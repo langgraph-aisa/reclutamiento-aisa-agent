@@ -1,0 +1,10 @@
+{
+  "entry": "main.typ",
+  "metadata": {
+    "author": "Manus AI",
+    "subtitle": "Guía técnica de implementación y archivos afectados",
+    "title": "Cambios de plataforma: acceso local y perfiles laborales"
+  },
+  "mode": "report",
+  "theme": "report-theme.typ"
+}

@@ -1,0 +1,10 @@
+{
+  "entry": "main.typ",
+  "metadata": {
+    "author": "Manus AI",
+    "subtitle": "Talento Claro · Reclutamiento automatizado por plaza",
+    "title": "Guía técnica de implementación"
+  },
+  "mode": "report",
+  "theme": "report-theme.typ"
+}

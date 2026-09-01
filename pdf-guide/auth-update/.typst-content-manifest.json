@@ -1,0 +1,11 @@
+{
+  "task_kind": "new-document",
+  "output": "pdf",
+  "signals": ["technical-report"],
+  "hard_constraints": ["Spanish", "implementation-change-log"],
+  "content_features": {
+    "code_blocks": 6,
+    "defined_terms": 12,
+    "portrait_images": 0
+  }
+}

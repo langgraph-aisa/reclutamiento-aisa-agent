@@ -1,0 +1,11 @@
+{
+  "task_kind": "new-document",
+  "output": "pdf",
+  "signals": ["technical implementation guide", "architecture diagrams", "n8n workflows", "PostgreSQL", "EasyPanel"],
+  "hard_constraints": ["PDF", "Spanish", "diagrams"],
+  "content_features": {
+    "code_blocks": 8,
+    "defined_terms": 24,
+    "portrait_images": 0
+  }
+}

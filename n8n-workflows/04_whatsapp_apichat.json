@@ -1,0 +1,232 @@
+{
+  "name": "RA · 04 · Continuación y alertas por ApiChat WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reclutamiento/whatsapp-continue",
+        "responseMode": "responseNode"
+      },
+      "id": "continuación-por-whatsapp",
+      "name": "Continuación por WhatsApp",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const position = $json.positionTitle ?? 'la plaza';\nconst recipientList = $json.internalRecipients ?? [];\nreturn [{ json: { ...$json, candidateMessage: `Gracias por aplicar a la plaza de ${position}, agradeceremos nos pueda brindar su Curriculum Vitae para continuar con su proceso de evaluación.`, internalMessages: recipientList.map(phone => ({ phone, message: `Nuevo candidato calificado para entrevista: ${position}. Teléfono: ${$json.phoneInternational}` })) } }];"
+      },
+      "id": "preparar-mensajes",
+      "name": "Preparar mensajes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APICHAT_API_ENDPOINT }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.APICHAT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { accountId: $env.APICHAT_ACCOUNT_ID, connectTo: $env.APICHAT_CONNECT_TO, to: $json.phoneInternational, message: $json.candidateMessage } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "enviar-mensaje-al-candidato",
+      "name": "Enviar mensaje al candidato",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "internalMessages"
+      },
+      "id": "enviar-alertas-internas",
+      "name": "Enviar alertas internas",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        560,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APICHAT_API_ENDPOINT }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.APICHAT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { accountId: $env.APICHAT_ACCOUNT_ID, connectTo: $env.APICHAT_CONNECT_TO, to: $json.internalMessages.phone, message: $json.internalMessages.message } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "http-apichat-alertas",
+      "name": "HTTP ApiChat alertas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        820,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE applications SET whatsapp_status='enviado', updated_at=now() WHERE id={{ $json.applicationId }};",
+        "options": {}
+      },
+      "id": "actualizar-conversación",
+      "name": "Actualizar conversación",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1080,
+        -100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PENDIENTE",
+          "name": "PostgreSQL reclutamiento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, status: 'enviado' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "responder-whatsapp",
+      "name": "Responder WhatsApp",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1340,
+        -100
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Continuación por WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Preparar mensajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar mensajes": {
+      "main": [
+        [
+          {
+            "node": "Enviar mensaje al candidato",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Enviar alertas internas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar mensaje al candidato": {
+      "main": [
+        [
+          {
+            "node": "Actualizar conversación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar conversación": {
+      "main": [
+        [
+          {
+            "node": "Responder WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar alertas internas": {
+      "main": [
+        [
+          {
+            "node": "HTTP ApiChat alertas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "reclutamiento-automatizado-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "reclutamiento"
+    },
+    {
+      "name": "whatsapp"
+    },
+    {
+      "name": "apichat"
+    }
+  ]
+}

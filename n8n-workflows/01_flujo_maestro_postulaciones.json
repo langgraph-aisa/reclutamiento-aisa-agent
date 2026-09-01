@@ -1,0 +1,225 @@
+{
+  "name": "RA · 01 · Flujo maestro de postulaciones",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reclutamiento/application",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "entrada-de-postulación",
+      "name": "Entrada de postulación",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nif (!body.token || !body.phone || !body.fullName || !body.answers) throw new Error('Faltan token, teléfono, nombre o respuestas');\nreturn [{ json: { ...body, receivedAt: new Date().toISOString(), source: 'public_form' } }];"
+      },
+      "id": "validar-solicitud",
+      "name": "Validar solicitud",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT process_public_application($1::jsonb) AS result;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json) }}"
+        }
+      },
+      "id": "guardar-postulación",
+      "name": "Guardar postulación",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        500,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PENDIENTE",
+          "name": "PostgreSQL reclutamiento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.result?.alreadyApplied ?? false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "¿ya-aplicada?",
+      "name": "¿Ya aplicada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { alreadyApplied: true, message: 'Esta solicitud ya fue enviada previamente para esta plaza.' } }}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "id": "aviso-de-duplicado",
+      "name": "Aviso de duplicado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1020,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_AGENT_EVALUATION_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.result }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "disparar-agente-de-plaza",
+      "name": "Disparar agente de plaza",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, applicationId: $json.applicationId ?? $json.result?.applicationId, status: 'en_revision' } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "respuesta-recibida",
+      "name": "Respuesta recibida",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1280,
+        120
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Entrada de postulación": {
+      "main": [
+        [
+          {
+            "node": "Validar solicitud",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar solicitud": {
+      "main": [
+        [
+          {
+            "node": "Guardar postulación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar postulación": {
+      "main": [
+        [
+          {
+            "node": "¿Ya aplicada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Ya aplicada?": {
+      "main": [
+        [
+          {
+            "node": "Aviso de duplicado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Disparar agente de plaza",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Disparar agente de plaza": {
+      "main": [
+        [
+          {
+            "node": "Respuesta recibida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "reclutamiento-automatizado-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "reclutamiento"
+    },
+    {
+      "name": "maestro"
+    }
+  ]
+}

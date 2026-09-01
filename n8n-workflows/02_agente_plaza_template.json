@@ -1,0 +1,243 @@
+{
+  "name": "RA · 02 · Agente evaluador por plaza",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reclutamiento/evaluate",
+        "responseMode": "responseNode"
+      },
+      "id": "entrada-de-evaluación",
+      "name": "Entrada de evaluación",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT a.id AS application_id, jsonb_build_object('application', to_jsonb(a), 'questions', COALESCE(jsonb_agg(jsonb_build_object('question', q, 'answer', aa.value_json, 'normalized', aa.normalized_value)), '[]'::jsonb), 'profile', COALESCE(to_jsonb(profile), '{}'::jsonb)) AS evaluation_input FROM applications a JOIN job_positions p ON p.id=a.job_position_id JOIN form_questions q ON q.form_id=a.form_id LEFT JOIN application_answers aa ON aa.application_id=a.id AND aa.question_id=q.id LEFT JOIN job_profile_positions link ON link.job_position_id=p.id LEFT JOIN job_profiles profile ON profile.id=link.profile_id AND profile.active=true WHERE a.id={{ $json.applicationId }} GROUP BY a.id, p.id, profile.id;",
+        "options": {}
+      },
+      "id": "cargar-reglas-de-la-plaza",
+      "name": "Cargar reglas de la plaza",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PENDIENTE",
+          "name": "PostgreSQL reclutamiento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.evaluation_input ?? $json;\nconst profile = input.profile ?? {};\nconst normalizeText = value => String(value ?? '').trim().toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\nconst asNumber = value => { const match = String(value ?? '').replace(',', '.').match(/-?\\d+(?:\\.\\d+)?/); return match ? Number(match[0]) : NaN; };\nconst asMonths = value => { const number = asNumber(value); return Number.isFinite(number) && /\\b(ano|anos)\\b/.test(normalizeText(value)) ? number * 12 : number; };\nconst ruleResults = (input.questions ?? []).map(item => { const question = item.question ?? {}; const value = item.normalized ?? item.answer ?? ''; const config = question.answer_config ?? {}; const accepted = (question.accepted_answers ?? []).map(normalizeText); let passed = true; let reason = 'Respuesta recibida'; if (question.hard_fail && accepted.length) { passed = accepted.includes(normalizeText(value)); reason = passed ? 'Coincide con una respuesta aceptada' : `No coincide con las respuestas aceptadas: ${(question.accepted_answers ?? []).join(', ')}`; } const numeric = asNumber(value); const months = asMonths(value); if (passed && Number.isFinite(numeric) && config.min != null && numeric < Number(config.min)) { passed = false; reason = `Valor menor que el mínimo ${config.min}`; } if (passed && Number.isFinite(numeric) && config.max != null && numeric > Number(config.max)) { passed = false; reason = `Valor mayor que el máximo ${config.max}`; } if (passed && Number.isFinite(months) && config.minMonths != null && months < Number(config.minMonths)) { passed = false; reason = `Experiencia menor que ${config.minMonths} meses`; } if (passed && Number.isFinite(months) && config.maxMonths != null && months > Number(config.maxMonths)) { passed = false; reason = `Experiencia mayor que ${config.maxMonths} meses`; } return { question_id: question.id, field_key: question.field_key, label: question.label, passed, hardFail: Boolean(question.hard_fail), result: passed ? 'passed' : 'failed', reason }; });\nconst hardFails = ruleResults.filter(item => item.hardFail && !item.passed);\nconst experienceQuestion = (input.questions ?? []).find(item => /experiencia|años|meses/i.test(String(item.question?.field_key ?? item.question?.label ?? '')));\nconst experienceMonths = experienceQuestion ? asMonths(experienceQuestion.normalized ?? experienceQuestion.answer ?? '') : NaN;\nconst profileExperienceFail = Number.isFinite(experienceMonths) && profile.experience_years_min != null && experienceMonths < Number(profile.experience_years_min) * 12;\nconst answers = (input.questions ?? []).map(item => ({ key: String(item.question?.field_key ?? item.question?.label ?? ''), text: String(item.normalized ?? item.answer ?? '') }));\nconst answerText = answers.map(item => `${item.key}: ${item.text}`).join(' | ').toLowerCase();\nconst profileChecks = [];\nif (profileExperienceFail) profileChecks.push(`Experiencia inferior al mínimo del perfil: ${profile.experience_years_min} años`);\nfor (const requirement of Array.isArray(profile.required_requirements) ? profile.required_requirements : []) if (requirement && !answerText.includes(String(requirement).toLowerCase())) profileChecks.push(`Requisito no evidenciado: ${requirement}`);\nfor (const license of Array.isArray(profile.licenses) ? profile.licenses : []) if (license && !answerText.includes(String(license).toLowerCase())) profileChecks.push(`Licencia no evidenciada: ${license}`);\nfor (const language of Array.isArray(profile.languages) ? profile.languages : []) if (language && !answerText.includes(String(language).toLowerCase())) profileChecks.push(`Idioma no evidenciado: ${language}`);\nif (profile.academic_level && !answerText.includes(String(profile.academic_level).toLowerCase())) profileChecks.push(`Nivel académico no evidenciado: ${profile.academic_level}`);\nif (profile.location && !answerText.includes(String(profile.location).toLowerCase())) profileChecks.push(`Ubicación requerida no evidenciada: ${profile.location}`);\nreturn [{ json: { ...input, deterministic: { passed: hardFails.length === 0 && profileChecks.length === 0, hardFails: [...hardFails.map(item => item.label), ...profileChecks], ruleResults, profileChecks, profileCriteria: { required_requirements: profile.required_requirements ?? [], academic_level: profile.academic_level ?? null, ai_criteria: profile.ai_criteria ?? null, licenses: profile.licenses ?? [], languages: profile.languages ?? [], location: profile.location ?? null } } } }];"
+      },
+      "id": "evaluar-reglas-deterministas",
+      "name": "Evaluar reglas deterministas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": "={{ $env.OPENAI_MODEL || 'gpt-5-mini' }}",
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        760,
+        220
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "PENDIENTE",
+          "name": "OpenAI / ChatGPT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Evalúa el candidato para la plaza {{ $json.evaluation_input?.application?.job_position_id }} usando también el perfil laboral asociado en evaluation_input.profile y las reglas operativas de profileCriteria. Aplica obligatoriamente ai_criteria como criterio de razonamiento para respuestas abiertas y explica su efecto en reason, profileSummary y ruleResults. Respeta las reglas deterministas y razona las respuestas abiertas según evaluation_criteria y ai_prompt. Si deterministic.passed es false, el estado final debe ser no_calificado. Devuelve un JSON con status, reason, profileSummary, keyPoints, confidence y ruleResults. ruleResults debe ser una lista de objetos con question_id y result (`passed`, `failed` o `not_applicable`).\n\nDatos: {{ JSON.stringify($json) }}",
+        "hasOutputParser": true
+      },
+      "id": "evaluar-respuestas-abiertas",
+      "name": "Evaluar respuestas abiertas",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        1020,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\"status\":\"calificado\",\"reason\":\"Cumple las condiciones configuradas\",\"profileSummary\":\"Resumen del perfil\",\"keyPoints\":[\"experiencia\",\"ubicacion\"],\"confidence\":0.92,\"ruleResults\":[{\"question_id\":12,\"result\":\"passed\"}]}"
+      },
+      "id": "salida-estructurada",
+      "name": "Salida estructurada",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1020,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT finalize_application_evaluation($1::integer, $2::jsonb) AS result;",
+        "options": {
+          "queryReplacement": "={{ [$json.application_id, JSON.stringify({ ...$json, ...($json.evaluation_input ?? {}) })] }}"
+        }
+      },
+      "id": "guardar-evaluación",
+      "name": "Guardar evaluación",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1280,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PENDIENTE",
+          "name": "PostgreSQL reclutamiento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.result ?? $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "responder-evaluación",
+      "name": "Responder evaluación",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1530,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Entrada de evaluación": {
+      "main": [
+        [
+          {
+            "node": "Cargar reglas de la plaza",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar reglas de la plaza": {
+      "main": [
+        [
+          {
+            "node": "Evaluar reglas deterministas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar reglas deterministas": {
+      "main": [
+        [
+          {
+            "node": "Evaluar respuestas abiertas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Evaluar respuestas abiertas",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salida estructurada": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Evaluar respuestas abiertas",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar respuestas abiertas": {
+      "main": [
+        [
+          {
+            "node": "Guardar evaluación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar evaluación": {
+      "main": [
+        [
+          {
+            "node": "Responder evaluación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "reclutamiento-automatizado-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "reclutamiento"
+    },
+    {
+      "name": "agente"
+    },
+    {
+      "name": "plantilla"
+    }
+  ]
+}

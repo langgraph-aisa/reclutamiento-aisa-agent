@@ -1,0 +1,320 @@
+{
+  "name": "RA · 03 · Revisión humana y espera de 10 minutos",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reclutamiento/manual-status",
+        "responseMode": "responseNode"
+      },
+      "id": "cambio-humano-de-estado",
+      "name": "Cambio humano de estado",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "if (!$json.applicationId || $json.status !== 'calificado' || $json.actorType !== 'human') return [{ json: { ...$json, skipped: true } }];\nreturn [{ json: { ...$json, holdUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString() } }];"
+      },
+      "id": "validar-cambio",
+      "name": "Validar cambio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.skipped ?? false }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "¿debe-esperar?",
+      "name": "¿Debe esperar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        500,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE applications SET review_hold_until = now() + interval '10 minutes', updated_at=now() WHERE id={{ $json.applicationId }} AND status='calificado' RETURNING id,status,review_hold_until;",
+        "options": {}
+      },
+      "id": "guardar-ventana-de-revisión",
+      "name": "Guardar ventana de revisión",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        760,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PENDIENTE",
+          "name": "PostgreSQL reclutamiento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 10,
+        "unit": "minutes"
+      },
+      "id": "esperar-10-minutos",
+      "name": "Esperar 10 minutos",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1020,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id AS \"applicationId\",status,review_hold_until FROM applications WHERE id={{ $json.applicationId }} LIMIT 1;",
+        "options": {}
+      },
+      "id": "verificar-estado-actual",
+      "name": "Verificar estado actual",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1280,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "PENDIENTE",
+          "name": "PostgreSQL reclutamiento"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "calificado",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "¿sigue-calificado?",
+      "name": "¿Sigue calificado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1530,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "PENDIENTE_WORKFLOW_WHATSAPP",
+        "mode": "once"
+      },
+      "id": "continuar-entrevista",
+      "name": "Continuar entrevista",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1780,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, skipped: true, reason: 'El estado cambió durante la ventana de revisión.' } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "cancelar-continuación",
+      "name": "Cancelar continuación",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, scheduled: true, holdMinutes: 10 } }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "confirmar-programación",
+      "name": "Confirmar programación",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2040,
+        -80
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cambio humano de estado": {
+      "main": [
+        [
+          {
+            "node": "Validar cambio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar cambio": {
+      "main": [
+        [
+          {
+            "node": "¿Debe esperar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Debe esperar?": {
+      "main": [
+        [
+          {
+            "node": "Guardar ventana de revisión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancelar continuación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar ventana de revisión": {
+      "main": [
+        [
+          {
+            "node": "Esperar 10 minutos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar 10 minutos": {
+      "main": [
+        [
+          {
+            "node": "Verificar estado actual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar estado actual": {
+      "main": [
+        [
+          {
+            "node": "¿Sigue calificado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Sigue calificado?": {
+      "main": [
+        [
+          {
+            "node": "Continuar entrevista",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancelar continuación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continuar entrevista": {
+      "main": [
+        [
+          {
+            "node": "Confirmar programación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "reclutamiento-automatizado-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "reclutamiento"
+    },
+    {
+      "name": "revision-humana"
+    }
+  ]
+}
