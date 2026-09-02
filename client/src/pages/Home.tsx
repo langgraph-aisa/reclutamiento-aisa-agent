@@ -2,7 +2,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { startLogin } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { ArrowRight, ClipboardCheck, Database, LayoutDashboard, LockKeyhole, MessageCircle, Sparkles, UsersRound } from "lucide-react";
 import { Link } from "wouter";
@@ -25,14 +24,21 @@ export default function Home() {
               <div className="grid h-10 w-10 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-soft"><Sparkles className="h-5 w-5" /></div>
               <div><p className="font-display text-lg font-800 tracking-tight">Talento Claro</p><p className="text-xs text-muted-foreground">Reclutamiento por evidencia</p></div>
             </div>
-            <Button variant="outline" onClick={() => startLogin()} className="rounded-full px-5">Ingresar</Button>
+            <Link href="/login">
+              <Button variant="outline" className="rounded-full px-5">Ingresar</Button>
+            </Link>
           </header>
           <section className="grid gap-12 pb-20 pt-20 lg:grid-cols-[1.08fr_.92fr] lg:items-center lg:pt-28">
             <div>
               <Badge className="mb-6 rounded-full bg-accent text-accent-foreground hover:bg-accent">Operación más humana, decisiones más claras</Badge>
               <h1 className="max-w-2xl text-balance text-5xl font-800 leading-[1.02] tracking-[-0.06em] text-primary sm:text-7xl">Cada plaza merece una evaluación <span className="text-emerald-700">a su medida.</span></h1>
               <p className="mt-7 max-w-xl text-lg leading-8 text-muted-foreground">Una consola para crear formularios, razonar respuestas, revisar candidatos y activar el siguiente paso sin perder el contexto.</p>
-              <div className="mt-9 flex flex-wrap gap-3"><Button onClick={() => startLogin()} size="lg" className="rounded-full px-6">Entrar al panel <ArrowRight className="ml-2 h-4 w-4" /></Button><Link href="/apply/demo-vendedor"><Button variant="outline" size="lg" className="rounded-full px-6">Ver formulario de ejemplo</Button></Link></div>
+              <div className="mt-9 flex flex-wrap gap-3">
+                <Link href="/login">
+                  <Button size="lg" className="rounded-full px-6">Entrar al panel <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                </Link>
+                <Link href="/apply/demo-vendedor"><Button variant="outline" size="lg" className="rounded-full px-6">Ver formulario de ejemplo</Button></Link>
+              </div>
               <div className="mt-12 flex flex-wrap gap-8 text-sm text-muted-foreground"><span className="flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-emerald-700" /> Enlaces seguros por plaza</span><span className="flex items-center gap-2"><ClipboardCheck className="h-4 w-4 text-emerald-700" /> Reglas configurables</span></div>
             </div>
             <div className="relative">
