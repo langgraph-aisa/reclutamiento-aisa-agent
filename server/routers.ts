@@ -329,7 +329,8 @@ export const appRouter = router({
       const clauses: string[] = [];
       if (input?.from) { values.push(input.from); clauses.push(`a.submitted_at >= $${values.length}`); }
       if (input?.to) { values.push(input.to); clauses.push(`a.submitted_at < ($${values.length}::date + interval '1 day')`); }
-      const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+      // CORRECCIÓN: Se agrega "WHERE 1=1" cuando no hay filtros para evitar error de sintaxis SQL
+      const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "WHERE 1=1";
       const [byStatus, byPosition, reasons, responseTime] = await Promise.all([
         pool.query(`SELECT status, count(*)::int AS count FROM applications a ${where} GROUP BY status ORDER BY count DESC`, values),
         pool.query(`SELECT p.title, count(*)::int AS count FROM applications a JOIN job_positions p ON p.id=a.job_position_id ${where} GROUP BY p.title ORDER BY count DESC`, values),
