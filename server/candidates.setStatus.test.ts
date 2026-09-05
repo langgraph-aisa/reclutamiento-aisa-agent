@@ -66,6 +66,11 @@ describe("candidates.setStatus", () => {
     });
 
     expect(result).toEqual({ success: true, application, audit });
+    const updateSql = String(query.mock.calls[2]?.[0]);
+    expect(updateSql).toMatch(/status=\$1::application_status/);
+    expect(updateSql).toMatch(
+      /WHEN \$1::application_status='calificado'::application_status/,
+    );
     expect(query.mock.calls[2]?.[1]).toEqual(["calificado", 42]);
     expect(query.mock.calls[3]?.[1]).toEqual([
       7,

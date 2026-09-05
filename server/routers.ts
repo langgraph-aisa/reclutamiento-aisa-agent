@@ -309,7 +309,7 @@ export const appRouter = router({
         await client.query("BEGIN");
         const before = await client.query(`SELECT * FROM applications WHERE id=$1 FOR UPDATE`, [input.id]);
         if (!before.rows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Candidato no encontrado." });
-        const after = await client.query(`UPDATE applications SET status=$1, review_hold_until=CASE WHEN $1='calificado' THEN now() + interval '10 minutes' ELSE NULL END, updated_at=now() WHERE id=$2 RETURNING *`, [input.status, input.id]);
+        const after = await client.query(`UPDATE applications SET status=$1::application_status, review_hold_until=CASE WHEN $1::application_status='calificado'::application_status THEN now() + interval '10 minutes' ELSE NULL END, updated_at=now() WHERE id=$2 RETURNING *`, [input.status, input.id]);
         const action = before.rows[0].status === input.status ? "comment_added" : "status_changed";
         const audit = await client.query(`INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment) VALUES ($1,'application',$2,$3,$4::jsonb,$5::jsonb,$6) RETURNING *`, [ctx.user.id, input.id, action, asJson(before.rows[0]), asJson(after.rows[0]), input.comment ?? null]);
         await client.query("COMMIT");
