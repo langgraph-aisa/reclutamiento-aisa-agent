@@ -297,7 +297,7 @@ export const appRouter = router({
       if (!application.rows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Candidato no encontrado." });
       const answers = await pool.query(`SELECT q.label, q.field_key, aa.value_json, aa.normalized_value, aa.deterministic_result FROM application_answers aa JOIN form_questions q ON q.id=aa.question_id WHERE aa.application_id=$1 ORDER BY q.order_index`, [input.id]);
       const evaluations = await pool.query(`SELECT * FROM evaluations WHERE application_id=$1 ORDER BY created_at DESC`, [input.id]);
-      const audit = await pool.query(`SELECT al.*, u.name AS actor_name FROM audit_log al LEFT JOIN users u ON u.id=al.actor_user_id WHERE al.entity_type='application' AND al.entity_id=$1 ORDER BY al.created_at DESC`, [input.id]);
+      const audit = await pool.query(`SELECT al.*, u.name AS actor_name FROM audit_log al LEFT JOIN users u ON u.id=al.actor_user_id WHERE al.entity_type='application' AND al.entity_id=$1 ORDER BY al.created_at DESC, al.id DESC`, [input.id]);
       const conversation = await pool.query(`SELECT * FROM conversations WHERE application_id=$1 ORDER BY created_at DESC LIMIT 1`, [input.id]);
       const messages = conversation.rows[0] ? await pool.query(`SELECT * FROM conversation_messages WHERE conversation_id=$1 ORDER BY created_at ASC`, [conversation.rows[0].id]) : { rows: [] };
       return { application: application.rows[0], answers: answers.rows, evaluations: evaluations.rows, audit: audit.rows, conversation: conversation.rows[0] ?? null, messages: messages.rows };
@@ -310,13 +310,14 @@ export const appRouter = router({
         const before = await client.query(`SELECT * FROM applications WHERE id=$1 FOR UPDATE`, [input.id]);
         if (!before.rows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Candidato no encontrado." });
         const after = await client.query(`UPDATE applications SET status=$1, review_hold_until=CASE WHEN $1='calificado' THEN now() + interval '10 minutes' ELSE NULL END, updated_at=now() WHERE id=$2 RETURNING *`, [input.status, input.id]);
-        await client.query(`INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment) VALUES ($1,'application',$2,'status_changed',$3::jsonb,$4::jsonb,$5)`, [ctx.user.id, input.id, asJson(before.rows[0]), asJson(after.rows[0]), input.comment ?? null]);
+        const action = before.rows[0].status === input.status ? "comment_added" : "status_changed";
+        const audit = await client.query(`INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment) VALUES ($1,'application',$2,$3,$4::jsonb,$5::jsonb,$6) RETURNING *`, [ctx.user.id, input.id, action, asJson(before.rows[0]), asJson(after.rows[0]), input.comment ?? null]);
         await client.query("COMMIT");
         const webhook = process.env.N8N_MANUAL_STATUS_WEBHOOK_URL;
         if (webhook) {
           void fetch(webhook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ applicationId: input.id, status: input.status, actorType: "human", actorUserId: ctx.user.id, comment: input.comment ?? null }) }).catch(error => console.warn("[n8n] Manual status webhook failed:", error));
         }
-        return after.rows[0];
+        return { success: true as const, application: after.rows[0], audit: audit.rows[0] };
       } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
     }),
   }),
