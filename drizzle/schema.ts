@@ -241,9 +241,15 @@ export const conversationMessages = pgTable("conversation_messages", {
   messageType: varchar("message_type", { length: 40 }).default("text").notNull(),
   body: text("body"),
   providerMessageId: varchar("provider_message_id", { length: 180 }),
+  messageKey: varchar("message_key", { length: 120 }),
+  deliveryStatus: varchar("delivery_status", { length: 32 }).default("recorded").notNull(),
+  attemptCount: integer("attempt_count").default(0).notNull(),
+  lastError: text("last_error"),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => ({ messageKeyUq: uniqueIndex("conversation_messages_message_key_uq").on(table.messageKey) }));
 
 export const auditLog = pgTable("audit_log", {
   id: serial("id").primaryKey(),

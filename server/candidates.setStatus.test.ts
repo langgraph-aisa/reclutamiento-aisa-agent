@@ -1,12 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 
-const { getPool } = vi.hoisted(() => ({ getPool: vi.fn() }));
+const { getPool, ensureCvRequestMessage, deliverCvRequestMessage } = vi.hoisted(() => ({
+  getPool: vi.fn(),
+  ensureCvRequestMessage: vi.fn(),
+  deliverCvRequestMessage: vi.fn(),
+}));
 
 vi.mock("./db", () => ({
   getPool,
   getUserById: vi.fn(),
   getUserByOpenId: vi.fn(),
+}));
+
+vi.mock("./cvRequest", () => ({
+  ensureCvRequestMessage,
+  deliverCvRequestMessage,
 }));
 
 import { appRouter } from "./routers";
@@ -29,107 +38,129 @@ function createContext(): TrpcContext {
 
 afterEach(() => {
   vi.clearAllMocks();
-  vi.unstubAllGlobals();
-  delete process.env.N8N_MANUAL_STATUS_WEBHOOK_URL;
 });
 
 describe("candidates.setStatus", () => {
-  it("commits the new status and its human comment in one transaction", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
-    vi.stubGlobal("fetch", fetchMock);
-    process.env.N8N_MANUAL_STATUS_WEBHOOK_URL =
-      "https://n8n.example.test/webhook/reclutamiento/manual-status";
-    const before = { id: 42, status: "en_revision" };
-    const application = {
+  it("commits the status and queues one direct CV request when transitioning to qualified", async () => {
+    const before = {
       id: 42,
-      status: "calificado",
-      review_hold_until: new Date("2026-09-05T17:10:00Z"),
+      status: "en_revision",
+      whatsapp_status: "no_enviado",
+      full_name: "Ana Pérez",
+      phone_international: "+50255555555",
+      position_title: "Ventas",
+      whatsapp_message: null,
     };
-    const audit = {
-      id: 99,
-      actor_user_id: 7,
-      action: "status_changed",
-      comment: "Cumple los requisitos",
-    };
-    const query = vi
+    const statusUpdated = { id: 42, status: "calificado", whatsapp_status: "no_enviado", review_hold_until: null };
+    const pending = { ...statusUpdated, whatsapp_status: "pendiente" };
+    const sent = { ...statusUpdated, whatsapp_status: "enviado" };
+    const audit = { id: 99, actor_user_id: 7, action: "status_changed", comment: "Cumple" };
+    const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [before] })
-      .mockResolvedValueOnce({ rows: [application] })
+      .mockResolvedValueOnce({ rows: [statusUpdated] })
+      .mockResolvedValueOnce({ rows: [pending] })
       .mockResolvedValueOnce({ rows: [audit] })
       .mockResolvedValueOnce({ rows: [] });
+    const poolQuery = vi.fn().mockResolvedValue({ rows: [sent] });
     const release = vi.fn();
-    getPool.mockResolvedValue({
-      connect: vi.fn().mockResolvedValue({ query, release }),
-    });
+    const pool = { connect: vi.fn().mockResolvedValue({ query: clientQuery, release }), query: poolQuery };
+    getPool.mockResolvedValue(pool);
+    ensureCvRequestMessage.mockResolvedValue({ id: 501, delivery_status: "pending", created: true });
+    deliverCvRequestMessage.mockResolvedValue({ status: "sent", providerMessageId: "msg-1" });
 
-    const caller = appRouter.createCaller(createContext());
-    const result = await caller.candidates.setStatus({
+    const result = await appRouter.createCaller(createContext()).candidates.setStatus({
       id: 42,
       status: "calificado",
-      comment: "Cumple los requisitos",
+      comment: "Cumple",
     });
 
-    expect(result).toEqual({ success: true, application, audit });
-    const updateSql = String(query.mock.calls[2]?.[0]);
-    expect(updateSql).toMatch(/status=\$1::application_status/);
-    expect(updateSql).toMatch(
-      /WHEN \$1::application_status='calificado'::application_status/,
-    );
-    expect(updateSql).toMatch(/interval '30 seconds'/);
-    expect(query.mock.calls[2]?.[1]).toEqual(["calificado", 42]);
-    expect(query.mock.calls[3]?.[1]).toEqual([
+    expect(result).toEqual({
+      success: true,
+      application: sent,
+      audit,
+      whatsapp: { status: "sent", providerMessageId: "msg-1" },
+    });
+    expect(String(clientQuery.mock.calls[2]?.[0])).toMatch(/review_hold_until=NULL/);
+    expect(ensureCvRequestMessage).toHaveBeenCalledWith(expect.anything(), before);
+    expect(deliverCvRequestMessage).toHaveBeenCalledWith(pool, 501);
+    expect(clientQuery.mock.calls[4]?.[1]).toEqual([
       7,
       42,
       "status_changed",
-      JSON.stringify(before),
-      JSON.stringify(application),
-      "Cumple los requisitos",
+      JSON.stringify({ id: 42, status: "en_revision", whatsapp_status: "no_enviado" }),
+      JSON.stringify(pending),
+      "Cumple",
     ]);
-    expect(query.mock.calls[4]?.[0]).toBe("COMMIT");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://n8n.example.test/webhook/reclutamiento/manual-status",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          applicationId: 42,
-          status: "calificado",
-          actorType: "human",
-          actorUserId: 7,
-          comment: "Cumple los requisitos",
-        }),
-      }),
-    );
+    expect(clientQuery.mock.calls[5]?.[0]).toBe("COMMIT");
     expect(release).toHaveBeenCalledOnce();
   });
 
-  it("records a comment even when the status does not change", async () => {
-    const application = { id: 42, status: "en_revision" };
-    const audit = {
-      id: 100,
-      action: "comment_added",
-      comment: "Mantener en observación",
+  it("does not enqueue again when qualified is saved without a transition", async () => {
+    const application = {
+      id: 42,
+      status: "calificado",
+      whatsapp_status: "enviado",
+      full_name: "Ana Pérez",
+      phone_international: "+50255555555",
+      position_title: "Ventas",
+      whatsapp_message: null,
     };
+    const after = { id: 42, status: "calificado", whatsapp_status: "enviado" };
+    const audit = { id: 100, action: "comment_added", comment: "Mantener" };
     const query = vi
       .fn()
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [application] })
-      .mockResolvedValueOnce({ rows: [application] })
+      .mockResolvedValueOnce({ rows: [after] })
       .mockResolvedValueOnce({ rows: [audit] })
       .mockResolvedValueOnce({ rows: [] });
-    getPool.mockResolvedValue({
-      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
-    });
+    getPool.mockResolvedValue({ connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }) });
 
-    const caller = appRouter.createCaller(createContext());
-    const result = await caller.candidates.setStatus({
+    const result = await appRouter.createCaller(createContext()).candidates.setStatus({
       id: 42,
-      status: "en_revision",
-      comment: "Mantener en observación",
+      status: "calificado",
+      comment: "Mantener",
     });
 
     expect(result.audit.action).toBe("comment_added");
-    expect(query.mock.calls[3]?.[1]?.[2]).toBe("comment_added");
-    expect(query.mock.calls[3]?.[1]?.[5]).toBe("Mantener en observación");
+    expect(result.whatsapp).toBeNull();
+    expect(ensureCvRequestMessage).not.toHaveBeenCalled();
+    expect(deliverCvRequestMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("candidates.retryCvRequest", () => {
+  it("retries a failed request only while the application is qualified", async () => {
+    const application = {
+      id: 42,
+      status: "calificado",
+      full_name: "Ana Pérez",
+      phone_international: "+50255555555",
+      position_title: "Ventas",
+      whatsapp_message: null,
+    };
+    const updated = { id: 42, status: "calificado", whatsapp_status: "enviado" };
+    const clientQuery = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [application] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    const poolQuery = vi.fn().mockResolvedValue({ rows: [updated] });
+    const pool = { connect: vi.fn().mockResolvedValue({ query: clientQuery, release: vi.fn() }), query: poolQuery };
+    getPool.mockResolvedValue(pool);
+    ensureCvRequestMessage.mockResolvedValue({ id: 501, delivery_status: "failed", created: false });
+    deliverCvRequestMessage.mockResolvedValue({ status: "sent", providerMessageId: "msg-2" });
+
+    const result = await appRouter.createCaller(createContext()).candidates.retryCvRequest({ id: 42 });
+
+    expect(deliverCvRequestMessage).toHaveBeenCalledWith(pool, 501);
+    expect(result).toEqual({
+      success: true,
+      application: updated,
+      whatsapp: { status: "sent", providerMessageId: "msg-2" },
+    });
   });
 });

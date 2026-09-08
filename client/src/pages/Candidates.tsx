@@ -16,6 +16,8 @@ import {
   Clock3,
   Eye,
   Filter,
+  MessageCircle,
+  RefreshCw,
   Search,
   UserRound,
   UsersRound,
@@ -168,9 +170,9 @@ export default function Candidates() {
       )}
       <div className="grid gap-4 sm:grid-cols-3">
         <InfoCard
-          icon={Clock3}
-          label="Ventana humana"
-          text="30 segundos antes de continuar"
+          icon={MessageCircle}
+          label="Solicitud de CV"
+          text="Se envía una vez al calificar"
         />
         <InfoCard
           icon={CheckCircle2}
@@ -204,11 +206,33 @@ function CandidateDetail({
         utils.candidates.detail.invalidate({ id: data.application.id }),
         utils.candidates.list.invalidate(),
       ]);
-      toast.success("Estado y comentario guardados");
+      if (result.whatsapp?.status === "sent") {
+        toast.success("Estado guardado y solicitud de CV enviada por WhatsApp");
+      } else if (result.whatsapp?.status === "failed") {
+        toast.error("Estado guardado, pero ApiChat no pudo enviar el mensaje. Puedes reintentarlo.");
+      } else if (result.whatsapp?.status === "unknown") {
+        toast.warning("ApiChat aceptó la solicitud, pero el resultado debe verificarse antes de otro envío.");
+      } else {
+        toast.success("Estado y comentario guardados");
+      }
     },
     onError: error => {
       toast.error(`No fue posible guardar: ${error.message}`);
     },
+  });
+  const retryCvRequest = trpc.candidates.retryCvRequest.useMutation({
+    onSuccess: async result => {
+      await Promise.all([
+        utils.candidates.detail.invalidate({ id: data.application.id }),
+        utils.candidates.list.invalidate(),
+      ]);
+      if (result.whatsapp.status === "sent") toast.success("Solicitud de CV enviada por WhatsApp");
+      else if (result.whatsapp.status === "already_sent") toast.info("La solicitud de CV ya había sido enviada");
+      else if (result.whatsapp.status === "in_progress") toast.info("El envío ya está siendo procesado");
+      else if (result.whatsapp.status === "unknown") toast.warning("El resultado del envío debe verificarse en WhatsApp antes de intentarlo nuevamente");
+      else toast.error("ApiChat no pudo enviar el mensaje. Revisa la configuración e inténtalo nuevamente.");
+    },
+    onError: error => toast.error(`No fue posible reintentar: ${error.message}`),
   });
 
   useEffect(() => {
@@ -267,8 +291,8 @@ function CandidateDetail({
         <div className="rounded-2xl bg-white p-5 text-primary">
           <p className="text-sm font-semibold">Cambio humano</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Al elegir “Calificado”, n8n iniciará una ventana de 30 segundos antes
-            de continuar.
+            Al cambiar a “Calificado”, Talento Claro solicitará el CV directamente
+            por ApiChat, una sola vez por postulación.
           </p>
           <div className="mt-4 space-y-3">
             <p className="text-xs text-muted-foreground">
@@ -325,6 +349,29 @@ function CandidateDetail({
                 {setStatus.error.message}
               </p>
             )}
+            {data.application.status === "calificado" && data.application.whatsapp_status !== "enviado" && (
+              <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+                <p className="font-semibold">
+                  WhatsApp: {data.application.whatsapp_status === "error" ? "envío fallido" : data.application.whatsapp_status === "pendiente" ? "pendiente" : data.application.whatsapp_status === "desconocido" ? "por confirmar" : "no enviado"}
+                </p>
+                {data.application.last_whatsapp_error && <p className="mt-1 leading-5">{data.application.last_whatsapp_error}</p>}
+                {data.application.whatsapp_status === "desconocido" ? (
+                  <p className="mt-2 font-semibold">Verifica la conversación del postulante antes de realizar otro envío.</p>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => retryCvRequest.mutate({ id: data.application.id })}
+                    disabled={retryCvRequest.isPending}
+                    className="mt-3 w-full rounded-xl"
+                  >
+                    <RefreshCw className={`mr-2 h-3.5 w-3.5 ${retryCvRequest.isPending ? "animate-spin" : ""}`} />
+                    {retryCvRequest.isPending ? "Enviando…" : data.application.whatsapp_status === "error" ? "Reintentar solicitud de CV" : "Enviar solicitud de CV"}
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="lg:col-span-2 rounded-2xl bg-white/8 p-4">
@@ -356,10 +403,17 @@ function CandidateDetail({
                   >
                     <span className="mr-2 text-xs text-white/45">
                       {message.direction === "outbound"
-                        ? "Enviado"
+                        ? message.delivery_status === "failed"
+                          ? "Fallido"
+                          : message.delivery_status === "unknown"
+                            ? "Por confirmar"
+                          : message.delivery_status === "pending" || message.delivery_status === "sending"
+                            ? "Pendiente"
+                            : "Enviado"
                         : "Recibido"}
                     </span>
                     {message.body ?? "Mensaje sin texto"}
+                    {message.last_error && <p className="mt-2 text-xs text-red-200">{message.last_error}</p>}
                   </div>
                 ))}
               </div>

@@ -36,6 +36,13 @@
       "when": 1788297295826,
       "tag": "0004_fearless_sentry",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788907915420,
+      "tag": "0005_direct_apichat",
+      "breakpoints": true
     }
   ]
 }

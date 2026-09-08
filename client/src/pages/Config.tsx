@@ -9,7 +9,11 @@ import { trpc } from "@/lib/trpc";
 import { Check, Globe2, KeyRound, MessageCircle, Plus, Save, ShieldCheck, Upload, UsersRound } from "lucide-react";
 import { useState } from "react";
 
-const defaultMessage = "Gracias por aplicar a la plaza de {{plaza}}, agradeceremos nos pueda brindar su Curriculum Vitae para continuar con su proceso de evaluación.";
+const defaultMessage = `Hola {{nombre}}, muchas gracias por su solicitud de empleo.
+
+Le saludamos de parte de AISA Solar. Dando seguimiento a su solicitud de empleo para la plaza “{{plaza}}”, por este medio agradeceríamos que pudiera enviarnos su CV para que sea evaluado por nuestro equipo de Recursos Humanos.
+
+Quedamos atentos a recibirlo. ¡Muchas gracias por su interés en formar parte de AISA Solar!`;
 
 export default function Config() {
   const recipients = trpc.config.recipients.useQuery();
@@ -62,15 +66,15 @@ export default function Config() {
 
         <TabsContent value="whatsapp" className="space-y-5">
           <Card className="rounded-3xl border-0 shadow-soft">
-            <CardHeader><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"><KeyRound className="h-5 w-5" /></div><div><CardTitle className="text-xl text-primary">ApiChat / WhatsApp</CardTitle><p className="mt-1 text-sm text-muted-foreground">Los valores de conexión viven como variables de entorno en n8n.</p></div></div></CardHeader>
+            <CardHeader><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"><KeyRound className="h-5 w-5" /></div><div><CardTitle className="text-xl text-primary">ApiChat / WhatsApp</CardTitle><p className="mt-1 text-sm text-muted-foreground">El backend envía directamente la solicitud de CV cuando una postulación cambia a Calificado.</p></div></div></CardHeader>
             <CardContent className="grid gap-5 sm:grid-cols-2">
-              <Readonly label="URL Webhook" value="APICHAT_WEBHOOK_URL" /><Readonly label="Conectar a" value="APICHAT_CONNECT_TO" /><Readonly label="API Endpoint" value="APICHAT_API_ENDPOINT" /><Readonly label="ID Cuenta · obligatorio" value="APICHAT_ACCOUNT_ID" /><Readonly label="Token · obligatorio" value="APICHAT_TOKEN" />
-              <div className="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900 sm:col-span-2"><strong>Estado:</strong> las credenciales se ingresan en el entorno de n8n; no se muestran ni se guardan en la interfaz.</div>
+              <Readonly label="Modo API" value="APICHAT_API_MODE" /><Readonly label="API Endpoint" value="APICHAT_API_ENDPOINT" /><Readonly label="Client ID · API nativa" value="APICHAT_CLIENT_ID" /><Readonly label="Token · obligatorio" value="APICHAT_TOKEN" /><Readonly label="ID Cuenta · modo heredado" value="APICHAT_ACCOUNT_ID" /><Readonly label="Conexión · modo heredado" value="APICHAT_CONNECT_TO" />
+              <div className="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900 sm:col-span-2"><strong>Seguridad:</strong> las credenciales se ingresan como secretos en el entorno del servicio Talento Claro de EasyPanel; no se muestran ni se guardan en el navegador.</div>
             </CardContent>
           </Card>
           <Card className="rounded-3xl border-0 shadow-soft">
             <CardHeader><CardTitle className="text-xl text-primary">Preferencias de comunicación</CardTitle></CardHeader>
-            <CardContent className="space-y-5"><div className="grid gap-4 sm:grid-cols-[180px_1fr]"><div className="space-y-2"><Label className="text-sm font-semibold text-primary">País predeterminado</Label><Input value={country} onChange={e => setCountry(e.target.value.toUpperCase().slice(0, 2))} className="rounded-2xl" placeholder="GT" /></div><div className="space-y-2"><Label className="text-sm font-semibold text-primary">Mensaje base</Label><Textarea value={message} onChange={e => setMessage(e.target.value)} rows={3} className="rounded-2xl" /><p className="text-xs text-muted-foreground">Puedes usar la variable {"{{plaza}}"}. Cada plaza puede personalizar su mensaje.</p></div></div><Button onClick={save} disabled={saveSetting.isPending} className="rounded-full"><Save className="mr-2 h-4 w-4" /> Guardar preferencias</Button>{saved && <span className="ml-3 inline-flex items-center gap-2 text-sm text-emerald-700"><Check className="h-4 w-4" /> Guardado</span>}</CardContent>
+            <CardContent className="space-y-5"><div className="grid gap-4 sm:grid-cols-[180px_1fr]"><div className="space-y-2"><Label className="text-sm font-semibold text-primary">País predeterminado</Label><Input value={country} onChange={e => setCountry(e.target.value.toUpperCase().slice(0, 2))} className="rounded-2xl" placeholder="GT" /></div><div className="space-y-2"><Label className="text-sm font-semibold text-primary">Mensaje base</Label><Textarea value={message} onChange={e => setMessage(e.target.value)} rows={7} className="rounded-2xl" /><p className="text-xs text-muted-foreground">Debe conservar las variables {"{{nombre}}"} y {"{{plaza}}"}. Cada plaza puede personalizar su mensaje.</p></div></div><Button onClick={save} disabled={saveSetting.isPending} className="rounded-full"><Save className="mr-2 h-4 w-4" /> Guardar preferencias</Button>{saved && <span className="ml-3 inline-flex items-center gap-2 text-sm text-emerald-700"><Check className="h-4 w-4" /> Guardado</span>}</CardContent>
           </Card>
           <Card className="rounded-3xl border-0 shadow-soft">
             <CardHeader><CardTitle className="text-xl text-primary">Números internos para alertas</CardTitle><p className="text-sm text-muted-foreground">Recibirán un aviso por WhatsApp cuando un candidato avance.</p></CardHeader>

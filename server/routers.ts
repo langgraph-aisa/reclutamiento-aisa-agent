@@ -7,6 +7,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, recruiterProcedure, publicProcedure, router } from "./_core/trpc";
+import { deliverCvRequestMessage, ensureCvRequestMessage, type CvRequestDelivery } from "./cvRequest";
 
 const statusValues = ["en_revision", "calificado", "no_calificado", "entrevista_iniciada", "entrevista_en_curso", "entrevista_finalizada", "pendiente_revision_humana", "error_procesamiento"] as const;
 const roleProcedure = recruiterProcedure;
@@ -305,20 +306,103 @@ export const appRouter = router({
     setStatus: roleProcedure.input(z.object({ id: z.number(), status: z.enum(statusValues), comment: z.string().max(1000).optional() })).mutation(async ({ input, ctx }) => {
       const pool = await requirePool();
       const client = await pool.connect();
+      let application: Record<string, any>;
+      let audit: Record<string, any>;
+      let messageId: number | null = null;
       try {
         await client.query("BEGIN");
-        const before = await client.query(`SELECT * FROM applications WHERE id=$1 FOR UPDATE`, [input.id]);
-        if (!before.rows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Candidato no encontrado." });
-        const after = await client.query(`UPDATE applications SET status=$1::application_status, review_hold_until=CASE WHEN $1::application_status='calificado'::application_status THEN now() + interval '30 seconds' ELSE NULL END, updated_at=now() WHERE id=$2 RETURNING *`, [input.status, input.id]);
-        const action = before.rows[0].status === input.status ? "comment_added" : "status_changed";
-        const audit = await client.query(`INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment) VALUES ($1,'application',$2,$3,$4::jsonb,$5::jsonb,$6) RETURNING *`, [ctx.user.id, input.id, action, asJson(before.rows[0]), asJson(after.rows[0]), input.comment ?? null]);
-        await client.query("COMMIT");
-        const webhook = process.env.N8N_MANUAL_STATUS_WEBHOOK_URL;
-        if (webhook) {
-          void fetch(webhook, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ applicationId: input.id, status: input.status, actorType: "human", actorUserId: ctx.user.id, comment: input.comment ?? null }) }).catch(error => console.warn("[n8n] Manual status webhook failed:", error));
+        const beforeResult = await client.query(
+          `SELECT a.*,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message,
+                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message
+             FROM applications a
+             JOIN candidates c ON c.id=a.candidate_id
+             JOIN job_positions p ON p.id=a.job_position_id
+            WHERE a.id=$1 FOR UPDATE OF a`,
+          [input.id],
+        );
+        const before = beforeResult.rows[0];
+        if (!before) throw new TRPCError({ code: "NOT_FOUND", message: "Candidato no encontrado." });
+        const afterResult = await client.query(
+          `UPDATE applications SET status=$1::application_status,review_hold_until=NULL,updated_at=now() WHERE id=$2 RETURNING *`,
+          [input.status, input.id],
+        );
+        application = afterResult.rows[0];
+        if (before.status !== "calificado" && input.status === "calificado") {
+          const message = await ensureCvRequestMessage(client, before);
+          if (message?.created) {
+            messageId = message.id;
+            const pending = await client.query(
+              `UPDATE applications SET whatsapp_status='pendiente',last_whatsapp_error=NULL,updated_at=now() WHERE id=$1 RETURNING *`,
+              [input.id],
+            );
+            application = pending.rows[0];
+          }
         }
-        return { success: true as const, application: after.rows[0], audit: audit.rows[0] };
+        const beforeApplication = { ...before };
+        delete beforeApplication.full_name;
+        delete beforeApplication.phone_international;
+        delete beforeApplication.position_title;
+        delete beforeApplication.whatsapp_message;
+        delete beforeApplication.global_whatsapp_message;
+        const action = before.status === input.status ? "comment_added" : "status_changed";
+        const auditResult = await client.query(
+          `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment) VALUES ($1,'application',$2,$3,$4::jsonb,$5::jsonb,$6) RETURNING *`,
+          [ctx.user.id, input.id, action, asJson(beforeApplication), asJson(application), input.comment ?? null],
+        );
+        audit = auditResult.rows[0];
+        await client.query("COMMIT");
       } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+      const whatsapp: CvRequestDelivery | null = messageId ? await deliverCvRequestMessage(pool, messageId) : null;
+      if (whatsapp) {
+        const current = await pool.query(`SELECT * FROM applications WHERE id=$1`, [input.id]);
+        application = current.rows[0] ?? application;
+      }
+      return { success: true as const, application, audit, whatsapp };
+    }),
+    retryCvRequest: roleProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
+      const pool = await requirePool();
+      const client = await pool.connect();
+      let messageId: number;
+      try {
+        await client.query("BEGIN");
+        const applicationResult = await client.query(
+          `SELECT a.*,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message,
+                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message
+             FROM applications a
+             JOIN candidates c ON c.id=a.candidate_id
+             JOIN job_positions p ON p.id=a.job_position_id
+            WHERE a.id=$1 FOR UPDATE OF a`,
+          [input.id],
+        );
+        const application = applicationResult.rows[0];
+        if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Candidato no encontrado." });
+        if (application.status !== "calificado") {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: "La solicitud de CV solo puede enviarse a postulaciones calificadas." });
+        }
+        const message = await ensureCvRequestMessage(client, application);
+        if (!message) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No fue posible preparar la solicitud de CV." });
+        messageId = message.id;
+        if (message.delivery_status === "sent") {
+          await client.query(
+            `UPDATE applications SET whatsapp_status='enviado',last_whatsapp_error=NULL,updated_at=now() WHERE id=$1`,
+            [input.id],
+          );
+        } else if (message.delivery_status === "unknown") {
+          await client.query(
+            `UPDATE applications SET whatsapp_status='desconocido',updated_at=now() WHERE id=$1`,
+            [input.id],
+          );
+        } else if (message.delivery_status !== "sending") {
+          await client.query(
+            `UPDATE applications SET whatsapp_status='pendiente',last_whatsapp_error=NULL,updated_at=now() WHERE id=$1`,
+            [input.id],
+          );
+        }
+        await client.query("COMMIT");
+      } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+      const whatsapp = await deliverCvRequestMessage(pool, messageId!);
+      const current = await pool.query(`SELECT * FROM applications WHERE id=$1`, [input.id]);
+      return { success: true as const, application: current.rows[0], whatsapp };
     }),
   }),
 

@@ -6,11 +6,13 @@ describe("integration secrets", () => {
   it("validates ApiChat configuration shape without network access", () => {
     const endpoint = process.env.APICHAT_API_ENDPOINT;
     const token = process.env.APICHAT_TOKEN;
+    const clientId = process.env.APICHAT_CLIENT_ID;
     const accountId = process.env.APICHAT_ACCOUNT_ID;
-    const configured = { endpoint: looksConfigured(endpoint), token: looksConfigured(token), accountId: looksConfigured(accountId) };
+    const configured = { endpoint: looksConfigured(endpoint), token: looksConfigured(token), clientId: looksConfigured(clientId), accountId: looksConfigured(accountId) };
 
-    expect(configured).toEqual({ endpoint: configured.endpoint, token: configured.token, accountId: configured.accountId });
+    expect(configured).toEqual({ endpoint: configured.endpoint, token: configured.token, clientId: configured.clientId, accountId: configured.accountId });
     expect(typeof configured.endpoint).toBe("boolean");
+    expect(typeof configured.clientId).toBe("boolean");
     expect(typeof configured.token).toBe("boolean");
     expect(typeof configured.accountId).toBe("boolean");
   });
