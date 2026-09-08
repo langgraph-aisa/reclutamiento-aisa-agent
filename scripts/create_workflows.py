@@ -73,10 +73,10 @@ agent_connections = {
 
 human_nodes = [
     node("Cambio humano de estado", "n8n-nodes-base.webhook", 2.1, [0, 0], {"httpMethod": "POST", "path": "reclutamiento/manual-status", "responseMode": "responseNode"}),
-    node("Validar cambio", "n8n-nodes-base.code", 2, [240, 0], {"jsCode": "if (!$json.applicationId || $json.status !== 'calificado' || $json.actorType !== 'human') return [{ json: { ...$json, skipped: true } }];\nreturn [{ json: { ...$json, holdUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString() } }];"}),
+    node("Validar cambio", "n8n-nodes-base.code", 2, [240, 0], {"jsCode": "if (!$json.applicationId || $json.status !== 'calificado' || $json.actorType !== 'human') return [{ json: { ...$json, skipped: true } }];\nreturn [{ json: { ...$json, holdUntil: new Date(Date.now() + 30 * 1000).toISOString() } }];"}),
     node("¿Debe esperar?", "n8n-nodes-base.if", 2.2, [500, 0], {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.skipped ?? false }}", "rightValue": False, "operator": {"type": "boolean", "operation": "false", "singleValue": True}}], "combinator": "and"}}),
-    node("Guardar ventana de revisión", "n8n-nodes-base.postgres", 2.6, [760, 0], {"operation": "executeQuery", "query": "UPDATE applications SET review_hold_until = now() + interval '10 minutes', updated_at=now() WHERE id={{ $json.applicationId }} AND status='calificado' RETURNING id,status,review_hold_until;", "options": {}}, {"postgres": {"id": "PENDIENTE", "name": "PostgreSQL reclutamiento"}}),
-    node("Esperar 10 minutos", "n8n-nodes-base.wait", 1.1, [1020, 0], {"resume": "timeInterval", "amount": 10, "unit": "minutes"}),
+    node("Guardar ventana de revisión", "n8n-nodes-base.postgres", 2.6, [760, 0], {"operation": "executeQuery", "query": "UPDATE applications SET review_hold_until = now() + interval '30 seconds', updated_at=now() WHERE id={{ $json.applicationId }} AND status='calificado' RETURNING id,status,review_hold_until;", "options": {}}, {"postgres": {"id": "PENDIENTE", "name": "PostgreSQL reclutamiento"}}),
+    node("Esperar 30 segundos", "n8n-nodes-base.wait", 1.1, [1020, 0], {"resume": "timeInterval", "amount": 30, "unit": "seconds"}),
     node("Verificar estado actual", "n8n-nodes-base.postgres", 2.6, [1280, 0], {"operation": "executeQuery", "query": "SELECT id,status,review_hold_until FROM applications WHERE id={{ $json.applicationId }} LIMIT 1;", "options": {}}, {"postgres": {"id": "PENDIENTE", "name": "PostgreSQL reclutamiento"}}),
     node("¿Sigue calificado?", "n8n-nodes-base.if", 2.2, [1530, 0], {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.status }}", "rightValue": "calificado", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}}),
     node("Continuar entrevista", "n8n-nodes-base.executeWorkflow", 1.2, [1780, -80], {"workflowId": "PENDIENTE_WORKFLOW_WHATSAPP", "mode": "once"}),
@@ -87,8 +87,8 @@ human_connections = {
     "Cambio humano de estado": {"main": [[{"node": "Validar cambio", "type": "main", "index": 0}]]},
     "Validar cambio": {"main": [[{"node": "¿Debe esperar?", "type": "main", "index": 0}]]},
     "¿Debe esperar?": {"main": [[{"node": "Guardar ventana de revisión", "type": "main", "index": 0}], [{"node": "Cancelar continuación", "type": "main", "index": 0}]]},
-    "Guardar ventana de revisión": {"main": [[{"node": "Esperar 10 minutos", "type": "main", "index": 0}]]},
-    "Esperar 10 minutos": {"main": [[{"node": "Verificar estado actual", "type": "main", "index": 0}]]},
+    "Guardar ventana de revisión": {"main": [[{"node": "Esperar 30 segundos", "type": "main", "index": 0}]]},
+    "Esperar 30 segundos": {"main": [[{"node": "Verificar estado actual", "type": "main", "index": 0}]]},
     "Verificar estado actual": {"main": [[{"node": "¿Sigue calificado?", "type": "main", "index": 0}]]},
     "¿Sigue calificado?": {"main": [[{"node": "Continuar entrevista", "type": "main", "index": 0}], [{"node": "Cancelar continuación", "type": "main", "index": 0}]]},
     "Continuar entrevista": {"main": [[{"node": "Confirmar programación", "type": "main", "index": 0}]]},
@@ -114,7 +114,7 @@ whatsapp_connections = {
 files = {
     "01_flujo_maestro_postulaciones.json": workflow("RA · 01 · Flujo maestro de postulaciones", maestro_nodes, maestro_connections, ["reclutamiento", "maestro"]),
     "02_agente_plaza_template.json": workflow("RA · 02 · Agente evaluador por plaza", agent_nodes, agent_connections, ["reclutamiento", "agente", "plantilla"]),
-    "03_revision_humana_10m.json": workflow("RA · 03 · Revisión humana y espera de 10 minutos", human_nodes, human_connections, ["reclutamiento", "revision-humana"]),
+    "03_revision_humana_10m.json": workflow("RA · 03 · Revisión humana y espera de 30 segundos", human_nodes, human_connections, ["reclutamiento", "revision-humana"]),
     "04_whatsapp_apichat.json": workflow("RA · 04 · Continuación y alertas por ApiChat WhatsApp", whatsapp_nodes, whatsapp_connections, ["reclutamiento", "whatsapp", "apichat"]),
 }
 

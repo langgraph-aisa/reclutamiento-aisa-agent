@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-root = Path('/home/ubuntu/reclutamiento-automatizado/n8n-workflows')
+root = Path(__file__).resolve().parent.parent / 'n8n-workflows'
 files = sorted(root.glob('*.json'))
 if len(files) < 4:
     raise SystemExit(f'Expected at least 4 workflow JSON files, found {len(files)}')
@@ -34,7 +34,7 @@ for path in files:
     required = {
         '01_flujo_maestro_postulaciones.json': ['process_public_application', 'alreadyApplied', 'N8N_AGENT_EVALUATION_URL'],
         '02_agente_plaza_template.json': ['lmChatOpenAi', 'outputParserStructured', 'jsonSchemaExample', 'application_id', 'finalize_application_evaluation'],
-        '03_revision_humana_10m.json': ['10', 'timeInterval', 'Verificar estado actual', 'Cancelar continuación', 'Sigue calificado'],
+        '03_revision_humana_10m.json': ['30 seconds', 'timeInterval', 'Verificar estado actual', 'Cancelar continuación', 'Sigue calificado'],
         '04_whatsapp_apichat.json': ['APICHAT_API_ENDPOINT', 'APICHAT_TOKEN', 'APICHAT_ACCOUNT_ID', 'APICHAT_CONNECT_TO', 'internalMessages', 'whatsapp_status'],
     }
     for marker in required.get(path.name, []):

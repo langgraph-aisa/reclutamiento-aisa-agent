@@ -170,7 +170,7 @@ export default function Candidates() {
         <InfoCard
           icon={Clock3}
           label="Ventana humana"
-          text="10 minutos antes de continuar"
+          text="30 segundos antes de continuar"
         />
         <InfoCard
           icon={CheckCircle2}
@@ -267,7 +267,7 @@ function CandidateDetail({
         <div className="rounded-2xl bg-white p-5 text-primary">
           <p className="text-sm font-semibold">Cambio humano</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Al elegir “Calificado”, n8n iniciará una ventana de 10 minutos antes
+            Al elegir “Calificado”, n8n iniciará una ventana de 30 segundos antes
             de continuar.
           </p>
           <div className="mt-4 space-y-3">
