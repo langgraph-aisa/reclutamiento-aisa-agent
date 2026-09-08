@@ -19,7 +19,6 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { startLogin } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { BarChart3, BriefcaseBusiness, KeyRound, LayoutDashboard, LogOut, MessageCircle, PanelLeft, Users, UserRoundCog } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
