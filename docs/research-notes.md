@@ -14,7 +14,7 @@ La documentación oficial [Structured Output Parser](https://docs.n8n.io/integra
 
 ## n8n: espera diferida
 
-La documentación oficial [Wait](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.wait) confirma que el nodo puede pausar y descargar los datos de ejecución a la base de n8n, reanudando después de un intervalo o por webhook. Se usará una espera de 10 minutos únicamente para cambios humanos a `calificado`, seguida de una consulta del estado actual para cancelar la continuación si el estado cambió.
+La documentación oficial [Wait](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.wait) confirma que el nodo puede pausar y descargar los datos de ejecución a la base de n8n, reanudando después de un intervalo o por webhook. Se usará una espera de 30 segundos únicamente para cambios humanos a `calificado`, seguida de una consulta del estado actual para cancelar la continuación si el estado cambió.
 
 ## n8n: nodo OpenAI/ChatGPT
 

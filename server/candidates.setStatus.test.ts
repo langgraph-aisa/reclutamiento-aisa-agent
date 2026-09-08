@@ -29,11 +29,16 @@ function createContext(): TrpcContext {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
   delete process.env.N8N_MANUAL_STATUS_WEBHOOK_URL;
 });
 
 describe("candidates.setStatus", () => {
   it("commits the new status and its human comment in one transaction", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.N8N_MANUAL_STATUS_WEBHOOK_URL =
+      "https://n8n.example.test/webhook/reclutamiento/manual-status";
     const before = { id: 42, status: "en_revision" };
     const application = {
       id: 42,
@@ -71,6 +76,7 @@ describe("candidates.setStatus", () => {
     expect(updateSql).toMatch(
       /WHEN \$1::application_status='calificado'::application_status/,
     );
+    expect(updateSql).toMatch(/interval '30 seconds'/);
     expect(query.mock.calls[2]?.[1]).toEqual(["calificado", 42]);
     expect(query.mock.calls[3]?.[1]).toEqual([
       7,
@@ -81,6 +87,19 @@ describe("candidates.setStatus", () => {
       "Cumple los requisitos",
     ]);
     expect(query.mock.calls[4]?.[0]).toBe("COMMIT");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://n8n.example.test/webhook/reclutamiento/manual-status",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          applicationId: 42,
+          status: "calificado",
+          actorType: "human",
+          actorUserId: 7,
+          comment: "Cumple los requisitos",
+        }),
+      }),
+    );
     expect(release).toHaveBeenCalledOnce();
   });
 

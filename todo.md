@@ -43,7 +43,7 @@
 - [x] Permitir actualización manual de estado por usuarios autorizados.
 - [x] Registrar bitácora de cambios con usuario, valor anterior, valor nuevo, comentario y fecha.
 - [x] Disparar proceso diferido cuando un humano cambie el estado a Calificado.
-- [x] Esperar 10 minutos antes de continuar el proceso de entrevista.
+- [x] Esperar 30 segundos antes de continuar el proceso de entrevista.
 - [x] Cancelar la continuación si el estado deja de ser Calificado durante la espera.
 
 ## Workflows n8n

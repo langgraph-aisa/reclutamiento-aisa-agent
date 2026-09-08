@@ -3,14 +3,12 @@
   "nodes": [
     {
       "parameters": {
-        "httpMethod": "POST",
-        "path": "reclutamiento/whatsapp-continue",
-        "responseMode": "responseNode"
+        "inputSource": "passthrough"
       },
       "id": "continuación-por-whatsapp",
       "name": "Continuación por WhatsApp",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
       "position": [
         0,
         0
@@ -18,7 +16,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const position = $json.positionTitle ?? 'la plaza';\nconst recipientList = $json.internalRecipients ?? [];\nreturn [{ json: { ...$json, candidateMessage: `Gracias por aplicar a la plaza de ${position}, agradeceremos nos pueda brindar su Curriculum Vitae para continuar con su proceso de evaluación.`, internalMessages: recipientList.map(phone => ({ phone, message: `Nuevo candidato calificado para entrevista: ${position}. Teléfono: ${$json.phoneInternational}` })) } }];"
+        "jsCode": "const input = $json.body ?? $json;\nconst position = input.positionTitle ?? 'la plaza';\nconst recipientList = input.internalRecipients ?? [];\nreturn [{ json: { ...input, candidateMessage: `Gracias por aplicar a la plaza de ${position}, agradeceremos nos pueda brindar su Curriculum Vitae para continuar con su proceso de evaluación.`, internalMessages: recipientList.map(phone => ({ phone, message: `Nuevo candidato calificado para entrevista: ${position}. Teléfono: ${input.phoneInternational}` })) } }];"
       },
       "id": "preparar-mensajes",
       "name": "Preparar mensajes",
@@ -111,7 +109,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE applications SET whatsapp_status='enviado', updated_at=now() WHERE id={{ $json.applicationId }};",
+        "query": "UPDATE applications SET whatsapp_status='enviado', updated_at=now() WHERE id={{ $('Preparar mensajes').first().json.applicationId }} RETURNING id AS \"applicationId\",whatsapp_status;",
         "options": {}
       },
       "id": "actualizar-conversación",
@@ -130,17 +128,11 @@
       }
     },
     {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { ok: true, status: 'enviado' } }}",
-        "options": {
-          "responseCode": 200
-        }
-      },
-      "id": "responder-whatsapp",
-      "name": "Responder WhatsApp",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "parameters": {},
+      "id": "finalizar-whatsapp",
+      "name": "Finalizar WhatsApp",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
       "position": [
         1340,
         -100
@@ -191,7 +183,7 @@
       "main": [
         [
           {
-            "node": "Responder WhatsApp",
+            "node": "Finalizar WhatsApp",
             "type": "main",
             "index": 0
           }

@@ -167,7 +167,7 @@ Importar los archivos en el siguiente orden y asignar las credenciales dentro de
 |---:|---|---|
 | 1 | `01_flujo_maestro_postulaciones.json` | Recepción, normalización, deduplicación y despacho |
 | 2 | `02_agente_plaza_template.json` | Perfil, reglas, OpenAI y persistencia |
-| 3 | `03_revision_humana_10m.json` | Espera de diez minutos y cancelación |
+| 3 | `03_revision_humana_30s.json` | Espera de 30 segundos y cancelación |
 | 4 | `04_whatsapp_apichat.json` | Mensaje al candidato y alertas internas |
 
 El agente normaliza mayúsculas y tildes en respuestas aceptadas, interpreta años o meses, aplica `min`, `max`, `minMonths`, `maxMonths`, requisitos, licencias, idiomas, ubicación, nivel académico y `ai_criteria`. Después solicita a OpenAI una salida estructurada y persiste `status`, `reason`, `profileSummary`, `keyPoints`, `confidence` y `ruleResults`.
@@ -205,7 +205,7 @@ Después del despliegue, ejecutar esta secuencia con una plaza de prueba:
 10. Enviar una respuesta que incumple una regla `hardFail` y confirmar `No calificado`.
 11. Enviar una respuesta abierta y confirmar evaluación estructurada.
 12. Repetir teléfono + plaza y confirmar rechazo de duplicado.
-13. Cambiar manualmente a `Calificado`, esperar diez minutos y verificar WhatsApp.
+13. Cambiar manualmente a `Calificado`, esperar 30 segundos y verificar WhatsApp.
 14. Cambiar el estado durante la espera y confirmar cancelación.
 
 ## 11. Comandos de validación

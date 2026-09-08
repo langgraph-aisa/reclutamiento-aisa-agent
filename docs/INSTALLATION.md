@@ -37,7 +37,7 @@ Las funciones `process_public_application` y `finalize_application_evaluation` s
 | Variable | Uso |
 |---|---|
 | `N8N_AGENT_EVALUATION_URL` | Webhook público del agente que evalúa una postulación nueva. |
-| `N8N_MANUAL_STATUS_WEBHOOK_URL` | Webhook público que recibe cambios humanos y programa la espera de diez minutos. |
+| `N8N_MANUAL_STATUS_WEBHOOK_URL` | Webhook público que recibe cambios humanos y programa la espera de 30 segundos. |
 | `OPENAI_MODEL` | Modelo opcional del nodo OpenAI Chat Model. |
 
 ### ApiChat
@@ -58,7 +58,7 @@ Importar los archivos en este orden:
 
 1. `01_flujo_maestro_postulaciones.json` recibe el POST de la aplicación, guarda la postulación, bloquea duplicados y llama al agente.
 2. `02_agente_plaza_template.json` es una plantilla. Duplicarla una vez por plaza, cambiar el nombre, `path`, criterios o referencias de plaza y conservar la conexión al nodo OpenAI Chat Model y al Structured Output Parser.
-3. `03_revision_humana_10m.json` recibe cambios humanos a `Calificado`, guarda la ventana, espera diez minutos, consulta el estado actual y cancela si cambió.
+3. `03_revision_humana_30s.json` recibe cambios humanos a `Calificado`, guarda la ventana, espera 30 segundos, consulta el estado actual y cancela si cambió.
 4. `04_whatsapp_apichat.json` prepara el mensaje configurado, envía al candidato, separa las alertas internas y actualiza la conversación.
 
 Después de importar, asignar una credencial PostgreSQL a cada nodo Postgres y una credencial OpenAI/ChatGPT al nodo `OpenAI Chat Model`. Los IDs `PENDIENTE` y `PENDIENTE_WORKFLOW_WHATSAPP` son marcadores intencionales: deben reemplazarse por la credencial o workflow correspondiente dentro de la instancia n8n, sin guardar secretos en los JSON.
@@ -71,12 +71,12 @@ La aplicación puede montarse en EasyPanel como servicio Node con el comando `pn
 
 ## Pruebas de aceptación
 
-Enviar una postulación completa y comprobar que solo se crea al pulsar `Enviar formulario`. Repetir el envío con el mismo teléfono y plaza para verificar el aviso de duplicado. Crear una regla `hardFail`, probar una respuesta incorrecta y confirmar `no_calificado`. Probar una respuesta abierta con experiencia expresada en meses y verificar que la IA devuelve JSON estructurado. Cambiar manualmente a `calificado`, comprobar la marca de espera y cambiar el estado antes de diez minutos para confirmar cancelación. Luego repetir sin cambiarlo y comprobar mensaje al candidato y alerta a la lista interna.
+Enviar una postulación completa y comprobar que solo se crea al pulsar `Enviar formulario`. Repetir el envío con el mismo teléfono y plaza para verificar el aviso de duplicado. Crear una regla `hardFail`, probar una respuesta incorrecta y confirmar `no_calificado`. Probar una respuesta abierta con experiencia expresada en meses y verificar que la IA devuelve JSON estructurado. Cambiar manualmente a `calificado`, comprobar la marca de espera y cambiar el estado antes de 30 segundos para confirmar cancelación. Luego repetir sin cambiarlo y comprobar mensaje al candidato y alerta a la lista interna.
 
 
 ## Validación de workflows y límites de la plantilla
 
-Los cuatro archivos JSON fueron validados localmente como JSON importable, con nombres de nodo únicos, conexiones internas válidas y marcadores semánticos para duplicados, PostgreSQL, OpenAI/ChatGPT estructurado, espera de 10 minutos, cancelación por cambio de estado y ApiChat. La validación final se ejecuta con `python3 scripts/validate_workflows.py`.
+Los cuatro archivos JSON fueron validados localmente como JSON importable, con nombres de nodo únicos, conexiones internas válidas y marcadores semánticos para duplicados, PostgreSQL, OpenAI/ChatGPT estructurado, espera de 30 segundos, cancelación por cambio de estado y ApiChat. La validación final se ejecuta con `python3 scripts/validate_workflows.py`.
 
 Los valores `PENDIENTE` se mantienen deliberadamente en credenciales de PostgreSQL, OpenAI/ChatGPT y el ID del subworkflow de WhatsApp. No son secretos ni deben sustituirse por valores inventados: deben mapearse a credenciales y workflow IDs reales después de importar los JSON en la instancia on-premise.
 

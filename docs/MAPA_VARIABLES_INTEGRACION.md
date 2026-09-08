@@ -71,7 +71,7 @@ Cuando un administrador o reclutador cambia manualmente un candidato a `Califica
 }
 ```
 
-El workflow receptor es `n8n-workflows/03_revision_humana_10m.json`, cuyo Webhook se denomina **Cambio humano de estado** y utiliza el path `reclutamiento/manual-status`.
+El workflow receptor es `n8n-workflows/03_revision_humana_30s.json`, cuyo Webhook se denomina **Cambio humano de estado** y utiliza el path `reclutamiento/manual-status`.
 
 ### 3.3 `OPENAI_MODEL`
 
@@ -176,11 +176,11 @@ Esta variable está reservada para la URL de callbacks o eventos entrantes de Ap
 | `02_agente_plaza_template.json` | **Cargar reglas de la plaza** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
 | `02_agente_plaza_template.json` | **OpenAI Chat Model** | Chat Model | `$env.OPENAI_MODEL` + credencial OpenAI: `PENDIENTE` |
 | `02_agente_plaza_template.json` | **Guardar evaluación** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
-| `03_revision_humana_10m.json` | **Cambio humano de estado** | Webhook | Recibe llamada desde `N8N_MANUAL_STATUS_WEBHOOK_URL` |
-| `03_revision_humana_10m.json` | **Guardar ventana de revisión** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
-| `03_revision_humana_10m.json` | **Esperar 10 minutos** | Wait | No requiere variable externa |
-| `03_revision_humana_10m.json` | **Verificar estado actual** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
-| `03_revision_humana_10m.json` | **Continuar entrevista** | Execute Workflow | `PENDIENTE_WORKFLOW_WHATSAPP` |
+| `03_revision_humana_30s.json` | **Cambio humano de estado** | Webhook | Recibe llamada desde `N8N_MANUAL_STATUS_WEBHOOK_URL` |
+| `03_revision_humana_30s.json` | **Guardar ventana de revisión** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
+| `03_revision_humana_30s.json` | **Esperar 30 segundos** | Wait | No requiere variable externa |
+| `03_revision_humana_30s.json` | **Verificar estado actual** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
+| `03_revision_humana_30s.json` | **Continuar entrevista** | Execute Workflow | `PENDIENTE_WORKFLOW_WHATSAPP` |
 | `04_whatsapp_apichat.json` | **Enviar mensaje al candidato** | HTTP Request | `APICHAT_API_ENDPOINT`, `APICHAT_TOKEN`, `APICHAT_ACCOUNT_ID`, `APICHAT_CONNECT_TO` |
 | `04_whatsapp_apichat.json` | **HTTP ApiChat alertas** | HTTP Request | `APICHAT_API_ENDPOINT`, `APICHAT_TOKEN`, `APICHAT_ACCOUNT_ID`, `APICHAT_CONNECT_TO` |
 | `04_whatsapp_apichat.json` | **Actualizar conversación** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |

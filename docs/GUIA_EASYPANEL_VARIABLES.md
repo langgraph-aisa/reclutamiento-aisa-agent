@@ -15,7 +15,7 @@ La solución utiliza dos servicios de ejecución que deben configurarse por sepa
 | Servicio EasyPanel | Variables principales | Responsabilidad |
 |---|---|---|
 | Aplicación web Talento Claro | `DATABASE_URL`, `JWT_SECRET`, `N8N_MANUAL_STATUS_WEBHOOK_URL` | Frontend, API, autenticación, PostgreSQL y disparo de revisión humana |
-| n8n | `N8N_AGENT_EVALUATION_URL`, `OPENAI_MODEL`, `APICHAT_*` | Workflows, evaluación, espera de diez minutos y WhatsApp |
+| n8n | `N8N_AGENT_EVALUATION_URL`, `OPENAI_MODEL`, `APICHAT_*` | Workflows, evaluación, espera de 30 segundos y WhatsApp |
 | PostgreSQL | Parámetros propios del servicio o URL de conexión | Persistencia central |
 
 En EasyPanel 2.33.2, la ruta operativa que debe utilizarse es **Project → Service → Environment**. Allí se agregan o editan las variables del servicio y posteriormente se aplica el cambio con **Save/Deploy** o la acción equivalente de despliegue visible en esa instalación. La documentación oficial de EasyPanel indica que las variables se utilizan durante el build y la ejecución, y que los cambios requieren redeploy o reinicio para afectar al proceso en ejecución [1]. n8n, por su parte, admite configuración mediante variables de entorno en instalaciones self-hosted [2]. Si la etiqueta de un botón difiere levemente en la interfaz de 2.33.2, debe utilizarse la acción que despliega o reinicia el servicio; no basta con guardar el formulario si el contenedor no se recrea.
@@ -220,7 +220,7 @@ En n8n:
 
 ### Workflow de WhatsApp
 
-En `03_revision_humana_10m.json`, el nodo **Continuar entrevista** contiene inicialmente:
+En `03_revision_humana_30s.json`, el nodo **Continuar entrevista** contiene inicialmente:
 
 ```text
 PENDIENTE_WORKFLOW_WHATSAPP
@@ -289,7 +289,7 @@ Realizar las pruebas en este orden para aislar errores:
 7. Confirmar que se crea una sola aplicación.
 8. Repetir el mismo teléfono y plaza para validar el HTTP 409 de duplicado.
 9. Cambiar manualmente un candidato a `Calificado`.
-10. Confirmar que `N8N_MANUAL_STATUS_WEBHOOK_URL` activa la espera de diez minutos.
+10. Confirmar que `N8N_MANUAL_STATUS_WEBHOOK_URL` activa la espera de 30 segundos.
 11. Cambiar el estado antes de cumplir la espera y confirmar que la continuación se cancela.
 12. Restaurar `Calificado`, esperar la ventana completa y probar ApiChat con un número controlado.
 13. Confirmar el mensaje al candidato y la alerta interna.
