@@ -43,6 +43,13 @@
       "when": 1788907915420,
       "tag": "0005_direct_apichat",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788970586625,
+      "tag": "0006_mst_eir_documents",
+      "breakpoints": true
     }
   ]
 }

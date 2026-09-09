@@ -280,6 +280,31 @@ export const integrationSettings = pgTable("integration_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, table => ({ providerKeyUq: uniqueIndex("integration_settings_provider_key_uq").on(table.provider, table.settingKey) }));
 
+export const methodologyDocuments = pgTable("methodology_documents", {
+  id: serial("id").primaryKey(),
+  documentKey: varchar("document_key", { length: 32 }).notNull(),
+  displayName: varchar("display_name", { length: 160 }).notNull(),
+  contentMarkdown: text("content_markdown").notNull(),
+  version: integer("version").default(1).notNull(),
+  createdByUserId: integer("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  updatedByUserId: integer("updated_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => ({ documentKeyUq: uniqueIndex("methodology_documents_document_key_uq").on(table.documentKey) }));
+
+export const methodologyDocumentRevisions = pgTable("methodology_document_revisions", {
+  id: serial("id").primaryKey(),
+  documentId: integer("document_id").references(() => methodologyDocuments.id, { onDelete: "cascade" }).notNull(),
+  version: integer("version").notNull(),
+  displayName: varchar("display_name", { length: 160 }).notNull(),
+  contentMarkdown: text("content_markdown").notNull(),
+  changedByUserId: integer("changed_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => ({
+  documentVersionUq: uniqueIndex("methodology_document_revisions_document_version_uq").on(table.documentId, table.version),
+  documentIdx: index("methodology_document_revisions_document_idx").on(table.documentId),
+}));
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type LoginCodeChallenge = typeof loginCodeChallenges.$inferSelect;
@@ -292,3 +317,5 @@ export type Application = typeof applications.$inferSelect;
 export type ApplicationAnswer = typeof applicationAnswers.$inferSelect;
 export type Evaluation = typeof evaluations.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
+export type MethodologyDocument = typeof methodologyDocuments.$inferSelect;
+export type MethodologyDocumentRevision = typeof methodologyDocumentRevisions.$inferSelect;

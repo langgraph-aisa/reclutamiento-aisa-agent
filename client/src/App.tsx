@@ -13,6 +13,7 @@ import FormBuilder from "./pages/FormBuilder";
 import Home from "./pages/Home";
 import Jobs from "./pages/Jobs";
 import Login from "./pages/Login";
+import MstEir from "./pages/MstEir";
 import Profiles from "./pages/Profiles";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
@@ -47,6 +48,9 @@ function Router() {
       </Route>
       <Route path="/admin/reports">
         <AdminShell><Reports /></AdminShell>
+      </Route>
+      <Route path="/admin/mst-eir">
+        <AdminShell><MstEir /></AdminShell>
       </Route>
       <Route path="/admin/config">
         <AdminShell><Config /></AdminShell>

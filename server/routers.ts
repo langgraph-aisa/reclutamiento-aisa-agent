@@ -10,6 +10,7 @@ import { adminProcedure, recruiterProcedure, publicProcedure, router } from "./_
 import { deliverCvRequestMessage, ensureCvRequestMessage, type CvRequestDelivery } from "./cvRequest";
 
 const statusValues = ["en_revision", "calificado", "no_calificado", "entrevista_iniciada", "entrevista_en_curso", "entrevista_finalizada", "pendiente_revision_humana", "error_procesamiento"] as const;
+const methodologyDocumentKeys = ["siera", "mst_eir"] as const;
 const roleProcedure = recruiterProcedure;
 
 async function requirePool() {
@@ -423,6 +424,81 @@ export const appRouter = router({
         pool.query(`SELECT ROUND(AVG(EXTRACT(EPOCH FROM (evaluation_at - submitted_at)) / 3600.0)::numeric, 1) AS average_hours FROM applications a ${where} AND evaluation_at IS NOT NULL`, values),
       ]);
       return { byStatus: byStatus.rows, byPosition: byPosition.rows, reasons: reasons.rows, responseTime: responseTime.rows[0] ?? { average_hours: null } };
+    }),
+  }),
+
+  mstEir: router({
+    documents: adminProcedure.query(async () => {
+      const pool = await requirePool();
+      const result = await pool.query(
+        `SELECT d.id,d.document_key,d.display_name,d.content_markdown,d.version,d.created_at,d.updated_at,
+                u.name AS updated_by_name,u.email AS updated_by_email,
+                (SELECT count(*)::int FROM methodology_document_revisions r WHERE r.document_id=d.id) AS revision_count
+           FROM methodology_documents d
+           LEFT JOIN users u ON u.id=d.updated_by_user_id
+          WHERE d.document_key = ANY($1::varchar[])
+          ORDER BY CASE d.document_key WHEN 'siera' THEN 1 WHEN 'mst_eir' THEN 2 ELSE 3 END`,
+        [methodologyDocumentKeys],
+      );
+      return result.rows;
+    }),
+    saveDocument: adminProcedure.input(z.object({
+      documentKey: z.enum(methodologyDocumentKeys),
+      contentMarkdown: z.string().min(1, "El documento no puede quedar vacío.").max(100_000, "El documento supera el máximo de 100,000 caracteres."),
+      expectedVersion: z.number().int().positive(),
+    })).mutation(async ({ input, ctx }) => {
+      const pool = await requirePool();
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const currentResult = await client.query(
+          `SELECT * FROM methodology_documents WHERE document_key=$1 FOR UPDATE`,
+          [input.documentKey],
+        );
+        const current = currentResult.rows[0];
+        if (!current) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "El documento no está inicializado. Ejecute primero el query MST-EIR en PostgreSQL." });
+        }
+        if (Number(current.version) !== input.expectedVersion) {
+          throw new TRPCError({ code: "CONFLICT", message: "Otra persona actualizó este documento. Recargue la página antes de guardar." });
+        }
+        if (current.content_markdown === input.contentMarkdown) {
+          await client.query("COMMIT");
+          return { ...current, unchanged: true as const };
+        }
+        const updatedResult = await client.query(
+          `UPDATE methodology_documents
+              SET content_markdown=$1,version=version+1,updated_by_user_id=$2,updated_at=now()
+            WHERE id=$3
+            RETURNING *`,
+          [input.contentMarkdown, ctx.user.id, current.id],
+        );
+        const updated = updatedResult.rows[0];
+        await client.query(
+          `INSERT INTO methodology_document_revisions
+             (document_id,version,display_name,content_markdown,changed_by_user_id)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [updated.id, updated.version, updated.display_name, updated.content_markdown, ctx.user.id],
+        );
+        await client.query(
+          `INSERT INTO audit_log
+             (actor_user_id,entity_type,entity_id,action,before_json,after_json)
+           VALUES ($1,'methodology_document',$2,'document_updated',$3::jsonb,$4::jsonb)`,
+          [
+            ctx.user.id,
+            current.id,
+            asJson({ documentKey: current.document_key, version: current.version, characters: current.content_markdown.length }),
+            asJson({ documentKey: updated.document_key, version: updated.version, characters: updated.content_markdown.length }),
+          ],
+        );
+        await client.query("COMMIT");
+        return { ...updated, unchanged: false as const };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
     }),
   }),
 

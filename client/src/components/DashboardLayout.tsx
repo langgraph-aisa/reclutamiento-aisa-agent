@@ -20,7 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { BarChart3, BriefcaseBusiness, KeyRound, LayoutDashboard, LogOut, MessageCircle, PanelLeft, Users, UserRoundCog } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, Globe2, KeyRound, LayoutDashboard, LogOut, MessageCircle, PanelLeft, Users, UserRoundCog } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -32,6 +32,7 @@ const menuItems = [
   { icon: BriefcaseBusiness, label: "Perfiles laborales", path: "/admin/profiles", adminOnly: true },
   { icon: Users, label: "Candidatos", path: "/admin/candidates" },
   { icon: BarChart3, label: "Informes", path: "/admin/reports" },
+  { icon: Globe2, label: "MST-EIR", path: "/admin/mst-eir", adminOnly: true },
   { icon: MessageCircle, label: "Configuración", path: "/admin/config", adminOnly: true },
   { icon: UserRoundCog, label: "Usuarios", path: "/admin/users", adminOnly: true },
   { icon: KeyRound, label: "Mi cuenta", path: "/admin/account" },
