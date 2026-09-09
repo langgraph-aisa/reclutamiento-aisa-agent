@@ -28,6 +28,7 @@ import { toast } from "sonner";
 
 const statuses = [
   { value: "en_revision", label: "En revisión" },
+  { value: "pre_calificado", label: "Pre-calificado" },
   { value: "calificado", label: "Calificado" },
   { value: "no_calificado", label: "No calificado" },
   { value: "pendiente_revision_humana", label: "Pendiente de revisión humana" },
@@ -209,9 +210,13 @@ function CandidateDetail({
       if (result.whatsapp?.status === "sent") {
         toast.success("Estado guardado y solicitud de CV enviada por WhatsApp");
       } else if (result.whatsapp?.status === "failed") {
-        toast.error("Estado guardado, pero ApiChat no pudo enviar el mensaje. Puedes reintentarlo.");
+        toast.error(
+          "Estado guardado, pero ApiChat no pudo enviar el mensaje. Puedes reintentarlo."
+        );
       } else if (result.whatsapp?.status === "unknown") {
-        toast.warning("ApiChat aceptó la solicitud, pero el resultado debe verificarse antes de otro envío.");
+        toast.warning(
+          "ApiChat aceptó la solicitud, pero el resultado debe verificarse antes de otro envío."
+        );
       } else {
         toast.success("Estado y comentario guardados");
       }
@@ -226,13 +231,23 @@ function CandidateDetail({
         utils.candidates.detail.invalidate({ id: data.application.id }),
         utils.candidates.list.invalidate(),
       ]);
-      if (result.whatsapp.status === "sent") toast.success("Solicitud de CV enviada por WhatsApp");
-      else if (result.whatsapp.status === "already_sent") toast.info("La solicitud de CV ya había sido enviada");
-      else if (result.whatsapp.status === "in_progress") toast.info("El envío ya está siendo procesado");
-      else if (result.whatsapp.status === "unknown") toast.warning("El resultado del envío debe verificarse en WhatsApp antes de intentarlo nuevamente");
-      else toast.error("ApiChat no pudo enviar el mensaje. Revisa la configuración e inténtalo nuevamente.");
+      if (result.whatsapp.status === "sent")
+        toast.success("Solicitud de CV enviada por WhatsApp");
+      else if (result.whatsapp.status === "already_sent")
+        toast.info("La solicitud de CV ya había sido enviada");
+      else if (result.whatsapp.status === "in_progress")
+        toast.info("El envío ya está siendo procesado");
+      else if (result.whatsapp.status === "unknown")
+        toast.warning(
+          "El resultado del envío debe verificarse en WhatsApp antes de intentarlo nuevamente"
+        );
+      else
+        toast.error(
+          "ApiChat no pudo enviar el mensaje. Revisa la configuración e inténtalo nuevamente."
+        );
     },
-    onError: error => toast.error(`No fue posible reintentar: ${error.message}`),
+    onError: error =>
+      toast.error(`No fue posible reintentar: ${error.message}`),
   });
 
   useEffect(() => {
@@ -291,8 +306,8 @@ function CandidateDetail({
         <div className="rounded-2xl bg-white p-5 text-primary">
           <p className="text-sm font-semibold">Cambio humano</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Al cambiar a “Calificado”, Talento Claro solicitará el CV directamente
-            por ApiChat, una sola vez por postulación.
+            Al cambiar a “Calificado”, Talento Claro solicitará el CV
+            directamente por ApiChat, una sola vez por postulación.
           </p>
           <div className="mt-4 space-y-3">
             <p className="text-xs text-muted-foreground">
@@ -349,29 +364,52 @@ function CandidateDetail({
                 {setStatus.error.message}
               </p>
             )}
-            {data.application.status === "calificado" && data.application.whatsapp_status !== "enviado" && (
-              <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
-                <p className="font-semibold">
-                  WhatsApp: {data.application.whatsapp_status === "error" ? "envío fallido" : data.application.whatsapp_status === "pendiente" ? "pendiente" : data.application.whatsapp_status === "desconocido" ? "por confirmar" : "no enviado"}
-                </p>
-                {data.application.last_whatsapp_error && <p className="mt-1 leading-5">{data.application.last_whatsapp_error}</p>}
-                {data.application.whatsapp_status === "desconocido" ? (
-                  <p className="mt-2 font-semibold">Verifica la conversación del postulante antes de realizar otro envío.</p>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => retryCvRequest.mutate({ id: data.application.id })}
-                    disabled={retryCvRequest.isPending}
-                    className="mt-3 w-full rounded-xl"
-                  >
-                    <RefreshCw className={`mr-2 h-3.5 w-3.5 ${retryCvRequest.isPending ? "animate-spin" : ""}`} />
-                    {retryCvRequest.isPending ? "Enviando…" : data.application.whatsapp_status === "error" ? "Reintentar solicitud de CV" : "Enviar solicitud de CV"}
-                  </Button>
-                )}
-              </div>
-            )}
+            {data.application.status === "calificado" &&
+              data.application.whatsapp_status !== "enviado" && (
+                <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-semibold">
+                    WhatsApp:{" "}
+                    {data.application.whatsapp_status === "error"
+                      ? "envío fallido"
+                      : data.application.whatsapp_status === "pendiente"
+                        ? "pendiente"
+                        : data.application.whatsapp_status === "desconocido"
+                          ? "por confirmar"
+                          : "no enviado"}
+                  </p>
+                  {data.application.last_whatsapp_error && (
+                    <p className="mt-1 leading-5">
+                      {data.application.last_whatsapp_error}
+                    </p>
+                  )}
+                  {data.application.whatsapp_status === "desconocido" ? (
+                    <p className="mt-2 font-semibold">
+                      Verifica la conversación del postulante antes de realizar
+                      otro envío.
+                    </p>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        retryCvRequest.mutate({ id: data.application.id })
+                      }
+                      disabled={retryCvRequest.isPending}
+                      className="mt-3 w-full rounded-xl"
+                    >
+                      <RefreshCw
+                        className={`mr-2 h-3.5 w-3.5 ${retryCvRequest.isPending ? "animate-spin" : ""}`}
+                      />
+                      {retryCvRequest.isPending
+                        ? "Enviando…"
+                        : data.application.whatsapp_status === "error"
+                          ? "Reintentar solicitud de CV"
+                          : "Enviar solicitud de CV"}
+                    </Button>
+                  )}
+                </div>
+              )}
           </div>
         </div>
         <div className="lg:col-span-2 rounded-2xl bg-white/8 p-4">
@@ -407,13 +445,18 @@ function CandidateDetail({
                           ? "Fallido"
                           : message.delivery_status === "unknown"
                             ? "Por confirmar"
-                          : message.delivery_status === "pending" || message.delivery_status === "sending"
-                            ? "Pendiente"
-                            : "Enviado"
+                            : message.delivery_status === "pending" ||
+                                message.delivery_status === "sending"
+                              ? "Pendiente"
+                              : "Enviado"
                         : "Recibido"}
                     </span>
                     {message.body ?? "Mensaje sin texto"}
-                    {message.last_error && <p className="mt-2 text-xs text-red-200">{message.last_error}</p>}
+                    {message.last_error && (
+                      <p className="mt-2 text-xs text-red-200">
+                        {message.last_error}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -481,9 +524,11 @@ function CandidateRow({
   const tone =
     candidate.status === "calificado"
       ? "bg-emerald-100 text-emerald-800"
-      : candidate.status === "no_calificado"
-        ? "bg-red-100 text-red-800"
-        : "bg-amber-100 text-amber-800";
+      : candidate.status === "pre_calificado"
+        ? "bg-sky-100 text-sky-800"
+        : candidate.status === "no_calificado"
+          ? "bg-red-100 text-red-800"
+          : "bg-amber-100 text-amber-800";
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 gap-3">

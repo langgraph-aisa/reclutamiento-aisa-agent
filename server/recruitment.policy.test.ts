@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { canChangeStatus, canManageConfiguration, canOperateCandidates, duplicateIdentity, shouldContinueAfterReview } from "./policy";
+import {
+  canChangeStatus,
+  canManageConfiguration,
+  canOperateCandidates,
+  duplicateIdentity,
+  shouldContinueAfterReview,
+} from "./policy";
 
 describe("recruitment policy", () => {
   it("allows operations for admin and recruiter only", () => {
@@ -15,14 +21,19 @@ describe("recruitment policy", () => {
 
   it("accepts only known statuses for an operational role", () => {
     expect(canChangeStatus("reclutador", "calificado")).toBe(true);
+    expect(canChangeStatus("reclutador", "pre_calificado")).toBe(true);
     expect(canChangeStatus("user", "calificado")).toBe(false);
     expect(canChangeStatus("admin", "otro_estado")).toBe(false);
   });
 
   it("uses phone plus position as duplicate identity", () => {
     expect(duplicateIdentity("+50255555555", 4)).toBe("+50255555555:4");
-    expect(duplicateIdentity("+50255555555", 4)).toBe(duplicateIdentity("+50255555555", 4));
-    expect(duplicateIdentity("+50255555555", 5)).not.toBe(duplicateIdentity("+50255555555", 4));
+    expect(duplicateIdentity("+50255555555", 4)).toBe(
+      duplicateIdentity("+50255555555", 4)
+    );
+    expect(duplicateIdentity("+50255555555", 5)).not.toBe(
+      duplicateIdentity("+50255555555", 4)
+    );
   });
 
   it("continues only while status remains qualified after the hold", () => {

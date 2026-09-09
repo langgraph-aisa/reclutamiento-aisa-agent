@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 
-const { getPool, ensureCvRequestMessage, deliverCvRequestMessage } = vi.hoisted(() => ({
-  getPool: vi.fn(),
-  ensureCvRequestMessage: vi.fn(),
-  deliverCvRequestMessage: vi.fn(),
-}));
+const { getPool, ensureCvRequestMessage, deliverCvRequestMessage } = vi.hoisted(
+  () => ({
+    getPool: vi.fn(),
+    ensureCvRequestMessage: vi.fn(),
+    deliverCvRequestMessage: vi.fn(),
+  })
+);
 
 vi.mock("./db", () => ({
   getPool,
@@ -40,7 +42,68 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+describe("candidates.list", () => {
+  it("filters applications by pre-qualified status", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    getPool.mockResolvedValue({ query });
+
+    await appRouter
+      .createCaller(createContext())
+      .candidates.list({ status: "pre_calificado" });
+
+    expect(String(query.mock.calls[0]?.[0])).toMatch(/a\.status = \$1/);
+    expect(query.mock.calls[0]?.[1]).toEqual(["pre_calificado"]);
+  });
+});
+
 describe("candidates.setStatus", () => {
+  it("accepts pre-qualified without queuing a CV request", async () => {
+    const before = {
+      id: 42,
+      status: "en_revision",
+      whatsapp_status: "no_enviado",
+      full_name: "Ana Pérez",
+      phone_international: "+50255555555",
+      position_title: "Ventas",
+      whatsapp_message: null,
+    };
+    const preQualified = {
+      id: 42,
+      status: "pre_calificado",
+      whatsapp_status: "no_enviado",
+      review_hold_until: null,
+    };
+    const audit = {
+      id: 98,
+      actor_user_id: 7,
+      action: "status_changed",
+      comment: "Revisión inicial",
+    };
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [before] })
+      .mockResolvedValueOnce({ rows: [preQualified] })
+      .mockResolvedValueOnce({ rows: [audit] })
+      .mockResolvedValueOnce({ rows: [] });
+    getPool.mockResolvedValue({
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    });
+
+    const result = await appRouter
+      .createCaller(createContext())
+      .candidates.setStatus({
+        id: 42,
+        status: "pre_calificado",
+        comment: "Revisión inicial",
+      });
+
+    expect(result.application).toEqual(preQualified);
+    expect(result.whatsapp).toBeNull();
+    expect(ensureCvRequestMessage).not.toHaveBeenCalled();
+    expect(deliverCvRequestMessage).not.toHaveBeenCalled();
+  });
+
   it("commits the status and queues one direct CV request when transitioning to qualified", async () => {
     const before = {
       id: 42,
@@ -51,10 +114,20 @@ describe("candidates.setStatus", () => {
       position_title: "Ventas",
       whatsapp_message: null,
     };
-    const statusUpdated = { id: 42, status: "calificado", whatsapp_status: "no_enviado", review_hold_until: null };
+    const statusUpdated = {
+      id: 42,
+      status: "calificado",
+      whatsapp_status: "no_enviado",
+      review_hold_until: null,
+    };
     const pending = { ...statusUpdated, whatsapp_status: "pendiente" };
     const sent = { ...statusUpdated, whatsapp_status: "enviado" };
-    const audit = { id: 99, actor_user_id: 7, action: "status_changed", comment: "Cumple" };
+    const audit = {
+      id: 99,
+      actor_user_id: 7,
+      action: "status_changed",
+      comment: "Cumple",
+    };
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({ rows: [] })
@@ -65,16 +138,28 @@ describe("candidates.setStatus", () => {
       .mockResolvedValueOnce({ rows: [] });
     const poolQuery = vi.fn().mockResolvedValue({ rows: [sent] });
     const release = vi.fn();
-    const pool = { connect: vi.fn().mockResolvedValue({ query: clientQuery, release }), query: poolQuery };
+    const pool = {
+      connect: vi.fn().mockResolvedValue({ query: clientQuery, release }),
+      query: poolQuery,
+    };
     getPool.mockResolvedValue(pool);
-    ensureCvRequestMessage.mockResolvedValue({ id: 501, delivery_status: "pending", created: true });
-    deliverCvRequestMessage.mockResolvedValue({ status: "sent", providerMessageId: "msg-1" });
-
-    const result = await appRouter.createCaller(createContext()).candidates.setStatus({
-      id: 42,
-      status: "calificado",
-      comment: "Cumple",
+    ensureCvRequestMessage.mockResolvedValue({
+      id: 501,
+      delivery_status: "pending",
+      created: true,
     });
+    deliverCvRequestMessage.mockResolvedValue({
+      status: "sent",
+      providerMessageId: "msg-1",
+    });
+
+    const result = await appRouter
+      .createCaller(createContext())
+      .candidates.setStatus({
+        id: 42,
+        status: "calificado",
+        comment: "Cumple",
+      });
 
     expect(result).toEqual({
       success: true,
@@ -82,14 +167,23 @@ describe("candidates.setStatus", () => {
       audit,
       whatsapp: { status: "sent", providerMessageId: "msg-1" },
     });
-    expect(String(clientQuery.mock.calls[2]?.[0])).toMatch(/review_hold_until=NULL/);
-    expect(ensureCvRequestMessage).toHaveBeenCalledWith(expect.anything(), before);
+    expect(String(clientQuery.mock.calls[2]?.[0])).toMatch(
+      /review_hold_until=NULL/
+    );
+    expect(ensureCvRequestMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      before
+    );
     expect(deliverCvRequestMessage).toHaveBeenCalledWith(pool, 501);
     expect(clientQuery.mock.calls[4]?.[1]).toEqual([
       7,
       42,
       "status_changed",
-      JSON.stringify({ id: 42, status: "en_revision", whatsapp_status: "no_enviado" }),
+      JSON.stringify({
+        id: 42,
+        status: "en_revision",
+        whatsapp_status: "no_enviado",
+      }),
       JSON.stringify(pending),
       "Cumple",
     ]);
@@ -116,13 +210,17 @@ describe("candidates.setStatus", () => {
       .mockResolvedValueOnce({ rows: [after] })
       .mockResolvedValueOnce({ rows: [audit] })
       .mockResolvedValueOnce({ rows: [] });
-    getPool.mockResolvedValue({ connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }) });
-
-    const result = await appRouter.createCaller(createContext()).candidates.setStatus({
-      id: 42,
-      status: "calificado",
-      comment: "Mantener",
+    getPool.mockResolvedValue({
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
     });
+
+    const result = await appRouter
+      .createCaller(createContext())
+      .candidates.setStatus({
+        id: 42,
+        status: "calificado",
+        comment: "Mantener",
+      });
 
     expect(result.audit.action).toBe("comment_added");
     expect(result.whatsapp).toBeNull();
@@ -141,7 +239,11 @@ describe("candidates.retryCvRequest", () => {
       position_title: "Ventas",
       whatsapp_message: null,
     };
-    const updated = { id: 42, status: "calificado", whatsapp_status: "enviado" };
+    const updated = {
+      id: 42,
+      status: "calificado",
+      whatsapp_status: "enviado",
+    };
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({ rows: [] })
@@ -149,12 +251,26 @@ describe("candidates.retryCvRequest", () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] });
     const poolQuery = vi.fn().mockResolvedValue({ rows: [updated] });
-    const pool = { connect: vi.fn().mockResolvedValue({ query: clientQuery, release: vi.fn() }), query: poolQuery };
+    const pool = {
+      connect: vi
+        .fn()
+        .mockResolvedValue({ query: clientQuery, release: vi.fn() }),
+      query: poolQuery,
+    };
     getPool.mockResolvedValue(pool);
-    ensureCvRequestMessage.mockResolvedValue({ id: 501, delivery_status: "failed", created: false });
-    deliverCvRequestMessage.mockResolvedValue({ status: "sent", providerMessageId: "msg-2" });
+    ensureCvRequestMessage.mockResolvedValue({
+      id: 501,
+      delivery_status: "failed",
+      created: false,
+    });
+    deliverCvRequestMessage.mockResolvedValue({
+      status: "sent",
+      providerMessageId: "msg-2",
+    });
 
-    const result = await appRouter.createCaller(createContext()).candidates.retryCvRequest({ id: 42 });
+    const result = await appRouter
+      .createCaller(createContext())
+      .candidates.retryCvRequest({ id: 42 });
 
     expect(deliverCvRequestMessage).toHaveBeenCalledWith(pool, 501);
     expect(result).toEqual({

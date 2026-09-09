@@ -50,6 +50,13 @@
       "when": 1788970586625,
       "tag": "0006_mst_eir_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788975832446,
+      "tag": "0007_pre_calificado",
+      "breakpoints": true
     }
   ]
 }
