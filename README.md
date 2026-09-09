@@ -1,2 +1,1 @@
-<img width="883" height="338" alt="alternativas-inteligentes-sa" src="https://github.com/user-attachments/assets/bf8ca4bf-e8b8-49ac-81e5-88615e59bfab" />
-# rrhh-aisa-google-login
+<img width="350" height="125" alt="alternativas-inteligentes-sa-mini" src="https://github.com/user-attachments/assets/03e4d535-404d-4994-80be-c3db20c98b34" />
