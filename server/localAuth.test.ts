@@ -43,7 +43,7 @@ describe("email code authentication", () => {
     process.env.SMTP_SECURE = "false";
     process.env.SMTP_USER = "mailer@example.test";
     process.env.SMTP_PASSWORD = "test-secret";
-    process.env.SMTP_FROM = "Talento Claro <mailer@example.test>";
+    process.env.SMTP_FROM = "Talento AISA <mailer@example.test>";
 
     await sendLoginCode({ email: "adminit@aisa.com.gt", code: "123456", expiresInMinutes: 10 });
 

@@ -69,7 +69,7 @@ export default function Config() {
             <CardHeader><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-50 text-emerald-700"><KeyRound className="h-5 w-5" /></div><div><CardTitle className="text-xl text-primary">ApiChat / WhatsApp</CardTitle><p className="mt-1 text-sm text-muted-foreground">El backend envía directamente la solicitud de CV cuando una postulación cambia a Calificado.</p></div></div></CardHeader>
             <CardContent className="grid gap-5 sm:grid-cols-2">
               <Readonly label="Modo API" value="APICHAT_API_MODE" /><Readonly label="API Endpoint" value="APICHAT_API_ENDPOINT" /><Readonly label="Client ID · API nativa" value="APICHAT_CLIENT_ID" /><Readonly label="Token · obligatorio" value="APICHAT_TOKEN" /><Readonly label="ID Cuenta · modo heredado" value="APICHAT_ACCOUNT_ID" /><Readonly label="Conexión · modo heredado" value="APICHAT_CONNECT_TO" />
-              <div className="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900 sm:col-span-2"><strong>Seguridad:</strong> las credenciales se ingresan como secretos en el entorno del servicio Talento Claro de EasyPanel; no se muestran ni se guardan en el navegador.</div>
+              <div className="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900 sm:col-span-2"><strong>Seguridad:</strong> las credenciales se ingresan como secretos en el entorno del servicio Talento AISA de EasyPanel; no se muestran ni se guardan en el navegador.</div>
             </CardContent>
           </Card>
           <Card className="rounded-3xl border-0 shadow-soft">

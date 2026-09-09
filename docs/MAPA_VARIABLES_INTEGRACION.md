@@ -1,5 +1,5 @@
 # Mapa de variables de entorno e integración
-## Talento Claro · n8n, OpenAI/ChatGPT y ApiChat/WhatsApp
+## Talento AISA · n8n, OpenAI/ChatGPT y ApiChat/WhatsApp
 
 **Proyecto:** `reclutamiento-automatizado`  
 **Versión de referencia:** `30e4f611`  
@@ -9,7 +9,7 @@
 
 ## 1. Propósito
 
-Este documento identifica exactamente dónde se utilizan las variables de entorno de n8n, OpenAI/ChatGPT y ApiChat/WhatsApp dentro de Talento Claro. También distingue entre variables consumidas en tiempo de ejecución, nombres mostrados únicamente en la interfaz, credenciales nativas de n8n y marcadores que aún deben sustituirse después de importar los workflows.
+Este documento identifica exactamente dónde se utilizan las variables de entorno de n8n, OpenAI/ChatGPT y ApiChat/WhatsApp dentro de Talento AISA. También distingue entre variables consumidas en tiempo de ejecución, nombres mostrados únicamente en la interfaz, credenciales nativas de n8n y marcadores que aún deben sustituirse después de importar los workflows.
 
 La regla de seguridad es mantener tokens y credenciales fuera de los archivos JSON, el código fuente, el frontend y la documentación. Los valores reales deben registrarse en las variables de entorno del servicio n8n, en las credenciales nativas de n8n o en EasyPanel, según corresponda.
 

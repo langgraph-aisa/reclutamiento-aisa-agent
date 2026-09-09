@@ -1,4 +1,4 @@
-# Talento Claro · Paquete integral para EasyPanel
+# Talento AISA · Paquete integral para EasyPanel
 
 **Fecha:** 1 de septiembre de 2026  
 **Contenido:** código fuente completo, migraciones PostgreSQL, seeds, workflows n8n, scripts, documentación Markdown y manual PDF.

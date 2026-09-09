@@ -1,4 +1,4 @@
-# Talento Claro · instalación on-premise
+# Talento AISA · instalación on-premise
 
 ## Alcance
 

@@ -22,7 +22,7 @@
   #align(center)[
     #text(size: 27pt, weight: "bold", fill: report-accent)[Guía técnica de implementación]
     #v(0.7em)
-    #text(size: 15pt, fill: luma(80))[Talento Claro · Reclutamiento automatizado por plaza]
+    #text(size: 15pt, fill: luma(80))[Talento AISA · Reclutamiento automatizado por plaza]
     #v(1.8em)
     #line(length: 42%, stroke: 1pt + report-accent)
     #v(1.6em)
@@ -41,7 +41,7 @@
 
 = Resumen técnico
 
-Talento Claro gestiona el ciclo de postulación y evaluación por plaza sin depender de hojas de cálculo. La aplicación pública recibe respuestas desde teléfonos móviles; el panel protegido permite mantener plazas, formularios, preguntas, reglas, candidatos, catálogo geográfico e informes; PostgreSQL conserva la información transaccional; y n8n coordina la evaluación, la revisión humana diferida y la mensajería de WhatsApp.
+Talento AISA gestiona el ciclo de postulación y evaluación por plaza sin depender de hojas de cálculo. La aplicación pública recibe respuestas desde teléfonos móviles; el panel protegido permite mantener plazas, formularios, preguntas, reglas, candidatos, catálogo geográfico e informes; PostgreSQL conserva la información transaccional; y n8n coordina la evaluación, la revisión humana diferida y la mensajería de WhatsApp.
 
 La decisión técnica más importante es separar tres responsabilidades. La aplicación es la fuente de configuración y operación; PostgreSQL es la fuente de verdad; n8n es la capa de orquestación e integración. Esta separación permite modificar reglas sin editar manualmente cada workflow y evita que una hoja externa cambie de estructura sin control.
 

@@ -128,8 +128,8 @@ export async function sendLoginCode(payload: { email: string; code: string; expi
   await transporter.sendMail({
     from,
     to: payload.email,
-    subject: "Código de acceso · Talento Claro",
+    subject: "Código de acceso · Talento AISA",
     text: `Tu código de acceso es ${payload.code}. Expira en ${expiresInMinutes} minutos. Si no solicitaste este acceso, ignora este mensaje.`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#0b2f53"><h1 style="font-size:22px">Talento Claro</h1><p>Utiliza el siguiente código para ingresar a la plataforma:</p><p style="font-size:34px;letter-spacing:8px;font-weight:700;margin:28px 0">${payload.code}</p><p>El código expira en <strong>${expiresInMinutes} minutos</strong> y solo puede utilizarse una vez.</p><p style="color:#64748b;font-size:13px">Si no solicitaste este acceso, ignora este mensaje.</p></div>`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#0b2f53"><h1 style="font-size:22px">Talento AISA</h1><p>Utiliza el siguiente código para ingresar a la plataforma:</p><p style="font-size:34px;letter-spacing:8px;font-weight:700;margin:28px 0">${payload.code}</p><p>El código expira en <strong>${expiresInMinutes} minutos</strong> y solo puede utilizarse una vez.</p><p style="color:#64748b;font-size:13px">Si no solicitaste este acceso, ignora este mensaje.</p></div>`,
   });
 }

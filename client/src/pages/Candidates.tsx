@@ -306,7 +306,7 @@ function CandidateDetail({
         <div className="rounded-2xl bg-white p-5 text-primary">
           <p className="text-sm font-semibold">Cambio humano</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Al cambiar a “Calificado”, Talento Claro solicitará el CV
+            Al cambiar a “Calificado”, Talento AISA solicitará el CV
             directamente por ApiChat, una sola vez por postulación.
           </p>
           <div className="mt-4 space-y-3">

@@ -1,5 +1,5 @@
 # Manual de implementación y configuración
-## Talento Claro · Reclutamiento automatizado por plaza
+## Talento AISA · Reclutamiento automatizado por plaza
 
 **Autor:** Manus AI  
 **Fecha de actualización:** 1 de septiembre de 2026  
@@ -10,7 +10,7 @@
 
 ## 1. Alcance validado
 
-Talento Claro sustituye el uso operativo de Google Sheets por una aplicación React/Express/tRPC y PostgreSQL. La plataforma administra **perfiles laborales**, **plazas**, **formularios**, **preguntas**, **reglas automáticas**, **candidatos**, **evaluaciones**, **revisión humana**, **informes** e integración con n8n, OpenAI/ChatGPT y ApiChat/WhatsApp.
+Talento AISA sustituye el uso operativo de Google Sheets por una aplicación React/Express/tRPC y PostgreSQL. La plataforma administra **perfiles laborales**, **plazas**, **formularios**, **preguntas**, **reglas automáticas**, **candidatos**, **evaluaciones**, **revisión humana**, **informes** e integración con n8n, OpenAI/ChatGPT y ApiChat/WhatsApp.
 
 La validación técnica confirmó que un Administrador puede crear un perfil laboral, asociarlo a una o varias plazas, generar un formulario por plaza y definir para cada pregunta su tipo, obligatoriedad, opciones visibles, respuestas que aprueban, descarte directo, rangos numéricos, experiencia mínima o máxima en meses y criterio de razonamiento para IA. El workflow del agente consulta estas configuraciones desde PostgreSQL; no codifica las respuestas correctas dentro del JSON.
 
@@ -90,7 +90,7 @@ En EasyPanel abrir **Proyecto → servicio de la aplicación → Environment**, 
 | `SMTP_SECURE` | Sí | `false` para 587; `true` para 465 | TLS inmediato |
 | `SMTP_USER` | Sí | `notificaciones@dominio.com` | Usuario SMTP |
 | `SMTP_PASSWORD` | Sí | Valor secreto | Clave o contraseña de aplicación |
-| `SMTP_FROM` | Sí | `Talento Claro <notificaciones@dominio.com>` | Remitente autorizado |
+| `SMTP_FROM` | Sí | `Talento AISA <notificaciones@dominio.com>` | Remitente autorizado |
 | `N8N_MANUAL_STATUS_WEBHOOK_URL` | Sí para revisión humana | URL de producción del workflow 03 | Evento de cambio manual |
 | `PORT` | Gestionada por EasyPanel | Sin valor fijo en código | Puerto HTTP interno |
 
@@ -105,7 +105,7 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=notificaciones@dominio.com
 SMTP_PASSWORD=REEMPLAZAR
-SMTP_FROM=Talento Claro <notificaciones@dominio.com>
+SMTP_FROM=Talento AISA <notificaciones@dominio.com>
 N8N_MANUAL_STATUS_WEBHOOK_URL=https://n8n.dominio.com/webhook/reclutamiento/revision-humana
 ```
 

@@ -1,5 +1,5 @@
 # Guía técnica para configurar variables de entorno en EasyPanel
-## Talento Claro · Aplicación web, n8n, PostgreSQL y ApiChat/WhatsApp
+## Talento AISA · Aplicación web, n8n, PostgreSQL y ApiChat/WhatsApp
 
 **Proyecto:** `reclutamiento-automatizado`  
 **Objetivo:** configurar las variables directamente en EasyPanel 2.33.2 sobre una VPS de Google  
@@ -14,7 +14,7 @@ La solución utiliza dos servicios de ejecución que deben configurarse por sepa
 
 | Servicio EasyPanel | Variables principales | Responsabilidad |
 |---|---|---|
-| Aplicación web Talento Claro | `DATABASE_URL`, `JWT_SECRET`, `N8N_MANUAL_STATUS_WEBHOOK_URL` | Frontend, API, autenticación, PostgreSQL y disparo de revisión humana |
+| Aplicación web Talento AISA | `DATABASE_URL`, `JWT_SECRET`, `N8N_MANUAL_STATUS_WEBHOOK_URL` | Frontend, API, autenticación, PostgreSQL y disparo de revisión humana |
 | n8n | `N8N_AGENT_EVALUATION_URL`, `OPENAI_MODEL`, `APICHAT_*` | Workflows, evaluación, espera de 30 segundos y WhatsApp |
 | PostgreSQL | Parámetros propios del servicio o URL de conexión | Persistencia central |
 
@@ -49,7 +49,7 @@ Realizar un respaldo de PostgreSQL y anotar los valores actuales antes de reempl
 ### Paso 1: abrir el proyecto en EasyPanel 2.33.2
 
 1. Entrar al panel de administración de EasyPanel 2.33.2.
-2. Seleccionar el proyecto donde se ejecuta Talento Claro.
+2. Seleccionar el proyecto donde se ejecuta Talento AISA.
 3. Abrir el servicio correspondiente a la aplicación web, no el servicio n8n.
 4. Confirmar que el servicio tenga el código del proyecto `reclutamiento-automatizado`.
 5. Verificar en la vista del servicio que el estado sea operativo antes de modificar variables.

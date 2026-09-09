@@ -32,7 +32,7 @@
 
 = 1. Resumen ejecutivo
 
-Se incorporó una primera capa de acceso local para proteger la operación interna de Talento Claro. Las rutas administrativas —plazas, formularios, candidatos, informes, configuración, perfiles laborales y usuarios— continúan pasando por el layout protegido y ahora pueden utilizar una sesión local firmada mediante cookie HttpOnly. Los formularios públicos por identificador seguro permanecen accesibles sin sesión porque son enlaces destinados a candidatos.
+Se incorporó una primera capa de acceso local para proteger la operación interna de Talento AISA. Las rutas administrativas —plazas, formularios, candidatos, informes, configuración, perfiles laborales y usuarios— continúan pasando por el layout protegido y ahora pueden utilizar una sesión local firmada mediante cookie HttpOnly. Los formularios públicos por identificador seguro permanecen accesibles sin sesión porque son enlaces destinados a candidatos.
 
 El usuario inicial de testing se entrega mediante un seed SQL separado. La cuenta es `adminit@aisa.com.gt` y la contraseña temporal es `ADMIN`. La cuenta se marca con `password_change_required = true`; después del primer ingreso debe cambiarse desde `Mi cuenta`. Esta contraseña solo es válida para pruebas y debe sustituirse antes de cualquier uso operativo.
 

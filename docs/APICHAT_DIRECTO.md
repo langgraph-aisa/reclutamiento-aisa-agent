@@ -1,6 +1,6 @@
 # Envío directo de solicitud de CV por ApiChat
 
-Talento Claro envía una sola solicitud de CV cuando una postulación cambia desde cualquier estado distinto de `calificado` hacia `calificado`. El flujo no utiliza n8n.
+Talento AISA envía una sola solicitud de CV cuando una postulación cambia desde cualquier estado distinto de `calificado` hacia `calificado`. El flujo no utiliza n8n.
 
 ## Preparación de PostgreSQL
 
@@ -8,7 +8,7 @@ Ejecutar la migración `drizzle/migrations/0005_direct_apichat.sql` antes de des
 
 ## Variables de EasyPanel
 
-Las variables pertenecen al servicio de Talento Claro, no al frontend y no al servicio n8n. Nunca deben llevar el prefijo `VITE_`.
+Las variables pertenecen al servicio de Talento AISA, no al frontend y no al servicio n8n. Nunca deben llevar el prefijo `VITE_`.
 
 ### Contrato nativo de apichat.io
 
@@ -59,4 +59,4 @@ El reintento manual solo está disponible para postulaciones calificadas. Un men
 6. Probar credenciales inválidas, confirmar que el estado queda guardado y que aparece `Reintentar solicitud de CV`.
 7. Restaurar la credencial y ejecutar el reintento una sola vez.
 
-Solicitar el CV no descarga el archivo en Talento Claro. La recepción y almacenamiento de adjuntos requiere un webhook entrante independiente.
+Solicitar el CV no descarga el archivo en Talento AISA. La recepción y almacenamiento de adjuntos requiere un webhook entrante independiente.
