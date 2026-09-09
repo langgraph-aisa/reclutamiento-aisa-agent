@@ -182,16 +182,16 @@ export default function HumanReview() {
   };
 
   return (
-    <div className="flex min-h-[760px] flex-col gap-3 overflow-hidden lg:h-[calc(100svh-2rem)] lg:min-h-[680px]">
-      <section className="shrink-0 rounded-[1.75rem] border border-border/60 bg-card px-5 py-4 shadow-soft">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_auto_minmax(360px,.85fr)] xl:items-center">
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-muted text-primary">
-              <UserRound className="h-6 w-6" />
+    <div className="human-review-workspace flex h-[calc(100dvh-5.5rem)] min-h-0 min-w-0 flex-col gap-2 overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:h-[calc(100dvh-2rem)] md:gap-3 md:overflow-hidden">
+      <section className="shrink-0 rounded-2xl border border-border/60 bg-card px-3 py-3 shadow-soft sm:px-4">
+        <div className="human-review-summary-grid">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-muted text-primary sm:h-12 sm:w-12 sm:rounded-2xl">
+              <UserRound className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-xl font-800 text-primary">
+                <h1 className="truncate text-lg font-800 text-primary sm:text-xl">
                   {selected?.full_name ?? "Revisión Humana"}
                 </h1>
                 {selected ? <StatusBadge status={selected.status} /> : null}
@@ -212,9 +212,9 @@ export default function HumanReview() {
               </button>
             </div>
           </div>
-          <div className="flex items-center justify-center gap-3 xl:px-4">
+          <div className="human-review-score-actions flex items-center gap-3">
             <div className="text-center">
-              <p className="text-4xl font-800 tracking-tight text-primary">
+              <p className="text-3xl font-800 tracking-tight text-primary sm:text-4xl">
                 {scoreFor(selected) ?? "—"}
                 <span className="text-lg font-semibold text-muted-foreground">
                   /100
@@ -255,9 +255,9 @@ export default function HumanReview() {
         onSelect={setViewer}
       />
 
-      <section className="shrink-0 rounded-2xl border border-border/60 bg-card p-3 shadow-soft">
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(230px,1.5fr)_minmax(180px,.8fr)_minmax(180px,.9fr)_130px_145px_145px_auto_auto]">
-          <div className="relative">
+      <section className="shrink-0 rounded-2xl border border-border/60 bg-card p-2 shadow-soft sm:p-3">
+        <div className="human-review-filter-grid">
+          <div className="human-review-filter-search relative min-w-0">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               value={searchText}
@@ -267,7 +267,7 @@ export default function HumanReview() {
             />
           </div>
           <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="rounded-xl">
+            <SelectTrigger className="w-full min-w-0 rounded-xl">
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
@@ -280,7 +280,7 @@ export default function HumanReview() {
             </SelectContent>
           </Select>
           <Select value={positionId} onValueChange={setPositionId}>
-            <SelectTrigger className="rounded-xl">
+            <SelectTrigger className="w-full min-w-0 rounded-xl">
               <SelectValue placeholder="Plaza" />
             </SelectTrigger>
             <SelectContent>
@@ -293,7 +293,7 @@ export default function HumanReview() {
             </SelectContent>
           </Select>
           <Select value={minimumScore} onValueChange={setMinimumScore}>
-            <SelectTrigger className="rounded-xl">
+            <SelectTrigger className="w-full min-w-0 rounded-xl">
               <SelectValue placeholder="Punteo" />
             </SelectTrigger>
             <SelectContent>
@@ -308,20 +308,20 @@ export default function HumanReview() {
             type="date"
             value={from}
             onChange={event => setFrom(event.target.value)}
-            className="rounded-xl"
+            className="w-full min-w-0 rounded-xl"
             aria-label="Fecha inicial"
           />
           <Input
             type="date"
             value={to}
             onChange={event => setTo(event.target.value)}
-            className="rounded-xl"
+            className="w-full min-w-0 rounded-xl"
             aria-label="Fecha final"
           />
           <Button
             type="button"
             variant={evaluatedOnly ? "default" : "outline"}
-            className="rounded-xl px-3"
+            className="w-full min-w-0 rounded-xl px-3"
             onClick={() => setEvaluatedOnly(current => !current)}
             aria-pressed={evaluatedOnly}
           >
@@ -330,7 +330,7 @@ export default function HumanReview() {
           <Button
             type="button"
             variant="ghost"
-            className="rounded-xl"
+            className="w-full min-w-0 rounded-xl"
             onClick={clearFilters}
           >
             <FilterX className="mr-2 h-4 w-4" /> Limpiar
@@ -338,8 +338,8 @@ export default function HumanReview() {
         </div>
       </section>
 
-      <Card className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border-border/60 shadow-soft">
-        <div className="flex shrink-0 items-center justify-between border-b bg-card px-4 py-2">
+      <Card className="flex min-h-[320px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border-border/60 shadow-soft md:min-h-0">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b bg-card px-3 py-2 sm:px-4">
           <div>
             <p className="text-sm font-semibold text-primary">
               Matriz humana dinámica
@@ -354,12 +354,12 @@ export default function HumanReview() {
               <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Actualizando
             </span>
           ) : (
-            <span className="text-xs text-muted-foreground">
+            <span className="hidden text-xs text-muted-foreground sm:inline">
               Haz clic en una fila o evidencia
             </span>
           )}
         </div>
-        <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
+        <div className="human-review-matrix-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain">
           {workspace.error ? (
             <div className="grid h-full min-h-40 place-items-center p-6 text-center">
               <p className="text-sm text-destructive">
@@ -388,7 +388,7 @@ export default function HumanReview() {
                     active={sortBy}
                     direction={sortDirection}
                     onSort={changeSort}
-                    className="sticky left-0 z-40 min-w-[300px] bg-muted/95"
+                    className="sticky left-0 z-40 min-w-[230px] bg-muted/95 sm:min-w-[270px] lg:min-w-[300px]"
                   />
                   <th className="min-w-[150px] border-r px-3 py-3 text-left font-semibold">
                     Teléfono
@@ -396,7 +396,7 @@ export default function HumanReview() {
                   {questionColumns.map(column => (
                     <th
                       key={column.fieldKey}
-                      className="min-w-[190px] max-w-[240px] border-r px-3 py-3 text-left align-bottom"
+                      className="min-w-[170px] max-w-[220px] border-r px-3 py-3 text-left align-bottom sm:min-w-[190px] sm:max-w-[240px]"
                       title={column.label}
                     >
                       <span className="block font-mono text-[11px] font-bold text-primary">
@@ -418,7 +418,7 @@ export default function HumanReview() {
                   <th className="min-w-[150px] border-r px-3 py-3 text-left font-semibold">
                     Motivo
                   </th>
-                  <th className="min-w-[270px] border-r px-3 py-3 text-left font-semibold">
+                  <th className="min-w-[230px] border-r px-3 py-3 text-left font-semibold sm:min-w-[270px]">
                     Comentario humano
                   </th>
                   <SortableHead
@@ -427,7 +427,7 @@ export default function HumanReview() {
                     active={sortBy}
                     direction={sortDirection}
                     onSort={changeSort}
-                    className="min-w-[250px]"
+                    className="min-w-[220px] sm:min-w-[250px]"
                   />
                   <SortableHead
                     label="Ingreso"
@@ -455,7 +455,7 @@ export default function HumanReview() {
                       className={`group cursor-pointer ${isSelected ? "bg-sky-50" : "bg-card hover:bg-muted/45"}`}
                     >
                       <td
-                        className={`sticky left-0 z-20 max-w-[300px] border-b border-r px-3 py-3 align-top ${isSelected ? "bg-sky-50" : "bg-card group-hover:bg-muted"}`}
+                        className={`sticky left-0 z-20 max-w-[230px] border-b border-r px-3 py-3 align-top sm:max-w-[270px] lg:max-w-[300px] ${isSelected ? "bg-sky-50" : "bg-card group-hover:bg-muted"}`}
                       >
                         <div className="flex gap-3">
                           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-[11px] font-bold text-primary-foreground">
@@ -602,8 +602,8 @@ function ViewerPanel({
           : "Matriz de evaluación IA";
 
   return (
-    <section className="h-[250px] shrink-0 overflow-hidden rounded-[1.6rem] bg-[#0b2d4b] text-white shadow-lift">
-      <div className="flex h-full flex-col px-5 py-4">
+    <section className="human-review-viewer h-[240px] shrink-0 overflow-hidden rounded-2xl bg-[#0b2d4b] text-white shadow-lift sm:h-[220px] lg:h-[210px]">
+      <div className="flex h-full flex-col px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-sky-200/70">
@@ -632,7 +632,7 @@ function ViewerPanel({
             />
           </div>
         </div>
-        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {!candidate ? (
             <div className="grid h-full place-items-center text-sm text-white/60">
               Selecciona un candidato en la matriz inferior.
@@ -741,9 +741,9 @@ function QuickReview({
   const disabled =
     pending || (status === currentStatus && comment.trim().length === 0);
   return (
-    <div className="grid gap-2 sm:grid-cols-[minmax(190px,.8fr)_minmax(200px,1fr)_auto] xl:grid-cols-1 2xl:grid-cols-[minmax(190px,.8fr)_minmax(200px,1fr)_auto]">
+    <div className="human-review-quick-grid min-w-0">
       <Select value={status} onValueChange={setStatus}>
-        <SelectTrigger className="rounded-xl">
+        <SelectTrigger className="w-full min-w-0 rounded-xl">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -759,12 +759,12 @@ function QuickReview({
         onChange={event => setComment(event.target.value)}
         placeholder="Comentario de revisión"
         maxLength={1000}
-        className="rounded-xl"
+        className="w-full min-w-0 rounded-xl"
       />
       <Button
         type="button"
         disabled={disabled}
-        className="rounded-xl"
+        className="w-full rounded-xl sm:w-auto"
         onClick={async () => {
           await onSave(status, comment);
           setComment("");

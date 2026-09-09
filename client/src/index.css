@@ -41,3 +41,124 @@
   .shadow-lift { box-shadow: 0 22px 70px rgba(24, 40, 63, .13); }
   .grid-paper { background-image: linear-gradient(rgba(33, 53, 80, .035) 1px, transparent 1px), linear-gradient(90deg, rgba(33, 53, 80, .035) 1px, transparent 1px); background-size: 32px 32px; }
 }
+
+/* The review workspace responds to its usable width after the sidebar, not to
+   the browser width. This prevents its controls from widening the document. */
+.human-review-workspace {
+  container-name: human-review;
+  container-type: inline-size;
+}
+
+.human-review-summary-grid,
+.human-review-quick-grid,
+.human-review-filter-grid {
+  display: grid;
+  min-width: 0;
+  gap: .5rem;
+}
+
+.human-review-summary-grid {
+  align-items: center;
+  gap: .75rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.human-review-score-actions {
+  justify-content: flex-start;
+}
+
+.human-review-quick-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.human-review-filter-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.human-review-filter-search {
+  grid-column: 1 / -1;
+}
+
+.human-review-matrix-scroll {
+  overscroll-behavior: contain;
+  scrollbar-color: color-mix(in oklab, var(--color-primary) 42%, transparent) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.human-review-matrix-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 10px;
+}
+
+.human-review-matrix-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--color-primary) 35%, transparent);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.human-review-matrix-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@container human-review (min-width: 42rem) {
+  .human-review-summary-grid {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .human-review-score-actions {
+    justify-content: flex-end;
+  }
+
+  .human-review-quick-grid {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(9rem, .75fr) minmax(11rem, 1fr) auto;
+  }
+
+  .human-review-filter-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .human-review-filter-search {
+    grid-column: span 2;
+  }
+}
+
+@container human-review (min-width: 72rem) {
+  .human-review-summary-grid {
+    grid-template-columns: minmax(0, 1.25fr) auto minmax(28rem, 1fr);
+  }
+
+  .human-review-quick-grid {
+    grid-column: auto;
+  }
+}
+
+@container human-review (min-width: 78rem) {
+  .human-review-filter-grid {
+    grid-template-columns:
+      minmax(14rem, 2fr)
+      minmax(9.5rem, 1fr)
+      minmax(10rem, 1.2fr)
+      8rem
+      9rem
+      9rem
+      auto
+      auto;
+  }
+
+  .human-review-filter-search {
+    grid-column: auto;
+  }
+}
+
+@media (min-width: 48rem) and (max-height: 47.5rem) {
+  .human-review-workspace {
+    gap: .5rem;
+  }
+
+  .human-review-viewer {
+    height: 10.5rem;
+  }
+}
