@@ -29,6 +29,18 @@ import {
   ensureCvRequestMessage,
   type CvRequestDelivery,
 } from "./cvRequest";
+import { AGENT_MODELS } from "../shared/agentConfig";
+import {
+  evaluateApplicationWithAgent,
+  verifyLangfuseConnection,
+  verifyOpenAIConnection,
+} from "./agentEvaluator";
+import {
+  AGENT_SECRET_KEYS,
+  getAgentConfiguration,
+  saveAgentPreferences,
+  saveAgentSecret,
+} from "./agentSettings";
 
 const statusValues = [
   "en_revision",
@@ -42,6 +54,10 @@ const statusValues = [
   "error_procesamiento",
 ] as const;
 const methodologyDocumentKeys = ["siera", "mst_eir"] as const;
+const agentModelValues = AGENT_MODELS.map(model => model.value) as [
+  (typeof AGENT_MODELS)[number]["value"],
+  ...(typeof AGENT_MODELS)[number]["value"][],
+];
 const roleProcedure = recruiterProcedure;
 
 async function requirePool() {
@@ -56,6 +72,27 @@ async function requirePool() {
 
 function asJson(value: unknown) {
   return JSON.stringify(value ?? null);
+}
+
+function safeIntegrationMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : "";
+  const allowedMessages = [
+    "Configura AGENT_SETTINGS_ENCRYPTION_KEY",
+    "La API Key",
+    "La OpenAI Responses API",
+    "No hay una API key",
+    "Configura las claves pública",
+    "Postulación no encontrada",
+    "Esta postulación ya está siendo evaluada",
+  ];
+  if (allowedMessages.some(prefix => message.startsWith(prefix))) {
+    return message.replace(/sk-[A-Za-z0-9_-]{8,}/g, "[credencial protegida]");
+  }
+  const status =
+    typeof error === "object" && error && "status" in error
+      ? Number((error as { status?: unknown }).status)
+      : Number.NaN;
+  return Number.isFinite(status) ? `${fallback} (HTTP ${status}).` : fallback;
 }
 
 function requestIp(req: { ip?: string; headers: Record<string, unknown> }) {
@@ -609,9 +646,28 @@ export const appRouter = router({
             );
           }
           await client.query("COMMIT");
+          const applicationId = application.rows[0].id as number;
+          setImmediate(() => {
+            void evaluateApplicationWithAgent(pool, applicationId).catch(
+              error => {
+                const message = safeIntegrationMessage(
+                  error,
+                  "No fue posible ejecutar la evaluación automática."
+                );
+                if (
+                  !message.includes("no está habilitada") &&
+                  !message.includes("No hay una API key")
+                ) {
+                  console.warn(
+                    `[Agent] Application ${applicationId}: ${message}`
+                  );
+                }
+              }
+            );
+          });
           return {
             alreadyApplied: false as const,
-            applicationId: application.rows[0].id,
+            applicationId,
             phone: phone.e164,
           };
         } catch (error) {
@@ -1540,19 +1596,136 @@ export const appRouter = router({
       }),
   }),
 
+  agent: router({
+    configuration: adminProcedure.query(async () => {
+      return getAgentConfiguration(await getPool());
+    }),
+    savePreferences: adminProcedure
+      .input(
+        z.object({
+          model: z.enum(agentModelValues),
+          instructions: z.string().trim().min(100).max(20_000),
+          summaryWordLimit: z.number().int().min(50).max(1_000),
+          useMethodologies: z.boolean(),
+          useResponsesApi: z.boolean(),
+          methodologyInterpretation: z.string().trim().min(100).max(12_000),
+          langfuseBaseUrl: z
+            .url()
+            .max(500)
+            .refine(
+              value => ["https:", "http:"].includes(new URL(value).protocol),
+              {
+                message: "La URL de Langfuse debe usar HTTP o HTTPS.",
+              }
+            ),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        return saveAgentPreferences(pool, input, ctx.user.id);
+      }),
+    saveSecret: adminProcedure
+      .input(
+        z.object({
+          key: z.enum(AGENT_SECRET_KEYS),
+          value: z.string().trim().min(8).max(500).nullable(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        if (
+          input.value &&
+          input.key.startsWith("openai_") &&
+          !input.value.startsWith("sk-")
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "La API key de OpenAI debe comenzar con sk-.",
+          });
+        }
+        try {
+          return await saveAgentSecret(
+            pool,
+            input.key,
+            input.value,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar la credencial."
+            ),
+          });
+        }
+      }),
+    verifyOpenAI: adminProcedure
+      .input(z.object({ slot: z.enum(["primary", "backup"]) }))
+      .mutation(async ({ input }) => {
+        try {
+          return await verifyOpenAIConnection(await requirePool(), input.slot);
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible verificar la conexión con OpenAI."
+            ),
+          });
+        }
+      }),
+    verifyLangfuse: adminProcedure.mutation(async () => {
+      try {
+        return await verifyLangfuseConnection(await requirePool());
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: safeIntegrationMessage(
+            error,
+            "No fue posible verificar la conexión con Langfuse."
+          ),
+        });
+      }
+    }),
+    evaluateApplication: roleProcedure
+      .input(z.object({ applicationId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        try {
+          return await evaluateApplicationWithAgent(
+            await requirePool(),
+            input.applicationId
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible evaluar la postulación."
+            ),
+          });
+        }
+      }),
+  }),
+
   config: router({
     settings: adminProcedure.query(async () => {
       const pool = await getPool();
       if (!pool) return [];
       const result = await pool.query(
-        `SELECT provider,setting_key,setting_value,is_secret FROM integration_settings WHERE provider IN ('recruitment','apichat') ORDER BY provider,setting_key`
+        `SELECT provider,setting_key,
+                CASE WHEN is_secret THEN NULL ELSE setting_value END AS setting_value,
+                is_secret,(is_secret AND COALESCE(setting_value,'')<>'') AS configured
+           FROM integration_settings
+          WHERE provider IN ('recruitment','apichat')
+          ORDER BY provider,setting_key`
       );
       return result.rows;
     }),
     saveSetting: adminProcedure
       .input(
         z.object({
-          provider: z.string().min(2).max(64),
+          provider: z.enum(["recruitment", "apichat"]),
           settingKey: z.string().min(2).max(120),
           settingValue: z.string().max(3000),
           isSecret: z.boolean().default(false),
@@ -1561,7 +1734,7 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const pool = await requirePool();
         const result = await pool.query(
-          `INSERT INTO integration_settings (provider,setting_key,setting_value,is_secret,updated_at) VALUES ($1,$2,$3,$4,now()) ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,is_secret=EXCLUDED.is_secret,updated_at=now() RETURNING provider,setting_key,setting_value,is_secret`,
+          `INSERT INTO integration_settings (provider,setting_key,setting_value,is_secret,updated_at) VALUES ($1,$2,$3,$4,now()) ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,is_secret=EXCLUDED.is_secret,updated_at=now() RETURNING provider,setting_key,CASE WHEN is_secret THEN NULL ELSE setting_value END AS setting_value,is_secret`,
           [input.provider, input.settingKey, input.settingValue, input.isSecret]
         );
         return result.rows[0];

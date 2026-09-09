@@ -21,21 +21,68 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { BarChart3, BriefcaseBusiness, Globe2, KeyRound, LayoutDashboard, LogOut, MessageCircle, PanelLeft, Users, UserRoundCog } from "lucide-react";
+import {
+  BarChart3,
+  BriefcaseBusiness,
+  Globe2,
+  KeyRound,
+  LayoutDashboard,
+  LogOut,
+  MessageCircle,
+  PanelLeft,
+  Users,
+  UserRoundCog,
+} from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
+
+function OpenAIMark({ className }: { className?: string }) {
+  return (
+    <img
+      src="/brand/openai-logo.svg"
+      alt=""
+      aria-hidden="true"
+      className={className}
+    />
+  );
+}
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Resumen", path: "/admin" },
-  { icon: BriefcaseBusiness, label: "Plazas y formularios", path: "/admin/jobs" },
-  { icon: BriefcaseBusiness, label: "Perfiles laborales", path: "/admin/profiles", adminOnly: true },
+  {
+    icon: BriefcaseBusiness,
+    label: "Plazas y formularios",
+    path: "/admin/jobs",
+  },
+  {
+    icon: BriefcaseBusiness,
+    label: "Perfiles laborales",
+    path: "/admin/profiles",
+    adminOnly: true,
+  },
   { icon: Users, label: "Candidatos", path: "/admin/candidates" },
   { icon: BarChart3, label: "Informes", path: "/admin/reports" },
   { icon: Globe2, label: "MST-EIR", path: "/admin/mst-eir", adminOnly: true },
-  { icon: MessageCircle, label: "Configuración", path: "/admin/config", adminOnly: true },
-  { icon: UserRoundCog, label: "Usuarios", path: "/admin/users", adminOnly: true },
+  {
+    icon: OpenAIMark,
+    label: "Agente evaluador",
+    path: "/admin/agent-evaluator",
+    adminOnly: true,
+  },
+  {
+    icon: MessageCircle,
+    label: "Configuración",
+    path: "/admin/config",
+    adminOnly: true,
+  },
+  {
+    icon: UserRoundCog,
+    label: "Usuarios",
+    path: "/admin/users",
+    adminOnly: true,
+  },
   { icon: KeyRound, label: "Mi cuenta", path: "/admin/account" },
 ];
 
@@ -61,7 +108,7 @@ export default function DashboardLayout({
   }, [sidebarWidth]);
 
   if (loading) {
-    return <DashboardLayoutSkeleton />
+    return <DashboardLayoutSkeleton />;
   }
 
   if (!user) {
@@ -73,7 +120,8 @@ export default function DashboardLayout({
               Ingresa para continuar
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Este espacio requiere autenticación. Continúa para abrir el panel operativo.
+              Este espacio requiere autenticación. Continúa para abrir el panel
+              operativo.
             </p>
           </div>
           <Button
@@ -118,7 +166,9 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const visibleMenuItems = menuItems.filter(item => !item.adminOnly || user?.role === "admin");
+  const visibleMenuItems = menuItems.filter(
+    item => !item.adminOnly || user?.role === "admin"
+  );
   const activeMenuItem = visibleMenuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 

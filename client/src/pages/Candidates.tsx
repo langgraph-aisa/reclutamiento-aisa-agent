@@ -197,6 +197,8 @@ function CandidateDetail({
   onClose: () => void;
 }) {
   const utils = trpc.useUtils();
+  const latestEvaluation = data.evaluations?.[0];
+  const agentPayload = latestEvaluation?.ai_payload;
   const [nextStatus, setNextStatus] = useState(data.application.status);
   const [comment, setComment] = useState("");
   const setStatus = trpc.candidates.setStatus.useMutation({
@@ -248,6 +250,18 @@ function CandidateDetail({
     },
     onError: error =>
       toast.error(`No fue posible reintentar: ${error.message}`),
+  });
+  const evaluateWithAgent = trpc.agent.evaluateApplication.useMutation({
+    onSuccess: async result => {
+      await Promise.all([
+        utils.candidates.detail.invalidate({ id: data.application.id }),
+        utils.candidates.list.invalidate(),
+      ]);
+      toast.success(
+        `Evaluación completada: ${result.classification} (${result.score}/100)`
+      );
+    },
+    onError: error => toast.error(`No fue posible evaluar: ${error.message}`),
   });
 
   useEffect(() => {
@@ -302,6 +316,23 @@ function CandidateDetail({
               {data.application.evaluation_reason ?? "Pendiente de evaluación."}
             </p>
           </div>
+          <Button
+            variant="outline"
+            className="w-full rounded-xl border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+            disabled={evaluateWithAgent.isPending}
+            onClick={() =>
+              evaluateWithAgent.mutate({ applicationId: data.application.id })
+            }
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${evaluateWithAgent.isPending ? "animate-spin" : ""}`}
+            />
+            {evaluateWithAgent.isPending
+              ? "Evaluando postulación…"
+              : data.evaluations?.length
+                ? "Reevaluar con agente IA"
+                : "Evaluar con agente IA"}
+          </Button>
         </div>
         <div className="rounded-2xl bg-white p-5 text-primary">
           <p className="text-sm font-semibold">Cambio humano</p>
@@ -412,6 +443,54 @@ function CandidateDetail({
               )}
           </div>
         </div>
+        {typeof agentPayload?.score === "number" && (
+          <div className="lg:col-span-2 rounded-2xl bg-white/8 p-4">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+              <div>
+                <p className="text-xs uppercase tracking-[.14em] text-white/55">
+                  Matriz de evaluación IA
+                </p>
+                <p className="mt-2 text-sm text-white/70">
+                  {agentPayload.classification ?? "Resultado ponderado"} ·{" "}
+                  {latestEvaluation.ai_model ?? "Modelo no informado"}
+                </p>
+              </div>
+              <p className="text-3xl font-bold text-white">
+                {agentPayload.score}
+                <span className="text-base font-medium text-white/55">
+                  /100
+                </span>
+              </p>
+            </div>
+            {Array.isArray(agentPayload.blocks) && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {agentPayload.blocks.map((block: any) => (
+                  <div key={block.id} className="rounded-xl bg-white/6 p-3">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate font-semibold text-white/80">
+                        {evaluationBlockLabel(block.id)}
+                      </span>
+                      <span className="text-white/60">
+                        {Math.round(block.score)}/100
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-emerald-300"
+                        style={{
+                          width: `${Math.max(0, Math.min(100, Number(block.score) || 0))}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/55">
+                      {block.rationale}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <div className="lg:col-span-2 rounded-2xl bg-white/8 p-4">
           <p className="text-xs uppercase tracking-[.14em] text-white/55">
             Respuestas
@@ -511,6 +590,17 @@ function CandidateDetail({
 
 function statusLabel(value: string | null | undefined) {
   return statuses.find(item => item.value === value)?.label ?? value ?? "—";
+}
+function evaluationBlockLabel(value: string) {
+  const labels: Record<string, string> = {
+    identificacion_ajuste: "Identificación del ajuste",
+    evidencia_experiencia: "Evidencia de experiencia",
+    competencias: "Competencias técnicas/comerciales",
+    disponibilidad_logistica: "Disponibilidad y logística",
+    riesgos_brechas: "Riesgos o brechas",
+    dictamen_ia: "Dictamen IA",
+  };
+  return labels[value] ?? value;
 }
 function CandidateRow({
   candidate,

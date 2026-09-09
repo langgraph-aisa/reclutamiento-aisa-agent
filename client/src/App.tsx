@@ -6,6 +6,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Account from "./pages/Account";
+import AgentEvaluator from "./pages/AgentEvaluator";
 import Apply from "./pages/Apply";
 import Candidates from "./pages/Candidates";
 import Config from "./pages/Config";
@@ -29,34 +30,59 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/apply/:token" component={Apply} />
       <Route path="/admin/account">
-        <AdminShell><Account /></AdminShell>
+        <AdminShell>
+          <Account />
+        </AdminShell>
       </Route>
       <Route path="/admin">
-        <AdminShell><Home /></AdminShell>
+        <AdminShell>
+          <Home />
+        </AdminShell>
       </Route>
       <Route path="/admin/jobs">
-        <AdminShell><Jobs /></AdminShell>
+        <AdminShell>
+          <Jobs />
+        </AdminShell>
       </Route>
       <Route path="/admin/profiles">
-        <AdminShell><Profiles /></AdminShell>
+        <AdminShell>
+          <Profiles />
+        </AdminShell>
       </Route>
       <Route path="/admin/users">
-        <AdminShell><Users /></AdminShell>
+        <AdminShell>
+          <Users />
+        </AdminShell>
       </Route>
       <Route path="/admin/candidates">
-        <AdminShell><Candidates /></AdminShell>
+        <AdminShell>
+          <Candidates />
+        </AdminShell>
       </Route>
       <Route path="/admin/reports">
-        <AdminShell><Reports /></AdminShell>
+        <AdminShell>
+          <Reports />
+        </AdminShell>
       </Route>
       <Route path="/admin/mst-eir">
-        <AdminShell><MstEir /></AdminShell>
+        <AdminShell>
+          <MstEir />
+        </AdminShell>
+      </Route>
+      <Route path="/admin/agent-evaluator">
+        <AdminShell>
+          <AgentEvaluator />
+        </AdminShell>
       </Route>
       <Route path="/admin/config">
-        <AdminShell><Config /></AdminShell>
+        <AdminShell>
+          <Config />
+        </AdminShell>
       </Route>
       <Route path="/admin/forms/:positionId">
-        <AdminShell><FormBuilder /></AdminShell>
+        <AdminShell>
+          <FormBuilder />
+        </AdminShell>
       </Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

@@ -29,6 +29,7 @@ export const applicationStatusEnum = pgEnum("application_status", [
   "error_procesamiento",
 ]);
 export const evaluationStatusEnum = pgEnum("evaluation_status", [
+  "pre_calificado",
   "calificado",
   "no_calificado",
   "pendiente_revision_humana",

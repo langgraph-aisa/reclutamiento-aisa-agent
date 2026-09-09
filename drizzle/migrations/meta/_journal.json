@@ -57,6 +57,13 @@
       "when": 1788975832446,
       "tag": "0007_pre_calificado",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788978900000,
+      "tag": "0008_agent_evaluator",
+      "breakpoints": true
     }
   ]
 }
