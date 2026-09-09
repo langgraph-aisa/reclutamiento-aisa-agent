@@ -4,3 +4,4 @@
 Documentación operativa: [Módulo Agente de IA LangGraph](docs/AGENTE_EVALUADOR.md).
 
 Arquitectura funcional: [Revisión Humana 360°](docs/REVISION_HUMANA_360.md).
+<img width="311" height="319" alt="favicon" src="https://github.com/user-attachments/assets/0e7d1406-2549-4dcf-98ba-f1148f132ad1" />
