@@ -3,8 +3,11 @@ import { AppBrand } from "@/components/AppBrand";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { ArrowRight, ClipboardCheck, Database, LayoutDashboard, LockKeyhole, MessageCircle, Sparkles, UsersRound } from "lucide-react";
+import { STANDARD_WORK_SCHEDULE } from "@shared/jobPresentation";
+import { ArrowRight, BriefcaseBusiness, ClipboardCheck, Clock3, Database, GraduationCap, LayoutDashboard, LockKeyhole, MapPin, MessageCircle, Sparkles, UsersRound } from "lucide-react";
+import { useState } from "react";
 import { Link } from "wouter";
 
 const emptyStats = { total: 0, enRevision: 0, calificados: 0, calificadosAisa: 0, entrevistas: 0, positions: 0 };
@@ -12,6 +15,7 @@ const emptyStats = { total: 0, enRevision: 0, calificados: 0, calificadosAisa: 0
 export default function Home() {
   const { user, loading } = useAuth();
   const statsQuery = trpc.dashboard.summary.useQuery(undefined, { enabled: Boolean(user) });
+  const publishedJobsQuery = trpc.publicJobs.listPublished.useQuery(undefined, { enabled: !loading && !user });
   const stats = statsQuery.data ?? emptyStats;
 
   if (loading) return <div className="min-h-screen grid place-items-center text-muted-foreground">Cargando espacio de trabajo…</div>;
@@ -38,16 +42,13 @@ export default function Home() {
                 <Link href="/login">
                   <Button size="lg" className="rounded-full px-6">Entrar al panel <ArrowRight className="ml-2 h-4 w-4" /></Button>
                 </Link>
-                <Link href="/apply/demo-vendedor"><Button variant="outline" size="lg" className="rounded-full px-6">Ver formulario de ejemplo</Button></Link>
+                <a href="#plazas-online"><Button variant="outline" size="lg" className="rounded-full px-6">Ver plazas disponibles</Button></a>
               </div>
               <div className="mt-12 flex flex-wrap gap-8 text-sm text-muted-foreground"><span className="flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-emerald-700" /> Enlaces seguros por plaza</span><span className="flex items-center gap-2"><ClipboardCheck className="h-4 w-4 text-emerald-700" /> Reglas configurables</span></div>
             </div>
-            <div className="relative">
+            <div id="plazas-online" className="relative scroll-mt-6">
               <div className="absolute -inset-6 rounded-[2rem] bg-emerald-100/60 blur-3xl" />
-              <Card className="relative overflow-hidden rounded-[2rem] border-white/70 bg-primary text-primary-foreground shadow-lift">
-                <CardHeader className="border-b border-white/10 pb-5"><div className="flex items-center justify-between"><div><p className="text-sm text-white/55">Vista del flujo</p><CardTitle className="mt-1 text-2xl text-white">Vendedor · Guatemala</CardTitle></div><span className="rounded-full bg-emerald-300/15 px-3 py-1 text-xs text-emerald-200">Publicado</span></div></CardHeader>
-                <CardContent className="space-y-4 p-6"><div className="rounded-2xl bg-white/8 p-4"><div className="flex items-center justify-between text-sm"><span className="text-white/70">Preguntas completadas</span><span className="font-semibold">7 / 9</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[78%] rounded-full bg-emerald-300" /></div></div><div className="grid grid-cols-2 gap-3"><div className="rounded-2xl bg-white/8 p-4"><p className="text-xs text-white/55">Resultado</p><p className="mt-2 text-lg font-semibold text-emerald-200">En revisión</p></div><div className="rounded-2xl bg-white/8 p-4"><p className="text-xs text-white/55">Siguiente paso</p><p className="mt-2 text-lg font-semibold text-white">WhatsApp</p></div></div><div className="flex items-center gap-3 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4"><MessageCircle className="h-5 w-5 text-emerald-200" /><p className="text-sm leading-5 text-white/80">La evaluación se guarda con trazabilidad y puede continuar cuando un reclutador confirma el avance.</p></div></CardContent>
-              </Card>
+              <PublicOpportunityCard jobs={publishedJobsQuery.data ?? []} loading={publishedJobsQuery.isLoading} />
             </div>
           </section>
           <section className="grid gap-4 border-t border-primary/10 py-10 sm:grid-cols-3"><Feature icon={LayoutDashboard} title="Una sola vista" text="Plazas, candidatos y reglas en un espacio ordenado." /><Feature icon={Database} title="Datos propios" text="PostgreSQL transaccional, sin hojas frágiles." /><Feature icon={UsersRound} title="Equipo alineado" text="Roles claros, auditoría y decisiones reversibles." /></section>
@@ -62,3 +63,103 @@ export default function Home() {
 
 function Feature({ icon: Icon, title, text }: { icon: typeof LayoutDashboard; title: string; text: string }) { return <div className="flex gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/8 text-primary"><Icon className="h-4 w-4" /></div><div><p className="font-semibold text-primary">{title}</p><p className="mt-1 text-sm leading-5 text-muted-foreground">{text}</p></div></div>; }
 function Quick({ href, icon: Icon, title, text }: { href: string; icon: typeof LayoutDashboard; title: string; text: string }) { return <Link href={href}><div className="group flex gap-4 rounded-2xl border border-border/70 p-4 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50/40"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground"><Icon className="h-4 w-4" /></div><div className="min-w-0"><p className="font-semibold text-primary group-hover:text-emerald-800">{title}</p><p className="mt-1 text-sm leading-5 text-muted-foreground">{text}</p></div></div></Link>; }
+
+type PublishedJob = {
+  id: number;
+  token: string;
+  title: string;
+  department: string | null;
+  locationLabel: string | null;
+  description: string | null;
+  profileName: string | null;
+  profileSummary: string | null;
+  academicLevel: string | null;
+  displayLocation: string;
+};
+
+function PublicOpportunityCard({ jobs, loading }: { jobs: PublishedJob[]; loading: boolean }) {
+  const [selectedToken, setSelectedToken] = useState("");
+  const selectedJob = jobs.find(job => job.token === selectedToken) ?? jobs[0];
+
+  return (
+    <Card className="relative overflow-hidden rounded-[2rem] border-white/70 bg-primary text-primary-foreground shadow-lift">
+      <CardHeader className="border-b border-white/10 pb-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm text-white/55">Invitación de Talento AISA</p>
+            <CardTitle className="mt-1 text-2xl text-white">Oportunidades disponibles</CardTitle>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-300/15 px-3 py-1 text-xs font-semibold text-emerald-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Online
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4 p-6">
+        {loading ? (
+          <div className="space-y-3" aria-live="polite">
+            <div className="h-11 animate-pulse rounded-xl bg-white/10" />
+            <div className="h-28 animate-pulse rounded-2xl bg-white/8" />
+            <p className="text-center text-sm text-white/60">Cargando plazas publicadas…</p>
+          </div>
+        ) : selectedJob ? (
+          <>
+            <div>
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-[.14em] text-white/55">Seleccionar plaza</label>
+              <Select value={selectedJob.token} onValueChange={setSelectedToken}>
+                <SelectTrigger className="h-11 w-full rounded-xl border-white/20 bg-white/10 text-left text-white shadow-none hover:bg-white/15 focus:ring-emerald-300/40">
+                  <SelectValue placeholder="Selecciona una plaza" />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  {jobs.map(job => <SelectItem key={job.id} value={job.token}>{job.title}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="rounded-2xl bg-white/8 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[.16em] text-emerald-200">Aplicar ahora</p>
+              <h2 className="mt-2 text-2xl font-800 tracking-[-.03em] text-white">{selectedJob.title}</h2>
+              <p className="mt-3 text-sm leading-6 text-white/70">{selectedJob.description || "Conoce esta oportunidad y completa el formulario para participar en el proceso de selección."}</p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <OpportunityDetail icon={BriefcaseBusiness} label="Perfil" value={selectedJob.profileName || selectedJob.title} />
+              <OpportunityDetail icon={GraduationCap} label="Nivel académico" value={selectedJob.academicLevel || "Según los requisitos de la plaza"} />
+              <OpportunityDetail icon={MapPin} label="Ubicación" value={selectedJob.displayLocation} />
+              <OpportunityDetail icon={Clock3} label="Horario de trabajo" value={STANDARD_WORK_SCHEDULE} />
+            </div>
+
+            <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[.14em] text-emerald-200">Resumen del perfil</p>
+              <p className="mt-2 text-sm leading-6 text-white/80">{selectedJob.profileSummary || selectedJob.description || "Consulta los requisitos completos al iniciar el formulario."}</p>
+            </div>
+
+            <Link href={`/apply/${selectedJob.token}`}>
+              <Button size="lg" className="w-full rounded-2xl bg-white text-primary hover:bg-white/90">
+                Aplicar ahora <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+            <p className="text-center text-xs text-white/50">Inicia el formulario en esta misma pestaña.</p>
+          </>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-white/8 p-6 text-center">
+            <BriefcaseBusiness className="mx-auto h-7 w-7 text-emerald-200" />
+            <p className="mt-3 font-semibold text-white">No hay plazas en línea por el momento</p>
+            <p className="mt-2 text-sm leading-6 text-white/60">Cuando se publique una nueva oportunidad con formulario, aparecerá aquí automáticamente.</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function OpportunityDetail({ icon: Icon, label, value }: { icon: typeof BriefcaseBusiness; label: string; value: string }) {
+  return (
+    <div className="flex gap-3 rounded-2xl bg-white/8 p-4">
+      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
+      <div className="min-w-0">
+        <p className="text-xs text-white/50">{label}</p>
+        <p className="mt-1 text-sm font-medium leading-5 text-white/90">{value}</p>
+      </div>
+    </div>
+  );
+}

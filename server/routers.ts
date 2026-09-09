@@ -497,6 +497,58 @@ export const appRouter = router({
   }),
 
   publicJobs: router({
+    listPublished: publicProcedure.query(async () => {
+      const pool = await getPool();
+      if (!pool) return [];
+
+      const result = await pool.query(
+        `SELECT p.id,
+                p.public_slug,
+                p.title,
+                p.department,
+                p.location_label,
+                p.description,
+                p.created_at,
+                profile.name AS profile_name,
+                profile.summary AS profile_summary,
+                profile.academic_level,
+                COALESCE(NULLIF(profile.location, ''), NULLIF(p.location_label, ''), NULLIF(p.department, ''), 'Guatemala') AS display_location
+           FROM job_positions p
+           JOIN LATERAL (
+             SELECT f.id
+               FROM application_forms f
+              WHERE f.job_position_id = p.id
+                AND f.published = true
+              ORDER BY f.version DESC, f.id DESC
+              LIMIT 1
+           ) published_form ON true
+           LEFT JOIN LATERAL (
+             SELECT jp.name, jp.summary, jp.academic_level, jp.location
+               FROM job_profile_positions link
+               JOIN job_profiles jp ON jp.id = link.profile_id
+              WHERE link.job_position_id = p.id
+                AND jp.active = true
+              ORDER BY jp.updated_at DESC, jp.id DESC
+              LIMIT 1
+           ) profile ON true
+          WHERE p.published = true
+          ORDER BY p.created_at DESC, p.id DESC
+          LIMIT 100`
+      );
+
+      return result.rows.map(row => ({
+        id: row.id as number,
+        token: row.public_slug as string,
+        title: row.title as string,
+        department: row.department as string | null,
+        locationLabel: row.location_label as string | null,
+        description: row.description as string | null,
+        profileName: row.profile_name as string | null,
+        profileSummary: row.profile_summary as string | null,
+        academicLevel: row.academic_level as string | null,
+        displayLocation: row.display_location as string,
+      }));
+    }),
     getByToken: publicProcedure
       .input(z.object({ token: z.string().min(8).max(120) }))
       .query(async ({ input }) => {
