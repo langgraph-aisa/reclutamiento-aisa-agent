@@ -49,11 +49,36 @@ export const EVALUATION_BLOCKS = [
 ] as const;
 
 export const SCORE_BANDS = [
-  { min: 90, max: 100, label: "Precalificado prioritario" },
-  { min: 80, max: 89, label: "Precalificado" },
-  { min: 70, max: 79, label: "Precalificado condicionado" },
-  { min: 60, max: 69, label: "Revisión humana" },
-  { min: 0, max: 59, label: "No precalificado" },
+  {
+    min: 90,
+    max: 100,
+    label: "Precalificado prioritario",
+    status: "pre_calificado_prioritario",
+  },
+  {
+    min: 80,
+    max: 89,
+    label: "Precalificado",
+    status: "pre_calificado",
+  },
+  {
+    min: 70,
+    max: 79,
+    label: "Precalificado condicionado",
+    status: "pre_calificado_condicionado",
+  },
+  {
+    min: 60,
+    max: 69,
+    label: "Revisión humana",
+    status: "pendiente_revision_humana",
+  },
+  {
+    min: 0,
+    max: 59,
+    label: "No precalificado",
+    status: "no_calificado",
+  },
 ] as const;
 
 export const DEFAULT_AGENT_INSTRUCTIONS = `Evalúa cada postulación con un modelo porcentual de 100 puntos. No dependas del número exacto de palabras de cada respuesta: asigna el peso según la importancia de la evidencia para la decisión de preselección.

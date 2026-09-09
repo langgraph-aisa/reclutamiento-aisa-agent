@@ -29,6 +29,7 @@ import { useSearch } from "wouter";
 import {
   APPLICATION_STATUS_OPTIONS,
   applicationStatusLabel,
+  applicationStatusTone,
 } from "@shared/applicationStatus";
 
 const statuses = APPLICATION_STATUS_OPTIONS;
@@ -614,16 +615,16 @@ function CandidateRow({
 }) {
   const status =
     statuses.find(item => item.value === candidate.status) ?? statuses[0];
-  const tone =
-    candidate.status === "calificado"
-      ? "bg-emerald-100 text-emerald-800"
-      : candidate.status === "calificado_aisa"
-        ? "bg-violet-100 text-violet-800"
-        : candidate.status === "pre_calificado"
-          ? "bg-sky-100 text-sky-800"
-          : candidate.status === "no_calificado"
-            ? "bg-red-100 text-red-800"
-            : "bg-amber-100 text-amber-800";
+  const tone = {
+    neutral: "bg-slate-100 text-slate-800",
+    priority: "bg-violet-100 text-violet-800",
+    positive: "bg-emerald-100 text-emerald-800",
+    conditional: "bg-sky-100 text-sky-800",
+    review: "bg-amber-100 text-amber-800",
+    negative: "bg-red-100 text-red-800",
+    interview: "bg-cyan-100 text-cyan-800",
+    error: "bg-rose-100 text-rose-800",
+  }[applicationStatusTone(candidate.status)];
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 gap-3">

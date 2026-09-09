@@ -75,7 +75,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Evalúa el candidato para la plaza {{ $json.evaluation_input?.application?.job_position_id }} usando también el perfil laboral asociado en evaluation_input.profile y las reglas operativas de profileCriteria. Aplica obligatoriamente ai_criteria como criterio de razonamiento para respuestas abiertas y explica su efecto en reason, profileSummary y ruleResults. Respeta las reglas deterministas y razona las respuestas abiertas según evaluation_criteria y ai_prompt. Si deterministic.passed es false, el estado final debe ser no_calificado. Devuelve un JSON con status, reason, profileSummary, keyPoints, confidence y ruleResults. ruleResults debe ser una lista de objetos con question_id y result (`passed`, `failed` o `not_applicable`).\n\nDatos: {{ JSON.stringify($json) }}",
+        "text": "=Evalúa el candidato para la plaza {{ $json.evaluation_input?.application?.job_position_id }} usando también el perfil laboral asociado en evaluation_input.profile y las reglas operativas de profileCriteria. Aplica obligatoriamente ai_criteria como criterio de razonamiento para respuestas abiertas y explica su efecto en reason, profileSummary y ruleResults. Respeta las reglas deterministas y razona las respuestas abiertas según evaluation_criteria y ai_prompt. Entrega score de 0 a 100 y asigna status exactamente así: 90–100 pre_calificado_prioritario; 80–89 pre_calificado; 70–79 pre_calificado_condicionado; 60–69 pendiente_revision_humana; 0–59 no_calificado. Si deterministic.passed es false, el estado final debe ser no_calificado sin importar el score. Devuelve un JSON con score, status, reason, profileSummary, keyPoints, confidence y ruleResults. ruleResults debe ser una lista de objetos con question_id y result (`passed`, `failed` o `not_applicable`).\n\nDatos: {{ JSON.stringify($json) }}",
         "hasOutputParser": true
       },
       "id": "evaluar-respuestas-abiertas",
@@ -89,7 +89,7 @@
     },
     {
       "parameters": {
-        "jsonSchemaExample": "{\"status\":\"calificado\",\"reason\":\"Cumple las condiciones configuradas\",\"profileSummary\":\"Resumen del perfil\",\"keyPoints\":[\"experiencia\",\"ubicacion\"],\"confidence\":0.92,\"ruleResults\":[{\"question_id\":12,\"result\":\"passed\"}]}"
+        "jsonSchemaExample": "{\"score\":85,\"status\":\"pre_calificado\",\"reason\":\"Cumple las condiciones configuradas\",\"profileSummary\":\"Resumen del perfil\",\"keyPoints\":[\"experiencia\",\"ubicacion\"],\"confidence\":0.92,\"ruleResults\":[{\"question_id\":12,\"result\":\"passed\"}]}"
       },
       "id": "salida-estructurada",
       "name": "Salida estructurada",

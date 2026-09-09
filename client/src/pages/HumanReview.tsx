@@ -13,6 +13,7 @@ import { trpc } from "@/lib/trpc";
 import {
   APPLICATION_STATUS_OPTIONS,
   applicationStatusLabel,
+  applicationStatusTone,
 } from "@shared/applicationStatus";
 import {
   ArrowDown,
@@ -922,16 +923,16 @@ function ViewerTextCard({ label, text }: { label: string; text: string }) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const tone =
-    status === "calificado"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-      : status === "calificado_aisa"
-        ? "border-violet-200 bg-violet-50 text-violet-800"
-        : status === "no_calificado"
-          ? "border-red-200 bg-red-50 text-red-800"
-          : status === "pre_calificado"
-            ? "border-sky-200 bg-sky-50 text-sky-800"
-            : "border-amber-200 bg-amber-50 text-amber-800";
+  const tone = {
+    neutral: "border-slate-200 bg-slate-50 text-slate-800",
+    priority: "border-violet-200 bg-violet-50 text-violet-800",
+    positive: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    conditional: "border-sky-200 bg-sky-50 text-sky-800",
+    review: "border-amber-200 bg-amber-50 text-amber-800",
+    negative: "border-red-200 bg-red-50 text-red-800",
+    interview: "border-cyan-200 bg-cyan-50 text-cyan-800",
+    error: "border-rose-200 bg-rose-50 text-rose-800",
+  }[applicationStatusTone(status)];
   return (
     <Badge variant="outline" className={`rounded-full ${tone}`}>
       {applicationStatusLabel(status)}

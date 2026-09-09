@@ -19,18 +19,22 @@ export const userRoleEnum = pgEnum("user_role", [
 ]);
 export const applicationStatusEnum = pgEnum("application_status", [
   "en_revision",
+  "pre_calificado_prioritario",
   "pre_calificado",
+  "pre_calificado_condicionado",
+  "pendiente_revision_humana",
+  "no_calificado",
   "calificado",
   "calificado_aisa",
-  "no_calificado",
   "entrevista_iniciada",
   "entrevista_en_curso",
   "entrevista_finalizada",
-  "pendiente_revision_humana",
   "error_procesamiento",
 ]);
 export const evaluationStatusEnum = pgEnum("evaluation_status", [
+  "pre_calificado_prioritario",
   "pre_calificado",
+  "pre_calificado_condicionado",
   "calificado",
   "no_calificado",
   "pendiente_revision_humana",

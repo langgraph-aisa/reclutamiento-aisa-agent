@@ -4,8 +4,8 @@
 
 La implementación es viable sobre la arquitectura actual. Reutiliza React, tRPC,
 PostgreSQL y los permisos administrativos existentes; no requiere una tabla nueva.
-La migración `0008_agent_evaluator.sql` alinea el historial con el estado
-`pre_calificado`. Las preferencias y credenciales se almacenan en
+Las migraciones `0008_agent_evaluator.sql` y `0010_agent_score_statuses.sql`
+alinean el historial con los cinco estados de la escala. Las preferencias y credenciales se almacenan en
 `integration_settings` con el proveedor `ai_agent`.
 
 El flujo aplicado es:
@@ -72,8 +72,9 @@ AES-256-GCM y la API devuelve solo una máscara con los últimos cuatro caracter
 
 ## Puesta en marcha
 
-1. Desplegar el código, ejecutar `pnpm install --frozen-lockfile` y aplicar la
-   migración `drizzle/migrations/0008_agent_evaluator.sql`.
+1. Desplegar el código, ejecutar `pnpm install --frozen-lockfile` y aplicar las
+   migraciones pendientes, incluida
+   `drizzle/migrations/0010_agent_score_statuses.sql`.
 2. Confirmar `DATABASE_URL` y `JWT_SECRET`; configurar además
    `AGENT_SETTINGS_ENCRYPTION_KEY` como separación criptográfica recomendada.
 3. Ingresar como Administrador y abrir **Agente de IA LangGraph**.
@@ -93,8 +94,12 @@ AES-256-GCM y la API devuelve solo una máscara con los últimos cuatro caracter
 - El máximo de claves OpenAI está fijado en dos ranuras.
 - El resumen admite entre 50 y 1,000 palabras.
 - Una descalificación crítica prevalece sobre una puntuación alta.
-- De 70 a 100 el estado automático es `pre_calificado`, no `calificado`; la
-  calificación definitiva sigue siendo humana.
+- De 90 a 100 se asigna `pre_calificado_prioritario`.
+- De 80 a 89 se asigna `pre_calificado`.
+- De 70 a 79 se asigna `pre_calificado_condicionado`.
 - De 60 a 69 se asigna `pendiente_revision_humana`.
+- De 0 a 59 se asigna `no_calificado`.
+- Ninguno de esos estados dispara la solicitud de CV; esa acción continúa
+  reservada al cambio humano a `calificado`.
 - La verificación OpenAI consulta el acceso al modelo y no envía datos de un
   candidato.

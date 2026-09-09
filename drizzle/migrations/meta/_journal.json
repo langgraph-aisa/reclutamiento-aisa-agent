@@ -71,6 +71,13 @@
       "when": 1788988005707,
       "tag": "0009_calificado_aisa",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788992951979,
+      "tag": "0010_agent_score_statuses",
+      "breakpoints": true
     }
   ]
 }

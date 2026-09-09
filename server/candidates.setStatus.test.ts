@@ -43,6 +43,20 @@ afterEach(() => {
 });
 
 describe("candidates.list", () => {
+  it("accepts every new score-derived status in its filter endpoint", async () => {
+    for (const status of [
+      "pre_calificado_prioritario",
+      "pre_calificado_condicionado",
+    ] as const) {
+      const query = vi.fn().mockResolvedValue({ rows: [] });
+      getPool.mockResolvedValue({ query });
+
+      await appRouter.createCaller(createContext()).candidates.list({ status });
+
+      expect(query.mock.calls[0]?.[1]).toEqual([status]);
+    }
+  });
+
   it("filters applications by pre-qualified status", async () => {
     const query = vi.fn().mockResolvedValue({ rows: [] });
     getPool.mockResolvedValue({ query });
@@ -74,8 +88,8 @@ describe("candidates.reviewWorkspace", () => {
       {
         id: 42,
         full_name: "Ana Pérez",
-        status: "pendiente_revision_humana",
-        evaluation_score: 67,
+        status: "pre_calificado_condicionado",
+        evaluation_score: 75,
         answers: [
           {
             fieldKey: "experiencia_ventas",
@@ -91,7 +105,7 @@ describe("candidates.reviewWorkspace", () => {
     const result = await appRouter
       .createCaller(createContext())
       .candidates.reviewWorkspace({
-        status: "pendiente_revision_humana",
+        status: "pre_calificado_condicionado",
         search: "Ana",
         positionId: 9,
         minimumScore: 60,
@@ -107,7 +121,7 @@ describe("candidates.reviewWorkspace", () => {
     expect(sql).toContain("e.evaluation_id IS NOT NULL");
     expect(sql).toMatch(/ORDER BY COALESCE\([\s\S]+\) ASC,a\.id DESC/);
     expect(query.mock.calls[0]?.[1]).toEqual([
-      "pendiente_revision_humana",
+      "pre_calificado_condicionado",
       "%Ana%",
       9,
       60,
@@ -150,6 +164,47 @@ describe("dashboard.summary", () => {
 });
 
 describe("candidates.setStatus", () => {
+  it.each([
+    "pre_calificado_prioritario",
+    "pre_calificado_condicionado",
+  ] as const)("accepts %s without triggering a CV event", async nextStatus => {
+    const before = {
+      id: 42,
+      status: "en_revision",
+      whatsapp_status: "no_enviado",
+      full_name: "Ana Pérez",
+      phone_international: "+50255555555",
+      position_title: "Ventas",
+      whatsapp_message: null,
+    };
+    const updated = {
+      id: 42,
+      status: nextStatus,
+      whatsapp_status: "no_enviado",
+      review_hold_until: null,
+    };
+    const audit = { id: 97, action: "status_changed" };
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [before] })
+      .mockResolvedValueOnce({ rows: [updated] })
+      .mockResolvedValueOnce({ rows: [audit] })
+      .mockResolvedValueOnce({ rows: [] });
+    getPool.mockResolvedValue({
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    });
+
+    const result = await appRouter
+      .createCaller(createContext())
+      .candidates.setStatus({ id: 42, status: nextStatus });
+
+    expect(result.application).toEqual(updated);
+    expect(result.whatsapp).toBeNull();
+    expect(ensureCvRequestMessage).not.toHaveBeenCalled();
+    expect(deliverCvRequestMessage).not.toHaveBeenCalled();
+  });
+
   it("accepts pre-qualified without queuing a CV request", async () => {
     const before = {
       id: 42,

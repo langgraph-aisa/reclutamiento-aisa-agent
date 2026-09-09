@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { APPLICATION_STATUS_OPTIONS } from "../shared/applicationStatus";
 import {
   canChangeStatus,
   canManageConfiguration,
@@ -22,9 +23,31 @@ describe("recruitment policy", () => {
   it("accepts only known statuses for an operational role", () => {
     expect(canChangeStatus("reclutador", "calificado")).toBe(true);
     expect(canChangeStatus("reclutador", "calificado_aisa")).toBe(true);
+    expect(canChangeStatus("reclutador", "pre_calificado_prioritario")).toBe(
+      true
+    );
     expect(canChangeStatus("reclutador", "pre_calificado")).toBe(true);
+    expect(canChangeStatus("reclutador", "pre_calificado_condicionado")).toBe(
+      true
+    );
     expect(canChangeStatus("user", "calificado")).toBe(false);
     expect(canChangeStatus("admin", "otro_estado")).toBe(false);
+  });
+
+  it("publishes every AI score band in the shared selectors", () => {
+    const options = new Map(
+      APPLICATION_STATUS_OPTIONS.map(option => [option.value, option.label])
+    );
+
+    expect(options.get("pre_calificado_prioritario")).toBe(
+      "Precalificado prioritario"
+    );
+    expect(options.get("pre_calificado")).toBe("Precalificado");
+    expect(options.get("pre_calificado_condicionado")).toBe(
+      "Precalificado condicionado"
+    );
+    expect(options.get("pendiente_revision_humana")).toBe("Revisión humana");
+    expect(options.get("no_calificado")).toBe("No precalificado");
   });
 
   it("uses phone plus position as duplicate identity", () => {
@@ -40,6 +63,10 @@ describe("recruitment policy", () => {
   it("continues only while status remains qualified after the hold", () => {
     expect(shouldContinueAfterReview("calificado")).toBe(true);
     expect(shouldContinueAfterReview("calificado_aisa")).toBe(false);
+    expect(shouldContinueAfterReview("pre_calificado_prioritario")).toBe(false);
+    expect(shouldContinueAfterReview("pre_calificado_condicionado")).toBe(
+      false
+    );
     expect(shouldContinueAfterReview("no_calificado")).toBe(false);
     expect(shouldContinueAfterReview("en_revision")).toBe(false);
   });

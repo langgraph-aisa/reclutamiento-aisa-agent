@@ -12,7 +12,10 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useState } from "react";
-import { applicationStatusLabel } from "@shared/applicationStatus";
+import {
+  applicationStatusLabel,
+  applicationStatusTone,
+} from "@shared/applicationStatus";
 
 export default function Reports() {
   const [from, setFrom] = useState("");
@@ -95,15 +98,16 @@ export default function Reports() {
                   value={Number(row.count)}
                   total={total}
                   tone={
-                    row.status === "calificado"
-                      ? "bg-emerald-500"
-                      : row.status === "calificado_aisa"
-                        ? "bg-violet-500"
-                        : row.status === "pre_calificado"
-                          ? "bg-sky-500"
-                          : row.status === "no_calificado"
-                            ? "bg-red-400"
-                            : "bg-primary"
+                    {
+                      neutral: "bg-slate-500",
+                      priority: "bg-violet-500",
+                      positive: "bg-emerald-500",
+                      conditional: "bg-sky-500",
+                      review: "bg-amber-500",
+                      negative: "bg-red-500",
+                      interview: "bg-cyan-500",
+                      error: "bg-rose-500",
+                    }[applicationStatusTone(row.status)]
                   }
                 />
               ))

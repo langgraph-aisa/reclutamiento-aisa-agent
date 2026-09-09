@@ -32,13 +32,33 @@ describe("agent evaluator policy", () => {
   });
 
   it("maps scores to the approved bands and workflow statuses", () => {
-    expect(classificationForScore(94)).toBe("Precalificado prioritario");
-    expect(classificationForScore(75)).toBe("Precalificado condicionado");
-    expect(applicationStatusForEvaluation(75, false)).toBe("pre_calificado");
-    expect(applicationStatusForEvaluation(65, false)).toBe(
-      "pendiente_revision_humana"
+    const cases = [
+      [100, "Precalificado prioritario", "pre_calificado_prioritario"],
+      [90, "Precalificado prioritario", "pre_calificado_prioritario"],
+      [89, "Precalificado", "pre_calificado"],
+      [80, "Precalificado", "pre_calificado"],
+      [79, "Precalificado condicionado", "pre_calificado_condicionado"],
+      [70, "Precalificado condicionado", "pre_calificado_condicionado"],
+      [69, "Revisión humana", "pendiente_revision_humana"],
+      [60, "Revisión humana", "pendiente_revision_humana"],
+      [59, "No precalificado", "no_calificado"],
+      [0, "No precalificado", "no_calificado"],
+    ] as const;
+
+    for (const [score, classification, status] of cases) {
+      expect(classificationForScore(score)).toBe(classification);
+      expect(applicationStatusForEvaluation(score, false)).toBe(status);
+    }
+  });
+
+  it("normalizes scores outside the scale before assigning a state", () => {
+    expect(applicationStatusForEvaluation(120, false)).toBe(
+      "pre_calificado_prioritario"
     );
-    expect(applicationStatusForEvaluation(59, false)).toBe("no_calificado");
+    expect(applicationStatusForEvaluation(-4, false)).toBe("no_calificado");
+    expect(applicationStatusForEvaluation(Number.NaN, false)).toBe(
+      "no_calificado"
+    );
   });
 
   it("makes a critical disqualification prevail over the score", () => {

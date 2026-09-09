@@ -89,9 +89,17 @@ export function scoreEvaluation(output: AgentModelOutput) {
 }
 
 export function classificationForScore(score: number) {
+  return scoreBandForScore(score).label;
+}
+
+function scoreBandForScore(score: number) {
+  const normalizedScore = Number.isFinite(score)
+    ? Math.max(0, Math.min(100, Math.round(score)))
+    : 0;
   return (
-    SCORE_BANDS.find(band => score >= band.min && score <= band.max)?.label ??
-    "No precalificado"
+    SCORE_BANDS.find(
+      band => normalizedScore >= band.min && normalizedScore <= band.max
+    ) ?? SCORE_BANDS[SCORE_BANDS.length - 1]
   );
 }
 
@@ -99,9 +107,8 @@ export function applicationStatusForEvaluation(
   score: number,
   criticalDisqualification: boolean
 ) {
-  if (criticalDisqualification || score < 60) return "no_calificado" as const;
-  if (score < 70) return "pendiente_revision_humana" as const;
-  return "pre_calificado" as const;
+  if (criticalDisqualification) return "no_calificado" as const;
+  return scoreBandForScore(score).status;
 }
 
 function buildSystemInstructions(
