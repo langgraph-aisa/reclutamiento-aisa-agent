@@ -87,6 +87,7 @@ export type AgentPreferences = {
   useResponsesApi: boolean;
   methodologyInterpretation: string;
   langfuseBaseUrl: string;
+  langfuseEnvironment: string;
 };
 
 export const DEFAULT_AGENT_SETTINGS: AgentPreferences = {
@@ -97,4 +98,5 @@ export const DEFAULT_AGENT_SETTINGS: AgentPreferences = {
   useResponsesApi: false,
   methodologyInterpretation: DEFAULT_METHODOLOGY_INTERPRETATION,
   langfuseBaseUrl: "https://cloud.langfuse.com",
+  langfuseEnvironment: "production",
 };

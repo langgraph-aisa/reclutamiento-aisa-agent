@@ -22,6 +22,7 @@ import {
 } from "@shared/agentConfig";
 import {
   Activity,
+  Bot,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -83,6 +84,7 @@ export default function AgentEvaluator() {
       useResponsesApi: configuration.data.useResponsesApi,
       methodologyInterpretation: configuration.data.methodologyInterpretation,
       langfuseBaseUrl: configuration.data.langfuseBaseUrl,
+      langfuseEnvironment: configuration.data.langfuseEnvironment,
     });
   }, [configuration.data]);
 
@@ -99,7 +101,8 @@ export default function AgentEvaluator() {
   };
   const ready = Boolean(
     preferences.useResponsesApi &&
-      configuration.data?.secrets.openai_api_key.configured
+      (configuration.data?.secrets.openai_api_key.configured ||
+        configuration.data?.secrets.openai_api_key_backup.configured)
   );
 
   return (
@@ -107,17 +110,15 @@ export default function AgentEvaluator() {
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
           <div className="flex items-center gap-3">
-            <img
-              src="/brand/openai-logo.svg"
-              alt="Logotipo de OpenAI"
-              className="h-10 w-10"
-            />
+            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-primary text-primary-foreground">
+              <Bot className="h-5 w-5" aria-hidden="true" />
+            </div>
             <p className="text-sm font-semibold uppercase tracking-[.18em] text-emerald-700">
               Inteligencia operativa
             </p>
           </div>
           <h1 className="mt-3 text-4xl font-800 tracking-[-.04em] text-primary">
-            Agente evaluador
+            Agente de IA LangGraph
           </h1>
           <p className="mt-2 max-w-3xl text-muted-foreground">
             Gobierno, metodología y observabilidad de la evaluación automática
@@ -447,6 +448,34 @@ export default function AgentEvaluator() {
                 placeholder="https://cloud.langfuse.com"
               />
             </div>
+            <div className="space-y-2">
+              <Label className="font-semibold text-primary">
+                LANGFUSE_TRACING_ENVIRONMENT
+              </Label>
+              <Input
+                value={preferences.langfuseEnvironment}
+                onChange={event =>
+                  setPreferences(current => ({
+                    ...current,
+                    langfuseEnvironment: event.target.value,
+                  }))
+                }
+                className="rounded-2xl font-mono text-xs"
+                placeholder="production"
+              />
+              <p className="text-xs text-muted-foreground">
+                Separa las trazas por ambiente, por ejemplo: production, staging
+                o development.
+              </p>
+            </div>
+            <Button
+              className="w-full rounded-full"
+              disabled={savePreferences.isPending || configuration.isLoading}
+              onClick={() => savePreferences.mutate(preferences)}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              Guardar configuración Langfuse
+            </Button>
             <Button
               variant="outline"
               className="w-full rounded-full"

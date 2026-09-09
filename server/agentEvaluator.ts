@@ -204,6 +204,7 @@ async function traceEvaluation(
     publicKey,
     secretKey,
     baseUrl: settings.langfuseBaseUrl,
+    environment: settings.langfuseEnvironment,
     flushAt: 1,
     requestTimeout: 10_000,
   });
@@ -547,6 +548,7 @@ export async function verifyLangfuseConnection(pool: Pool) {
     publicKey,
     secretKey,
     baseUrl: settings.langfuseBaseUrl,
+    environment: settings.langfuseEnvironment,
     requestTimeout: 15_000,
   });
   try {
@@ -554,6 +556,7 @@ export async function verifyLangfuseConnection(pool: Pool) {
     return {
       success: true as const,
       baseUrl: settings.langfuseBaseUrl,
+      environment: settings.langfuseEnvironment,
       projects: projects.data.length,
     };
   } finally {

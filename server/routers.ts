@@ -77,7 +77,7 @@ function asJson(value: unknown) {
 function safeIntegrationMessage(error: unknown, fallback: string) {
   const message = error instanceof Error ? error.message : "";
   const allowedMessages = [
-    "Configura AGENT_SETTINGS_ENCRYPTION_KEY",
+    "No existe una fuente estable para cifrar credenciales",
     "La API Key",
     "La OpenAI Responses API",
     "No hay una API key",
@@ -1618,6 +1618,15 @@ export const appRouter = router({
                 message: "La URL de Langfuse debe usar HTTP o HTTPS.",
               }
             ),
+          langfuseEnvironment: z
+            .string()
+            .trim()
+            .min(2)
+            .max(80)
+            .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/, {
+              message:
+                "El environment de Langfuse solo admite letras, números, punto, guion y guion bajo.",
+            }),
         })
       )
       .mutation(async ({ input, ctx }) => {

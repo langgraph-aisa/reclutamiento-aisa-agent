@@ -1,4 +1,4 @@
-# Módulo Agente evaluador
+# Módulo Agente de IA LangGraph
 
 ## Viabilidad técnica
 
@@ -43,9 +43,10 @@ documentación oficial de OpenAI recomienda `json_schema` sobre el modo JSON
 anterior para modelos compatibles:
 <https://developers.openai.com/api/reference/typescript/resources/beta/subresources/responses/methods/create>.
 
-## Configuración obligatoria en EasyPanel
+## Configuración recomendada en EasyPanel
 
-Agregar al servicio web una clave estable, aleatoria y de 32 caracteres o más:
+Se recomienda agregar al servicio web una clave estable, aleatoria y de 32
+caracteres o más:
 
 ```dotenv
 AGENT_SETTINGS_ENCRYPTION_KEY=REEMPLAZAR_CON_UN_SECRETO_ALEATORIO_ESTABLE
@@ -57,11 +58,15 @@ Puede generarse fuera del servidor con:
 openssl rand -base64 48
 ```
 
-No debe cambiarse mientras existan credenciales guardadas: el cambio impediría
-descifrarlas. Si la variable no existe, el servidor acepta `JWT_SECRET` como
-respaldo, aunque se recomienda una clave dedicada para separar responsabilidades.
+Para evitar que un despliegue sin esa variable bloquee al administrador, el
+servidor usa en orden `AGENT_SETTINGS_ENCRYPTION_KEY`, `JWT_SECRET` y
+`DATABASE_URL`, y deriva de la primera disponible una clave AES de 256 bits. Al
+descifrar también prueba las fuentes restantes, lo que conserva las credenciales
+si después se agrega una clave dedicada. No deben cambiarse o eliminarse todas
+las fuentes con las que se hayan cifrado credenciales existentes.
 
-Las claves de OpenAI y Langfuse se ingresan únicamente en **Agente evaluador**.
+Las claves de OpenAI y Langfuse se ingresan únicamente en **Agente de IA
+LangGraph**.
 No se incluyen en `.env`, capturas, logs, tickets ni repositorios. Se cifran con
 AES-256-GCM y la API devuelve solo una máscara con los últimos cuatro caracteres.
 
@@ -69,15 +74,16 @@ AES-256-GCM y la API devuelve solo una máscara con los últimos cuatro caracter
 
 1. Desplegar el código, ejecutar `pnpm install --frozen-lockfile` y aplicar la
    migración `drizzle/migrations/0008_agent_evaluator.sql`.
-2. Confirmar `DATABASE_URL`, `JWT_SECRET` y
-   `AGENT_SETTINGS_ENCRYPTION_KEY` en EasyPanel.
-3. Ingresar como Administrador y abrir **Agente evaluador**.
+2. Confirmar `DATABASE_URL` y `JWT_SECRET`; configurar además
+   `AGENT_SETTINGS_ENCRYPTION_KEY` como separación criptográfica recomendada.
+3. Ingresar como Administrador y abrir **Agente de IA LangGraph**.
 4. Guardar API Key, API Key Back Up opcional y seleccionar el modelo.
 5. Usar **Verificar** en cada clave configurada.
 6. Revisar instrucciones, máximo de palabras e interpretación metodológica.
 7. Activar **Usar SIERA y MST-EIR**.
 8. Activar **Habilitar OpenAI Responses API** y guardar la configuración.
-9. Configurar Langfuse de forma opcional y verificar la conexión.
+9. Configurar Langfuse de forma opcional, indicar
+   `LANGFUSE_TRACING_ENVIRONMENT`, guardar y verificar la conexión.
 10. Evaluar una postulación de prueba sin datos personales reales.
 
 ## Controles y límites

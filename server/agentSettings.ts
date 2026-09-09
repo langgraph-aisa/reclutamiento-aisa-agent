@@ -30,6 +30,7 @@ const preferenceKeys = {
   useResponsesApi: "use_responses_api",
   methodologyInterpretation: "methodology_interpretation",
   langfuseBaseUrl: "langfuse_base_url",
+  langfuseEnvironment: "langfuse_environment",
 } as const;
 
 type SettingRow = {
@@ -41,20 +42,26 @@ type SettingRow = {
 
 type Queryable = Pick<Pool, "query"> | Pick<PoolClient, "query">;
 
-function encryptionMaterial() {
-  const material =
-    process.env.AGENT_SETTINGS_ENCRYPTION_KEY ?? process.env.JWT_SECRET ?? "";
-  if (material.length < 32) {
+function encryptionMaterials() {
+  const materials = [
+    process.env.AGENT_SETTINGS_ENCRYPTION_KEY?.trim(),
+    process.env.JWT_SECRET?.trim(),
+    process.env.DATABASE_URL?.trim(),
+  ].filter((material): material is string => Boolean(material));
+  const uniqueMaterials = Array.from(new Set(materials));
+  if (uniqueMaterials.length === 0) {
     throw new Error(
-      "Configura AGENT_SETTINGS_ENCRYPTION_KEY con al menos 32 caracteres antes de guardar credenciales."
+      "No existe una fuente estable para cifrar credenciales. Configura AGENT_SETTINGS_ENCRYPTION_KEY, JWT_SECRET o DATABASE_URL."
     );
   }
-  return createHash("sha256").update(material).digest();
+  return uniqueMaterials.map(material =>
+    createHash("sha256").update(material).digest()
+  );
 }
 
 export function encryptAgentSecret(value: string) {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", encryptionMaterial(), iv);
+  const cipher = createCipheriv("aes-256-gcm", encryptionMaterials()[0], iv);
   const encrypted = Buffer.concat([
     cipher.update(value, "utf8"),
     cipher.final(),
@@ -69,16 +76,23 @@ export function decryptAgentSecret(value: string) {
   if (!ivValue || !tagValue || !encryptedValue) {
     throw new Error("La credencial cifrada no tiene un formato válido.");
   }
-  const decipher = createDecipheriv(
-    "aes-256-gcm",
-    encryptionMaterial(),
-    Buffer.from(ivValue, "base64url")
-  );
-  decipher.setAuthTag(Buffer.from(tagValue, "base64url"));
-  return Buffer.concat([
-    decipher.update(Buffer.from(encryptedValue, "base64url")),
-    decipher.final(),
-  ]).toString("utf8");
+  for (const material of encryptionMaterials()) {
+    try {
+      const decipher = createDecipheriv(
+        "aes-256-gcm",
+        material,
+        Buffer.from(ivValue, "base64url")
+      );
+      decipher.setAuthTag(Buffer.from(tagValue, "base64url"));
+      return Buffer.concat([
+        decipher.update(Buffer.from(encryptedValue, "base64url")),
+        decipher.final(),
+      ]).toString("utf8");
+    } catch {
+      // Permite leer secretos cifrados con una fuente anterior durante rotaciones.
+    }
+  }
+  throw new Error("No fue posible descifrar la credencial almacenada.");
 }
 
 export function maskAgentSecret(value: string) {
@@ -142,6 +156,9 @@ function preferencesFromRows(rows: SettingRow[]): AgentPreferences {
     langfuseBaseUrl:
       values.get(preferenceKeys.langfuseBaseUrl) ??
       DEFAULT_AGENT_SETTINGS.langfuseBaseUrl,
+    langfuseEnvironment:
+      values.get(preferenceKeys.langfuseEnvironment) ??
+      DEFAULT_AGENT_SETTINGS.langfuseEnvironment,
   };
 }
 
@@ -237,6 +254,7 @@ export async function saveAgentPreferences(
         preferences.methodologyInterpretation,
       ],
       [preferenceKeys.langfuseBaseUrl, preferences.langfuseBaseUrl],
+      [preferenceKeys.langfuseEnvironment, preferences.langfuseEnvironment],
     ];
     for (const [key, value] of entries) {
       await upsertSetting(client, key, value, false);

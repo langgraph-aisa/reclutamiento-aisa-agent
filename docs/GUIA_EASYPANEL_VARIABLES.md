@@ -87,7 +87,7 @@ El valor generado se pega una sola vez en el campo secreto de EasyPanel. No debe
 
 #### `AGENT_SETTINGS_ENCRYPTION_KEY`
 
-Clave estable de al menos 32 caracteres utilizada exclusivamente para cifrar las credenciales de OpenAI y Langfuse que el Administrador mantiene desde el módulo **Agente evaluador**. Se recomienda generar un valor diferente de `JWT_SECRET` con `openssl rand -base64 48`, marcarlo como secreto y conservarlo durante toda la vida de las credenciales guardadas. Si se rota, primero deben volver a registrarse las credenciales con la nueva clave.
+Clave estable de al menos 32 caracteres recomendada para cifrar exclusivamente las credenciales de OpenAI y Langfuse que el Administrador mantiene desde **Agente de IA LangGraph**. Se recomienda generar un valor diferente de `JWT_SECRET` con `openssl rand -base64 48`, marcarlo como secreto y conservarlo durante toda la vida de las credenciales guardadas. Si no está definida, el servidor deriva la clave desde `JWT_SECRET` o, como último respaldo, `DATABASE_URL`; por ello el guardado ya no queda bloqueado. Durante una rotación deben conservarse temporalmente las fuentes anteriores hasta volver a registrar las credenciales.
 
 #### `N8N_MANUAL_STATUS_WEBHOOK_URL`
 

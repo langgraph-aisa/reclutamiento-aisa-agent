@@ -23,6 +23,7 @@ import {
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   BarChart3,
+  Bot,
   BriefcaseBusiness,
   Globe2,
   KeyRound,
@@ -37,17 +38,6 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
-
-function OpenAIMark({ className }: { className?: string }) {
-  return (
-    <img
-      src="/brand/openai-logo.svg"
-      alt=""
-      aria-hidden="true"
-      className={className}
-    />
-  );
-}
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Resumen", path: "/admin" },
@@ -66,8 +56,8 @@ const menuItems = [
   { icon: BarChart3, label: "Informes", path: "/admin/reports" },
   { icon: Globe2, label: "MST-EIR", path: "/admin/mst-eir", adminOnly: true },
   {
-    icon: OpenAIMark,
-    label: "Agente evaluador",
+    icon: Bot,
+    label: "Agente de IA LangGraph",
     path: "/admin/agent-evaluator",
     adminOnly: true,
   },
