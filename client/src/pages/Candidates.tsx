@@ -30,6 +30,7 @@ const statuses = [
   { value: "en_revision", label: "En revisión" },
   { value: "pre_calificado", label: "Pre-calificado" },
   { value: "calificado", label: "Solicitar CV por WhatsApp" },
+  { value: "calificado_aisa", label: "Calificado por AISA" },
   { value: "no_calificado", label: "No calificado" },
   { value: "pendiente_revision_humana", label: "Pendiente de revisión humana" },
   { value: "entrevista_iniciada", label: "Entrevista iniciada" },
@@ -614,11 +615,13 @@ function CandidateRow({
   const tone =
     candidate.status === "calificado"
       ? "bg-emerald-100 text-emerald-800"
-      : candidate.status === "pre_calificado"
-        ? "bg-sky-100 text-sky-800"
-        : candidate.status === "no_calificado"
-          ? "bg-red-100 text-red-800"
-          : "bg-amber-100 text-amber-800";
+      : candidate.status === "calificado_aisa"
+        ? "bg-violet-100 text-violet-800"
+        : candidate.status === "pre_calificado"
+          ? "bg-sky-100 text-sky-800"
+          : candidate.status === "no_calificado"
+            ? "bg-red-100 text-red-800"
+            : "bg-amber-100 text-amber-800";
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 gap-3">

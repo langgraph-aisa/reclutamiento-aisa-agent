@@ -2,6 +2,7 @@ export const applicationStatuses = [
   "en_revision",
   "pre_calificado",
   "calificado",
+  "calificado_aisa",
   "no_calificado",
   "entrevista_iniciada",
   "entrevista_en_curso",

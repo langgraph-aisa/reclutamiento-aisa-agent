@@ -64,6 +64,13 @@
       "when": 1788978900000,
       "tag": "0008_agent_evaluator",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788988005707,
+      "tag": "0009_calificado_aisa",
+      "breakpoints": true
     }
   ]
 }

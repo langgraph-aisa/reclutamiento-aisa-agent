@@ -54,6 +54,52 @@ describe("candidates.list", () => {
     expect(String(query.mock.calls[0]?.[0])).toMatch(/a\.status = \$1/);
     expect(query.mock.calls[0]?.[1]).toEqual(["pre_calificado"]);
   });
+
+  it("filters applications by AISA-qualified status", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    getPool.mockResolvedValue({ query });
+
+    await appRouter
+      .createCaller(createContext())
+      .candidates.list({ status: "calificado_aisa" });
+
+    expect(String(query.mock.calls[0]?.[0])).toMatch(/a\.status = \$1/);
+    expect(query.mock.calls[0]?.[1]).toEqual(["calificado_aisa"]);
+  });
+});
+
+describe("dashboard.summary", () => {
+  it("counts AISA-qualified applications independently", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          total: 12,
+          en_revision: 3,
+          calificados: 2,
+          calificados_aisa: 4,
+          entrevistas: 1,
+          positions: 5,
+        },
+      ],
+    });
+    getPool.mockResolvedValue({ query });
+
+    const result = await appRouter
+      .createCaller(createContext())
+      .dashboard.summary();
+
+    expect(result).toEqual({
+      total: 12,
+      enRevision: 3,
+      calificados: 2,
+      calificadosAisa: 4,
+      entrevistas: 1,
+      positions: 5,
+    });
+    expect(String(query.mock.calls[0]?.[0])).toContain(
+      "status = 'calificado_aisa'"
+    );
+  });
 });
 
 describe("candidates.setStatus", () => {
@@ -99,6 +145,54 @@ describe("candidates.setStatus", () => {
       });
 
     expect(result.application).toEqual(preQualified);
+    expect(result.whatsapp).toBeNull();
+    expect(ensureCvRequestMessage).not.toHaveBeenCalled();
+    expect(deliverCvRequestMessage).not.toHaveBeenCalled();
+  });
+
+  it("accepts AISA-qualified without triggering any CV event", async () => {
+    const before = {
+      id: 42,
+      status: "en_revision",
+      whatsapp_status: "no_enviado",
+      full_name: "Ana Pérez",
+      phone_international: "+50255555555",
+      position_title: "Ventas",
+      whatsapp_message: null,
+    };
+    const qualifiedByAisa = {
+      id: 42,
+      status: "calificado_aisa",
+      whatsapp_status: "no_enviado",
+      review_hold_until: null,
+    };
+    const audit = {
+      id: 101,
+      actor_user_id: 7,
+      action: "status_changed",
+      comment: "Aprobado por el comité AISA",
+    };
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [before] })
+      .mockResolvedValueOnce({ rows: [qualifiedByAisa] })
+      .mockResolvedValueOnce({ rows: [audit] })
+      .mockResolvedValueOnce({ rows: [] });
+    getPool.mockResolvedValue({
+      connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }),
+    });
+
+    const result = await appRouter
+      .createCaller(createContext())
+      .candidates.setStatus({
+        id: 42,
+        status: "calificado_aisa",
+        comment: "Aprobado por el comité AISA",
+      });
+
+    expect(result.application).toEqual(qualifiedByAisa);
+    expect(result.audit).toEqual(audit);
     expect(result.whatsapp).toBeNull();
     expect(ensureCvRequestMessage).not.toHaveBeenCalled();
     expect(deliverCvRequestMessage).not.toHaveBeenCalled();

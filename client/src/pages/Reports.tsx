@@ -17,6 +17,7 @@ const labels: Record<string, string> = {
   en_revision: "En revisión",
   pre_calificado: "Pre-calificado",
   calificado: "Solicitar CV por WhatsApp",
+  calificado_aisa: "Calificado por AISA",
   no_calificado: "No calificado",
   entrevista_iniciada: "Entrevista iniciada",
   entrevista_en_curso: "Entrevista en curso",
@@ -107,11 +108,13 @@ export default function Reports() {
                   tone={
                     row.status === "calificado"
                       ? "bg-emerald-500"
-                      : row.status === "pre_calificado"
-                        ? "bg-sky-500"
-                        : row.status === "no_calificado"
-                          ? "bg-red-400"
-                          : "bg-primary"
+                      : row.status === "calificado_aisa"
+                        ? "bg-violet-500"
+                        : row.status === "pre_calificado"
+                          ? "bg-sky-500"
+                          : row.status === "no_calificado"
+                            ? "bg-red-400"
+                            : "bg-primary"
                   }
                 />
               ))

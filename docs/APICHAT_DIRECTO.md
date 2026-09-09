@@ -2,9 +2,17 @@
 
 Talento AISA envía una sola solicitud de CV cuando una postulación cambia desde cualquier estado distinto de `calificado` hacia `calificado`. El flujo no utiliza n8n.
 
+El estado **Calificado por AISA** utiliza el valor técnico `calificado_aisa` y
+no dispara ApiChat, webhooks ni mensajes. Únicamente registra el cambio y su
+auditoría como cualquier otro estado manual.
+
 ## Preparación de PostgreSQL
 
 Ejecutar la migración `drizzle/migrations/0005_direct_apichat.sql` antes de desplegar el código. La columna `message_key` y su índice único garantizan una sola solicitud lógica por postulación. El identificador tiene la forma `cv_request:{applicationId}`.
+
+Para habilitar **Calificado por AISA**, aplicar además
+`drizzle/migrations/0009_calificado_aisa.sql` antes de iniciar la nueva versión
+de la aplicación.
 
 ## Variables de EasyPanel
 

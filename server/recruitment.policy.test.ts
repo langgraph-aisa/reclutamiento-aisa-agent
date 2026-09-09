@@ -21,6 +21,7 @@ describe("recruitment policy", () => {
 
   it("accepts only known statuses for an operational role", () => {
     expect(canChangeStatus("reclutador", "calificado")).toBe(true);
+    expect(canChangeStatus("reclutador", "calificado_aisa")).toBe(true);
     expect(canChangeStatus("reclutador", "pre_calificado")).toBe(true);
     expect(canChangeStatus("user", "calificado")).toBe(false);
     expect(canChangeStatus("admin", "otro_estado")).toBe(false);
@@ -38,6 +39,7 @@ describe("recruitment policy", () => {
 
   it("continues only while status remains qualified after the hold", () => {
     expect(shouldContinueAfterReview("calificado")).toBe(true);
+    expect(shouldContinueAfterReview("calificado_aisa")).toBe(false);
     expect(shouldContinueAfterReview("no_calificado")).toBe(false);
     expect(shouldContinueAfterReview("en_revision")).toBe(false);
   });

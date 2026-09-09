@@ -41,18 +41,9 @@ import {
   saveAgentPreferences,
   saveAgentSecret,
 } from "./agentSettings";
+import { applicationStatuses } from "./policy";
 
-const statusValues = [
-  "en_revision",
-  "pre_calificado",
-  "calificado",
-  "no_calificado",
-  "entrevista_iniciada",
-  "entrevista_en_curso",
-  "entrevista_finalizada",
-  "pendiente_revision_humana",
-  "error_procesamiento",
-] as const;
+const statusValues = applicationStatuses;
 const methodologyDocumentKeys = ["siera", "mst_eir"] as const;
 const agentModelValues = AGENT_MODELS.map(model => model.value) as [
   (typeof AGENT_MODELS)[number]["value"],
@@ -694,6 +685,7 @@ export const appRouter = router({
           total: 0,
           enRevision: 0,
           calificados: 0,
+          calificadosAisa: 0,
           entrevistas: 0,
           positions: 0,
         };
@@ -701,6 +693,7 @@ export const appRouter = router({
         (SELECT count(*)::int FROM applications) AS total,
         (SELECT count(*)::int FROM applications WHERE status = 'en_revision') AS en_revision,
         (SELECT count(*)::int FROM applications WHERE status = 'calificado') AS calificados,
+        (SELECT count(*)::int FROM applications WHERE status = 'calificado_aisa') AS calificados_aisa,
         (SELECT count(*)::int FROM applications WHERE status IN ('entrevista_iniciada','entrevista_en_curso','entrevista_finalizada')) AS entrevistas,
         (SELECT count(*)::int FROM job_positions) AS positions`);
       const row = result.rows[0];
@@ -708,6 +701,7 @@ export const appRouter = router({
         total: row.total ?? 0,
         enRevision: row.en_revision ?? 0,
         calificados: row.calificados ?? 0,
+        calificadosAisa: row.calificados_aisa ?? 0,
         entrevistas: row.entrevistas ?? 0,
         positions: row.positions ?? 0,
       };
