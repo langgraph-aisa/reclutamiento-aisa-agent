@@ -1,1 +1,1 @@
-<img width="350" height="125" alt="alternativas-inteligentes-sa-mini" src="https://github.com/user-attachments/assets/03e4d535-404d-4994-80be-c3db20c98b34" />
+<img width="250" height="89" alt="alternativas-inteligentes-mini" src="https://github.com/user-attachments/assets/5bac130d-f21a-4d07-a7b2-2f9c3f7e7f2d" />
