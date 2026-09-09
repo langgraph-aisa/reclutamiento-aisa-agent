@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { AppBrand } from "@/components/AppBrand";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,7 +36,7 @@ export default function Login() {
     <main className="min-h-screen bg-background px-4 py-10 sm:px-6 lg:px-8">
       <div className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-5xl items-center gap-10 lg:grid-cols-[1fr_440px]">
         <section className="hidden lg:block">
-          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-primary">Talento Claro · acceso seguro</p>
+          <div className="mb-6 flex items-center gap-4"><AppBrand className="h-14" /><span className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Acceso seguro</span></div>
           <h1 className="max-w-xl text-5xl font-semibold tracking-[-0.05em] text-foreground">Configura evaluaciones laborales con trazabilidad.</h1>
           <p className="mt-6 max-w-lg text-lg leading-8 text-muted-foreground">El panel centraliza plazas, formularios, perfiles, candidatos y decisiones de evaluación en un espacio protegido.</p>
           <div className="mt-10 flex items-center gap-3 text-sm text-muted-foreground"><ShieldCheck className="h-5 w-5 text-primary" />Cada ingreso se confirma con un código temporal enviado al correo registrado.</div>

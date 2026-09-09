@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { AppBrand } from "@/components/AppBrand";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,8 +22,8 @@ export default function Home() {
         <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8 sm:py-10">
           <header className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-soft"><Sparkles className="h-5 w-5" /></div>
-              <div><p className="font-display text-lg font-800 tracking-tight">Talento Claro</p><p className="text-xs text-muted-foreground">Reclutamiento por evidencia</p></div>
+              <AppBrand className="h-12" />
+              <p className="hidden text-xs text-muted-foreground sm:block">Reclutamiento por evidencia</p>
             </div>
             <Link href="/login">
               <Button variant="outline" className="rounded-full px-5">Ingresar</Button>
