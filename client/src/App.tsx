@@ -1,6 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
+import { lazy, Suspense } from "react";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
@@ -18,6 +19,8 @@ import MstEir from "./pages/MstEir";
 import Profiles from "./pages/Profiles";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
+
+const HumanReview = lazy(() => import("./pages/HumanReview"));
 
 function AdminShell({ children }: { children: React.ReactNode }) {
   return <DashboardLayout>{children}</DashboardLayout>;
@@ -57,6 +60,19 @@ function Router() {
       <Route path="/admin/candidates">
         <AdminShell>
           <Candidates />
+        </AdminShell>
+      </Route>
+      <Route path="/admin/human-review">
+        <AdminShell>
+          <Suspense
+            fallback={
+              <div className="grid min-h-[60vh] place-items-center text-sm text-muted-foreground">
+                Preparando espacio de revisión…
+              </div>
+            }
+          >
+            <HumanReview />
+          </Suspense>
         </AdminShell>
       </Route>
       <Route path="/admin/reports">

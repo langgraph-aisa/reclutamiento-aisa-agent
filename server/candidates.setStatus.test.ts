@@ -68,6 +68,53 @@ describe("candidates.list", () => {
   });
 });
 
+describe("candidates.reviewWorkspace", () => {
+  it("builds a parameterized 360-degree matrix with dynamic answers", async () => {
+    const rows = [
+      {
+        id: 42,
+        full_name: "Ana Pérez",
+        status: "pendiente_revision_humana",
+        evaluation_score: 67,
+        answers: [
+          {
+            fieldKey: "experiencia_ventas",
+            label: "Experiencia en ventas",
+            value: "5 años",
+          },
+        ],
+      },
+    ];
+    const query = vi.fn().mockResolvedValue({ rows });
+    getPool.mockResolvedValue({ query });
+
+    const result = await appRouter
+      .createCaller(createContext())
+      .candidates.reviewWorkspace({
+        status: "pendiente_revision_humana",
+        search: "Ana",
+        positionId: 9,
+        minimumScore: 60,
+        evaluatedOnly: true,
+        sortBy: "score",
+        sortDirection: "asc",
+      });
+
+    expect(result).toEqual(rows);
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain("LEFT JOIN LATERAL");
+    expect(sql).toContain("jsonb_build_object");
+    expect(sql).toContain("e.evaluation_id IS NOT NULL");
+    expect(sql).toMatch(/ORDER BY COALESCE\([\s\S]+\) ASC,a\.id DESC/);
+    expect(query.mock.calls[0]?.[1]).toEqual([
+      "pendiente_revision_humana",
+      "%Ana%",
+      9,
+      60,
+    ]);
+  });
+});
+
 describe("dashboard.summary", () => {
   it("counts AISA-qualified applications independently", async () => {
     const query = vi.fn().mockResolvedValue({

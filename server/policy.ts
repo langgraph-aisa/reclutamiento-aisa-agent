@@ -1,16 +1,10 @@
-export const applicationStatuses = [
-  "en_revision",
-  "pre_calificado",
-  "calificado",
-  "calificado_aisa",
-  "no_calificado",
-  "entrevista_iniciada",
-  "entrevista_en_curso",
-  "entrevista_finalizada",
-  "pendiente_revision_humana",
-  "error_procesamiento",
-] as const;
-export type ApplicationStatus = (typeof applicationStatuses)[number];
+import {
+  APPLICATION_STATUS_VALUES,
+  type ApplicationStatus,
+} from "../shared/applicationStatus";
+
+export const applicationStatuses = APPLICATION_STATUS_VALUES;
+export type { ApplicationStatus };
 export type RecruitmentRole = "user" | "reclutador" | "admin";
 
 export function canOperateCandidates(role: RecruitmentRole) {

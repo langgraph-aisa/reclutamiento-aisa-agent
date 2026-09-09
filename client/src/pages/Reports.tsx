@@ -12,19 +12,8 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useState } from "react";
+import { applicationStatusLabel } from "@shared/applicationStatus";
 
-const labels: Record<string, string> = {
-  en_revision: "En revisión",
-  pre_calificado: "Pre-calificado",
-  calificado: "Solicitar CV por WhatsApp",
-  calificado_aisa: "Calificado por AISA",
-  no_calificado: "No calificado",
-  entrevista_iniciada: "Entrevista iniciada",
-  entrevista_en_curso: "Entrevista en curso",
-  entrevista_finalizada: "Entrevista finalizada",
-  pendiente_revision_humana: "Pendiente de revisión humana",
-  error_procesamiento: "Error de procesamiento",
-};
 export default function Reports() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -102,7 +91,7 @@ export default function Reports() {
               report.byStatus.map((row: any) => (
                 <Bar
                   key={row.status}
-                  label={labels[row.status] ?? row.status}
+                  label={applicationStatusLabel(row.status)}
                   value={Number(row.count)}
                   total={total}
                   tone={

@@ -851,6 +851,122 @@ export const appRouter = router({
         );
         return result.rows;
       }),
+    reviewWorkspace: roleProcedure
+      .input(
+        z
+          .object({
+            status: z.enum(statusValues).optional(),
+            search: z.string().trim().max(120).optional(),
+            positionId: z.number().int().positive().optional(),
+            from: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .optional(),
+            to: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .optional(),
+            minimumScore: z.number().int().min(0).max(100).optional(),
+            evaluatedOnly: z.boolean().optional(),
+            sortBy: z
+              .enum(["submitted_at", "name", "score", "status", "position"])
+              .default("submitted_at"),
+            sortDirection: z.enum(["asc", "desc"]).default("desc"),
+          })
+          .optional()
+      )
+      .query(async ({ input }) => {
+        const pool = await getPool();
+        if (!pool) return [];
+        const values: unknown[] = [];
+        const clauses: string[] = [];
+        const scoreExpression = `(CASE
+          WHEN e.ai_payload->>'score' ~ '^[0-9]+(\\.[0-9]+)?$'
+          THEN (e.ai_payload->>'score')::numeric
+          WHEN e.ai_payload->>'criticalDisqualification' = 'true' THEN 0
+          ELSE NULL
+        END)`;
+        if (input?.status) {
+          values.push(input.status);
+          clauses.push(`a.status = $${values.length}`);
+        }
+        if (input?.search) {
+          values.push(`%${input.search}%`);
+          clauses.push(
+            `(c.full_name ILIKE $${values.length} OR c.phone_international ILIKE $${values.length} OR c.email ILIKE $${values.length} OR p.title ILIKE $${values.length})`
+          );
+        }
+        if (input?.positionId) {
+          values.push(input.positionId);
+          clauses.push(`p.id = $${values.length}`);
+        }
+        if (input?.from) {
+          values.push(input.from);
+          clauses.push(`a.submitted_at >= $${values.length}::date`);
+        }
+        if (input?.to) {
+          values.push(input.to);
+          clauses.push(
+            `a.submitted_at < ($${values.length}::date + interval '1 day')`
+          );
+        }
+        if (input?.minimumScore !== undefined) {
+          values.push(input.minimumScore);
+          clauses.push(`${scoreExpression} >= $${values.length}`);
+        }
+        if (input?.evaluatedOnly) clauses.push(`e.evaluation_id IS NOT NULL`);
+        const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+        const sortColumns = {
+          submitted_at: "a.submitted_at",
+          name: "LOWER(COALESCE(c.full_name,''))",
+          score: `COALESCE(${scoreExpression},-1)`,
+          status: "a.status::text",
+          position: "LOWER(p.title)",
+        } as const;
+        const sortBy = input?.sortBy ?? "submitted_at";
+        const sortDirection = input?.sortDirection === "asc" ? "ASC" : "DESC";
+        const result = await pool.query(
+          `SELECT
+             a.id,a.status,a.submitted_at,a.evaluation_at,a.evaluation_reason,
+             a.profile_summary,a.whatsapp_status,c.full_name,c.phone_international,
+             c.email,p.id AS position_id,p.title AS position_title,p.public_slug,
+             e.evaluation_id,e.evaluation_status,e.latest_reason,e.latest_profile_summary,
+             e.ai_payload,e.ai_model,e.evaluation_created_at,
+             ${scoreExpression} AS evaluation_score,
+             COALESCE(answer_set.answers,'[]'::jsonb) AS answers
+           FROM applications a
+           JOIN candidates c ON c.id=a.candidate_id
+           JOIN job_positions p ON p.id=a.job_position_id
+           LEFT JOIN LATERAL (
+             SELECT ev.id AS evaluation_id,ev.status AS evaluation_status,
+                    ev.reason AS latest_reason,ev.profile_summary AS latest_profile_summary,
+                    ev.ai_payload,ev.ai_model,ev.created_at AS evaluation_created_at
+               FROM evaluations ev
+              WHERE ev.application_id=a.id
+              ORDER BY ev.created_at DESC,ev.id DESC
+              LIMIT 1
+           ) e ON true
+           LEFT JOIN LATERAL (
+             SELECT jsonb_agg(
+                      jsonb_build_object(
+                        'fieldKey',q.field_key,
+                        'label',q.label,
+                        'value',aa.value_json,
+                        'normalizedValue',aa.normalized_value,
+                        'deterministicResult',aa.deterministic_result
+                      ) ORDER BY q.order_index,q.id
+                    ) AS answers
+               FROM application_answers aa
+               JOIN form_questions q ON q.id=aa.question_id
+              WHERE aa.application_id=a.id
+           ) answer_set ON true
+           ${where}
+           ORDER BY ${sortColumns[sortBy]} ${sortDirection},a.id DESC
+           LIMIT 200`,
+          values
+        );
+        return result.rows;
+      }),
     detail: roleProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {

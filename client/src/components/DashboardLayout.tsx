@@ -31,6 +31,7 @@ import {
   LogOut,
   MessageCircle,
   PanelLeft,
+  Search,
   Users,
   UserRoundCog,
 } from "lucide-react";
@@ -53,6 +54,7 @@ const menuItems = [
     adminOnly: true,
   },
   { icon: Users, label: "Candidatos", path: "/admin/candidates" },
+  { icon: Search, label: "Revisión Humana", path: "/admin/human-review" },
   { icon: BarChart3, label: "Informes", path: "/admin/reports" },
   { icon: Globe2, label: "MST-EIR", path: "/admin/mst-eir", adminOnly: true },
   {

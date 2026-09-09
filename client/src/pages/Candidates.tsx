@@ -25,21 +25,16 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useSearch } from "wouter";
+import {
+  APPLICATION_STATUS_OPTIONS,
+  applicationStatusLabel,
+} from "@shared/applicationStatus";
 
-const statuses = [
-  { value: "en_revision", label: "En revisión" },
-  { value: "pre_calificado", label: "Pre-calificado" },
-  { value: "calificado", label: "Solicitar CV por WhatsApp" },
-  { value: "calificado_aisa", label: "Calificado por AISA" },
-  { value: "no_calificado", label: "No calificado" },
-  { value: "pendiente_revision_humana", label: "Pendiente de revisión humana" },
-  { value: "entrevista_iniciada", label: "Entrevista iniciada" },
-  { value: "entrevista_en_curso", label: "Entrevista en curso" },
-  { value: "entrevista_finalizada", label: "Entrevista finalizada" },
-  { value: "error_procesamiento", label: "Error de procesamiento" },
-];
+const statuses = APPLICATION_STATUS_OPTIONS;
 
 export default function Candidates() {
+  const locationSearch = useSearch();
   const [status, setStatus] = useState("all");
   const [positionId, setPositionId] = useState("all");
   const [search, setSearch] = useState("");
@@ -59,6 +54,13 @@ export default function Candidates() {
     { enabled: Boolean(selected) }
   );
   const candidates = query.data ?? [];
+  useEffect(() => {
+    const requested = Number(
+      new URLSearchParams(locationSearch).get("application")
+    );
+    if (Number.isSafeInteger(requested) && requested > 0)
+      setSelected(requested);
+  }, [locationSearch]);
   return (
     <div className="space-y-7">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -590,7 +592,7 @@ function CandidateDetail({
 }
 
 function statusLabel(value: string | null | undefined) {
-  return statuses.find(item => item.value === value)?.label ?? value ?? "—";
+  return applicationStatusLabel(value);
 }
 function evaluationBlockLabel(value: string) {
   const labels: Record<string, string> = {
