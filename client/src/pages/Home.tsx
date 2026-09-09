@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { STANDARD_WORK_SCHEDULE } from "@shared/jobPresentation";
-import { ArrowRight, BriefcaseBusiness, ClipboardCheck, Clock3, Database, GraduationCap, LayoutDashboard, LockKeyhole, MapPin, MessageCircle, Sparkles, UsersRound } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, ClipboardCheck, Clock3, Database, GraduationCap, LayoutDashboard, Lightbulb, LockKeyhole, MapPin, MessageCircle, Sparkles, SunMedium, UsersRound } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
 
@@ -23,7 +23,7 @@ export default function Home() {
   if (!user) {
     return (
       <main className="min-h-screen overflow-hidden grid-paper">
-        <div className="mx-auto max-w-6xl px-5 py-6 sm:px-8 sm:py-10">
+        <div className="mx-auto max-w-7xl px-4 py-5 sm:px-7 sm:py-7 lg:px-8">
           <header className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <AppBrand className="h-12" />
@@ -33,25 +33,34 @@ export default function Home() {
               <Button variant="outline" className="rounded-full px-5">Ingresar</Button>
             </Link>
           </header>
-          <section className="grid gap-12 pb-20 pt-20 lg:grid-cols-[1.08fr_.92fr] lg:items-center lg:pt-28">
-            <div>
-              <Badge className="mb-6 rounded-full bg-accent text-accent-foreground hover:bg-accent">Operación más humana, decisiones más claras</Badge>
-              <h1 className="max-w-2xl text-balance text-5xl font-800 leading-[1.02] tracking-[-0.06em] text-primary sm:text-7xl">Cada plaza merece una evaluación <span className="text-emerald-700">a su medida.</span></h1>
-              <p className="mt-7 max-w-xl text-lg leading-8 text-muted-foreground">Una consola para crear formularios, razonar respuestas, revisar candidatos y activar el siguiente paso sin perder el contexto.</p>
-              <div className="mt-9 flex flex-wrap gap-3">
-                <Link href="/login">
-                  <Button size="lg" className="rounded-full px-6">Entrar al panel <ArrowRight className="ml-2 h-4 w-4" /></Button>
-                </Link>
-                <a href="#plazas-online"><Button variant="outline" size="lg" className="rounded-full px-6">Ver plazas disponibles</Button></a>
+          <section className="grid gap-8 pb-12 pt-10 sm:pt-14 lg:grid-cols-[1.03fr_.97fr] lg:items-center lg:pt-16">
+            <div className="min-w-0">
+              <Badge className="mb-4 rounded-full bg-accent text-accent-foreground hover:bg-accent">Operación más humana, decisiones más claras</Badge>
+              <h1 className="max-w-2xl text-balance text-5xl font-800 leading-[1.02] tracking-[-0.06em] text-primary sm:text-6xl xl:text-7xl">Cada plaza merece una evaluación <span className="text-emerald-700">a su medida.</span></h1>
+              <div className="mt-5 max-w-2xl">
+                <h2 className="text-lg font-800 text-primary">¿Qué es Talento AISA?</h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7">Talento AISA representa una comunidad de profesionales orientados a soluciones inteligentes en energías renovables, refrigeración, bombeo y calentamiento solar, combinando conocimiento técnico, experiencia práctica, servicio al cliente, innovación y crecimiento profesional para transformar necesidades.</p>
               </div>
-              <div className="mt-12 flex flex-wrap gap-8 text-sm text-muted-foreground"><span className="flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-emerald-700" /> Enlaces seguros por plaza</span><span className="flex items-center gap-2"><ClipboardCheck className="h-4 w-4 text-emerald-700" /> Reglas configurables</span></div>
+              <div className="mt-5 grid grid-cols-[minmax(0,1fr)_7rem] items-end gap-3 sm:grid-cols-[minmax(0,1fr)_10rem] lg:grid-cols-[minmax(0,1fr)_12rem]">
+                <div className="pb-2">
+                  <div className="flex flex-wrap gap-3">
+                    <Link href="/login">
+                      <Button size="lg" className="rounded-full px-5">Entrar al panel <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                    </Link>
+                    <a href="https://www.aisa.com.gt" target="_blank" rel="noreferrer"><Button variant="outline" size="lg" className="rounded-full px-5">Conocer AISA</Button></a>
+                  </div>
+                  <div className="mt-6 flex flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:gap-5 sm:text-sm"><span className="flex items-center gap-2"><LockKeyhole className="h-4 w-4 shrink-0 text-emerald-700" /> Enlaces seguros por plaza</span><span className="flex items-center gap-2"><ClipboardCheck className="h-4 w-4 shrink-0 text-emerald-700" /> Reglas configurables</span></div>
+                </div>
+                <img src="/brand/talento-aisa-personaje.png" alt="Personaje de Talento AISA" width="640" height="960" className="max-h-56 w-full object-contain object-bottom drop-shadow-[0_14px_18px_rgba(3,36,62,.16)]" loading="eager" decoding="async" />
+              </div>
             </div>
             <div id="plazas-online" className="relative scroll-mt-6">
               <div className="absolute -inset-6 rounded-[2rem] bg-emerald-100/60 blur-3xl" />
               <PublicOpportunityCard jobs={publishedJobsQuery.data ?? []} loading={publishedJobsQuery.isLoading} />
             </div>
           </section>
-          <section className="grid gap-4 border-t border-primary/10 py-10 sm:grid-cols-3"><Feature icon={LayoutDashboard} title="Una sola vista" text="Plazas, candidatos y reglas en un espacio ordenado." /><Feature icon={Database} title="Datos propios" text="PostgreSQL transaccional, sin hojas frágiles." /><Feature icon={UsersRound} title="Equipo alineado" text="Roles claros, auditoría y decisiones reversibles." /></section>
+          <section className="grid gap-4 border-t border-primary/10 py-7 sm:grid-cols-3"><Feature icon={SunMedium} title="Construye tu carrera transformando energía en oportunidades." /><Feature icon={GraduationCap} title="Crece profesionalmente con tecnología, propósito y aprendizaje." /><Feature icon={Lightbulb} title="Convierte tus habilidades en soluciones que transforman." /></section>
+          <footer className="border-t border-primary/10 py-5 text-center text-xs text-muted-foreground sm:text-left">Todos los derechos reservados por Alternativas Inteligentes, S.A.</footer>
         </div>
       </main>
     );
@@ -61,7 +70,7 @@ export default function Home() {
   return <div className="space-y-8"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold uppercase tracking-[.18em] text-emerald-700">Centro de mando</p><h1 className="mt-2 text-4xl font-800 tracking-[-.04em] text-primary">Buenos días, {user.name?.split(" ")[0] ?? "equipo"}.</h1><p className="mt-2 text-muted-foreground">Una vista rápida de la operación de selección.</p></div><Link href="/admin/jobs"><Button className="rounded-full">Gestionar plazas <ArrowRight className="ml-2 h-4 w-4" /></Button></Link></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{metrics.map(metric => <Card key={metric.label} className="rounded-3xl border-0 shadow-soft"><CardContent className="p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-muted-foreground">{metric.label}</p><p className="mt-3 text-4xl font-800 tracking-tight text-primary">{metric.value}</p><p className="mt-2 text-xs text-muted-foreground">{metric.note}</p></div><div className={`grid h-11 w-11 place-items-center rounded-2xl ${metric.tone}`}><metric.icon className="h-5 w-5" /></div></div></CardContent></Card>)}</div><div className="grid gap-5 lg:grid-cols-[1.35fr_.65fr]"><Card className="rounded-3xl border-0 shadow-soft"><CardHeader className="flex flex-row items-center justify-between"><div><CardTitle className="text-xl text-primary">Tu operación</CardTitle><p className="mt-1 text-sm text-muted-foreground">Atajos para las tareas más frecuentes.</p></div><Badge variant="outline" className="rounded-full">{stats.positions} plazas</Badge></CardHeader><CardContent className="grid gap-3 sm:grid-cols-2"><Quick href="/admin/jobs" icon={LayoutDashboard} title="Configurar plazas" text="Publica enlaces seguros y asigna un agente." /><Quick href="/admin/candidates" icon={UsersRound} title="Revisar candidatos" text="Filtra estados y registra decisiones humanas." /><Quick href="/admin/reports" icon={Database} title="Ver informes" text="Convierte el flujo en señales accionables." /><Quick href="/admin/config" icon={MessageCircle} title="Integraciones" text="Administra receptores y variables de conexión." /></CardContent></Card><Card className="rounded-3xl border-0 bg-primary text-white shadow-soft"><CardHeader><CardTitle className="text-xl text-white">Principio operativo</CardTitle></CardHeader><CardContent><p className="text-3xl font-800 leading-tight">Reglas claras. Contexto completo. Siguiente paso oportuno.</p><p className="mt-5 text-sm leading-6 text-white/65">La acción “Solicitar CV por WhatsApp” conserva una ventana de 30 segundos antes de activar la continuación.</p></CardContent></Card></div></div>;
 }
 
-function Feature({ icon: Icon, title, text }: { icon: typeof LayoutDashboard; title: string; text: string }) { return <div className="flex gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/8 text-primary"><Icon className="h-4 w-4" /></div><div><p className="font-semibold text-primary">{title}</p><p className="mt-1 text-sm leading-5 text-muted-foreground">{text}</p></div></div>; }
+function Feature({ icon: Icon, title, text }: { icon: typeof LayoutDashboard; title: string; text?: string }) { return <div className="flex gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-primary/8 text-primary"><Icon className="h-4 w-4" /></div><div><p className="text-sm font-semibold leading-5 text-primary">{title}</p>{text && <p className="mt-1 text-sm leading-5 text-muted-foreground">{text}</p>}</div></div>; }
 function Quick({ href, icon: Icon, title, text }: { href: string; icon: typeof LayoutDashboard; title: string; text: string }) { return <Link href={href}><div className="group flex gap-4 rounded-2xl border border-border/70 p-4 hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50/40"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-secondary text-secondary-foreground"><Icon className="h-4 w-4" /></div><div className="min-w-0"><p className="font-semibold text-primary group-hover:text-emerald-800">{title}</p><p className="mt-1 text-sm leading-5 text-muted-foreground">{text}</p></div></div></Link>; }
 
 type PublishedJob = {
@@ -83,7 +92,7 @@ function PublicOpportunityCard({ jobs, loading }: { jobs: PublishedJob[]; loadin
 
   return (
     <Card className="relative overflow-hidden rounded-[2rem] border-white/70 bg-primary text-primary-foreground shadow-lift">
-      <CardHeader className="border-b border-white/10 pb-5">
+      <CardHeader className="border-b border-white/10 p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm text-white/55">Invitación de Talento AISA</p>
@@ -94,7 +103,7 @@ function PublicOpportunityCard({ jobs, loading }: { jobs: PublishedJob[]; loadin
           </span>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 p-6">
+      <CardContent className="space-y-3 p-4 sm:p-5">
         {loading ? (
           <div className="space-y-3" aria-live="polite">
             <div className="h-11 animate-pulse rounded-xl bg-white/10" />
@@ -115,10 +124,10 @@ function PublicOpportunityCard({ jobs, loading }: { jobs: PublishedJob[]; loadin
               </Select>
             </div>
 
-            <div className="rounded-2xl bg-white/8 p-5">
+            <div className="rounded-2xl bg-white/8 p-4">
               <p className="text-xs font-semibold uppercase tracking-[.16em] text-emerald-200">Aplicar ahora</p>
               <h2 className="mt-2 text-2xl font-800 tracking-[-.03em] text-white">{selectedJob.title}</h2>
-              <p className="mt-3 text-sm leading-6 text-white/70">{selectedJob.description || "Conoce esta oportunidad y completa el formulario para participar en el proceso de selección."}</p>
+              <p className="mt-2 text-sm leading-6 text-white/70">{selectedJob.description || "Conoce esta oportunidad y completa el formulario para participar en el proceso de selección."}</p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -128,7 +137,7 @@ function PublicOpportunityCard({ jobs, loading }: { jobs: PublishedJob[]; loadin
               <OpportunityDetail icon={Clock3} label="Horario de trabajo" value={STANDARD_WORK_SCHEDULE} />
             </div>
 
-            <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+            <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-3.5">
               <p className="text-xs font-semibold uppercase tracking-[.14em] text-emerald-200">Resumen del perfil</p>
               <p className="mt-2 text-sm leading-6 text-white/80">{selectedJob.profileSummary || selectedJob.description || "Consulta los requisitos completos al iniciar el formulario."}</p>
             </div>
@@ -154,7 +163,7 @@ function PublicOpportunityCard({ jobs, loading }: { jobs: PublishedJob[]; loadin
 
 function OpportunityDetail({ icon: Icon, label, value }: { icon: typeof BriefcaseBusiness; label: string; value: string }) {
   return (
-    <div className="flex gap-3 rounded-2xl bg-white/8 p-4">
+    <div className="flex gap-3 rounded-2xl bg-white/8 p-3.5">
       <Icon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-200" />
       <div className="min-w-0">
         <p className="text-xs text-white/50">{label}</p>
