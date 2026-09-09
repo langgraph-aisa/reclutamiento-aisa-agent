@@ -29,7 +29,7 @@ import { toast } from "sonner";
 const statuses = [
   { value: "en_revision", label: "En revisión" },
   { value: "pre_calificado", label: "Pre-calificado" },
-  { value: "calificado", label: "Calificado" },
+  { value: "calificado", label: "Solicitar CV por WhatsApp" },
   { value: "no_calificado", label: "No calificado" },
   { value: "pendiente_revision_humana", label: "Pendiente de revisión humana" },
   { value: "entrevista_iniciada", label: "Entrevista iniciada" },
@@ -337,8 +337,8 @@ function CandidateDetail({
         <div className="rounded-2xl bg-white p-5 text-primary">
           <p className="text-sm font-semibold">Cambio humano</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Al cambiar a “Calificado”, Talento AISA solicitará el CV
-            directamente por ApiChat, una sola vez por postulación.
+            Al seleccionar “Solicitar CV por WhatsApp”, Talento AISA solicitará
+            el CV directamente por ApiChat, una sola vez por postulación.
           </p>
           <div className="mt-4 space-y-3">
             <p className="text-xs text-muted-foreground">

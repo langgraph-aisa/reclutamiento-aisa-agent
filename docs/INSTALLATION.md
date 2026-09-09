@@ -8,13 +8,13 @@ Este proyecto contiene una aplicación web responsive para postulaciones y opera
 
 ## Componentes
 
-| Componente | Responsabilidad | Credencial pendiente |
-|---|---|---|
-| Aplicación React + Express + tRPC | Formulario público, panel, configuración e informes | `DATABASE_URL`, autenticación del proveedor elegido |
-| PostgreSQL | Plazas, formularios, respuestas, candidatos, evaluaciones, conversaciones y auditoría | Usuario, contraseña, host, puerto, SSL |
-| n8n on-premise | Orquestación, agentes por plaza, espera y WhatsApp | Credenciales Postgres, OpenAI/ChatGPT y ApiChat |
-| ApiChat | Mensajes de WhatsApp y alertas internas | `APICHAT_ACCOUNT_ID`, `APICHAT_TOKEN` y parámetros de conexión |
-| OpenAI/ChatGPT | Razonamiento de respuestas abiertas | Credencial del nodo nativo de n8n |
+| Componente                        | Responsabilidad                                                                       | Credencial pendiente                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Aplicación React + Express + tRPC | Formulario público, panel, configuración e informes                                   | `DATABASE_URL`, autenticación del proveedor elegido            |
+| PostgreSQL                        | Plazas, formularios, respuestas, candidatos, evaluaciones, conversaciones y auditoría | Usuario, contraseña, host, puerto, SSL                         |
+| n8n on-premise                    | Orquestación, agentes por plaza, espera y WhatsApp                                    | Credenciales Postgres, OpenAI/ChatGPT y ApiChat                |
+| ApiChat                           | Mensajes de WhatsApp y alertas internas                                               | `APICHAT_ACCOUNT_ID`, `APICHAT_TOKEN` y parámetros de conexión |
+| OpenAI/ChatGPT                    | Razonamiento de respuestas abiertas                                                   | Credencial del nodo nativo de n8n                              |
 
 ## PostgreSQL
 
@@ -34,21 +34,21 @@ Las funciones `process_public_application` y `finalize_application_evaluation` s
 
 ### n8n y evaluación
 
-| Variable | Uso |
-|---|---|
-| `N8N_AGENT_EVALUATION_URL` | Webhook público del agente que evalúa una postulación nueva. |
+| Variable                        | Uso                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| `N8N_AGENT_EVALUATION_URL`      | Webhook público del agente que evalúa una postulación nueva.                    |
 | `N8N_MANUAL_STATUS_WEBHOOK_URL` | Webhook público que recibe cambios humanos y programa la espera de 30 segundos. |
-| `OPENAI_MODEL` | Modelo opcional del nodo OpenAI Chat Model. |
+| `OPENAI_MODEL`                  | Modelo opcional del nodo OpenAI Chat Model.                                     |
 
 ### ApiChat
 
-| Variable | Uso |
-|---|---|
-| `APICHAT_WEBHOOK_URL` | URL de callbacks o eventos entrantes. |
-| `APICHAT_CONNECT_TO` | Conexión o instancia de WhatsApp. |
-| `APICHAT_API_ENDPOINT` | Endpoint HTTP para enviar mensajes. |
-| `APICHAT_ACCOUNT_ID` | ID de cuenta, obligatorio. |
-| `APICHAT_TOKEN` | Token, obligatorio y secreto. |
+| Variable               | Uso                                   |
+| ---------------------- | ------------------------------------- |
+| `APICHAT_WEBHOOK_URL`  | URL de callbacks o eventos entrantes. |
+| `APICHAT_CONNECT_TO`   | Conexión o instancia de WhatsApp.     |
+| `APICHAT_API_ENDPOINT` | Endpoint HTTP para enviar mensajes.   |
+| `APICHAT_ACCOUNT_ID`   | ID de cuenta, obligatorio.            |
+| `APICHAT_TOKEN`        | Token, obligatorio y secreto.         |
 
 No copiar la URL del editor de n8n (`/workflow/...`) como webhook. Cada nodo Webhook muestra su URL de producción después de activar el workflow; esas URLs son las que se deben colocar en las variables.
 
@@ -58,7 +58,7 @@ Importar los archivos en este orden:
 
 1. `01_flujo_maestro_postulaciones.json` recibe el POST de la aplicación, guarda la postulación, bloquea duplicados y llama al agente.
 2. `02_agente_plaza_template.json` es una plantilla. Duplicarla una vez por plaza, cambiar el nombre, `path`, criterios o referencias de plaza y conservar la conexión al nodo OpenAI Chat Model y al Structured Output Parser.
-3. `03_revision_humana_30s.json` recibe cambios humanos a `Calificado`, guarda la ventana, espera 30 segundos, consulta el estado actual y cancela si cambió.
+3. `03_revision_humana_30s.json` recibe la acción humana **Solicitar CV por WhatsApp** (estado interno `calificado`), guarda la ventana, espera 30 segundos, consulta el estado actual y cancela si cambió.
 4. `04_whatsapp_apichat.json` prepara el mensaje configurado, envía al candidato, separa las alertas internas y actualiza la conversación.
 
 Después de importar, asignar una credencial PostgreSQL a cada nodo Postgres y una credencial OpenAI/ChatGPT al nodo `OpenAI Chat Model`. Los IDs `PENDIENTE` y `PENDIENTE_WORKFLOW_WHATSAPP` son marcadores intencionales: deben reemplazarse por la credencial o workflow correspondiente dentro de la instancia n8n, sin guardar secretos en los JSON.
@@ -71,8 +71,7 @@ La aplicación puede montarse en EasyPanel como servicio Node con el comando `pn
 
 ## Pruebas de aceptación
 
-Enviar una postulación completa y comprobar que solo se crea al pulsar `Enviar formulario`. Repetir el envío con el mismo teléfono y plaza para verificar el aviso de duplicado. Crear una regla `hardFail`, probar una respuesta incorrecta y confirmar `no_calificado`. Probar una respuesta abierta con experiencia expresada en meses y verificar que la IA devuelve JSON estructurado. Cambiar manualmente a `calificado`, comprobar la marca de espera y cambiar el estado antes de 30 segundos para confirmar cancelación. Luego repetir sin cambiarlo y comprobar mensaje al candidato y alerta a la lista interna.
-
+Enviar una postulación completa y comprobar que solo se crea al pulsar `Enviar formulario`. Repetir el envío con el mismo teléfono y plaza para verificar el aviso de duplicado. Crear una regla `hardFail`, probar una respuesta incorrecta y confirmar `no_calificado`. Probar una respuesta abierta con experiencia expresada en meses y verificar que la IA devuelve JSON estructurado. Seleccionar **Solicitar CV por WhatsApp** (estado interno `calificado`), comprobar la marca de espera y cambiar el estado antes de 30 segundos para confirmar cancelación. Luego repetir sin cambiarlo y comprobar mensaje al candidato y alerta a la lista interna.
 
 ## Validación de workflows y límites de la plantilla
 

@@ -1,4 +1,5 @@
 # Mapa de variables de entorno e integración
+
 ## Talento AISA · n8n, OpenAI/ChatGPT y ApiChat/WhatsApp
 
 **Proyecto:** `reclutamiento-automatizado`  
@@ -19,16 +20,16 @@ La regla de seguridad es mantener tokens y credenciales fuera de los archivos JS
 
 Las variables operativas principales ya están conectadas de la siguiente forma:
 
-| Variable | Estado | Ubicación de consumo |
-|---|---|---|
-| `N8N_AGENT_EVALUATION_URL` | Integrada | Workflow maestro, nodo **Disparar agente de plaza** |
-| `N8N_MANUAL_STATUS_WEBHOOK_URL` | Integrada | Backend, mutación `candidates.setStatus` |
-| `OPENAI_MODEL` | Integrada | Workflow de agente, nodo **OpenAI Chat Model** |
-| `APICHAT_API_ENDPOINT` | Integrada | Workflow WhatsApp, dos nodos HTTP Request |
-| `APICHAT_TOKEN` | Integrada | Encabezado Bearer de los dos nodos HTTP de ApiChat |
-| `APICHAT_ACCOUNT_ID` | Integrada | Cuerpo JSON de los dos nodos HTTP de ApiChat |
-| `APICHAT_CONNECT_TO` | Integrada | Cuerpo JSON de los dos nodos HTTP de ApiChat |
-| `APICHAT_WEBHOOK_URL` | Preparada, no consumida | Interfaz administrativa y documentación únicamente |
+| Variable                        | Estado                  | Ubicación de consumo                                |
+| ------------------------------- | ----------------------- | --------------------------------------------------- |
+| `N8N_AGENT_EVALUATION_URL`      | Integrada               | Workflow maestro, nodo **Disparar agente de plaza** |
+| `N8N_MANUAL_STATUS_WEBHOOK_URL` | Integrada               | Backend, mutación `candidates.setStatus`            |
+| `OPENAI_MODEL`                  | Integrada               | Workflow de agente, nodo **OpenAI Chat Model**      |
+| `APICHAT_API_ENDPOINT`          | Integrada               | Workflow WhatsApp, dos nodos HTTP Request           |
+| `APICHAT_TOKEN`                 | Integrada               | Encabezado Bearer de los dos nodos HTTP de ApiChat  |
+| `APICHAT_ACCOUNT_ID`            | Integrada               | Cuerpo JSON de los dos nodos HTTP de ApiChat        |
+| `APICHAT_CONNECT_TO`            | Integrada               | Cuerpo JSON de los dos nodos HTTP de ApiChat        |
+| `APICHAT_WEBHOOK_URL`           | Preparada, no consumida | Interfaz administrativa y documentación únicamente  |
 
 La variable `APICHAT_WEBHOOK_URL` quedó reservada para eventos entrantes de ApiChat. Actualmente no existe un nodo runtime que la lea, por lo que todavía debe implementarse el webhook entrante si se desea recibir mensajes del candidato y alimentar el agente conversacional.
 
@@ -59,7 +60,7 @@ La URL compartida durante el análisis tenía el formato `/workflow/...`, que co
 **Procedimiento:** `candidates.setStatus`  
 **Código:** `process.env.N8N_MANUAL_STATUS_WEBHOOK_URL`
 
-Cuando un administrador o reclutador cambia manualmente un candidato a `Calificado`, el backend envía una solicitud HTTP al workflow de revisión humana. El payload incluye:
+Cuando un administrador o reclutador selecciona **Solicitar CV por WhatsApp**, el backend conserva el estado interno `calificado` y envía una solicitud HTTP al workflow de revisión humana. El payload incluye:
 
 ```json
 {
@@ -169,21 +170,21 @@ Esta variable está reservada para la URL de callbacks o eventos entrantes de Ap
 
 ## 5. Workflows y nodos relacionados
 
-| Workflow | Nodo | Tipo | Variables / credenciales |
-|---|---|---|---|
-| `01_flujo_maestro_postulaciones.json` | **Guardar postulación** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
-| `01_flujo_maestro_postulaciones.json` | **Disparar agente de plaza** | HTTP Request | `$env.N8N_AGENT_EVALUATION_URL` |
-| `02_agente_plaza_template.json` | **Cargar reglas de la plaza** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
-| `02_agente_plaza_template.json` | **OpenAI Chat Model** | Chat Model | `$env.OPENAI_MODEL` + credencial OpenAI: `PENDIENTE` |
-| `02_agente_plaza_template.json` | **Guardar evaluación** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
-| `03_revision_humana_30s.json` | **Cambio humano de estado** | Webhook | Recibe llamada desde `N8N_MANUAL_STATUS_WEBHOOK_URL` |
-| `03_revision_humana_30s.json` | **Guardar ventana de revisión** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
-| `03_revision_humana_30s.json` | **Esperar 30 segundos** | Wait | No requiere variable externa |
-| `03_revision_humana_30s.json` | **Verificar estado actual** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
-| `03_revision_humana_30s.json` | **Continuar entrevista** | Execute Workflow | `PENDIENTE_WORKFLOW_WHATSAPP` |
-| `04_whatsapp_apichat.json` | **Enviar mensaje al candidato** | HTTP Request | `APICHAT_API_ENDPOINT`, `APICHAT_TOKEN`, `APICHAT_ACCOUNT_ID`, `APICHAT_CONNECT_TO` |
-| `04_whatsapp_apichat.json` | **HTTP ApiChat alertas** | HTTP Request | `APICHAT_API_ENDPOINT`, `APICHAT_TOKEN`, `APICHAT_ACCOUNT_ID`, `APICHAT_CONNECT_TO` |
-| `04_whatsapp_apichat.json` | **Actualizar conversación** | PostgreSQL | Credencial nativa PostgreSQL: `PENDIENTE` |
+| Workflow                              | Nodo                            | Tipo             | Variables / credenciales                                                            |
+| ------------------------------------- | ------------------------------- | ---------------- | ----------------------------------------------------------------------------------- |
+| `01_flujo_maestro_postulaciones.json` | **Guardar postulación**         | PostgreSQL       | Credencial nativa PostgreSQL: `PENDIENTE`                                           |
+| `01_flujo_maestro_postulaciones.json` | **Disparar agente de plaza**    | HTTP Request     | `$env.N8N_AGENT_EVALUATION_URL`                                                     |
+| `02_agente_plaza_template.json`       | **Cargar reglas de la plaza**   | PostgreSQL       | Credencial nativa PostgreSQL: `PENDIENTE`                                           |
+| `02_agente_plaza_template.json`       | **OpenAI Chat Model**           | Chat Model       | `$env.OPENAI_MODEL` + credencial OpenAI: `PENDIENTE`                                |
+| `02_agente_plaza_template.json`       | **Guardar evaluación**          | PostgreSQL       | Credencial nativa PostgreSQL: `PENDIENTE`                                           |
+| `03_revision_humana_30s.json`         | **Cambio humano de estado**     | Webhook          | Recibe llamada desde `N8N_MANUAL_STATUS_WEBHOOK_URL`                                |
+| `03_revision_humana_30s.json`         | **Guardar ventana de revisión** | PostgreSQL       | Credencial nativa PostgreSQL: `PENDIENTE`                                           |
+| `03_revision_humana_30s.json`         | **Esperar 30 segundos**         | Wait             | No requiere variable externa                                                        |
+| `03_revision_humana_30s.json`         | **Verificar estado actual**     | PostgreSQL       | Credencial nativa PostgreSQL: `PENDIENTE`                                           |
+| `03_revision_humana_30s.json`         | **Continuar entrevista**        | Execute Workflow | `PENDIENTE_WORKFLOW_WHATSAPP`                                                       |
+| `04_whatsapp_apichat.json`            | **Enviar mensaje al candidato** | HTTP Request     | `APICHAT_API_ENDPOINT`, `APICHAT_TOKEN`, `APICHAT_ACCOUNT_ID`, `APICHAT_CONNECT_TO` |
+| `04_whatsapp_apichat.json`            | **HTTP ApiChat alertas**        | HTTP Request     | `APICHAT_API_ENDPOINT`, `APICHAT_TOKEN`, `APICHAT_ACCOUNT_ID`, `APICHAT_CONNECT_TO` |
+| `04_whatsapp_apichat.json`            | **Actualizar conversación**     | PostgreSQL       | Credencial nativa PostgreSQL: `PENDIENTE`                                           |
 
 ---
 
@@ -191,14 +192,14 @@ Esta variable está reservada para la URL de callbacks o eventos entrantes de Ap
 
 No todo lo que aparece como `PENDIENTE` es una variable de entorno. Los siguientes elementos son credenciales o referencias internas de n8n:
 
-| Elemento | Tipo | Acción requerida |
-|---|---|---|
-| `PENDIENTE` en nodos PostgreSQL | Credencial nativa | Crear una credencial PostgreSQL en n8n y asignarla a cada nodo. |
-| `PENDIENTE` en OpenAI Chat Model | Credencial nativa | Crear una credencial OpenAI/ChatGPT y asignarla al nodo. |
-| `PENDIENTE_WORKFLOW_WHATSAPP` | ID de workflow | Sustituirlo por el workflow ID real de WhatsApp después de importar. |
-| `N8N_AGENT_EVALUATION_URL` | Variable de entorno | Definir URL pública de producción del agente. |
-| `N8N_MANUAL_STATUS_WEBHOOK_URL` | Variable de entorno | Definir URL pública de producción de revisión humana. |
-| `APICHAT_*` | Variables de entorno | Definirlas en el entorno del servicio n8n. |
+| Elemento                         | Tipo                 | Acción requerida                                                     |
+| -------------------------------- | -------------------- | -------------------------------------------------------------------- |
+| `PENDIENTE` en nodos PostgreSQL  | Credencial nativa    | Crear una credencial PostgreSQL en n8n y asignarla a cada nodo.      |
+| `PENDIENTE` en OpenAI Chat Model | Credencial nativa    | Crear una credencial OpenAI/ChatGPT y asignarla al nodo.             |
+| `PENDIENTE_WORKFLOW_WHATSAPP`    | ID de workflow       | Sustituirlo por el workflow ID real de WhatsApp después de importar. |
+| `N8N_AGENT_EVALUATION_URL`       | Variable de entorno  | Definir URL pública de producción del agente.                        |
+| `N8N_MANUAL_STATUS_WEBHOOK_URL`  | Variable de entorno  | Definir URL pública de producción de revisión humana.                |
+| `APICHAT_*`                      | Variables de entorno | Definirlas en el entorno del servicio n8n.                           |
 
 La propiedad `meta.templateCredsSetupCompleted` permanece en `false` intencionalmente, porque las credenciales del usuario todavía no han sido asignadas.
 
@@ -257,19 +258,19 @@ Después de modificar variables de entorno en EasyPanel, reiniciar el servicio n
 
 ## 9. Checklist de configuración
 
-| Paso | Acción | Estado esperado |
-|---:|---|---|
-| 1 | Crear credencial PostgreSQL en n8n | Credencial disponible y probada |
-| 2 | Asignar PostgreSQL a todos los nodos Postgres | Ya no queda `PENDIENTE` en credenciales |
-| 3 | Crear credencial OpenAI/ChatGPT | Credencial disponible y probada |
-| 4 | Asignarla al nodo **OpenAI Chat Model** | Modelo puede ejecutar una evaluación de prueba |
-| 5 | Definir `N8N_AGENT_EVALUATION_URL` | Flujo maestro alcanza el agente |
-| 6 | Definir `N8N_MANUAL_STATUS_WEBHOOK_URL` | Cambio humano crea una espera |
-| 7 | Definir las cuatro variables operativas de ApiChat | Solicitud HTTP llega al endpoint |
-| 8 | Confirmar `APICHAT_ACCOUNT_ID` y `APICHAT_TOKEN` | Autorización aceptada |
-| 9 | Reemplazar `PENDIENTE_WORKFLOW_WHATSAPP` | Execute Workflow apunta al workflow real |
-| 10 | Probar un número de WhatsApp controlado | Mensaje candidato y alerta interna verificables |
-| 11 | Implementar webhook entrante si se requiere conversación | `APICHAT_WEBHOOK_URL` deja de ser solo documental |
+| Paso | Acción                                                   | Estado esperado                                   |
+| ---: | -------------------------------------------------------- | ------------------------------------------------- |
+|    1 | Crear credencial PostgreSQL en n8n                       | Credencial disponible y probada                   |
+|    2 | Asignar PostgreSQL a todos los nodos Postgres            | Ya no queda `PENDIENTE` en credenciales           |
+|    3 | Crear credencial OpenAI/ChatGPT                          | Credencial disponible y probada                   |
+|    4 | Asignarla al nodo **OpenAI Chat Model**                  | Modelo puede ejecutar una evaluación de prueba    |
+|    5 | Definir `N8N_AGENT_EVALUATION_URL`                       | Flujo maestro alcanza el agente                   |
+|    6 | Definir `N8N_MANUAL_STATUS_WEBHOOK_URL`                  | Cambio humano crea una espera                     |
+|    7 | Definir las cuatro variables operativas de ApiChat       | Solicitud HTTP llega al endpoint                  |
+|    8 | Confirmar `APICHAT_ACCOUNT_ID` y `APICHAT_TOKEN`         | Autorización aceptada                             |
+|    9 | Reemplazar `PENDIENTE_WORKFLOW_WHATSAPP`                 | Execute Workflow apunta al workflow real          |
+|   10 | Probar un número de WhatsApp controlado                  | Mensaje candidato y alerta interna verificables   |
+|   11 | Implementar webhook entrante si se requiere conversación | `APICHAT_WEBHOOK_URL` deja de ser solo documental |
 
 ---
 

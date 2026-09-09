@@ -39,11 +39,11 @@ Después de modificar variables, guardar y volver a desplegar el servicio. No re
 
 ## Comportamiento operativo
 
-1. El reclutador cambia el estado a `Calificado`.
+1. El reclutador selecciona **Solicitar CV por WhatsApp** (estado interno `calificado`).
 2. PostgreSQL guarda el estado, la auditoría y el mensaje pendiente en una transacción.
 3. Después del commit, el backend llama a ApiChat con un timeout de 15 segundos.
 4. En éxito, guarda el identificador del proveedor y marca `whatsapp_status='enviado'`.
-5. En error, conserva `Calificado`, marca `whatsapp_status='error'` y muestra el reintento manual.
+5. En error, conserva el estado interno `calificado`, marca `whatsapp_status='error'` y muestra el reintento manual.
 6. Si ApiChat acepta la solicitud pero falla la confirmación local, marca el envío como `unknown` / `desconocido`, bloquea el reintento y pide verificar primero la conversación del postulante. Esto evita duplicados inciertos.
 7. Guardar de nuevo el mismo estado no crea ni envía otro mensaje.
 
@@ -52,10 +52,10 @@ El reintento manual solo está disponible para postulaciones calificadas. Un men
 ## Prueba de aceptación
 
 1. Usar una plaza y teléfono controlados.
-2. Cambiar de `En revisión` a `Calificado`.
+2. Cambiar de **En revisión** a **Solicitar CV por WhatsApp**.
 3. Confirmar que el teléfono recibe el texto con nombre y plaza reales.
 4. Confirmar en el detalle que WhatsApp aparece como enviado.
-5. Guardar nuevamente `Calificado` y verificar que no llega un duplicado.
+5. Guardar nuevamente **Solicitar CV por WhatsApp** y verificar que no llega un duplicado.
 6. Probar credenciales inválidas, confirmar que el estado queda guardado y que aparece `Reintentar solicitud de CV`.
 7. Restaurar la credencial y ejecutar el reintento una sola vez.
 

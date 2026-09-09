@@ -91,7 +91,7 @@ Clave estable de al menos 32 caracteres recomendada para cifrar exclusivamente l
 
 #### `N8N_MANUAL_STATUS_WEBHOOK_URL`
 
-La aplicación consume esta variable mediante `process.env.N8N_MANUAL_STATUS_WEBHOOK_URL` dentro de `server/routers.ts`, en la mutación `candidates.setStatus`. Se llama cuando un humano cambia el estado de un candidato a `Calificado`.
+La aplicación consume esta variable mediante `process.env.N8N_MANUAL_STATUS_WEBHOOK_URL` dentro de `server/routers.ts`, en la mutación `candidates.setStatus`. Se llama cuando un humano selecciona **Solicitar CV por WhatsApp**; el valor técnico enviado sigue siendo `calificado`.
 
 El valor debe ser la **URL de producción** del webhook de revisión humana, por ejemplo:
 
@@ -295,10 +295,10 @@ Realizar las pruebas en este orden para aislar errores:
 6. Enviar una postulación de prueba a la URL del flujo maestro.
 7. Confirmar que se crea una sola aplicación.
 8. Repetir el mismo teléfono y plaza para validar el HTTP 409 de duplicado.
-9. Cambiar manualmente un candidato a `Calificado`.
+9. Seleccionar **Solicitar CV por WhatsApp** para un candidato.
 10. Confirmar que `N8N_MANUAL_STATUS_WEBHOOK_URL` activa la espera de 30 segundos.
 11. Cambiar el estado antes de cumplir la espera y confirmar que la continuación se cancela.
-12. Restaurar `Calificado`, esperar la ventana completa y probar ApiChat con un número controlado.
+12. Restaurar **Solicitar CV por WhatsApp**, esperar la ventana completa y probar ApiChat con un número controlado.
 13. Confirmar el mensaje al candidato y la alerta interna.
 14. Revisar que ningún log contenga tokens, contraseñas o payloads personales completos.
 

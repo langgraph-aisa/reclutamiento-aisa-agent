@@ -16,7 +16,7 @@ import { useState } from "react";
 const labels: Record<string, string> = {
   en_revision: "En revisión",
   pre_calificado: "Pre-calificado",
-  calificado: "Calificado",
+  calificado: "Solicitar CV por WhatsApp",
   no_calificado: "No calificado",
   entrevista_iniciada: "Entrevista iniciada",
   entrevista_en_curso: "Entrevista en curso",
@@ -81,7 +81,7 @@ export default function Reports() {
         <Metric icon={UsersRound} label="Postulaciones" value={total} />
         <Metric
           icon={TrendingUp}
-          label="Conversión a calificado"
+          label="Conversión a solicitud de CV por WhatsApp"
           value={total ? `${Math.round((qualified / total) * 100)}%` : "0%"}
         />
         <Metric
