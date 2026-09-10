@@ -10,16 +10,9 @@
   <img src="https://img.shields.io/badge/JARVI%20RH-2.0.112-0b2d4b" alt="JARVI RH 2.0.112" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
+  <img src="https://img.shields.io/badge/LangGraph-0.2.56-purple" alt="LangGraph 0.2.56" />
   <img src="https://img.shields.io/badge/ISO%2FIEC-25010%20%C2%B7%2027001%20%C2%B7%2029119-0284c7" alt="Referentes ISO/IEC" />
 </p>
-![Python](https://img.shields.io/badge/python-3.11-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115.0-green)
-![LangGraph](https://img.shields.io/badge/LangGraph-0.2.56-purple)
-![Langfuse](https://img.shields.io/badge/Langfuse-3.9.0-orange)
-![ISO](https://img.shields.io/badge/ISO-25010%20%7C%2027001%20%7C%2029119-blue)
-![CTFOM](https://img.shields.io/badge/CTFOM-telemetry-orange)
-![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-1.33.1-lightgrey)
-![Status](https://img.shields.io/badge/status-production-brightgreen)
 
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
