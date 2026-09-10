@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.114</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.115</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.114-0b2d4b" alt="JARVI RH 2.0.114" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.115-0b2d4b" alt="JARVI RH 2.0.115" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse-3.38.20-orange" alt="Langfuse 3.38.20" />
@@ -23,16 +23,26 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.114 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.115 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
-Talento AISA es la plataforma No.1 especializada en reclutamiento propiedad de Alternativas Inteligentes, S. A. para vincular capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas. JARVI RH 2.0.114 integra publicación de plazas, formularios versionados, evaluación asistida por inteligencia artificial (IA), revisión humana, solicitud controlada de currículum por WhatsApp y evidencia de auditoría. Su propuesta comercial es reducir trabajo repetitivo sin transferir a un modelo estadístico la responsabilidad institucional de contratar. La automatización produce una recomendación explicada; el personal autorizado conserva la decisión.
+Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH 2.0.115 integra plazas, formularios versionados, evaluación asistida por IA, revisión humana, solicitud controlada de currículum por WhatsApp y auditoría. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar: el personal autorizado conserva la decisión.
 
 ## 1. Reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora
 
 ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
+
+### 10SEP2026 · JARVI RH 2.0.115
+
+- Estado: integrado para publicación en `main`.
+- Day, Dark Dimmed y Dark High Contrast persistentes en login, páginas públicas y administración.
+- Tokens funcionales AISA para fondos, superficies, texto, bordes, controles, foco y señales semánticas.
+- Contraste automatizado sobre la paleta y estados expresados con texto, icono o forma además de color.
+- Caja negra, pie del artefacto, gobierno de release y fuentes académicas sincronizados.
+
+Descripción: establece un sistema de visualización alternativa para confort visual, personalización y accesibilidad; no garantiza una reducción clínica de fatiga visual.
 
 ### 10SEP2026 · JARVI RH 2.0.114
 
@@ -46,27 +56,20 @@ Descripción: integra identidad y geografía verificadas sin romper registros hi
 
 ### 10SEP2026 · JARVI RH 2.0.113
 
-- Estado: integrado para publicación en `main`.
-- Commit: `HEAD` de `main`; el hash se replica en el pie del artefacto.
-- Revisión Humana 360° compactada con navegación vertical asistida en el visor y los resultados.
-- Eliminado el encabezado redundante de la retícula para ampliar el área efectiva de trabajo.
-- Modo oscuro convertido a escala acromática de grises y negros, conservando contraste y estados funcionales.
-- Logotipo AISA transparente en claro y adaptación monocromática en oscuro.
-- Caja negra, documentación responsive y gobierno de release actualizados.
-
-Descripción: esta versión reduce la carga visual y la distancia de interacción sin modificar consultas, filtros, evaluación, comentarios, estados, auditoría ni navegación al detalle. Los controles se deshabilitan en sus límites y anuncian su función a tecnologías de asistencia.
+- Revisión Humana 360° compactada, con navegación asistida y logotipo transparente.
+- Tema oscuro acromático inicial, reemplazado por los tokens semánticos de 2.0.115.
 
 ### 10SEP2026 · JARVI RH 2.0.112
 
-- Estado: implementado y publicado en `main`.
-- Actualización académica y comercial del README.
-- Tema persistente, metadata Git, gobierno automático de versiones y workflow de caja negra consolidados.
+- Tema persistente, metadata Git, README y gobierno automático consolidados.
 
 <!-- release-history:end -->
 
 El objeto sociotécnico no es “la IA” aislada, sino el ensamblaje persona/plaza/formulario/evidencia/regla/modelo/revisor. La pregunta rectora es: **¿cómo acelerar la preclasificación de talento especializado manteniendo procedencia, seguridad, posibilidad de refutación y autoridad humana?** Se aplicó investigación de ciencia del diseño: inspección estática de código, reconstrucción del modelo de datos, análisis de dependencias, pruebas de comportamiento observable y contraste normativo. La unidad de análisis es una postulación; las unidades de evidencia son respuestas declaradas, reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora.
 
 La validez se separa en cuatro planos. La validez de construcción pregunta si los campos representan realmente experiencia y competencias; la interna, si el dictamen deriva de la evidencia y no de atributos protegidos; la externa, si los criterios se sostienen en distintas plazas; y la operacional, si transacciones, permisos y pruebas ejecutan el contrato. El software aporta trazabilidad, pero no demuestra por sí solo justicia laboral, ausencia de sesgo o validez predictiva. Esas hipótesis requieren datos longitudinales, revisión experta y métricas desagregadas.
+
+La visualización sigue roles funcionales, no inversión automática: `#0B1118` para lienzo, `#111A24` para superficies, `#162333` para elevación, `#0B2945` para estructura AISA, `#2A3949` para divisores, `#7F8C9A` para límites de control, `#E6EDF3` y `#AAB7C5` para texto, y teal, azul, púrpura, ámbar o rojo para semántica. Sobre el lienzo, texto principal, secundario y teal alcanzan 16.05:1, 9.29:1 y 10.30:1. El control ofrece Day, Dark Dimmed y Dark High Contrast, mantiene foco visible y no comunica estados únicamente mediante color. Es personalización de luminancia y contraste, no una intervención médica: el experimento de Intaruk et al. (2025), limitado a exposición inmediata en 30 mujeres jóvenes usuarias de tablet, no encontró diferencia significativa de fatiga visual entre modos y recomienda investigación longitudinal.
 
 ## 2. Arquitectura y dependencias
 
@@ -179,7 +182,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.114](docs/PRUEBAS_CAJA_NEGRA_2.0.114.md).
+`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.115](docs/PRUEBAS_CAJA_NEGRA_2.0.115.md).
 
 ## 8. Protocolo de Ingenierìa de Software
 
@@ -191,20 +194,7 @@ El protocolo recomendado comienza con un corpus seudonimizado, estratificado por
 
 Un diseño cuasiexperimental por etapas compararía proceso manual, reglas sin IA y sistema híbrido, conservando un conjunto temporal posterior para detectar sobreajuste y deriva. Las versiones de prompt, perfil, formulario, modelo y código deben congelarse por corrida. Casos metamórficos cambiarían orden o redacción sin alterar significado; casos adversos probarían instrucciones maliciosas, datos ausentes, contradicciones, idioma, valores límite y fallos de proveedores. La prueba fenomenológica complementaría las métricas con entrevistas semiestructuradas y análisis temático de claridad, dignidad, posibilidad de corrección y confianza, sin confundir aceptación subjetiva con exactitud técnica.
 
-Las amenazas principales son sesgo de selección del corpus, criterios históricos discriminatorios, baja frecuencia de algunas plazas, dependencia entre evaluadores, cambio de contexto laboral y efecto de automatización sobre el juicio humano. La mitigación exige preregistro de hipótesis y umbrales, separación entre desarrollo y evaluación, réplica temporal, revisión ética, documentación de exclusiones y publicación de resultados negativos. README, pruebas y bitácora aportan trazabilidad, pero no sustituyen esa evaluación empírica.
-
-## 9. Acerca de Talento AISA
-
-1. Empleos de energia solar en guatemala
-2. Tecnico en refrigeracion solar guatemala
-3. Plazas de bombeo solar guatemala
-4. Ingeniero fotovoltaico guatemala
-5. Instalador de paneles solares empleo guatemala
-6. Mantenimiento industrial alimentario panales solares
-7. Trabajo energias renovables guatemala
-8. Proyectos solares agricolas plazas
-9. Tecnico hvac solar guatemala
-10. Bolsa de empleo tecnico industrial guatemala
+Las amenazas incluyen sesgo del corpus, criterios históricos discriminatorios, dependencia entre evaluadores, cambio de contexto y automatización del juicio. Se mitigan con preregistro, separación desarrollo–evaluación, réplica temporal, revisión ética y publicación de resultados negativos. README, pruebas y bitácora aportan trazabilidad, no validación empírica.
 
 ## Referencias
 
@@ -231,27 +221,30 @@ Las páginas técnicas evolutivas se consultaron el 10 de septiembre de 2026. La
 17. tRPC. (s. f.). _Authorization_. https://trpc.io/docs/server/authorization
 18. Vite. (s. f.). _Building for production_. https://vite.dev/guide/build
 19. Vitest. (s. f.). _Writing tests_. https://vitest.dev/guide/learn/writing-tests
+20. GitHub. (s. f.). _Managing your theme settings_. https://docs.github.com/en/get-started/accessibility/managing-your-theme-settings
+21. Intaruk, R., Kongnun, J., Kwanchainond, S., & Pichaiyongwongdee, S. (2025). Immediate effects of light mode and dark mode features on visual fatigue in tablet users. _International Journal of Environmental Research and Public Health, 22_(4), 609. https://doi.org/10.3390/ijerph22040609
+22. World Wide Web Consortium. (2024). _Web Content Accessibility Guidelines (WCAG) 2.2_. https://www.w3.org/TR/WCAG22/
 
 ### Normativa aplicada
 
-20. American Psychological Association. (2020). _Publication manual of the American Psychological Association_ (7th ed.). American Psychological Association. https://www.apa.org/pubs/books/publication-manual-7th-edition-paperback
-21. Gruber, T. R. (1993). A translation approach to portable ontology specifications. _Knowledge Acquisition, 5_(2), 199–220. https://doi.org/10.1006/knac.1993.1008
-22. Hevner, A. R., March, S. T., Park, J., & Ram, S. (2004). Design science in information systems research. _MIS Quarterly, 28_(1), 75–105. https://doi.org/10.2307/25148625
-23. Husserl, E. (2012). _Ideas: General introduction to pure phenomenology_ (W. R. Boyce Gibson, Trans.). Routledge. (Original work published 1913). https://doi.org/10.4324/9780203120330
-24. International Organization for Standardization. (2022a). _ISO/IEC 27001:2022 Information security, cybersecurity and privacy protection: Information security management systems: Requirements_. https://www.iso.org/standard/27001
-25. International Organization for Standardization. (2022b). _ISO/IEC/IEEE 29119-1:2022 Software and systems engineering: Software testing: Part 1: General concepts_. https://www.iso.org/standard/81291.html
-26. International Organization for Standardization. (2023a). _ISO/IEC 25010:2023 Systems and software engineering: SQuaRE: Product quality model_. https://www.iso.org/standard/78176.html
-27. International Organization for Standardization. (2023b). _ISO/IEC 42001:2023 Information technology: Artificial intelligence: Management system_. https://www.iso.org/standard/42001
-28. Kitchenham, B., & Charters, S. (2007). _Guidelines for performing systematic literature reviews in software engineering_ (EBSE-2007-01). Keele University & Durham University.
-29. Moustakas, C. (1994). _Phenomenological research methods_. SAGE. https://doi.org/10.4135/9781412995658
-30. National Institute of Standards and Technology. (2023). _Artificial intelligence risk management framework (AI RMF 1.0)_ (NIST AI 100-1). https://doi.org/10.6028/NIST.AI.100-1
-31. National Institute of Standards and Technology. (2024). _Artificial intelligence risk management framework: Generative artificial intelligence profile_ (NIST AI 600-1). https://doi.org/10.6028/NIST.AI.600-1
-32. Peffers, K., Tuunanen, T., Rothenberger, M. A., & Chatterjee, S. (2007). A design science research methodology for information systems research. _Journal of Management Information Systems, 24_(3), 45–77. https://doi.org/10.2753/MIS0742-1222240302
-33. Popper, K. R. (2002). _The logic of scientific discovery_. Routledge. (Original work published 1959). https://doi.org/10.4324/9780203994627
-34. Raji, I. D., Smart, A., White, R. N., Mitchell, M., Gebru, T., Hutchinson, B., Smith-Loud, J., Theron, D., & Barnes, P. (2020). Closing the AI accountability gap. In _Proceedings of the 2020 Conference on Fairness, Accountability, and Transparency_ (pp. 33–44). ACM. https://doi.org/10.1145/3351095.3372873
-35. Selbst, A. D., Boyd, D., Friedler, S. A., Venkatasubramanian, S., & Vertesi, J. (2019). Fairness and abstraction in sociotechnical systems. In _Proceedings of FAT '19_ (pp. 59–68). ACM. https://doi.org/10.1145/3287560.3287598
-36. UNESCO. (2021). _Recommendation on the ethics of artificial intelligence_. https://unesdoc.unesco.org/ark:/48223/pf0000381137
+23. American Psychological Association. (2020). _Publication manual of the American Psychological Association_ (7th ed.). American Psychological Association. https://www.apa.org/pubs/books/publication-manual-7th-edition-paperback
+24. Gruber, T. R. (1993). A translation approach to portable ontology specifications. _Knowledge Acquisition, 5_(2), 199–220. https://doi.org/10.1006/knac.1993.1008
+25. Hevner, A. R., March, S. T., Park, J., & Ram, S. (2004). Design science in information systems research. _MIS Quarterly, 28_(1), 75–105. https://doi.org/10.2307/25148625
+26. Husserl, E. (2012). _Ideas: General introduction to pure phenomenology_ (W. R. Boyce Gibson, Trans.). Routledge. (Original work published 1913). https://doi.org/10.4324/9780203120330
+27. International Organization for Standardization. (2022a). _ISO/IEC 27001:2022 Information security, cybersecurity and privacy protection: Information security management systems: Requirements_. https://www.iso.org/standard/27001
+28. International Organization for Standardization. (2022b). _ISO/IEC/IEEE 29119-1:2022 Software and systems engineering: Software testing: Part 1: General concepts_. https://www.iso.org/standard/81291.html
+29. International Organization for Standardization. (2023a). _ISO/IEC 25010:2023 Systems and software engineering: SQuaRE: Product quality model_. https://www.iso.org/standard/78176.html
+30. International Organization for Standardization. (2023b). _ISO/IEC 42001:2023 Information technology: Artificial intelligence: Management system_. https://www.iso.org/standard/42001
+31. Kitchenham, B., & Charters, S. (2007). _Guidelines for performing systematic literature reviews in software engineering_ (EBSE-2007-01). Keele University & Durham University.
+32. Moustakas, C. (1994). _Phenomenological research methods_. SAGE. https://doi.org/10.4135/9781412995658
+33. National Institute of Standards and Technology. (2023). _Artificial intelligence risk management framework (AI RMF 1.0)_ (NIST AI 100-1). https://doi.org/10.6028/NIST.AI.100-1
+34. National Institute of Standards and Technology. (2024). _Artificial intelligence risk management framework: Generative artificial intelligence profile_ (NIST AI 600-1). https://doi.org/10.6028/NIST.AI.600-1
+35. Peffers, K., Tuunanen, T., Rothenberger, M. A., & Chatterjee, S. (2007). A design science research methodology for information systems research. _Journal of Management Information Systems, 24_(3), 45–77. https://doi.org/10.2753/MIS0742-1222240302
+36. Popper, K. R. (2002). _The logic of scientific discovery_. Routledge. (Original work published 1959). https://doi.org/10.4324/9780203994627
+37. Raji, I. D., Smart, A., White, R. N., Mitchell, M., Gebru, T., Hutchinson, B., Smith-Loud, J., Theron, D., & Barnes, P. (2020). Closing the AI accountability gap. In _Proceedings of the 2020 Conference on Fairness, Accountability, and Transparency_ (pp. 33–44). ACM. https://doi.org/10.1145/3351095.3372873
+38. Selbst, A. D., Boyd, D., Friedler, S. A., Venkatasubramanian, S., & Vertesi, J. (2019). Fairness and abstraction in sociotechnical systems. In _Proceedings of FAT '19_ (pp. 59–68). ACM. https://doi.org/10.1145/3287560.3287598
+39. UNESCO. (2021). _Recommendation on the ethics of artificial intelligence_. https://unesdoc.unesco.org/ark:/48223/pf0000381137
 
 ## Licencia y alcance
 
-Código distribuido bajo [licencia MIT](LICENSE). La documentación académica orienta evaluación y mejora continua; cualquier uso real debe observar legislación laboral, privacidad, no discriminación y políticas aplicables en Guatemala. Última revisión documental: **10 de septiembre de 2026**. Todos los derechos reservados por Alternativas Inteligetes, S.A.
+Código distribuido bajo [licencia MIT](LICENSE). La documentación académica orienta evaluación y mejora continua; cualquier uso real debe observar legislación laboral, privacidad, no discriminación y políticas aplicables en Guatemala. Última revisión documental: **10 de septiembre de 2026**. Todos los derechos reservados por Alternativas Inteligentes, S.A.

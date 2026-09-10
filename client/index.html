@@ -10,10 +10,16 @@
     <script>
       try {
         const theme = localStorage.getItem("jarvi-rh-theme");
-        if (theme === "dark") {
+        if (theme === "dark" || theme === "high-contrast") {
           document.documentElement.classList.add("dark");
-          document.documentElement.dataset.theme = "dark";
+          if (theme === "high-contrast") {
+            document.documentElement.classList.add("high-contrast");
+          }
+          document.documentElement.dataset.theme = theme;
           document.documentElement.style.colorScheme = "dark";
+          document
+            .querySelector('meta[name="theme-color"]')
+            ?.setAttribute("content", theme === "dark" ? "#0B1118" : "#000000");
         }
       } catch {}
     </script>

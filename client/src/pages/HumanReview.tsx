@@ -474,10 +474,10 @@ export default function HumanReview() {
                       key={candidate.id}
                       data-review-row={candidate.id}
                       onClick={() => selectCandidate(candidate.id)}
-                      className={`group cursor-pointer ${isSelected ? "bg-sky-50 dark:bg-neutral-800" : "bg-card hover:bg-muted/45"}`}
+                      className={`group cursor-pointer ${isSelected ? "bg-sky-50 dark:bg-[#162333]" : "bg-card hover:bg-muted/45"}`}
                     >
                       <td
-                        className={`sticky left-0 z-20 max-w-[230px] border-b border-r px-3 py-3 align-top sm:max-w-[270px] lg:max-w-[300px] ${isSelected ? "bg-sky-50 dark:bg-neutral-800" : "bg-card group-hover:bg-muted"}`}
+                        className={`sticky left-0 z-20 max-w-[230px] border-b border-r px-3 py-3 align-top sm:max-w-[270px] lg:max-w-[300px] ${isSelected ? "bg-sky-50 dark:bg-[#162333]" : "bg-card group-hover:bg-muted"}`}
                       >
                         <div className="flex gap-3">
                           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-[11px] font-bold text-primary-foreground">
@@ -674,7 +674,7 @@ function ViewerPanel({
   };
 
   return (
-    <section className="human-review-viewer relative h-[220px] shrink-0 overflow-hidden rounded-2xl bg-[#0b2d4b] text-white shadow-lift dark:bg-neutral-950 sm:h-[184px] lg:h-[168px]">
+    <section className="human-review-viewer relative h-[220px] shrink-0 overflow-hidden rounded-2xl bg-[#0b2d4b] text-white shadow-lift dark:bg-[#0B2945] sm:h-[184px] lg:h-[168px]">
       <div className="flex h-full flex-col px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
           <div>
@@ -1024,7 +1024,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <Badge
       variant="outline"
-      className={`rounded-full dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 ${tone}`}
+      className={`rounded-full dark:border-[#2A3949] dark:bg-[#162333] dark:text-[#E6EDF3] ${tone}`}
     >
       {applicationStatusLabel(status)}
     </Badge>

@@ -35,7 +35,7 @@ export default function MstEir() {
         </p>
       </div>
 
-      <Card className="rounded-3xl border-0 bg-[#0b2d4b] text-white dark:bg-neutral-950 shadow-soft">
+      <Card className="rounded-3xl border-0 bg-[#0b2d4b] text-white shadow-soft dark:bg-[#0B2945]">
         <CardContent className="flex gap-3 p-5">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-200" />
           <p className="text-sm leading-6 text-white/75">

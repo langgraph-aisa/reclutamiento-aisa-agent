@@ -37,37 +37,71 @@
 }
 
 .dark {
-  --color-background: oklch(0.145 0 0);
-  --color-foreground: oklch(0.93 0 0);
-  --color-card: oklch(0.195 0 0);
-  --color-card-foreground: oklch(0.93 0 0);
-  --color-popover: oklch(0.18 0 0);
-  --color-popover-foreground: oklch(0.93 0 0);
-  --color-primary: oklch(0.84 0 0);
-  --color-primary-foreground: oklch(0.14 0 0);
-  --color-secondary: oklch(0.27 0 0);
-  --color-secondary-foreground: oklch(0.93 0 0);
-  --color-muted: oklch(0.235 0 0);
-  --color-muted-foreground: oklch(0.7 0 0);
-  --color-accent: oklch(0.29 0 0);
-  --color-accent-foreground: oklch(0.95 0 0);
-  --color-destructive: oklch(0.68 0.18 25);
-  --color-border: oklch(0.32 0 0);
-  --color-input: oklch(0.34 0 0);
-  --color-ring: oklch(0.68 0 0);
-  --color-sidebar: oklch(0.17 0 0);
-  --color-sidebar-foreground: oklch(0.91 0 0);
-  --color-sidebar-primary: oklch(0.84 0 0);
-  --color-sidebar-primary-foreground: oklch(0.14 0 0);
-  --color-sidebar-accent: oklch(0.245 0 0);
-  --color-sidebar-accent-foreground: oklch(0.95 0 0);
-  --color-sidebar-border: oklch(0.3 0 0);
-  --color-sidebar-ring: oklch(0.68 0 0);
+  --color-background: #0b1118;
+  --color-foreground: #e6edf3;
+  --color-card: #111a24;
+  --color-card-foreground: #e6edf3;
+  --color-popover: #162333;
+  --color-popover-foreground: #e6edf3;
+  --color-primary: #35d6b1;
+  --color-primary-foreground: #0b1118;
+  --color-secondary: #162333;
+  --color-secondary-foreground: #e6edf3;
+  --color-muted: #162333;
+  --color-muted-foreground: #aab7c5;
+  --color-accent: #162333;
+  --color-accent-foreground: #35d6b1;
+  --color-destructive: #ff6b6b;
+  --color-border: #2a3949;
+  --color-input: #7f8c9a;
+  --color-ring: #35d6b1;
+  --color-sidebar: #111a24;
+  --color-sidebar-foreground: #e6edf3;
+  --color-sidebar-primary: #35d6b1;
+  --color-sidebar-primary-foreground: #0b1118;
+  --color-sidebar-accent: #162333;
+  --color-sidebar-accent-foreground: #e6edf3;
+  --color-sidebar-border: #2a3949;
+  --color-sidebar-ring: #35d6b1;
+  --aisa-deep: #0b2945;
+  --aisa-info: #58a6ff;
+  --aisa-ai: #a78bfa;
+  --aisa-attention: #f2b84b;
+  --aisa-error: #ff6b6b;
+  --aisa-input-fill: #344456;
 }
 
-/* High-contrast structural surfaces: semantic hues remain available for small
-   status indicators, while cards, callouts, controls and borders become
-   neutral in dark mode throughout authenticated and public routes. */
+.high-contrast {
+  --color-background: #000000;
+  --color-foreground: #ffffff;
+  --color-card: #0b1118;
+  --color-card-foreground: #ffffff;
+  --color-popover: #111a24;
+  --color-popover-foreground: #ffffff;
+  --color-primary: #56f7d2;
+  --color-primary-foreground: #000000;
+  --color-secondary: #111a24;
+  --color-secondary-foreground: #ffffff;
+  --color-muted: #111a24;
+  --color-muted-foreground: #e6edf3;
+  --color-accent: #0b2945;
+  --color-accent-foreground: #ffffff;
+  --color-destructive: #ff7b7b;
+  --color-border: #aab7c5;
+  --color-input: #aab7c5;
+  --color-ring: #58a6ff;
+  --color-sidebar: #000000;
+  --color-sidebar-foreground: #ffffff;
+  --color-sidebar-primary: #56f7d2;
+  --color-sidebar-primary-foreground: #000000;
+  --color-sidebar-accent: #0b2945;
+  --color-sidebar-accent-foreground: #ffffff;
+  --color-sidebar-border: #aab7c5;
+  --color-sidebar-ring: #58a6ff;
+}
+
+/* Dark AISA assigns functional roles instead of inverting the Day palette.
+   Status meaning remains expressed by label/icon/shape as well as color. */
 .dark
   :where(
     .bg-amber-50,
@@ -96,29 +130,43 @@
   background-color: var(--color-muted) !important;
 }
 
+.dark :where(.text-primary) {
+  color: var(--color-foreground);
+}
+
 .dark
   :where(
-    .text-amber-700,
-    .text-amber-800,
-    .text-amber-900,
-    .text-cyan-800,
     .text-emerald-700,
     .text-emerald-800,
     .text-emerald-900,
-    .text-emerald-950,
+    .text-emerald-950
+  ) {
+  color: #35d6b1 !important;
+}
+
+.dark :where(.text-cyan-800, .text-sky-700, .text-sky-800) {
+  color: #58a6ff !important;
+}
+
+.dark
+  :where(
     .text-fuchsia-700,
-    .text-red-600,
-    .text-red-700,
-    .text-red-800,
-    .text-rose-800,
-    .text-sky-700,
-    .text-sky-800,
-    .text-slate-800,
-    .text-slate-950,
     .text-violet-700,
     .text-violet-800,
     .text-violet-900
   ) {
+  color: #a78bfa !important;
+}
+
+.dark :where(.text-amber-700, .text-amber-800, .text-amber-900) {
+  color: #f2b84b !important;
+}
+
+.dark :where(.text-red-600, .text-red-700, .text-red-800, .text-rose-800) {
+  color: #ff6b6b !important;
+}
+
+.dark :where(.text-slate-800, .text-slate-950) {
   color: var(--color-foreground) !important;
 }
 
@@ -139,7 +187,25 @@
 
 .dark :where(select, option) {
   color: var(--color-foreground);
-  background-color: var(--color-background);
+  background-color: var(--color-card);
+}
+
+.dark :where(input, textarea, select) {
+  caret-color: #35d6b1;
+}
+
+.dark :where(input, textarea)::placeholder {
+  color: #7f8c9a;
+  opacity: 1;
+}
+
+.dark
+  :where([data-slot="card"], [role="dialog"], [role="menu"], [role="listbox"]) {
+  border-color: var(--color-border);
+}
+
+.high-contrast :where(button, a, input, textarea, select):focus-visible {
+  outline-width: 3px;
 }
 
 @layer base {
@@ -164,6 +230,10 @@
   }
   button:active {
     transform: scale(0.98);
+  }
+  :where(button, a, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
   }
 }
 
@@ -193,9 +263,6 @@
     background-image:
       linear-gradient(rgba(205, 232, 225, 0.035) 1px, transparent 1px),
       linear-gradient(90deg, rgba(205, 232, 225, 0.035) 1px, transparent 1px);
-  }
-  .dark .release-summary {
-    filter: grayscale(1);
   }
 }
 

@@ -1,7 +1,14 @@
 import { useTheme } from "@/contexts/ThemeContext";
 import { cn } from "@/lib/utils";
-import { Moon, Sun } from "lucide-react";
+import { APP_THEME_LABELS, nextAppTheme, type AppTheme } from "@shared/theme";
+import { Contrast, Moon, Sun } from "lucide-react";
 import React from "react";
+
+const THEME_ICONS = {
+  light: Sun,
+  dark: Moon,
+  "high-contrast": Contrast,
+} satisfies Record<AppTheme, typeof Sun>;
 
 export function ThemeToggle({
   compact = false,
@@ -11,16 +18,19 @@ export function ThemeToggle({
   className?: string;
 }) {
   const { theme, toggleTheme } = useTheme();
-  const dark = theme === "dark";
-  const nextThemeLabel = dark ? "claro" : "oscuro";
+  const nextTheme = nextAppTheme(theme);
+  const ActiveIcon = THEME_ICONS[theme];
+  const positions: Record<AppTheme, string> = {
+    light: "translate-x-1",
+    dark: "translate-x-[1.25rem]",
+    "high-contrast": "translate-x-9",
+  };
 
   return (
     <button
       type="button"
-      role="switch"
-      aria-checked={dark}
-      aria-label={`Cambiar a modo ${nextThemeLabel}`}
-      title={`Cambiar a modo ${nextThemeLabel}`}
+      aria-label={`Tema actual: ${APP_THEME_LABELS[theme]}. Cambiar a ${APP_THEME_LABELS[nextTheme]}`}
+      title={`Tema actual: ${APP_THEME_LABELS[theme]}. Cambiar a ${APP_THEME_LABELS[nextTheme]}`}
       onClick={toggleTheme}
       className={cn(
         "relative isolate h-8 shrink-0 rounded-full border border-sidebar-border bg-sidebar-accent/70 shadow-inner outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar",
@@ -30,36 +40,28 @@ export function ThemeToggle({
     >
       {!compact && (
         <>
-          <Moon
-            aria-hidden="true"
-            className={cn(
-              "absolute left-1.5 top-1/2 size-3.5 -translate-y-1/2 transition-opacity",
-              dark ? "opacity-90" : "opacity-35"
-            )}
-          />
           <Sun
             aria-hidden="true"
-            className={cn(
-              "absolute right-1.5 top-1/2 size-3.5 -translate-y-1/2 transition-opacity",
-              dark ? "opacity-35" : "opacity-90"
-            )}
+            className="absolute left-1.5 top-1/2 size-3 -translate-y-1/2 opacity-45"
+          />
+          <Moon
+            aria-hidden="true"
+            className="absolute left-1/2 top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 opacity-45"
+          />
+          <Contrast
+            aria-hidden="true"
+            className="absolute right-1.5 top-1/2 size-3 -translate-y-1/2 opacity-45"
           />
         </>
       )}
       <span
         aria-hidden="true"
         className={cn(
-          "absolute left-0 top-1 z-10 grid size-6 place-items-center rounded-full bg-white text-slate-800 shadow-md transition-transform duration-300",
-          compact ? "translate-x-1" : dark ? "translate-x-8" : "translate-x-1"
+          "absolute left-0 top-1 z-10 grid size-6 place-items-center rounded-full bg-foreground text-background shadow-md transition-transform duration-300",
+          compact ? "translate-x-1" : positions[theme]
         )}
       >
-        {compact ? (
-          dark ? (
-            <Moon className="size-3.5" />
-          ) : (
-            <Sun className="size-3.5" />
-          )
-        ) : null}
+        <ActiveIcon className="size-3.5" />
       </span>
     </button>
   );

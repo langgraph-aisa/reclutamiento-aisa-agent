@@ -14,16 +14,40 @@ import {
   nextReleaseVersion,
 } from "../shared/release";
 import { adjacentReviewResultIndex } from "../shared/reviewNavigation";
+import { APPLICATION_STATUS_OPTIONS } from "../shared/applicationStatus";
 import {
-  oppositeTheme,
+  nextAppTheme,
   resolveStoredTheme,
   THEME_STORAGE_KEY,
 } from "../shared/theme";
 
+function relativeLuminance(hex: string) {
+  const channels = hex
+    .replace("#", "")
+    .match(/.{2}/g)!
+    .map(channel => Number.parseInt(channel, 16) / 255)
+    .map(channel =>
+      channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+    );
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function contrastRatio(foreground: string, background: string) {
+  const lighter = Math.max(
+    relativeLuminance(foreground),
+    relativeLuminance(background)
+  );
+  const darker = Math.min(
+    relativeLuminance(foreground),
+    relativeLuminance(background)
+  );
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.114");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.114");
+    expect(APP_VERSION).toBe("2.0.115");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.115");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -49,16 +73,18 @@ describe("black-box release contract", () => {
     expect(() => nextReleaseVersion("2.0")).toThrow(/inválida/);
   });
 
-  it("persists only supported visual themes and toggles deterministically", () => {
+  it("persists only supported visual themes and cycles deterministically", () => {
     expect(THEME_STORAGE_KEY).toBe("jarvi-rh-theme");
     expect(resolveStoredTheme("dark")).toBe("dark");
+    expect(resolveStoredTheme("high-contrast")).toBe("high-contrast");
     expect(resolveStoredTheme("invalid")).toBe("light");
-    expect(oppositeTheme("light")).toBe("dark");
-    expect(oppositeTheme("dark")).toBe("light");
+    expect(nextAppTheme("light")).toBe("dark");
+    expect(nextAppTheme("dark")).toBe("high-contrast");
+    expect(nextAppTheme("high-contrast")).toBe("light");
   });
 
-  it("exposes an accessible theme switch for both visual modes", () => {
-    const renderTheme = (theme: "light" | "dark") =>
+  it("exposes an accessible control for all three visual themes", () => {
+    const renderTheme = (theme: "light" | "dark" | "high-contrast") =>
       renderToStaticMarkup(
         createElement(
           ThemeProvider,
@@ -67,10 +93,15 @@ describe("black-box release contract", () => {
         )
       );
 
-    expect(renderTheme("light")).toContain('role="switch"');
-    expect(renderTheme("light")).toContain("Cambiar a modo oscuro");
-    expect(renderTheme("dark")).toContain('aria-checked="true"');
-    expect(renderTheme("dark")).toContain("Cambiar a modo claro");
+    expect(renderTheme("light")).toContain(
+      "Tema actual: Día. Cambiar a Oscuro atenuado"
+    );
+    expect(renderTheme("dark")).toContain(
+      "Tema actual: Oscuro atenuado. Cambiar a Oscuro de alto contraste"
+    );
+    expect(renderTheme("high-contrast")).toContain(
+      "Tema actual: Oscuro de alto contraste. Cambiar a Día"
+    );
   });
 
   it("exposes accessible dynamic navigation for evaluation and results", () => {
@@ -98,7 +129,7 @@ describe("black-box release contract", () => {
     expect(adjacentReviewResultIndex(0, 0, 1)).toBe(-1);
   });
 
-  it("integrates the compact matrix, grayscale theme, and transparent brand", () => {
+  it("integrates the compact matrix, Dark AISA tokens, and transparent brand", () => {
     const review = fs.readFileSync(
       path.resolve("client/src/pages/HumanReview.tsx"),
       "utf8"
@@ -111,13 +142,33 @@ describe("black-box release contract", () => {
     const logo = fs.readFileSync(
       path.resolve("client/public/brand/aisa-logo.png")
     );
+    const visualSources = ["client/src/pages", "client/src/components"]
+      .flatMap(directory =>
+        fs
+          .readdirSync(path.resolve(directory))
+          .filter(file => file.endsWith(".tsx"))
+          .map(file => fs.readFileSync(path.resolve(directory, file), "utf8"))
+      )
+      .join("\n");
 
     expect(review).not.toContain("Matriz humana dinámica");
     expect(review).toContain("Navegación de bloques de evaluación");
     expect(review).toContain("Navegación vertical de resultados");
     expect(review).toContain("data-review-row");
-    expect(theme).toContain("--color-background: oklch(0.145 0 0)");
-    expect(theme).toContain("--color-sidebar: oklch(0.17 0 0)");
+    expect(theme).toContain("--color-background: #0b1118");
+    expect(theme).toContain("--color-card: #111a24");
+    expect(theme).toContain("--color-border: #2a3949");
+    expect(theme).toContain("--color-input: #7f8c9a");
+    expect(theme).toContain("--color-ring: #35d6b1");
+    expect(theme).toContain(".high-contrast {");
+    expect(visualSources).not.toMatch(/dark:(?:bg|text|border)-neutral/);
+    expect(contrastRatio("#E6EDF3", "#0B1118")).toBeCloseTo(16.05, 2);
+    expect(contrastRatio("#AAB7C5", "#0B1118")).toBeCloseTo(9.29, 2);
+    expect(contrastRatio("#35D6B1", "#0B1118")).toBeCloseTo(10.3, 2);
+    expect(contrastRatio("#7F8C9A", "#111A24")).toBeGreaterThanOrEqual(3);
+    expect(
+      APPLICATION_STATUS_OPTIONS.every(option => option.label.trim())
+    ).toBe(true);
     expect(layout).toContain(
       'AppBrand className="h-8 max-w-full dark:brightness-0 dark:invert"'
     );
@@ -152,6 +203,10 @@ describe("black-box release contract", () => {
       "utf8"
     );
     const theme = fs.readFileSync(path.resolve("client/src/index.css"), "utf8");
+    const bootstrap = fs.readFileSync(
+      path.resolve("client/index.html"),
+      "utf8"
+    );
 
     expect(login).toContain('useState("")');
     expect(login).toContain('autoComplete="off"');
@@ -168,9 +223,12 @@ describe("black-box release contract", () => {
     expect(migration).toContain("generate_series(1,25)");
     expect(migration).toContain('"location_zone_id"');
     expect(agent).toContain("ubicacionDeclarada");
-    expect(theme).toContain("High-contrast structural surfaces");
+    expect(theme).toContain("Dark AISA assigns functional roles");
     expect(theme).toContain(".bg-amber-50");
     expect(theme).toContain(".bg-violet-100");
+    expect(bootstrap).toContain(
+      'theme === "dark" || theme === "high-contrast"'
+    );
   });
 
   it("publishes the academic-commercial README with auditable proportions and references", () => {
@@ -181,16 +239,20 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.114");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.115");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
     expect(wordCount).toBeGreaterThanOrEqual(2_400);
     expect(wordCount).toBeLessThanOrEqual(2_800);
-    expect(bibliography).toHaveLength(36);
+    expect(bibliography).toHaveLength(39);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.114");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.115");
+    expect(readme).toContain("sistema de visualización alternativa");
+    expect(readme).toContain("Dark Dimmed");
+    expect(readme).toContain("Dark High Contrast");
+    expect(readme).toContain("no garantiza una reducción clínica");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.113");
     expect(readme).toContain(
       "Zona 1–25, departamento y municipio obligatorios"

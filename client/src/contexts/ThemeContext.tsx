@@ -1,5 +1,5 @@
 import {
-  oppositeTheme,
+  nextAppTheme,
   resolveStoredTheme,
   THEME_STORAGE_KEY,
   type AppTheme,
@@ -39,12 +39,17 @@ export function ThemeProvider({
 
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.toggle("dark", theme === "dark");
+    const usesDarkCanvas = theme !== "light";
+    root.classList.toggle("dark", usesDarkCanvas);
+    root.classList.toggle("high-contrast", theme === "high-contrast");
     root.dataset.theme = theme;
-    root.style.colorScheme = theme;
+    root.style.colorScheme = usesDarkCanvas ? "dark" : "light";
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", theme === "dark" ? "#101b2b" : "#f7f4ed");
+      ?.setAttribute(
+        "content",
+        theme === "light" ? "#f7f4ed" : theme === "dark" ? "#0B1118" : "#000000"
+      );
 
     if (switchable) {
       try {
@@ -56,7 +61,7 @@ export function ThemeProvider({
   }, [theme, switchable]);
 
   const toggleTheme = () => {
-    if (switchable) setTheme(previous => oppositeTheme(previous));
+    if (switchable) setTheme(previous => nextAppTheme(previous));
   };
 
   return (

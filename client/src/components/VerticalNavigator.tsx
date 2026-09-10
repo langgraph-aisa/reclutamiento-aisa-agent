@@ -45,7 +45,7 @@ export function VerticalNavigator({
         onClick={onPrevious}
         aria-label={previousLabel}
         title={previousLabel}
-        className="h-7 w-7 rounded-md border-0 bg-cyan-400 text-slate-950 shadow-sm hover:bg-cyan-300 hover:text-slate-950 disabled:bg-cyan-200/60 dark:bg-neutral-700 dark:text-white dark:hover:bg-neutral-600 dark:hover:text-white dark:disabled:bg-neutral-800"
+        className="h-7 w-7 rounded-md border-0 bg-cyan-400 text-slate-950 shadow-sm hover:bg-cyan-300 hover:text-slate-950 disabled:bg-cyan-200/60 dark:bg-[#35D6B1] dark:text-[#0B1118] dark:hover:bg-[#58A6FF] dark:hover:text-[#0B1118] dark:disabled:bg-[#162333] dark:disabled:text-[#7F8C9A]"
       >
         <ChevronUp className="h-4 w-4" aria-hidden="true" />
       </Button>
@@ -57,7 +57,7 @@ export function VerticalNavigator({
         onClick={onNext}
         aria-label={nextLabel}
         title={nextLabel}
-        className="h-7 w-7 rounded-md border-0 bg-cyan-400 text-slate-950 shadow-sm hover:bg-cyan-300 hover:text-slate-950 disabled:bg-cyan-200/60 dark:bg-neutral-700 dark:text-white dark:hover:bg-neutral-600 dark:hover:text-white dark:disabled:bg-neutral-800"
+        className="h-7 w-7 rounded-md border-0 bg-cyan-400 text-slate-950 shadow-sm hover:bg-cyan-300 hover:text-slate-950 disabled:bg-cyan-200/60 dark:bg-[#35D6B1] dark:text-[#0B1118] dark:hover:bg-[#58A6FF] dark:hover:text-[#0B1118] dark:disabled:bg-[#162333] dark:disabled:text-[#7F8C9A]"
       >
         <ChevronDown className="h-4 w-4" aria-hidden="true" />
       </Button>
