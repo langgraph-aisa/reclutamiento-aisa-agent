@@ -13,6 +13,12 @@ import {
   RELEASE_LABEL,
   nextReleaseVersion,
 } from "../shared/release";
+import {
+  APPLICATION_CONSENTS,
+  APPLICATION_CONSENT_VERSION,
+  PRIVACY_TERMS_LINK_TEXT,
+  PRIVACY_TERMS_PATH,
+} from "../shared/applicationConsent";
 import { adjacentReviewResultIndex } from "../shared/reviewNavigation";
 import { APPLICATION_STATUS_OPTIONS } from "../shared/applicationStatus";
 import {
@@ -46,8 +52,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.117");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.117");
+    expect(APP_VERSION).toBe("2.0.118");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.118");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -206,6 +212,11 @@ describe("black-box release contract", () => {
       path.resolve("shared/applicationConsent.ts"),
       "utf8"
     );
+    const privacyTerms = fs.readFileSync(
+      path.resolve("client/src/pages/PrivacyTerms.tsx"),
+      "utf8"
+    );
+    const app = fs.readFileSync(path.resolve("client/src/App.tsx"), "utf8");
     const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
     const phoneInput = fs.readFileSync(
       path.resolve("client/src/components/GuatemalaPhoneInput.tsx"),
@@ -244,7 +255,25 @@ describe("black-box release contract", () => {
     expect(consent).toContain(
       "Declaro que la información proporcionada es verdadera, exacta, completa y actualizada."
     );
-    expect(consent).toContain("He leído el Aviso de Privacidad");
+    expect(APPLICATION_CONSENT_VERSION).toBe("2026-09-10.2");
+    expect(PRIVACY_TERMS_PATH).toBe("/privacidad-terminos");
+    expect(PRIVACY_TERMS_LINK_TEXT).toBe(
+      '"Privacidad, términos y condiciones de uso"'
+    );
+    expect(APPLICATION_CONSENTS[2].text).toBe(
+      'He leído el Aviso de "Privacidad, términos y condiciones de uso" y autorizo a AISA a tratar mis datos para fines relacionados con este proceso de selección.'
+    );
+    expect(apply).toContain('target="_blank"');
+    expect(apply).toContain('rel="noopener noreferrer"');
+    expect(app).toContain('<Route path="/privacidad-terminos">');
+    expect(privacyTerms).toContain(
+      "PRIVACIDAD, TÉRMINOS Y CONDICIONES DE USO DE LA PLATAFORMA"
+    );
+    expect(privacyTerms).toContain("useLegalDocumentMetadata");
+    expect(privacyTerms).toContain('link[rel="canonical"]');
+    expect(privacyTerms).toContain("Alternativas Inteligentes, S.A.");
+    expect(privacyTerms).toContain("https://diaco.gob.gt/");
+    expect(privacyTerms).not.toMatch(/\[RAZÓN|\[DIRECCIÓN|\[PRIVACIDAD@/);
     expect(routers).toContain("application_consents_confirmed");
     expect(routers).toContain("requiredApplicationConfirmation");
     expect(migration).toContain("generate_series(1,25)");
@@ -266,7 +295,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.117");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.118");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -275,7 +304,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(39);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.117");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.118");
     expect(readme).toContain("Tres confirmaciones obligatorias");
     expect(readme).toContain("tokens compilados como variables dinámicas");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.115");

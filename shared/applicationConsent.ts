@@ -1,4 +1,7 @@
-export const APPLICATION_CONSENT_VERSION = "2026-09-10";
+export const APPLICATION_CONSENT_VERSION = "2026-09-10.2";
+export const PRIVACY_TERMS_PATH = "/privacidad-terminos";
+export const PRIVACY_TERMS_LINK_TEXT =
+  '"Privacidad, términos y condiciones de uso"';
 
 export const APPLICATION_CONSENTS = [
   {
@@ -11,7 +14,7 @@ export const APPLICATION_CONSENTS = [
   },
   {
     id: "privacyAccepted",
-    text: "He leído el Aviso de Privacidad y autorizo a AISA a tratar mis datos para fines relacionados con este proceso de selección.",
+    text: `He leído el Aviso de ${PRIVACY_TERMS_LINK_TEXT} y autorizo a AISA a tratar mis datos para fines relacionados con este proceso de selección.`,
   },
 ] as const;
 

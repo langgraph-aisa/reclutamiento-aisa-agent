@@ -12,6 +12,8 @@ import { STANDARD_WORK_SCHEDULE } from "@shared/jobPresentation";
 import {
   APPLICATION_CONSENTS,
   EMPTY_APPLICATION_CONSENTS,
+  PRIVACY_TERMS_LINK_TEXT,
+  PRIVACY_TERMS_PATH,
   type ApplicationConsents,
 } from "@shared/applicationConsent";
 import {
@@ -427,14 +429,38 @@ export default function Apply() {
                           aria-required="true"
                           aria-invalid={Boolean(error) && !consents[consent.id]}
                         />
-                        <span>{consent.text}</span>
+                        <span>
+                          {consent.id === "privacyAccepted" ? (
+                            <>
+                              He leído el Aviso de{" "}
+                              <a
+                                href={PRIVACY_TERMS_PATH}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={event => event.stopPropagation()}
+                                className="font-semibold text-sky-700 underline decoration-sky-500/70 underline-offset-4 hover:text-sky-800 dark:text-[#58a6ff] dark:hover:text-[#8bc2ff]"
+                                aria-label={`${PRIVACY_TERMS_LINK_TEXT} (abre en una pestaña nueva)`}
+                              >
+                                {PRIVACY_TERMS_LINK_TEXT}
+                              </a>{" "}
+                              y autorizo a AISA a tratar mis datos para fines
+                              relacionados con este proceso de selección.
+                            </>
+                          ) : (
+                            consent.text
+                          )}
+                        </span>
                       </label>
                     );
                   })}
                 </div>
               </fieldset>
               {error && (
-                <div className="rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800">
+                <div
+                  role="alert"
+                  aria-live="polite"
+                  className="rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800"
+                >
                   {error}
                 </div>
               )}

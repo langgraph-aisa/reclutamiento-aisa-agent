@@ -1,16 +1,16 @@
-# Validación final · JARVI RH 2.0.117
+# Validación final · JARVI RH 2.0.118
 
 Fecha de ejecución: 2026-09-10. Rama objetivo: `main`.
 
 ## Alcance verificado
 
-Esta hoja registra las tres confirmaciones obligatorias en todos los formularios publicados. Comprueba representación compacta, asociación accesible de etiqueta y control, rechazo cliente/servidor y registro transaccional versionado en bitácora. Los casos observables están especificados en [PRUEBAS_CAJA_NEGRA_2.0.117.md](PRUEBAS_CAJA_NEGRA_2.0.117.md).
+Esta hoja registra la página interna de privacidad, términos y condiciones y el vínculo de la tercera confirmación. Comprueba apertura en pestaña paralela sin navegación del formulario, contenido depurado, responsable y contacto, metadata, URL canónica, impresión, tres temas y sincronización de la versión aceptada en bitácora. Los casos observables están especificados en [PRUEBAS_CAJA_NEGRA_2.0.118.md](PRUEBAS_CAJA_NEGRA_2.0.118.md).
 
 ## Evidencia automatizada
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.117` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.118` |
 | Próxima versión (`pnpm release:bump -- --dry-run`) | Incremento semántico aprobado |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 8 de 8 pruebas     |
 | Regresión Vitest (`pnpm test`)                     | Aprobado · 73 de 73 pruebas   |
@@ -21,4 +21,4 @@ El build conserva advertencias no bloqueantes preexistentes para variables opcio
 
 ## Dictamen
 
-El release cumple la puerta técnica local cuando toda la evidencia anterior resulte aprobada. La aplicación de WCAG 2.2, ISO/IEC 25010:2023, ISO/IEC 27001:2022 e ISO/IEC/IEEE 29119-1:2022 es metodológica y no implica certificación formal. La verificación posterior al despliegue debe confirmar BN-CONS-01 a BN-CONS-04 y la regresión visual en los tres temas, navegadores y resoluciones objetivo.
+El release cumple la puerta técnica local cuando toda la evidencia anterior resulte aprobada. La aplicación de WCAG 2.2, ISO/IEC 25010:2023, ISO/IEC 27001:2022 e ISO/IEC/IEEE 29119-1:2022 es metodológica y no implica certificación formal. La verificación posterior al despliegue debe confirmar BN-LEGAL-01 a BN-LEGAL-06 y la regresión visual en los tres temas, navegadores y resoluciones objetivo. El contenido se contrastó con fuentes oficiales, pero debe recibir aprobación jurídica organizacional antes de considerarse política definitiva.

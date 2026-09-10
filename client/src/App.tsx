@@ -21,6 +21,7 @@ import Reports from "./pages/Reports";
 import Users from "./pages/Users";
 
 const HumanReview = lazy(() => import("./pages/HumanReview"));
+const PrivacyTerms = lazy(() => import("./pages/PrivacyTerms"));
 
 function AdminShell({ children }: { children: React.ReactNode }) {
   return <DashboardLayout>{children}</DashboardLayout>;
@@ -32,6 +33,17 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/login" component={Login} />
       <Route path="/apply/:token" component={Apply} />
+      <Route path="/privacidad-terminos">
+        <Suspense
+          fallback={
+            <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">
+              Cargando documento…
+            </div>
+          }
+        >
+          <PrivacyTerms />
+        </Suspense>
+      </Route>
       <Route path="/admin/account">
         <AdminShell>
           <Account />
