@@ -1,8 +1,8 @@
-# Pruebas de caja negra · JARVI RH 2.0.115
+# Pruebas de caja negra · JARVI RH 2.0.116
 
 ## Alcance del cambio
 
-La especificación cubre las superficies intervenidas por este release: tema visual global, login, portada pública, formulario de postulación, administración, Revisión Humana 360°, persistencia de preferencia y documentación. Las reglas de evaluación, los estados y la decisión humana no cambian y permanecen bajo la regresión general.
+La especificación cubre la corrección del tema visual en el CSS producido: body, login, portada pública, postulación, menús, administración, Revisión Humana 360°, persistencia de preferencia y documentación. Las reglas de evaluación, estados y decisión humana no cambian y permanecen bajo regresión general.
 
 ## Matriz funcional observable
 
@@ -25,20 +25,22 @@ La especificación cubre las superficies intervenidas por este release: tema vis
 | BN-DARK-02  | Dark Dimmed activo                                   | Activar nuevamente el control                  | Se aplica Dark High Contrast con bordes, texto y foco reforzados, y el tercer uso retorna a Day               | WCAG 2.2 · contraste/foco                   |
 | BN-DARK-03  | Cualquier tema alternativo activo                    | Navegar entre rutas públicas y administrativas | La preferencia persiste sin destello claro y el logotipo transparente usa su versión clara sin placa blanca   | ISO/IEC 25010:2023 · fiabilidad/interacción |
 | BN-DARK-04  | Paleta Dark Dimmed cargada                           | Ejecutar oráculo de contraste                  | Texto principal, secundario y teal sobre fondo global superan 4.5:1; controles y foco conservan al menos 3:1  | WCAG 2.2 · 1.4.3 y 1.4.11                   |
+| BN-DARK-05  | Build de producción iniciado                         | Compilar utilidades temáticas                  | Fondo, tarjeta, menú, popover y texto referencian `var(--color-*)`; ningún valor claro queda fijado           | ISO/IEC 25010:2023 · corrección funcional   |
+| BN-DARK-06  | Dark Dimmed activo                                   | Inspeccionar superficies estructurales         | Body usa `#0B1118`; menús y tarjetas `#111A24`; paneles antes azules usan gris grafito `#162333`              | ISO/IEC 25010:2023 · consistencia           |
 | BN-STATE-01 | Listado o detalle con estado                         | Inspeccionar publicación, revisión, IA o error | Cada señal conserva nombre y, cuando aplica, icono o forma; ninguna decisión depende únicamente del color     | WCAG 2.2 · 1.4.1                            |
 | BN-LEG-01   | Postulación histórica sin referencias geográficas    | Consultar candidatos existentes                | La lectura permanece operativa; la obligatoriedad se aplica a nuevos envíos                                   | ISO/IEC 25010:2023 · compatibilidad         |
-| BN-DOC-01   | Repositorio en versión vigente                       | Ejecutar puerta de release                     | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.115`                             | ISO/IEC/IEEE 29119-1:2022 · trazabilidad    |
+| BN-DOC-01   | Repositorio en versión vigente                       | Ejecutar puerta de release                     | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.116`                             | ISO/IEC/IEEE 29119-1:2022 · trazabilidad    |
 
 ## Pruebas automatizadas
 
 | Comando                          | Oráculo                                                                             |
 | -------------------------------- | ----------------------------------------------------------------------------------- |
 | `pnpm release:verify`            | Versión, historial, documentos y dependencias auditadas están sincronizados         |
-| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.116`                                          |
+| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.117`                                          |
 | `pnpm test:black-box`            | Contratos observables de identidad, geografía, tema, artefacto y README son exactos |
 | `pnpm test`                      | Normalización `+502`, relación geográfica y endpoints conservan la regresión        |
 | `pnpm check`                     | Cliente, tRPC, servidor y esquema mantienen contratos TypeScript consistentes       |
-| `pnpm build`                     | El artefacto de producción se genera con la versión vigente                         |
+| `pnpm build`                     | Genera el artefacto y rechaza utilidades temáticas fijadas al tema claro            |
 
 ## Criterio de aprobación
 

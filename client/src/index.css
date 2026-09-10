@@ -4,7 +4,9 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme inline {
+/* Do not use `inline`: theme utilities must retain var(--color-*) references so
+   the values below can change at runtime for every surface. */
+@theme {
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --color-background: oklch(0.975 0.012 85);
@@ -63,7 +65,6 @@
   --color-sidebar-accent-foreground: #e6edf3;
   --color-sidebar-border: #2a3949;
   --color-sidebar-ring: #35d6b1;
-  --aisa-deep: #0b2945;
   --aisa-info: #58a6ff;
   --aisa-ai: #a78bfa;
   --aisa-attention: #f2b84b;
@@ -84,7 +85,7 @@
   --color-secondary-foreground: #ffffff;
   --color-muted: #111a24;
   --color-muted-foreground: #e6edf3;
-  --color-accent: #0b2945;
+  --color-accent: #162333;
   --color-accent-foreground: #ffffff;
   --color-destructive: #ff7b7b;
   --color-border: #aab7c5;
@@ -94,7 +95,7 @@
   --color-sidebar-foreground: #ffffff;
   --color-sidebar-primary: #56f7d2;
   --color-sidebar-primary-foreground: #000000;
-  --color-sidebar-accent: #0b2945;
+  --color-sidebar-accent: #162333;
   --color-sidebar-accent-foreground: #ffffff;
   --color-sidebar-border: #aab7c5;
   --color-sidebar-ring: #58a6ff;

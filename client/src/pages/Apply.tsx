@@ -220,7 +220,7 @@ export default function Apply() {
         </header>
         {step === "intro" && (
           <Card className="overflow-hidden rounded-[2rem] border-0 shadow-lift">
-            <div className="bg-primary p-7 text-white dark:bg-[#0B2945] sm:p-10">
+            <div className="bg-primary p-7 text-white dark:bg-[#162333] sm:p-10">
               <p className="text-sm font-semibold uppercase tracking-[.18em] text-emerald-200">
                 Plaza disponible
               </p>

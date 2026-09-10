@@ -674,7 +674,7 @@ function ViewerPanel({
   };
 
   return (
-    <section className="human-review-viewer relative h-[220px] shrink-0 overflow-hidden rounded-2xl bg-[#0b2d4b] text-white shadow-lift dark:bg-[#0B2945] sm:h-[184px] lg:h-[168px]">
+    <section className="human-review-viewer relative h-[220px] shrink-0 overflow-hidden rounded-2xl bg-[#0b2d4b] text-white shadow-lift dark:bg-[#162333] sm:h-[184px] lg:h-[168px]">
       <div className="flex h-full flex-col px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
           <div>
@@ -990,7 +990,7 @@ function ViewerButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition ${active ? "border-white bg-white text-[#0b2d4b]" : "border-white/20 bg-white/5 text-white/75 hover:bg-white/10"}`}
+      className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition ${active ? "border-white bg-white text-[#0b2d4b] dark:border-primary dark:bg-primary dark:text-primary-foreground" : "border-white/20 bg-white/5 text-white/75 hover:bg-white/10"}`}
     >
       <Icon className="mr-1.5 h-3.5 w-3.5" /> {label}
     </button>

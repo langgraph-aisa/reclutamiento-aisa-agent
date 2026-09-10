@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.115</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.116</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.115-0b2d4b" alt="JARVI RH 2.0.115" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.116-0b2d4b" alt="JARVI RH 2.0.116" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse-3.38.20-orange" alt="Langfuse 3.38.20" />
@@ -23,10 +23,10 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.115 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.116 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
-Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH 2.0.115 integra plazas, formularios versionados, evaluación asistida por IA, revisión humana, solicitud controlada de currículum por WhatsApp y auditoría. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar: el personal autorizado conserva la decisión.
+Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH 2.0.116 integra plazas, formularios versionados, evaluación asistida por IA, revisión humana, solicitud controlada de currículum por WhatsApp y auditoría. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar: el personal autorizado conserva la decisión.
 
 ## 1. Reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora
 
@@ -34,23 +34,27 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
 
-### 10SEP2026 · JARVI RH 2.0.115
+### 10SEP2026 · JARVI RH 2.0.116
 
 - Estado: integrado para publicación en `main`.
-- Day, Dark Dimmed y Dark High Contrast persistentes en login, páginas públicas y administración.
-- Tokens funcionales AISA para fondos, superficies, texto, bordes, controles, foco y señales semánticas.
-- Contraste automatizado sobre la paleta y estados expresados con texto, icono o forma además de color.
-- Caja negra, pie del artefacto, gobierno de release y fuentes académicas sincronizados.
+- Corregida la causa raíz que fijaba el tema claro en el CSS de producción.
+- Body, tarjetas, menús, paneles, formularios y retícula consumen tokens compilados como variables dinámicas.
+- Superficies azules oscuras sustituidas por gris grafito `#162333`; acciones conservan señal semántica.
+- El build falla si vuelve a compilar fondos o texto con valores claros fijos.
+
+Descripción: el tema alternativo ahora cubre el artefacto completo, no solo componentes con variantes `dark:` explícitas.
+
+### 10SEP2026 · JARVI RH 2.0.115
+
+- Day, Dark Dimmed y Dark High Contrast persistentes con contraste automatizado.
+- Tokens AISA, caja negra, gobierno y fuentes académicas sincronizados.
 
 Descripción: establece un sistema de visualización alternativa para confort visual, personalización y accesibilidad; no garantiza una reducción clínica de fatiga visual.
 
 ### 10SEP2026 · JARVI RH 2.0.114
 
-- Estado: integrado para publicación en `main`.
-- Login y teléfono sin datos sugeridos; el servidor normaliza a `+502`.
-- Zona 1–25, departamento y municipio obligatorios, validados y persistidos.
-- Ubicación declarada incorporada al contexto auditable del agente.
-- Tema público, horario institucional y microtexto corregidos.
+- Identidad y teléfono normalizados; Zona 1–25, departamento y municipio obligatorios, validados y persistidos.
+- Ubicación auditable, tema público, horario y microtexto corregidos.
 
 Descripción: integra identidad y geografía verificadas sin romper registros históricos.
 
@@ -182,7 +186,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.115](docs/PRUEBAS_CAJA_NEGRA_2.0.115.md).
+`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.116](docs/PRUEBAS_CAJA_NEGRA_2.0.116.md).
 
 ## 8. Protocolo de Ingenierìa de Software
 
