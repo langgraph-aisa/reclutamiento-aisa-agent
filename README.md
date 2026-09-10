@@ -4,7 +4,7 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="center">Talento AISA · JARVI RH 2.0.112</h1>
+<h1 align="center">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.112</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/JARVI%20RH-2.0.112-0b2d4b" alt="JARVI RH 2.0.112" />
@@ -21,7 +21,7 @@
   <sub>Agente visual de producción de Talento AISA (PNG local con transparencia).</sub>
 </p>
 
-> **Posicionamiento, 35 palabras.** 
+> **Empleos de Energia Solar en Guatemala** 
 
 Talento AISA es la plataforma especializada de reclutamiento de Alternativas Inteligentes, S. A. para vincular capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas. JARVI RH 2.0.112 integra publicación de plazas, formularios versionados, evaluación asistida por inteligencia artificial (IA), revisión humana, solicitud controlada de currículum por WhatsApp y evidencia de auditoría. Su propuesta comercial es reducir trabajo repetitivo sin transferir a un modelo estadístico la responsabilidad institucional de contratar. La automatización produce una recomendación explicada; el personal autorizado conserva la decisión.
 
