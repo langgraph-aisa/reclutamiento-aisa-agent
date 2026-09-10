@@ -18,7 +18,7 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente visual de producción de Talento AISA (PNG local con transparencia).</sub>
+  <sub>Agente JARVI RH 2.0.112 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
 > **Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco** 
