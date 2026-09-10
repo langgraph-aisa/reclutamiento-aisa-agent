@@ -5,7 +5,8 @@
 </p>
 
 <h1 align="left">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.112</h1>
-
+> **Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco**
+> 
 <p align="center">
   <img src="https://img.shields.io/badge/JARVI%20RH-2.0.112-0b2d4b" alt="JARVI RH 2.0.112" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
@@ -20,9 +21,6 @@
   <br />
   <sub>Agente JARVI RH 2.0.112 de Talento AISA (IA Evaluadora).</sub>
 </p>
-
-> **Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco**
-> 
 
 Talento AISA es la plataforma No.1 especializada en reclutamiento propiedad de Alternativas Inteligentes, S. A. para vincular capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas. JARVI RH 2.0.112 integra publicación de plazas, formularios versionados, evaluación asistida por inteligencia artificial (IA), revisión humana, solicitud controlada de currículum por WhatsApp y evidencia de auditoría. Su propuesta comercial es reducir trabajo repetitivo sin transferir a un modelo estadístico la responsabilidad institucional de contratar. La automatización produce una recomendación explicada; el personal autorizado conserva la decisión.
 
