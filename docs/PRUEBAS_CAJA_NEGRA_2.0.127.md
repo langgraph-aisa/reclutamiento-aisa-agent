@@ -1,8 +1,8 @@
-# Pruebas de caja negra · JARVI RH 2.0.126
+# Pruebas de caja negra · JARVI RH 2.0.127
 
 ## Alcance del cambio
 
-La especificación cubre la coherencia editorial de las responsabilidades en todas las plazas publicadas: oración autónoma, verbo de acción en infinitivo, puntuación final, delimitadores balanceados, rechazo de fragmentos y revalidación histórica mediante política versionada. Revisión Humana 360°, asociación de perfiles, prioridad pública, tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general.
+La especificación cubre el mensaje institucional de la landing: texto exacto, eliminación de la frase sustituida, integración responsive y contraste temático. La coherencia editorial de responsabilidades, Revisión Humana 360°, asociación de perfiles, prioridad pública, tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general.
 
 ## Matriz funcional observable
 
@@ -28,7 +28,8 @@ La especificación cubre la coherencia editorial de las responsabilidades en tod
 | BN-LAND-05  | Landing pública cargada                                | Activar privacidad, contacto o productos           | Cada recurso se abre en pestaña paralela con `noopener noreferrer`; la landing permanece abierta                   | ISO/IEC 27001:2022 · interacción segura      |
 | BN-LAND-06  | Pantalla móvil, tableta o escritorio                   | Inspeccionar acciones y personaje JARVI            | Los controles conservan foco y ajuste responsive; JARVI alcanza el doble del ancho de referencia en escritorio     | ISO/IEC 25010:2023 · adaptabilidad           |
 | BN-LAND-07  | Portada pública cargada                                | Inspeccionar el lema principal                     | Presenta «Cada candidato merece una evaluación a su medida» y no conserva la referencia anterior a cada plaza      | ISO/IEC 25010:2023 · corrección funcional    |
-| BN-LAND-08  | Portada pública cargada                                | Inspeccionar enlaces y descripción institucional   | El enlace mantiene su destino con el texto corto; Talento AISA se identifica como plataforma de oportunidades      | ISO/IEC 25010:2023 · interacción             |
+| BN-LAND-08  | Portada pública cargada                                | Inspeccionar enlaces y acciones institucionales    | Privacidad conserva su destino y texto corto; contacto y productos mantienen sus enlaces externos                  | ISO/IEC 25010:2023 · interacción             |
+| BN-LAND-09  | Portada pública cargada                                | Inspeccionar el mensaje junto al icono de control  | Muestra exactamente «Plataforma Laboral No.1 de Guatemala» y no conserva la frase institucional anterior           | ISO/IEC 25010:2023 · corrección funcional    |
 | BN-APPLY-01 | Solicitud pública vinculada a un perfil completo       | Abrir la pantalla previa al formulario             | El encabezado muestra RESPONSABILIDADES DEL PUESTO y elimina “Antes de comenzar”                                   | ISO/IEC 25010:2023 · interacción             |
 | BN-APPLY-02 | Perfil activo con varias responsabilidades             | Inspeccionar la pantalla previa                    | La interfaz presenta todas las responsabilidades en el orden almacenado, sin sustituirlas por la descripción       | ISO/IEC 25010:2023 · completitud funcional   |
 | BN-PUB-01   | Perfil asociado a una o más plazas                     | Abrirlo, editarlo y guardarlo                      | El listado devuelve `position_ids` y la UI los reenvía; ninguna asociación desaparece por omisión                  | ISO/IEC 25010:2023 · integridad funcional    |
@@ -62,7 +63,7 @@ La especificación cubre la coherencia editorial de las responsabilidades en tod
 | BN-EDIT-17  | Persona visita landing o solicitud ya validada         | Cargar o navegar por las páginas                   | La lectura usa únicamente PostgreSQL; no llama a OpenAI ni consume tokens por visita                               | ISO/IEC 25010:2023 · eficiencia              |
 | BN-EDIT-18  | Catálogo geográfico oficial activo                     | Mostrar zona, departamento o municipio             | La interfaz conserva la nomenclatura autoritativa sin reescritura generativa                                       | ISO/IEC 27001:2022 · integridad              |
 | BN-EDIT-19  | IA devuelve una responsabilidad fragmentada o nominal  | Validar la salida estructurada                     | El servidor rechaza paréntesis abiertos, complementos aislados, falta de puntuación o ausencia de verbo infinitivo | ISO/IEC 25010:2023 · prevención de errores   |
-| BN-EDIT-20  | Contenido validado con una política editorial anterior | Iniciar la versión 2.0.126                         | El hash anterior no se reutiliza; las 25 plazas publicadas vuelven a revisión y registran la política vigente      | ISO/IEC/IEEE 29119-1:2022 · repetibilidad    |
+| BN-EDIT-20  | Contenido validado con una política editorial anterior | Iniciar la versión 2.0.127                         | El hash anterior no se reutiliza; las 25 plazas publicadas vuelven a revisión y registran la política vigente      | ISO/IEC/IEEE 29119-1:2022 · repetibilidad    |
 | BN-EDIT-21  | Barrido editorial finalizado                           | Consultar cada solicitud pública                   | Toda responsabilidad es autónoma, coherente, legible y conserva las condiciones sustantivas del perfil             | ISO/IEC 25010:2023 · corrección funcional    |
 | BN-CONS-01  | Formulario público completo                            | Inspeccionar el bloque final                       | Se muestran tres casillas separadas, compactas, legibles, sin doble espaciado y marcadas como obligatorias         | ISO/IEC 25010:2023 · interacción             |
 | BN-CONS-02  | Falta una o más confirmaciones                         | Pulsar Enviar formulario                           | La interfaz impide el envío y comunica que deben marcarse las tres confirmaciones                                  | ISO/IEC 25010:2023 · prevención de errores   |
@@ -89,7 +90,7 @@ La especificación cubre la coherencia editorial de las responsabilidades en tod
 | BN-LANG-04  | Perfil vinculado a un formulario                       | Generar preguntas desde el perfil                  | Preguntas, ayudas y criterios nuevos se generan con conjugación formal                                             | ISO/IEC/IEEE 29119-1:2022 · repetibilidad    |
 | BN-LANG-05  | Base con valores predeterminados anteriores            | Ejecutar migración `0012`                          | Se homologan los valores conocidos; las plantillas libres de administración permanecen intactas                    | ISO/IEC 27001:2022 · integridad              |
 | BN-LANG-06  | Código introduce un patrón informal prohibido          | Ejecutar verificación o build                      | El proceso termina con código distinto de cero e identifica archivo, línea y regla                                 | ISO/IEC 25010:2023 · mantenibilidad          |
-| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.126`                                  | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
+| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.127`                                  | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
 
 ## Pruebas automatizadas
 
@@ -97,7 +98,7 @@ La especificación cubre la coherencia editorial de las responsabilidades en tod
 | -------------------------------- | ----------------------------------------------------------------------------- |
 | `pnpm release:verify`            | Versión, historial, documentos y dependencias auditadas están sincronizados   |
 | `pnpm text:verify`               | El tratamiento formal y la cobertura de rutas editoriales permanecen íntegros |
-| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.127`                                    |
+| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.128`                                    |
 | `pnpm test:black-box`            | Modelo editorial, textos públicos, artefacto, versión y README son exactos    |
 | `pnpm test`                      | Mensajería, formularios, geografía y endpoints conservan la regresión         |
 | `pnpm check`                     | Cliente, tRPC, servidor y esquema mantienen contratos TypeScript consistentes |
@@ -105,4 +106,4 @@ La especificación cubre la coherencia editorial de las responsabilidades en tod
 
 ## Criterio de aprobación
 
-El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación posterior al despliegue debe consultar las 25 plazas y ejecutar BN-EDIT-19 a BN-EDIT-21; los casos editoriales BN-EDIT-01 a BN-EDIT-18 y BN-360-01 a BN-360-08 continúan como regresión. WCAG e ISO se utilizan como guías metodológicas y no constituyen certificación.
+El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación posterior al despliegue debe ejecutar BN-LAND-09 en Day, Dark Dimmed y Dark High Contrast; los casos editoriales y BN-360-01 a BN-360-08 continúan como regresión. WCAG e ISO se utilizan como guías metodológicas y no constituyen certificación.

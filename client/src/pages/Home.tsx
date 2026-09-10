@@ -141,8 +141,7 @@ export default function Home() {
                     </a>
                     <span className="flex items-center gap-2">
                       <ClipboardCheck className="h-4 w-4 shrink-0 text-emerald-700" />
-                      Talento AISA, plataforma tecnológica de oportunidades
-                      laborales.
+                      Plataforma Laboral No.1 de Guatemala
                     </span>
                   </div>
                 </div>
