@@ -10,8 +10,9 @@
   <img src="https://img.shields.io/badge/JARVI%20RH-2.0.112-0b2d4b" alt="JARVI RH 2.0.112" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
+  <img src="https://img.shields.io/badge/Langfuse-3.9.0-orange" alt="Langfuse 3.9.0" />
   <img src="https://img.shields.io/badge/LangGraph-0.2.56-purple" alt="LangGraph 0.2.56" />
-  <img src="https://img.shields.io/badge/ISO%2FIEC-25010%20%C2%B7%2027001%20%C2%B7%2029119-0284c7" alt="Referentes ISO/IEC" />
+    <img src="https://img.shields.io/badge/ISO%2FIEC-25010%20%C2%B7%2027001%20%C2%B7%2029119-0284c7" alt="Referentes ISO/IEC" />
 </p>
 
 <p align="center">
