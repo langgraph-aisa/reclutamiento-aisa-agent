@@ -392,8 +392,4 @@
   .human-review-workspace {
     gap: 0.5rem;
   }
-
-  .human-review-viewer {
-    height: 10.5rem;
-  }
 }

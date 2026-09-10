@@ -1,8 +1,8 @@
-# Pruebas de caja negra · JARVI RH 2.0.124
+# Pruebas de caja negra · JARVI RH 2.0.125
 
 ## Alcance del cambio
 
-La especificación cubre el control editorial de todo texto público configurable mediante GPT-4.1 mini: plazas, perfiles, objetivos, responsabilidades, requisitos, formularios, preguntas, ayudas, opciones y mensajes. Verifica ejecución previa al guardado, activación o publicación; salida estructurada; recomposición de fragmentos; conservación de hechos, variables y respuestas aceptadas; fallo cerrado; rotación de credenciales; persistencia y reutilización auditable; barrido de plazas existentes; ausencia de llamadas durante visitas; y puerta estática para textos institucionales. Asociación de perfiles, prioridad pública, tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general.
+La especificación cubre la composición de Revisión Humana 360°: paginación controlada de bloques, adaptación de tres a una tarjeta, contenido íntegro, altura flexible, ubicación superior de botoneras, columna fija compacta, contraste temático y selección de candidato. El control editorial de 2.0.124, asociación de perfiles, prioridad pública, tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general.
 
 ## Matriz funcional observable
 
@@ -35,6 +35,14 @@ La especificación cubre el control editorial de todo texto público configurabl
 | BN-PUB-02   | Plaza y perfil completo con igual nombre, sin vínculo  | Pulsar Publicar                                    | El servidor identifica el perfil, inserta idempotentemente la relación y publica la plaza                          | ISO/IEC 25010:2023 · tolerancia a errores    |
 | BN-PUB-03   | Plaza sin perfil completo o coincidente                | Pulsar Publicar                                    | La plaza continúa como borrador y la interfaz muestra el motivo comunicado por el endpoint                         | ISO/IEC 25010:2023 · prevención de errores   |
 | BN-ORDER-01 | Varias plazas aptas y publicadas                       | Cargar la landing                                  | Ejecutivo de Negocios (Ventas) aparece primero; las demás conservan orden descendente de creación                  | ISO/IEC/IEEE 29119-1:2022 · consistencia     |
+| BN-360-01   | Candidato con seis bloques y panel de al menos 760 px  | Abrir Evaluación                                   | Solo aparecen los tres primeros bloques completos, alineados y sin tarjeta parcial                                 | ISO/IEC 25010:2023 · adecuación funcional    |
+| BN-360-02   | Primera página de tres bloques visible                 | Activar la flecha siguiente                        | Los bloques 4–6 sustituyen a los anteriores; no existe desplazamiento manual dentro del panel                      | ISO/IEC 25010:2023 · controlabilidad         |
+| BN-360-03   | Panel con ancho inferior a 760 px                      | Recorrer la evaluación                             | Se presenta un bloque completo por página y las flechas avanzan o retroceden de uno en uno                         | ISO/IEC 25010:2023 · adaptabilidad           |
+| BN-360-04   | Razonamientos de distinta longitud                     | Cambiar de página                                  | Ningún razonamiento usa truncamiento; tarjeta y contenedor crecen hasta mantener el contenido legible              | WCAG 2.2 · 1.4.10                            |
+| BN-360-05   | Varias páginas de evaluación                           | Inspeccionar encabezado                            | «Vista 360° del Candidato», intervalo visible y botonera se muestran juntos en la parte superior                   | ISO/IEC 25010:2023 · interacción             |
+| BN-360-06   | Matriz con varios candidatos                           | Inspeccionar navegación de resultados              | Las flechas anterior/siguiente están arriba a la derecha y no reservan espacio vacío al final de la tabla          | ISO/IEC 25010:2023 · operabilidad            |
+| BN-360-07   | Tabla desplazada horizontalmente en Day y Dark         | Inspeccionar primera columna                       | La columna permanece fija, diferenciada por superficie, borde y sombra; muestra únicamente nombre y plaza          | WCAG 2.2 · 1.4.1 y 1.4.3                     |
+| BN-360-08   | Candidato distinto visible en primera columna          | Activar su nombre o plaza                          | El foco es perceptible, cambia la selección y el resumen superior carga teléfono, puntuación, estado y nota IA     | WCAG 2.2 · 2.1.1 y 2.4.7                     |
 | BN-EDIT-01  | Perfil con errores en varios campos                    | Guardar el perfil                                  | GPT-4.1 mini devuelve campos y listas estructurados; el servidor persiste nombre, objetivo y demás texto corregido | ISO/IEC 25010:2023 · corrección funcional    |
 | BN-EDIT-02  | Responsabilidades partidas por comas o paréntesis      | Guardar y abrir la solicitud                       | Fragmentos relacionados se recomponen en una idea autónoma por viñeta, sin saltos ni marcadores internos           | ISO/IEC 25010:2023 · adecuación funcional    |
 | BN-EDIT-03  | Plaza con título, descripción o mensaje defectuoso     | Guardar la plaza                                   | El contenido se corrige antes de persistirse y las variables `{{nombre}}` y `{{plaza}}` permanecen idénticas       | ISO/IEC 27001:2022 · integridad              |
@@ -78,7 +86,7 @@ La especificación cubre el control editorial de todo texto público configurabl
 | BN-LANG-04  | Perfil vinculado a un formulario                       | Generar preguntas desde el perfil                  | Preguntas, ayudas y criterios nuevos se generan con conjugación formal                                             | ISO/IEC/IEEE 29119-1:2022 · repetibilidad    |
 | BN-LANG-05  | Base con valores predeterminados anteriores            | Ejecutar migración `0012`                          | Se homologan los valores conocidos; las plantillas libres de administración permanecen intactas                    | ISO/IEC 27001:2022 · integridad              |
 | BN-LANG-06  | Código introduce un patrón informal prohibido          | Ejecutar verificación o build                      | El proceso termina con código distinto de cero e identifica archivo, línea y regla                                 | ISO/IEC 25010:2023 · mantenibilidad          |
-| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.124`                                  | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
+| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.125`                                  | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
 
 ## Pruebas automatizadas
 
@@ -86,7 +94,7 @@ La especificación cubre el control editorial de todo texto público configurabl
 | -------------------------------- | ----------------------------------------------------------------------------- |
 | `pnpm release:verify`            | Versión, historial, documentos y dependencias auditadas están sincronizados   |
 | `pnpm text:verify`               | El tratamiento formal y la cobertura de rutas editoriales permanecen íntegros |
-| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.125`                                    |
+| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.126`                                    |
 | `pnpm test:black-box`            | Modelo editorial, textos públicos, artefacto, versión y README son exactos    |
 | `pnpm test`                      | Mensajería, formularios, geografía y endpoints conservan la regresión         |
 | `pnpm check`                     | Cliente, tRPC, servidor y esquema mantienen contratos TypeScript consistentes |
@@ -94,4 +102,4 @@ La especificación cubre el control editorial de todo texto público configurabl
 
 ## Criterio de aprobación
 
-El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación posterior al despliegue debe comprobar el resumen del barrido inicial y, en un registro controlado, confirmar la recomposición persistida de responsabilidades y requisitos antes de inspeccionar BN-EDIT-01 a BN-EDIT-18 en la landing real. WCAG e ISO se utilizan como guías metodológicas y no constituyen certificación.
+El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación posterior al despliegue debe recorrer BN-360-01 a BN-360-08 con datos reales en Day y Dark; los casos editoriales BN-EDIT-01 a BN-EDIT-18 continúan como regresión. WCAG e ISO se utilizan como guías metodológicas y no constituyen certificación.

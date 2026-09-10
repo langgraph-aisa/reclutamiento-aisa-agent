@@ -1,10 +1,16 @@
-# Gobierno de release JARVI RH 2.0.124
+# Gobierno de release JARVI RH 2.0.125
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.124**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.125**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-La versión 2.0.124 extiende el control editorial a todo texto público configurable: título, área, ubicación, descripción y mensaje de cada plaza; nombre, resumen, objetivo, responsabilidades, requisitos, competencias, conocimientos, nivel académico, idiomas, licencias, disponibilidad, ubicación, rango salarial y modalidad del perfil; título e introducción del formulario; y enunciado, ayuda, opciones, criterio y prompt de cada pregunta. La nomenclatura geográfica administrada desde el catálogo oficial se preserva como fuente autoritativa y no se reinterpreta generativamente.
+La versión 2.0.125 corrige la composición de Revisión Humana 360°. La matriz de evaluación deja de depender de un contenedor con altura fija y desplazamiento interno: `ResizeObserver` selecciona páginas de tres bloques cuando el panel dispone de al menos 760 píxeles y páginas de un bloque en anchos inferiores. Cada página muestra el razonamiento completo, iguala la altura visual de sus tarjetas y adapta el panel a la tarjeta más extensa. `reviewBlockPageRange` y `adjacentReviewBlockPage` limitan el rango y los extremos de forma determinista.
+
+La botonera de bloques comparte el encabezado con «Vista 360° del Candidato», informa el intervalo visible y es la única acción que cambia la página. La botonera que selecciona candidatos también abandona la esquina inferior y queda fija en la parte superior derecha de la matriz. Ambas usan controles con etiquetas accesibles, estado anunciado y disposición horizontal para evitar que oculten datos.
+
+La primera columna se reduce de 300 a 210 píxeles como máximo y queda fija durante el desplazamiento horizontal. Muestra exclusivamente nombre y plaza; seleccionar su botón carga el detalle completo en el resumen y el visor superiores. Day usa superficies azul grisáceo claras y Dark emplea superficies grafito diferenciadas; selección, borde lateral, sombra y anillo de foco mantienen la columna reconocible sin depender solo del color. Las filas reducen relleno y altura de controles para presentar más postulaciones sin perder sus acciones.
+
+La versión 2.0.124 extendió el control editorial a todo texto público configurable: título, área, ubicación, descripción y mensaje de cada plaza; nombre, resumen, objetivo, responsabilidades, requisitos, competencias, conocimientos, nivel académico, idiomas, licencias, disponibilidad, ubicación, rango salarial y modalidad del perfil; título e introducción del formulario; y enunciado, ayuda, opciones, criterio y prompt de cada pregunta. La nomenclatura geográfica administrada desde el catálogo oficial se preserva como fuente autoritativa y no se reinterpreta generativamente.
 
 Antes de guardar, activar o publicar, el servidor solicita a `gpt-4.1-mini-2025-04-14` una salida estructurada mediante OpenAI Responses API. La instrucción exige español estándar formal conforme a RAE/ASALE, conserva hechos, cifras, nombres, condiciones y variables `{{...}}`, corrige ortografía, gramática, sintaxis, semántica y puntuación, y permite recomponer fragmentos de una misma responsabilidad o requisito. La UI administrativa almacena responsabilidades y requisitos con una idea completa por línea; las comas ya no dividen una oración en viñetas distintas.
 
@@ -93,4 +99,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.124.md](PRUEBAS_CAJA_NEGRA_2.0.124.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.125.md](PRUEBAS_CAJA_NEGRA_2.0.125.md).

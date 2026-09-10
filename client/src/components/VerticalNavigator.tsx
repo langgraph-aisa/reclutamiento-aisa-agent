@@ -13,6 +13,7 @@ type VerticalNavigatorProps = {
   disableNext?: boolean;
   status?: string;
   className?: string;
+  orientation?: "vertical" | "horizontal";
 };
 
 export function VerticalNavigator({
@@ -25,12 +26,17 @@ export function VerticalNavigator({
   disableNext = false,
   status,
   className,
+  orientation = "vertical",
 }: VerticalNavigatorProps) {
   return (
     <div
       role="group"
       aria-label={label}
-      className={cn("flex flex-col gap-1", className)}
+      className={cn(
+        "flex gap-1",
+        orientation === "horizontal" ? "flex-row" : "flex-col",
+        className
+      )}
     >
       {status ? (
         <span className="sr-only" aria-live="polite">

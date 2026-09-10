@@ -21,7 +21,11 @@ import {
   PRIVACY_TERMS_LINK_TEXT,
   PRIVACY_TERMS_PATH,
 } from "../shared/applicationConsent";
-import { adjacentReviewResultIndex } from "../shared/reviewNavigation";
+import {
+  adjacentReviewBlockPage,
+  adjacentReviewResultIndex,
+  reviewBlockPageRange,
+} from "../shared/reviewNavigation";
 import { APPLICATION_STATUS_OPTIONS } from "../shared/applicationStatus";
 import {
   nextAppTheme,
@@ -54,8 +58,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.124");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.124");
+    expect(APP_VERSION).toBe("2.0.125");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.125");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -135,6 +139,27 @@ describe("black-box release contract", () => {
     expect(adjacentReviewResultIndex(2, 5, -1)).toBe(1);
     expect(adjacentReviewResultIndex(-1, 5, 1)).toBe(0);
     expect(adjacentReviewResultIndex(0, 0, 1)).toBe(-1);
+    expect(reviewBlockPageRange(0, 6, 3)).toEqual({
+      pageIndex: 0,
+      pageCount: 2,
+      start: 0,
+      end: 3,
+    });
+    expect(reviewBlockPageRange(5, 6, 1)).toEqual({
+      pageIndex: 5,
+      pageCount: 6,
+      start: 5,
+      end: 6,
+    });
+    expect(adjacentReviewBlockPage(0, 6, 3, 1)).toBe(1);
+    expect(adjacentReviewBlockPage(1, 6, 3, 1)).toBe(1);
+    expect(adjacentReviewBlockPage(1, 6, 3, -1)).toBe(0);
+    expect(reviewBlockPageRange(Number.NaN, Number.NaN, 0)).toEqual({
+      pageIndex: 0,
+      pageCount: 1,
+      start: 0,
+      end: 0,
+    });
   });
 
   it("integrates the compact matrix, Dark AISA tokens, and transparent brand", () => {
@@ -169,6 +194,16 @@ describe("black-box release contract", () => {
     expect(review).not.toContain("Matriz humana dinámica");
     expect(review).toContain("Navegación de bloques de evaluación");
     expect(review).toContain("Navegación vertical de resultados");
+    expect(review).toContain("Vista 360° del Candidato");
+    expect(review).not.toContain("Visor 360°");
+    expect(review).toContain("blocks.slice(blockRange.start, blockRange.end)");
+    expect(review).toContain("element.clientWidth >= 760 ? 3 : 1");
+    expect(review).toContain('label="Candidato / plaza"');
+    expect(review).toContain("aria-pressed={isSelected}");
+    expect(review).toContain("bg-[#eaf2f7]");
+    expect(review).toContain("dark:bg-[#162333]");
+    expect(review.match(/orientation="horizontal"/g)).toHaveLength(2);
+    expect(review).toContain("absolute right-3 top-3");
     expect(review).toContain("data-review-row");
     expect(theme).toContain("--color-background: #0b1118");
     expect(theme).toContain("--color-heading: #ffffff");
@@ -178,6 +213,7 @@ describe("black-box release contract", () => {
     expect(theme).toContain("--color-ring: #35d6b1");
     expect(theme).toContain(".high-contrast {");
     expect(theme).toContain(".dark :where(h1)");
+    expect(theme).not.toMatch(/\.human-review-viewer\s*\{\s*height:/);
     expect((visualSources.match(/<h1\b/g) ?? []).length).toBeGreaterThan(0);
     expect(theme).toContain("@theme {");
     expect(theme).not.toContain("@theme inline");
@@ -420,7 +456,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.124");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.125");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -429,6 +465,11 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.125");
+    expect(readme).toContain("Vista 360° del Candidato");
+    expect(readme).toContain("tres tarjetas en escritorio");
+    expect(readme).toContain("una en ancho reducido");
+    expect(readme).toContain("muestra únicamente nombre y plaza");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.124");
     expect(readme).toContain("control editorial transversal");
     expect(readme).toContain("plazas públicas ya existentes");

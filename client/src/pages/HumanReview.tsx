@@ -17,7 +17,9 @@ import {
   applicationStatusTone,
 } from "@shared/applicationStatus";
 import {
+  adjacentReviewBlockPage,
   adjacentReviewResultIndex,
+  reviewBlockPageRange,
   type ReviewNavigationDirection,
 } from "@shared/reviewNavigation";
 import {
@@ -34,7 +36,14 @@ import {
   Sparkles,
   UserRound,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
 
@@ -215,7 +224,7 @@ export default function HumanReview() {
   };
 
   return (
-    <div className="human-review-workspace flex h-[calc(100dvh-5.5rem)] min-h-0 min-w-0 flex-col gap-2 overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:h-[calc(100dvh-2rem)] md:gap-3 md:overflow-hidden">
+    <div className="human-review-workspace flex h-[calc(100dvh-5.5rem)] min-h-0 min-w-0 flex-col gap-2 overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:h-[calc(100dvh-2rem)] md:gap-3 md:overflow-y-auto">
       <section className="shrink-0 rounded-2xl border border-border/60 bg-card px-3 py-3 shadow-soft sm:px-4">
         <div className="human-review-summary-grid">
           <div className="flex min-w-0 items-center gap-3">
@@ -371,15 +380,15 @@ export default function HumanReview() {
         </div>
       </section>
 
-      <Card className="relative flex min-h-[320px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border-border/60 shadow-soft md:min-h-0">
+      <Card className="relative flex min-h-[320px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border-border/60 shadow-soft md:min-h-[18rem]">
         {workspace.isFetching ? (
-          <span className="pointer-events-none absolute right-12 top-2 z-50 flex items-center rounded-full border bg-card/95 px-2.5 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
+          <span className="pointer-events-none absolute right-24 top-3 z-50 flex items-center rounded-full border bg-card/95 px-2.5 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Actualizando
           </span>
         ) : null}
         <div
           ref={matrixScrollRef}
-          className="human-review-matrix-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain pb-16"
+          className="human-review-matrix-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain"
         >
           {workspace.error ? (
             <div className="grid h-full min-h-40 place-items-center p-6 text-center">
@@ -404,20 +413,20 @@ export default function HumanReview() {
               <thead className="sticky top-0 z-30 bg-muted/95 shadow-[0_1px_0_hsl(var(--border))] backdrop-blur">
                 <tr>
                   <SortableHead
-                    label="Persona / nota IA"
+                    label="Candidato / plaza"
                     column="name"
                     active={sortBy}
                     direction={sortDirection}
                     onSort={changeSort}
-                    className="sticky left-0 z-40 min-w-[230px] bg-muted/95 sm:min-w-[270px] lg:min-w-[300px]"
+                    className="sticky left-0 z-40 w-[190px] min-w-[190px] max-w-[190px] bg-[#dce8f0] shadow-[8px_0_18px_-16px_rgba(15,23,42,.9)] dark:bg-[#1b2a3a] sm:w-[210px] sm:min-w-[210px] sm:max-w-[210px]"
                   />
-                  <th className="min-w-[150px] border-r px-3 py-3 text-left font-semibold">
+                  <th className="min-w-[150px] border-r px-3 py-2 text-left font-semibold">
                     Teléfono
                   </th>
                   {questionColumns.map(column => (
                     <th
                       key={column.fieldKey}
-                      className="min-w-[170px] max-w-[220px] border-r px-3 py-3 text-left align-bottom sm:min-w-[190px] sm:max-w-[240px]"
+                      className="min-w-[170px] max-w-[220px] border-r px-3 py-2 text-left align-bottom sm:min-w-[190px] sm:max-w-[240px]"
                       title={column.label}
                     >
                       <span className="block font-mono text-[11px] font-bold text-primary">
@@ -436,10 +445,10 @@ export default function HumanReview() {
                     onSort={changeSort}
                     className="min-w-[140px]"
                   />
-                  <th className="min-w-[150px] border-r px-3 py-3 text-left font-semibold">
+                  <th className="min-w-[150px] border-r px-3 py-2 text-left font-semibold">
                     Motivo
                   </th>
-                  <th className="min-w-[230px] border-r px-3 py-3 text-left font-semibold sm:min-w-[270px]">
+                  <th className="min-w-[230px] border-r px-3 py-2 text-left font-semibold sm:min-w-[270px]">
                     Comentario humano
                   </th>
                   <SortableHead
@@ -461,7 +470,7 @@ export default function HumanReview() {
                 </tr>
               </thead>
               <tbody>
-                {(rows as any[]).map((candidate, index) => {
+                {(rows as any[]).map(candidate => {
                   const answerMap = new Map(
                     answersFor(candidate).map(answer => [
                       answer.fieldKey,
@@ -477,37 +486,26 @@ export default function HumanReview() {
                       className={`group cursor-pointer ${isSelected ? "bg-sky-50 dark:bg-[#162333]" : "bg-card hover:bg-muted/45"}`}
                     >
                       <td
-                        className={`sticky left-0 z-20 max-w-[230px] border-b border-r px-3 py-3 align-top sm:max-w-[270px] lg:max-w-[300px] ${isSelected ? "bg-sky-50 dark:bg-[#162333]" : "bg-card group-hover:bg-muted"}`}
+                        className={`sticky left-0 z-20 w-[190px] min-w-[190px] max-w-[190px] border-b border-r px-3 py-2 align-top shadow-[8px_0_18px_-16px_rgba(15,23,42,.9)] sm:w-[210px] sm:min-w-[210px] sm:max-w-[210px] ${isSelected ? "bg-[#c8dfec] dark:bg-[#24384d]" : "bg-[#eaf2f7] group-hover:bg-[#dce8f0] dark:bg-[#162333] dark:group-hover:bg-[#1b2a3a]"}`}
                       >
-                        <div className="flex gap-3">
-                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-[11px] font-bold text-primary-foreground">
-                            {index + 1}
+                        <button
+                          type="button"
+                          onClick={event => {
+                            event.stopPropagation();
+                            selectCandidate(candidate.id);
+                          }}
+                          aria-pressed={isSelected}
+                          className="block w-full min-w-0 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                          <span className="block truncate text-sm font-bold text-primary">
+                            {candidate.full_name ?? "Sin nombre"}
                           </span>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-bold text-primary">
-                              {candidate.full_name ?? "Sin nombre"}
-                            </p>
-                            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                              {candidate.position_title}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={event => {
-                                event.stopPropagation();
-                                showForCandidate(candidate.id, {
-                                  kind: "summary",
-                                });
-                              }}
-                              className="mt-2 line-clamp-2 text-left text-[11px] leading-4 text-muted-foreground hover:text-primary hover:underline"
-                            >
-                              <Sparkles className="mr-1 inline h-3 w-3" />
-                              {candidate.profile_summary ??
-                                "Sin nota inicial de IA"}
-                            </button>
-                          </div>
-                        </div>
+                          <span className="mt-0.5 block truncate text-[11px] font-medium text-muted-foreground">
+                            {candidate.position_title}
+                          </span>
+                        </button>
                       </td>
-                      <td className="border-b border-r px-3 py-3 align-top">
+                      <td className="border-b border-r px-3 py-2 align-top">
                         <a
                           href={`tel:${candidate.phone_international}`}
                           onClick={event => event.stopPropagation()}
@@ -527,7 +525,7 @@ export default function HumanReview() {
                         return (
                           <td
                             key={column.fieldKey}
-                            className="max-w-[240px] border-b border-r px-3 py-3 align-top"
+                            className="max-w-[240px] border-b border-r px-3 py-2 align-top"
                           >
                             {answer ? (
                               <button
@@ -539,7 +537,7 @@ export default function HumanReview() {
                                     fieldKey: column.fieldKey,
                                   });
                                 }}
-                                className="line-clamp-3 w-full text-left leading-5 text-primary hover:text-sky-800 hover:underline dark:hover:text-white"
+                                className="line-clamp-2 w-full text-left leading-5 text-primary hover:text-sky-800 hover:underline dark:hover:text-white"
                                 title={formatAnswer(answer)}
                               >
                                 {formatAnswer(answer)}
@@ -552,7 +550,7 @@ export default function HumanReview() {
                           </td>
                         );
                       })}
-                      <td className="border-b border-r px-3 py-3 text-center align-top">
+                      <td className="border-b border-r px-3 py-2 text-center align-top">
                         <button
                           type="button"
                           onClick={event => {
@@ -565,7 +563,7 @@ export default function HumanReview() {
                           {scoreFor(candidate) ?? "—"}
                         </button>
                       </td>
-                      <td className="border-b border-r px-3 py-3 text-center align-top">
+                      <td className="border-b border-r px-3 py-2 text-center align-top">
                         <button
                           type="button"
                           onClick={event => {
@@ -583,7 +581,7 @@ export default function HumanReview() {
                         pending={updateStatus.isPending}
                         onSave={saveReview}
                       />
-                      <td className="border-b px-3 py-3 align-top text-muted-foreground">
+                      <td className="border-b px-3 py-2 align-top text-muted-foreground">
                         {formatDate(candidate.submitted_at)}
                       </td>
                     </tr>
@@ -603,7 +601,8 @@ export default function HumanReview() {
             onPrevious={() => moveThroughResults(-1)}
             onNext={() => moveThroughResults(1)}
             status={`Resultado ${selectedIndex + 1} de ${rows.length}`}
-            className="absolute bottom-3 right-3 z-50"
+            orientation="horizontal"
+            className="absolute right-3 top-3 z-50 rounded-lg border border-border/70 bg-card/95 p-1 shadow-md backdrop-blur"
           />
         ) : null}
       </Card>
@@ -635,80 +634,105 @@ function ViewerPanel({
         : selection.kind === "summary"
           ? "Nota inicial del candidato"
           : "Matriz de evaluación IA";
-  const viewerScrollRef = useRef<HTMLDivElement>(null);
-  const [scrollLimits, setScrollLimits] = useState({ up: false, down: false });
+  const viewerPanelRef = useRef<HTMLElement>(null);
+  const [blockPageSize, setBlockPageSize] = useState(3);
+  const [blockPage, setBlockPage] = useState(0);
   const selectionKey =
     selection.kind === "answer"
       ? `${selection.kind}:${selection.fieldKey}`
       : selection.kind;
 
-  const updateScrollLimits = () => {
-    const element = viewerScrollRef.current;
+  useLayoutEffect(() => {
+    const element = viewerPanelRef.current;
     if (!element) return;
-    setScrollLimits({
-      up: element.scrollTop > 2,
-      down: element.scrollTop + element.clientHeight < element.scrollHeight - 2,
-    });
-  };
+    const updatePageSize = () => {
+      setBlockPageSize(element.clientWidth >= 760 ? 3 : 1);
+    };
+    updatePageSize();
+    const observer = new ResizeObserver(updatePageSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
-    const element = viewerScrollRef.current;
-    if (!element) return;
-    element.scrollTop = 0;
-    const frame = window.requestAnimationFrame(updateScrollLimits);
-    const observer = new ResizeObserver(updateScrollLimits);
-    observer.observe(element);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [candidate?.id, selectionKey, blocks.length]);
+    setBlockPage(0);
+  }, [candidate?.id, selectionKey, blockPageSize, blocks.length]);
 
-  const scrollViewer = (direction: -1 | 1) => {
-    const element = viewerScrollRef.current;
-    if (!element) return;
-    element.scrollBy({
-      top: direction * Math.max(72, element.clientHeight * 0.85),
-      behavior: "smooth",
-    });
+  const blockRange = reviewBlockPageRange(
+    blockPage,
+    blocks.length,
+    blockPageSize
+  );
+  const visibleBlocks = blocks.slice(blockRange.start, blockRange.end);
+  const blockStatus = blocks.length
+    ? `${blockRange.start + 1}–${blockRange.end} de ${blocks.length}`
+    : "Sin bloques";
+  const moveBlockPage = (direction: ReviewNavigationDirection) => {
+    setBlockPage(current =>
+      adjacentReviewBlockPage(current, blocks.length, blockPageSize, direction)
+    );
   };
 
   return (
-    <section className="human-review-viewer relative h-[220px] shrink-0 overflow-hidden rounded-2xl bg-[#0b2d4b] text-white shadow-lift dark:bg-[#162333] sm:h-[184px] lg:h-[168px]">
-      <div className="flex h-full flex-col px-4 py-3 sm:px-5 sm:py-4">
-        <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
-          <div>
+    <section
+      ref={viewerPanelRef}
+      className="human-review-viewer relative min-h-[168px] shrink-0 rounded-2xl bg-[#0b2d4b] text-white shadow-lift dark:bg-[#162333]"
+    >
+      <div className="flex flex-col px-4 py-3 sm:px-5 sm:py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-sky-200/70">
-              Visor 360° · {candidate?.full_name ?? "Sin selección"}
+              Vista 360° del Candidato
             </p>
             <h2 className="mt-1 text-lg font-bold text-white">{heading}</h2>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            <ViewerButton
-              active={selection.kind === "summary"}
-              onClick={() => onSelect({ kind: "summary" })}
-              icon={Sparkles}
-              label="Nota IA"
-            />
-            <ViewerButton
-              active={selection.kind === "ai"}
-              onClick={() => onSelect({ kind: "ai" })}
-              icon={Bot}
-              label="Evaluación"
-            />
-            <ViewerButton
-              active={selection.kind === "reason"}
-              onClick={() => onSelect({ kind: "reason" })}
-              icon={MessageSquareText}
-              label="Motivo"
-            />
+          <div className="flex flex-wrap items-start justify-end gap-2">
+            {candidate &&
+            selection.kind === "ai" &&
+            blockRange.pageCount > 1 ? (
+              <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-black/10 px-2 py-1">
+                <span
+                  className="min-w-[4.5rem] text-center text-[11px] font-semibold text-white/75"
+                  aria-live="polite"
+                >
+                  {blockStatus}
+                </span>
+                <VerticalNavigator
+                  label="Navegación de bloques de evaluación"
+                  previousLabel="Mostrar bloque o grupo anterior"
+                  nextLabel="Mostrar bloque o grupo siguiente"
+                  disablePrevious={blockRange.pageIndex === 0}
+                  disableNext={blockRange.pageIndex >= blockRange.pageCount - 1}
+                  onPrevious={() => moveBlockPage(-1)}
+                  onNext={() => moveBlockPage(1)}
+                  status={`Bloques ${blockStatus}`}
+                  orientation="horizontal"
+                />
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-1.5">
+              <ViewerButton
+                active={selection.kind === "summary"}
+                onClick={() => onSelect({ kind: "summary" })}
+                icon={Sparkles}
+                label="Nota IA"
+              />
+              <ViewerButton
+                active={selection.kind === "ai"}
+                onClick={() => onSelect({ kind: "ai" })}
+                icon={Bot}
+                label="Evaluación"
+              />
+              <ViewerButton
+                active={selection.kind === "reason"}
+                onClick={() => onSelect({ kind: "reason" })}
+                icon={MessageSquareText}
+                label="Motivo"
+              />
+            </div>
           </div>
         </div>
-        <div
-          ref={viewerScrollRef}
-          onScroll={updateScrollLimits}
-          className="mt-2 min-h-0 flex-1 overflow-y-auto pr-9 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
+        <div className="mt-3">
           {!candidate ? (
             <div className="grid h-full place-items-center text-sm text-white/60">
               Seleccione una persona candidata en la matriz inferior.
@@ -758,11 +782,16 @@ function ViewerPanel({
               }
             />
           ) : blocks.length ? (
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {blocks.map((block: any) => (
-                <div key={block.id} className="rounded-xl bg-white/8 p-3">
+            <div
+              className={`grid items-stretch gap-2 ${blockPageSize === 3 ? "grid-cols-3" : "grid-cols-1"}`}
+            >
+              {visibleBlocks.map((block: any) => (
+                <div
+                  key={block.id}
+                  className="h-full rounded-xl border border-white/10 bg-white/8 p-3"
+                >
                   <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="truncate font-semibold text-white/90">
+                    <span className="font-semibold text-white/90">
                       {blockLabel(block.id)}
                     </span>
                     <span className="font-bold text-sky-100">
@@ -777,7 +806,7 @@ function ViewerPanel({
                       }}
                     />
                   </div>
-                  <p className="mt-2 line-clamp-2 text-[11px] leading-4 text-white/60">
+                  <p className="mt-2 text-[11px] leading-4 text-white/70">
                     {block.rationale ?? "Sin razonamiento por bloque."}
                   </p>
                 </div>
@@ -799,19 +828,6 @@ function ViewerPanel({
           )}
         </div>
       </div>
-      {candidate ? (
-        <VerticalNavigator
-          label="Navegación de bloques de evaluación"
-          previousLabel="Mostrar bloques anteriores"
-          nextLabel="Mostrar bloques siguientes"
-          disablePrevious={!scrollLimits.up}
-          disableNext={!scrollLimits.down}
-          onPrevious={() => scrollViewer(-1)}
-          onNext={() => scrollViewer(1)}
-          status={heading}
-          className="absolute right-2 top-1/2 z-20 -translate-y-1/2"
-        />
-      ) : null}
     </section>
   );
 }
@@ -886,22 +902,22 @@ function RowReviewControls({
     pending || (status === candidate.status && comment.trim().length === 0);
   return (
     <Fragment>
-      <td className="border-b border-r px-3 py-3 align-top">
+      <td className="border-b border-r px-3 py-2 align-top">
         <Input
           value={comment}
           maxLength={1000}
           onClick={event => event.stopPropagation()}
           onChange={event => setComment(event.target.value)}
           placeholder="Agregar criterio o evidencia…"
-          className="h-9 min-w-[245px] rounded-lg text-xs"
+          className="h-8 min-w-[245px] rounded-lg text-xs"
         />
       </td>
-      <td className="border-b border-r px-3 py-3 align-top">
+      <td className="border-b border-r px-3 py-2 align-top">
         <div className="flex min-w-[225px] gap-2">
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger
               onClick={event => event.stopPropagation()}
-              className="h-9 min-w-0 flex-1 rounded-lg text-xs"
+              className="h-8 min-w-0 flex-1 rounded-lg text-xs"
             >
               <SelectValue />
             </SelectTrigger>
@@ -917,7 +933,7 @@ function RowReviewControls({
             type="button"
             size="icon"
             disabled={disabled}
-            className="h-9 w-9 shrink-0 rounded-lg"
+            className="h-8 w-8 shrink-0 rounded-lg"
             aria-label="Guardar revisión de esta fila"
             onClick={async event => {
               event.stopPropagation();
@@ -953,7 +969,7 @@ function SortableHead({
   className?: string;
 }) {
   return (
-    <th className={`border-r px-3 py-3 text-left ${className}`}>
+    <th className={`border-r px-3 py-2 text-left ${className}`}>
       <button
         type="button"
         onClick={() => onSort(column)}
