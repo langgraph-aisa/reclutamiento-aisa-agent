@@ -1,16 +1,16 @@
-# Validación final · JARVI RH 2.0.127
+# Validación final · JARVI RH 2.0.128
 
 Fecha de ejecución: 2026-09-10. Rama objetivo: `main`.
 
 ## Alcance verificado
 
-Esta hoja registra el cambio de mensaje institucional en la landing. Comprueba la presencia exacta de «Plataforma Laboral No.1 de Guatemala», la eliminación de la frase anterior, su integración responsive y el mantenimiento del control editorial de responsabilidades. Los casos observables están especificados en [PRUEBAS_CAJA_NEGRA_2.0.127.md](PRUEBAS_CAJA_NEGRA_2.0.127.md).
+Esta hoja registra la corrección exacta del mensaje institucional en la landing. Comprueba la presencia de «Plataforma Laboral No.1», la eliminación de «de Guatemala» y de la frase institucional original, su integración responsive y el mantenimiento del control editorial de responsabilidades. Los casos observables están especificados en [PRUEBAS_CAJA_NEGRA_2.0.128.md](PRUEBAS_CAJA_NEGRA_2.0.128.md).
 
 ## Evidencia automatizada
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.127` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.128` |
 | Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 77 archivos        |
 | Próxima versión (`pnpm release:bump -- --dry-run`) | Incremento semántico aprobado |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 9 de 9 pruebas     |

@@ -1,10 +1,10 @@
-# Gobierno de release JARVI RH 2.0.127
+# Gobierno de release JARVI RH 2.0.128
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.127**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.128**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-La versión 2.0.127 presenta en la landing el mensaje institucional «Plataforma Laboral No.1 de Guatemala» junto al icono de verificación. Sustituye por completo la frase anterior y mantiene la misma composición responsive, jerarquía visual y contraste temático. La prueba de caja negra comprueba tanto la presencia del texto aprobado como la ausencia del sustituido.
+La versión 2.0.128 corrige el mensaje institucional de la landing a «Plataforma Laboral No.1» y elimina el sufijo «de Guatemala» introducido en 2.0.127. Mantiene la misma composición responsive, jerarquía visual y contraste temático. La prueba de caja negra comprueba la coincidencia exacta y la ausencia de las dos frases sustituidas.
 
 La versión 2.0.126 fortaleció la revisión de responsabilidades para las 25 plazas detectadas en el catálogo público. La auditoría previa al cambio confirmó fragmentos separados dentro de paréntesis, enumeraciones divididas, complementos en minúscula y construcciones nominales que no expresaban una acción completa. El defecto no estaba en la representación visual: la lista persistida ya contenía esos elementos aislados.
 
@@ -107,4 +107,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.127.md](PRUEBAS_CAJA_NEGRA_2.0.127.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.128.md](PRUEBAS_CAJA_NEGRA_2.0.128.md).

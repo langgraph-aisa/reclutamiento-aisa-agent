@@ -58,8 +58,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.127");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.127");
+    expect(APP_VERSION).toBe("2.0.128");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.128");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -314,7 +314,8 @@ describe("black-box release contract", () => {
     );
     expect(home).toContain("Cada candidato merece una evaluación");
     expect(home).not.toContain("Cada plaza merece una evaluación");
-    expect(home).toContain("Plataforma Laboral No.1 de Guatemala");
+    expect(home).toContain("Plataforma Laboral No.1");
+    expect(home).not.toContain("Plataforma Laboral No.1 de Guatemala");
     expect(home).not.toContain(
       "Talento AISA, plataforma tecnológica de oportunidades"
     );
@@ -463,7 +464,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.127");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.128");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -472,7 +473,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.127");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.128");
     expect(readme).toContain("Vista 360° del Candidato");
     expect(readme).toContain("tres tarjetas en escritorio");
     expect(readme).toContain("una en ancho reducido");
