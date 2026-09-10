@@ -4,7 +4,7 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="center">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.112</h1>
+<h1 align="left">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.112</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/JARVI%20RH-2.0.112-0b2d4b" alt="JARVI RH 2.0.112" />
