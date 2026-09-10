@@ -9,6 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { BriefcaseBusiness, Check, Copy, Edit3, ExternalLink, Globe2, MessageCircle, Plus, Radio, Search, Settings2, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
+import { toast } from "sonner";
 
 type Draft = { id?: number; code: string; title: string; department: string; locationLabel: string; description: string; agentKey: string; whatsappMessage: string; defaultCountry: string; published: boolean };
 const blank: Draft = { code: "", title: "", department: "", locationLabel: "", description: "", agentKey: "", whatsappMessage: "Hola {{nombre}}, muchas gracias por su solicitud de empleo.\n\nLe saludamos de parte de AISA Solar. Dando seguimiento a su solicitud de empleo para la plaza “{{plaza}}”, por este medio agradeceríamos que pudiera enviarnos su CV para que sea evaluado por nuestro equipo de Recursos Humanos.\n\nQuedamos atentos a recibirlo. ¡Muchas gracias por su interés en formar parte de AISA Solar!", defaultCountry: "GT", published: false };
@@ -18,7 +19,7 @@ export default function Jobs() {
   const isAdmin = user?.role === "admin";
   const query = trpc.positions.list.useQuery();
   const upsert = trpc.positions.upsert.useMutation({ onSuccess: () => query.refetch() });
-  const setPublished = trpc.positions.setPublished.useMutation({ onSuccess: () => query.refetch() });
+  const setPublished = trpc.positions.setPublished.useMutation({ onSuccess: (_result, variables) => { toast.success(variables.published ? "Plaza publicada correctamente" : "Plaza retirada de la landing"); query.refetch(); }, onError: error => toast.error(error.message) });
   const remove = trpc.positions.remove.useMutation({ onSuccess: () => query.refetch() });
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<Draft>(blank);

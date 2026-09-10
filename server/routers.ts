@@ -49,6 +49,7 @@ import {
 } from "../shared/applicationConsent";
 
 const statusValues = applicationStatuses;
+const featuredPublicPositionTitle = "Ejecutivo de Negocios (Ventas)";
 const methodologyDocumentKeys = ["siera", "mst_eir"] as const;
 const agentModelValues = AGENT_MODELS.map(model => model.value) as [
   (typeof AGENT_MODELS)[number]["value"],
@@ -76,25 +77,38 @@ async function requireCompletePositionProfile(
   positionId: number
 ) {
   const profileReadiness = await pool.query(
-    `SELECT EXISTS (
-       SELECT 1
-         FROM job_profile_positions link
-         JOIN job_profiles profile ON profile.id = link.profile_id
-        WHERE link.job_position_id = $1
-          AND profile.active = true
-          AND NULLIF(BTRIM(COALESCE(profile.objective, '')), '') IS NOT NULL
-          AND jsonb_array_length(COALESCE(profile.responsibilities, '[]'::jsonb)) > 0
-          AND jsonb_array_length(COALESCE(profile.required_requirements, '[]'::jsonb)) > 0
-     ) AS ready`,
+    `SELECT profile.id AS profile_id
+       FROM job_positions position
+       JOIN job_profiles profile ON profile.active = true
+       LEFT JOIN job_profile_positions link
+         ON link.profile_id = profile.id
+        AND link.job_position_id = position.id
+      WHERE position.id = $1
+        AND (
+          link.job_position_id IS NOT NULL
+          OR LOWER(BTRIM(profile.name)) = LOWER(BTRIM(position.title))
+        )
+        AND NULLIF(BTRIM(COALESCE(profile.objective, '')), '') IS NOT NULL
+        AND jsonb_array_length(COALESCE(profile.responsibilities, '[]'::jsonb)) > 0
+        AND jsonb_array_length(COALESCE(profile.required_requirements, '[]'::jsonb)) > 0
+      ORDER BY (link.job_position_id IS NOT NULL) DESC, profile.updated_at DESC, profile.id DESC
+      LIMIT 1`,
     [positionId]
   );
-  if (!profileReadiness.rows[0]?.ready) {
+  const profileId = profileReadiness.rows[0]?.profile_id as number | undefined;
+  if (!profileId) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message:
         "La plaza requiere un perfil activo con objetivo, responsabilidades y requisitos obligatorios antes de publicarse.",
     });
   }
+  await pool.query(
+    `INSERT INTO job_profile_positions (profile_id,job_position_id)
+     VALUES ($1,$2)
+     ON CONFLICT DO NOTHING`,
+    [profileId, positionId]
+  );
 }
 
 function asJson(value: unknown) {
@@ -383,15 +397,25 @@ export const appRouter = router({
         if (input?.search) {
           values.push(`%${input.search}%`);
           clauses.push(
-            `(name ILIKE $${values.length} OR summary ILIKE $${values.length} OR academic_level ILIKE $${values.length})`
+            `(p.name ILIKE $${values.length} OR p.summary ILIKE $${values.length} OR p.academic_level ILIKE $${values.length})`
           );
         }
         if (input?.active !== undefined) {
           values.push(input.active);
-          clauses.push(`active=$${values.length}`);
+          clauses.push(`p.active=$${values.length}`);
         }
         const result = await pool.query(
-          `SELECT * FROM job_profiles ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""} ORDER BY updated_at DESC`,
+          `SELECT p.*,
+                  COALESCE(
+                    array_agg(link.job_position_id ORDER BY link.job_position_id)
+                      FILTER (WHERE link.job_position_id IS NOT NULL),
+                    ARRAY[]::integer[]
+                  ) AS position_ids
+             FROM job_profiles p
+             LEFT JOIN job_profile_positions link ON link.profile_id = p.id
+             ${clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""}
+            GROUP BY p.id
+            ORDER BY p.updated_at DESC`,
           values
         );
         return result.rows;
@@ -572,8 +596,12 @@ export const appRouter = router({
               LIMIT 1
            ) profile ON true
           WHERE p.published = true
-          ORDER BY p.created_at DESC, p.id DESC
-          LIMIT 100`
+          ORDER BY
+            CASE WHEN LOWER(BTRIM(p.title)) = LOWER($1) THEN 0 ELSE 1 END,
+            p.created_at DESC,
+            p.id DESC
+          LIMIT 100`,
+        [featuredPublicPositionTitle]
       );
 
       return result.rows.map(row => ({

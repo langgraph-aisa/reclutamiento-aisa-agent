@@ -53,8 +53,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.121");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.121");
+    expect(APP_VERSION).toBe("2.0.122");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.122");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -213,6 +213,14 @@ describe("black-box release contract", () => {
       path.resolve("client/src/pages/Apply.tsx"),
       "utf8"
     );
+    const jobs = fs.readFileSync(
+      path.resolve("client/src/pages/Jobs.tsx"),
+      "utf8"
+    );
+    const profiles = fs.readFileSync(
+      path.resolve("client/src/pages/Profiles.tsx"),
+      "utf8"
+    );
     const consent = fs.readFileSync(
       path.resolve("shared/applicationConsent.ts"),
       "utf8"
@@ -271,6 +279,16 @@ describe("black-box release contract", () => {
     expect(routers).toContain("profile.required_requirements");
     expect(routers).toContain("profile.responsibilities");
     expect(routers).toContain("jsonb_array_length");
+    expect(routers).toContain(
+      'featuredPublicPositionTitle = "Ejecutivo de Negocios (Ventas)"'
+    );
+    expect(routers).toContain("INSERT INTO job_profile_positions");
+    expect(routers).toContain("array_agg(link.job_position_id");
+    expect(profiles).toContain(
+      'positionIds: (profile.position_ids ?? []).join(", ")'
+    );
+    expect(jobs).toContain("Plaza publicada correctamente");
+    expect(jobs).toContain("onError: error => toast.error(error.message)");
     expect(routers).toContain(
       "La plaza requiere un perfil activo con objetivo, responsabilidades y requisitos obligatorios antes de publicarse."
     );
@@ -359,7 +377,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.121");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.122");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -368,11 +386,12 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.121");
-    expect(readme).toContain("La landing compacta la tarjeta");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.122");
+    expect(readme).toContain("Perfiles laborales preserva `position_ids`");
     expect(readme).toContain(
-      "impiden publicar una plaza sin perfil activo, objetivo, responsabilidades y requisitos"
+      "Ejecutivo de Negocios (Ventas) conserva la primera posición"
     );
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.121");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.120");
     expect(readme).toContain("Tratamiento institucional «usted» homologado");
     expect(readme).toContain("Tres confirmaciones obligatorias");

@@ -1,8 +1,8 @@
-# Pruebas de caja negra · JARVI RH 2.0.121
+# Pruebas de caja negra · JARVI RH 2.0.122
 
 ## Alcance del cambio
 
-La especificación cubre la integración de la landing y la solicitud pública con Perfiles laborales, su composición compacta, la navegación paralela y la escala visual de JARVI. Verifica que cada oportunidad visible provenga de una plaza publicada con formulario y perfil activos, objetivo no vacío, responsabilidades y al menos un requisito obligatorio; también comprueba que ambos caminos administrativos de publicación rechacen perfiles incompletos. Tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general.
+La especificación cubre la corrección del bloqueo de publicación y la prioridad de la sugerencia principal. Verifica que Perfiles laborales conserve las asociaciones al editar, que Publicar reutilice el vínculo explícito o repare uno ausente mediante coincidencia exacta de nombre, que el error resulte visible y que Ejecutivo de Negocios (Ventas) ocupe siempre la primera posición pública. Objetivo, responsabilidades, requisitos, tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general.
 
 ## Matriz funcional observable
 
@@ -29,6 +29,10 @@ La especificación cubre la integración de la landing y la solicitud pública c
 | BN-LAND-06  | Pantalla móvil, tableta o escritorio                   | Inspeccionar acciones y personaje JARVI            | Los controles conservan foco y ajuste responsive; JARVI alcanza el doble del ancho de referencia en escritorio | ISO/IEC 25010:2023 · adaptabilidad           |
 | BN-APPLY-01 | Solicitud pública vinculada a un perfil completo       | Abrir la pantalla previa al formulario             | El encabezado muestra RESPONSABILIDADES DEL PUESTO y elimina “Antes de comenzar”                               | ISO/IEC 25010:2023 · interacción             |
 | BN-APPLY-02 | Perfil activo con varias responsabilidades             | Inspeccionar la pantalla previa                    | La interfaz presenta todas las responsabilidades en el orden almacenado, sin sustituirlas por la descripción   | ISO/IEC 25010:2023 · completitud funcional   |
+| BN-PUB-01   | Perfil asociado a una o más plazas                     | Abrirlo, editarlo y guardarlo                      | El listado devuelve `position_ids` y la UI los reenvía; ninguna asociación desaparece por omisión              | ISO/IEC 25010:2023 · integridad funcional    |
+| BN-PUB-02   | Plaza y perfil completo con igual nombre, sin vínculo  | Pulsar Publicar                                    | El servidor identifica el perfil, inserta idempotentemente la relación y publica la plaza                      | ISO/IEC 25010:2023 · tolerancia a errores    |
+| BN-PUB-03   | Plaza sin perfil completo o coincidente                | Pulsar Publicar                                    | La plaza continúa como borrador y la interfaz muestra el motivo comunicado por el endpoint                     | ISO/IEC 25010:2023 · prevención de errores   |
+| BN-ORDER-01 | Varias plazas aptas y publicadas                       | Cargar la landing                                  | Ejecutivo de Negocios (Ventas) aparece primero; las demás conservan orden descendente de creación              | ISO/IEC/IEEE 29119-1:2022 · consistencia     |
 | BN-CONS-01  | Formulario público completo                            | Inspeccionar el bloque final                       | Se muestran tres casillas separadas, compactas, legibles, sin doble espaciado y marcadas como obligatorias     | ISO/IEC 25010:2023 · interacción             |
 | BN-CONS-02  | Falta una o más confirmaciones                         | Pulsar Enviar formulario                           | La interfaz impide el envío y comunica que deben marcarse las tres confirmaciones                              | ISO/IEC 25010:2023 · prevención de errores   |
 | BN-CONS-03  | Cliente manipulado omite o envía `false`               | Invocar `publicJobs.submit`                        | Zod rechaza la entrada antes de acceder a PostgreSQL                                                           | ISO/IEC 27001:2022 · integridad              |
@@ -54,20 +58,20 @@ La especificación cubre la integración de la landing y la solicitud pública c
 | BN-LANG-04  | Perfil vinculado a un formulario                       | Generar preguntas desde el perfil                  | Preguntas, ayudas y criterios nuevos se generan con conjugación formal                                         | ISO/IEC/IEEE 29119-1:2022 · repetibilidad    |
 | BN-LANG-05  | Base con valores predeterminados anteriores            | Ejecutar migración `0012`                          | Se homologan los valores conocidos; las plantillas libres de administración permanecen intactas                | ISO/IEC 27001:2022 · integridad              |
 | BN-LANG-06  | Código introduce un patrón informal prohibido          | Ejecutar verificación o build                      | El proceso termina con código distinto de cero e identifica archivo, línea y regla                             | ISO/IEC 25010:2023 · mantenibilidad          |
-| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.121`                              | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
+| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.122`                              | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
 
 ## Pruebas automatizadas
 
-| Comando                          | Oráculo                                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------------------------- |
-| `pnpm release:verify`            | Versión, historial, documentos y dependencias auditadas están sincronizados                 |
-| `pnpm text:verify`               | Los literales de ejecución no contienen patrones de tratamiento informal                    |
-| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.122`                                                  |
-| `pnpm test:black-box`            | Landing, solicitud, datos de perfil, enlaces, escala visual, artefacto y README son exactos |
-| `pnpm test`                      | Mensajería, formularios, geografía y endpoints conservan la regresión                       |
-| `pnpm check`                     | Cliente, tRPC, servidor y esquema mantienen contratos TypeScript consistentes               |
-| `pnpm build`                     | Genera el artefacto y rechaza regresiones lingüísticas o temáticas                          |
+| Comando                          | Oráculo                                                                                  |
+| -------------------------------- | ---------------------------------------------------------------------------------------- |
+| `pnpm release:verify`            | Versión, historial, documentos y dependencias auditadas están sincronizados              |
+| `pnpm text:verify`               | Los literales de ejecución no contienen patrones de tratamiento informal                 |
+| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.123`                                               |
+| `pnpm test:black-box`            | Asociación, autorreparación, prioridad, mensaje de error, artefacto y README son exactos |
+| `pnpm test`                      | Mensajería, formularios, geografía y endpoints conservan la regresión                    |
+| `pnpm check`                     | Cliente, tRPC, servidor y esquema mantienen contratos TypeScript consistentes            |
+| `pnpm build`                     | Genera el artefacto y rechaza regresiones lingüísticas o temáticas                       |
 
 ## Criterio de aprobación
 
-El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación posterior al despliegue debe ejecutar BN-LAND-01 a BN-LAND-06 y BN-APPLY-01 a BN-APPLY-02 en Day, Dark Dimmed y Dark High Contrast, con una plaza real que contenga varias responsabilidades y requisitos. WCAG e ISO se utilizan como guías metodológicas y no constituyen certificación.
+El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación posterior al despliegue debe editar y guardar el perfil, publicar la plaza, confirmar la notificación de éxito y verificar BN-PUB-01 a BN-ORDER-01 en la landing real. WCAG e ISO se utilizan como guías metodológicas y no constituyen certificación.

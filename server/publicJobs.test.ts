@@ -43,7 +43,7 @@ function createAdminContext(): TrpcContext {
 afterEach(() => vi.clearAllMocks());
 
 describe("publicJobs.listPublished", () => {
-  it("returns only safe presentation fields with the latest published job first", async () => {
+  it("returns safe fields with Ejecutivo de Negocios fixed as the first suggestion", async () => {
     const query = vi.fn().mockResolvedValue({
       rows: [
         {
@@ -99,7 +99,12 @@ describe("publicJobs.listPublished", () => {
     expect(sql).toContain("jp.responsibilities");
     expect(sql).toContain("jsonb_array_length");
     expect(sql).not.toContain("LEFT JOIN LATERAL");
-    expect(sql).toMatch(/ORDER BY p\.created_at DESC, p\.id DESC/);
+    expect(sql).toContain(
+      "CASE WHEN LOWER(BTRIM(p.title)) = LOWER($1) THEN 0 ELSE 1 END"
+    );
+    expect(query.mock.calls[0]?.[1]).toEqual([
+      "Ejecutivo de Negocios (Ventas)",
+    ]);
     expect(sql).not.toContain("agent_key");
   });
 
@@ -168,7 +173,7 @@ describe("publicJobs.getByToken responsibilities", () => {
 
 describe("jobs.setPublished profile readiness", () => {
   it("rejects publication when the linked profile lacks objective or requirements", async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [{ ready: false }] });
+    const query = vi.fn().mockResolvedValue({ rows: [] });
     getPool.mockResolvedValue({ query });
 
     await expect(
@@ -187,7 +192,8 @@ describe("jobs.setPublished profile readiness", () => {
     const published = { id: 8, published: true };
     const query = vi
       .fn()
-      .mockResolvedValueOnce({ rows: [{ ready: true }] })
+      .mockResolvedValueOnce({ rows: [{ profile_id: 15 }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [published] });
     getPool.mockResolvedValue({ query });
 
@@ -205,7 +211,38 @@ describe("jobs.setPublished profile readiness", () => {
     expect(String(query.mock.calls[0]?.[0])).toContain(
       "profile.required_requirements"
     );
-    expect(String(query.mock.calls[1]?.[0])).toContain("UPDATE job_positions");
+    expect(String(query.mock.calls[0]?.[0])).toContain(
+      "LOWER(BTRIM(profile.name)) = LOWER(BTRIM(position.title))"
+    );
+    expect(String(query.mock.calls[1]?.[0])).toContain(
+      "INSERT INTO job_profile_positions"
+    );
+    expect(query.mock.calls[1]?.[1]).toEqual([15, 8]);
+    expect(String(query.mock.calls[2]?.[0])).toContain("UPDATE job_positions");
+  });
+});
+
+describe("profiles.list position associations", () => {
+  it("returns linked position IDs so editing a profile preserves its assignments", async () => {
+    const profile = {
+      id: 15,
+      name: "Ejecutivo de Negocios (Ventas)",
+      position_ids: [8],
+    };
+    const query = vi.fn().mockResolvedValue({ rows: [profile] });
+    getPool.mockResolvedValue({ query });
+
+    await expect(
+      appRouter.createCaller(createAdminContext()).profiles.list({
+        active: true,
+      })
+    ).resolves.toEqual([profile]);
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain("array_agg(link.job_position_id");
+    expect(sql).toContain("AS position_ids");
+    expect(sql).toContain("LEFT JOIN job_profile_positions");
+    expect(sql).toContain("GROUP BY p.id");
   });
 });
 
