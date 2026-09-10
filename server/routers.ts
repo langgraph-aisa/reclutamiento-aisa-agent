@@ -69,6 +69,34 @@ async function requirePool() {
   return pool;
 }
 
+type DatabasePool = NonNullable<Awaited<ReturnType<typeof getPool>>>;
+
+async function requireCompletePositionProfile(
+  pool: DatabasePool,
+  positionId: number
+) {
+  const profileReadiness = await pool.query(
+    `SELECT EXISTS (
+       SELECT 1
+         FROM job_profile_positions link
+         JOIN job_profiles profile ON profile.id = link.profile_id
+        WHERE link.job_position_id = $1
+          AND profile.active = true
+          AND NULLIF(BTRIM(COALESCE(profile.objective, '')), '') IS NOT NULL
+          AND jsonb_array_length(COALESCE(profile.responsibilities, '[]'::jsonb)) > 0
+          AND jsonb_array_length(COALESCE(profile.required_requirements, '[]'::jsonb)) > 0
+     ) AS ready`,
+    [positionId]
+  );
+  if (!profileReadiness.rows[0]?.ready) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "La plaza requiere un perfil activo con objetivo, responsabilidades y requisitos obligatorios antes de publicarse.",
+    });
+  }
+}
+
 function asJson(value: unknown) {
   return JSON.stringify(value ?? null);
 }
@@ -518,7 +546,8 @@ export const appRouter = router({
                 p.description,
                 p.created_at,
                 profile.name AS profile_name,
-                profile.summary AS profile_summary,
+                profile.objective AS profile_objective,
+                profile.required_requirements,
                 profile.academic_level,
                 COALESCE(NULLIF(profile.location, ''), NULLIF(p.location_label, ''), NULLIF(p.department, ''), 'Guatemala') AS display_location
            FROM job_positions p
@@ -530,12 +559,15 @@ export const appRouter = router({
               ORDER BY f.version DESC, f.id DESC
               LIMIT 1
            ) published_form ON true
-           LEFT JOIN LATERAL (
-             SELECT jp.name, jp.summary, jp.academic_level, jp.location
+           JOIN LATERAL (
+             SELECT jp.name, jp.objective, jp.required_requirements, jp.academic_level, jp.location
                FROM job_profile_positions link
                JOIN job_profiles jp ON jp.id = link.profile_id
               WHERE link.job_position_id = p.id
                 AND jp.active = true
+                AND NULLIF(BTRIM(COALESCE(jp.objective, '')), '') IS NOT NULL
+                AND jsonb_array_length(COALESCE(jp.responsibilities, '[]'::jsonb)) > 0
+                AND jsonb_array_length(COALESCE(jp.required_requirements, '[]'::jsonb)) > 0
               ORDER BY jp.updated_at DESC, jp.id DESC
               LIMIT 1
            ) profile ON true
@@ -552,7 +584,14 @@ export const appRouter = router({
         locationLabel: row.location_label as string | null,
         description: row.description as string | null,
         profileName: row.profile_name as string | null,
-        profileSummary: row.profile_summary as string | null,
+        profileObjective: row.profile_objective as string,
+        requiredRequirements: (Array.isArray(row.required_requirements)
+          ? (row.required_requirements as unknown[])
+          : []
+        ).filter(
+          (requirement: unknown): requirement is string =>
+            typeof requirement === "string" && requirement.trim().length > 0
+        ),
         academicLevel: row.academic_level as string | null,
         displayLocation: row.display_location as string,
       }));
@@ -565,10 +604,30 @@ export const appRouter = router({
         const result = await pool.query(
           `SELECT p.id, p.public_slug, p.title, p.department, p.location_label, p.description, p.agent_key,
                 f.id AS form_id, f.title AS form_title, f.intro AS form_intro,
+                profile.responsibilities,
                 q.id AS question_id, q.field_key, q.label, q.help_text, q.type, q.required,
                 q.order_index, q.answer_config, q.accepted_answers, q.hard_fail, q.evaluation_criteria
            FROM job_positions p
-           JOIN application_forms f ON f.job_position_id = p.id AND f.published = true
+           JOIN LATERAL (
+             SELECT published.id, published.title, published.intro
+               FROM application_forms published
+              WHERE published.job_position_id = p.id
+                AND published.published = true
+              ORDER BY published.version DESC, published.id DESC
+              LIMIT 1
+           ) f ON true
+           JOIN LATERAL (
+             SELECT jp.responsibilities
+               FROM job_profile_positions link
+               JOIN job_profiles jp ON jp.id = link.profile_id
+              WHERE link.job_position_id = p.id
+                AND jp.active = true
+                AND NULLIF(BTRIM(COALESCE(jp.objective, '')), '') IS NOT NULL
+                AND jsonb_array_length(COALESCE(jp.responsibilities, '[]'::jsonb)) > 0
+                AND jsonb_array_length(COALESCE(jp.required_requirements, '[]'::jsonb)) > 0
+              ORDER BY jp.updated_at DESC, jp.id DESC
+              LIMIT 1
+           ) profile ON true
            JOIN form_questions q ON q.form_id = f.id AND q.active = true
           WHERE p.public_slug = $1 AND p.published = true
           ORDER BY q.order_index ASC`,
@@ -584,6 +643,14 @@ export const appRouter = router({
           locationLabel: first.location_label,
           description: first.description,
           agentKey: first.agent_key,
+          responsibilities: (Array.isArray(first.responsibilities)
+            ? (first.responsibilities as unknown[])
+            : []
+          ).filter(
+            (responsibility: unknown): responsibility is string =>
+              typeof responsibility === "string" &&
+              responsibility.trim().length > 0
+          ),
           form: {
             id: first.form_id,
             title: first.form_title,
@@ -837,6 +904,16 @@ export const appRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
+        if (input.published) {
+          if (!input.id) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "La plaza requiere un perfil activo con objetivo, responsabilidades y requisitos obligatorios antes de publicarse.",
+            });
+          }
+          await requireCompletePositionProfile(pool, input.id);
+        }
         const publicSlug = input.id
           ? undefined
           : `${input.code.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
@@ -889,6 +966,9 @@ export const appRouter = router({
       .input(z.object({ id: z.number(), published: z.boolean() }))
       .mutation(async ({ input }) => {
         const pool = await requirePool();
+        if (input.published) {
+          await requireCompletePositionProfile(pool, input.id);
+        }
         const result = await pool.query(
           `UPDATE job_positions SET published=$1,updated_at=now() WHERE id=$2 RETURNING *`,
           [input.published, input.id]

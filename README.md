@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.120</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.121</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.120-0b2d4b" alt="JARVI RH 2.0.120" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.121-0b2d4b" alt="JARVI RH 2.0.121" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse-3.38.20-orange" alt="Langfuse 3.38.20" />
@@ -23,10 +23,10 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.120 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.121 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
-Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH 2.0.120 integra plazas, formularios versionados, evaluación asistida por IA, revisión humana, solicitud controlada de currículum por WhatsApp y auditoría. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar: el personal autorizado conserva la decisión.
+Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH 2.0.121 integra plazas, formularios versionados, evaluación asistida por IA, revisión humana, solicitud controlada de currículum por WhatsApp y auditoría. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar: el personal autorizado conserva la decisión.
 
 ## 1. Reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora
 
@@ -34,19 +34,22 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
 
+### 10SEP2026 · JARVI RH 2.0.121
+
+- La landing compacta la tarjeta y presenta objetivo y requisitos del perfil activo; la solicitud expone sus responsabilidades.
+- Los endpoints impiden publicar una plaza sin perfil activo, objetivo, responsabilidades y requisitos; los enlaces externos abren pestañas paralelas y JARVI duplica su escala.
+
+Descripción: sincroniza Perfiles laborales, PostgreSQL, tRPC y UI responsive bajo caja negra.
+
 ### 10SEP2026 · JARVI RH 2.0.120
 
-- Los 20 títulos `h1` comparten blanco semántico en Dark Dimmed y Dark High Contrast.
-- El encabezado jurídico deja de heredar el color oscuro destinado a controles teal.
-
-Descripción: separa el rol visual de títulos respecto de `primary-foreground` y añade un oráculo sobre el CSS compilado para impedir regresiones de contraste.
+- Los 20 títulos `h1` y el encabezado jurídico usan blanco semántico en temas oscuros; un oráculo CSS impide regresiones.
 
 ### 10SEP2026 · JARVI RH 2.0.119
 
-- Tratamiento institucional «usted» homologado en portal público, formularios, administración, correo, WhatsApp y mensajes de validación.
-- Auditoría automática de 76 archivos de ejecución y migración de textos predeterminados históricos.
+- Tratamiento institucional «usted» homologado en portal, formularios, administración, correo y WhatsApp.
 
-Descripción: elimina el tuteo de las interacciones, preserva el contenido libre de administración y bloquea regresiones lingüísticas durante verificación y build.
+Descripción: una auditoría de 76 archivos bloquea regresiones lingüísticas y preserva contenido libre.
 
 ### 10SEP2026 · JARVI RH 2.0.118
 
@@ -113,7 +116,7 @@ flowchart LR
 
 | Módulo         | Función especializada                                                                | Evidencia principal                                    |
 | -------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| Portal público | Lista plazas, normaliza teléfono y exige ubicación catalogada antes de registrar.    | `Home.tsx`, `Apply.tsx`, `publicJobs.*`, `geo.*`       |
+| Portal público | Expone plazas con perfil completo, normaliza teléfono y exige ubicación catalogada.  | `Home.tsx`, `Apply.tsx`, `publicJobs.*`, `geo.*`       |
 | Administración | Usuarios y roles, plazas, perfiles, geografía INE, formularios y configuración.      | `App.tsx`, `routers.ts`                                |
 | Evaluación IA  | Reglas críticas, seis bloques, salida tipada, respaldo de credencial y persistencia. | `agentEvaluator.ts`, `evaluation.ts`                   |
 | Revisión 360°  | Matriz dinámica, filtros, última evaluación, respuestas y decisión humana.           | `HumanReview.tsx`, `candidates.reviewWorkspace`        |
@@ -201,7 +204,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.120](docs/PRUEBAS_CAJA_NEGRA_2.0.120.md).
+`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.121](docs/PRUEBAS_CAJA_NEGRA_2.0.121.md).
 
 ## 8. Protocolo de Ingenierìa de Software
 

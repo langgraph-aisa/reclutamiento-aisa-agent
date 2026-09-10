@@ -24,6 +24,22 @@ function createPublicContext(): TrpcContext {
   };
 }
 
+function createAdminContext(): TrpcContext {
+  return {
+    user: {
+      id: 7,
+      openId: "email:admin@example.test",
+      name: "Administración",
+      email: "admin@example.test",
+      loginMethod: "email_code",
+      role: "admin",
+      active: true,
+    } as NonNullable<TrpcContext["user"]>,
+    req: { headers: {} } as TrpcContext["req"],
+    res: {} as TrpcContext["res"],
+  };
+}
+
 afterEach(() => vi.clearAllMocks());
 
 describe("publicJobs.listPublished", () => {
@@ -39,7 +55,11 @@ describe("publicJobs.listPublished", () => {
           description: "Atención y desarrollo de clientes.",
           created_at: new Date("2026-09-09T12:00:00Z"),
           profile_name: "Ejecutivo comercial",
-          profile_summary: "Perfil orientado a resultados.",
+          profile_objective: "Convertir prospectos en clientes.",
+          required_requirements: [
+            "Cinco años de experiencia comercial.",
+            "Licencia de conducir vigente.",
+          ],
           academic_level: "Licenciatura",
           display_location: "Guatemala",
         },
@@ -60,7 +80,11 @@ describe("publicJobs.listPublished", () => {
         locationLabel: "Ciudad de Guatemala",
         description: "Atención y desarrollo de clientes.",
         profileName: "Ejecutivo comercial",
-        profileSummary: "Perfil orientado a resultados.",
+        profileObjective: "Convertir prospectos en clientes.",
+        requiredRequirements: [
+          "Cinco años de experiencia comercial.",
+          "Licencia de conducir vigente.",
+        ],
         academicLevel: "Licenciatura",
         displayLocation: "Guatemala",
       },
@@ -70,6 +94,11 @@ describe("publicJobs.listPublished", () => {
     expect(sql).toContain("p.published = true");
     expect(sql).toContain("f.published = true");
     expect(sql).toContain("jp.active = true");
+    expect(sql).toContain("profile.objective AS profile_objective");
+    expect(sql).toContain("profile.required_requirements");
+    expect(sql).toContain("jp.responsibilities");
+    expect(sql).toContain("jsonb_array_length");
+    expect(sql).not.toContain("LEFT JOIN LATERAL");
     expect(sql).toMatch(/ORDER BY p\.created_at DESC, p\.id DESC/);
     expect(sql).not.toContain("agent_key");
   });
@@ -80,6 +109,103 @@ describe("publicJobs.listPublished", () => {
     await expect(
       appRouter.createCaller(createPublicContext()).publicJobs.listPublished()
     ).resolves.toEqual([]);
+  });
+});
+
+describe("publicJobs.getByToken responsibilities", () => {
+  it("returns every responsibility from the active profile linked to the position", async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          id: 8,
+          public_slug: "ventas-8-abcd1234",
+          title: "Ejecutivo de ventas",
+          department: "Comercial",
+          location_label: "Ciudad de Guatemala",
+          description: "Atención y desarrollo de clientes.",
+          agent_key: "evaluador-ventas",
+          form_id: 13,
+          form_title: "Formulario de ventas",
+          form_intro: "Complete la información solicitada.",
+          responsibilities: [
+            "Prospectar clientes.",
+            "Registrar el seguimiento comercial.",
+          ],
+          question_id: 21,
+          field_key: "experiencia",
+          label: "Describa su experiencia.",
+          help_text: null,
+          type: "textarea",
+          required: true,
+          order_index: 0,
+          answer_config: {},
+          accepted_answers: [],
+          hard_fail: false,
+        },
+      ],
+    });
+    getPool.mockResolvedValue({ query });
+
+    const result = await appRouter
+      .createCaller(createPublicContext())
+      .publicJobs.getByToken({ token: "ventas-8-abcd1234" });
+
+    expect(result?.responsibilities).toEqual([
+      "Prospectar clientes.",
+      "Registrar el seguimiento comercial.",
+    ]);
+    expect(result?.form.id).toBe(13);
+    expect(result?.questions).toHaveLength(1);
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain("profile.responsibilities");
+    expect(sql).toContain("published.version DESC");
+    expect(sql).toContain("jp.active = true");
+    expect(sql).toContain("jp.responsibilities");
+    expect(sql).toContain("jsonb_array_length");
+  });
+});
+
+describe("jobs.setPublished profile readiness", () => {
+  it("rejects publication when the linked profile lacks objective or requirements", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ ready: false }] });
+    getPool.mockResolvedValue({ query });
+
+    await expect(
+      appRouter.createCaller(createAdminContext()).positions.setPublished({
+        id: 8,
+        published: true,
+      })
+    ).rejects.toThrow(
+      "La plaza requiere un perfil activo con objetivo, responsabilidades y requisitos obligatorios antes de publicarse."
+    );
+
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it("publishes the position when its active profile is complete", async () => {
+    const published = { id: 8, published: true };
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ ready: true }] })
+      .mockResolvedValueOnce({ rows: [published] });
+    getPool.mockResolvedValue({ query });
+
+    await expect(
+      appRouter.createCaller(createAdminContext()).positions.setPublished({
+        id: 8,
+        published: true,
+      })
+    ).resolves.toEqual(published);
+
+    expect(String(query.mock.calls[0]?.[0])).toContain("profile.objective");
+    expect(String(query.mock.calls[0]?.[0])).toContain(
+      "profile.responsibilities"
+    );
+    expect(String(query.mock.calls[0]?.[0])).toContain(
+      "profile.required_requirements"
+    );
+    expect(String(query.mock.calls[1]?.[0])).toContain("UPDATE job_positions");
   });
 });
 

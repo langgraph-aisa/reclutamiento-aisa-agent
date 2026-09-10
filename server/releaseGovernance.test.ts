@@ -53,8 +53,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.120");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.120");
+    expect(APP_VERSION).toBe("2.0.121");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.121");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -247,6 +247,33 @@ describe("black-box release contract", () => {
       expect(publicSurface).toContain("<ThemeToggle");
     }
     expect(home).not.toContain("Inicia el formulario en esta misma pestaña.");
+    expect(home).toContain("OPORTUNIDADES DISPONIBLES");
+    expect(home).toContain("Objetivo del puesto");
+    expect(home).toContain("Requisitos del puesto");
+    expect(home).toContain("selectedJob.profileObjective");
+    expect(home).toContain("selectedJob.requiredRequirements.map");
+    expect(home).toContain("Acceso Administrativo");
+    expect(home).toContain("Conocer nuestros productos");
+    expect(home).toContain(
+      "https://www.aisa.com.gt/productos-solares-en-guatemala/"
+    );
+    expect(home).toContain("Contactar a AISA");
+    expect(home).toContain("https://www.aisa.com.gt/contactoaisa/");
+    expect(home).toContain(
+      "Privacidad, Términos y Condiciones de Uso de Plataforma"
+    );
+    expect(home).toContain("lg:w-[24rem]");
+    expect(home).not.toContain("Entrar al panel");
+    expect(apply).toContain("RESPONSABILIDADES DEL PUESTO");
+    expect(apply).toContain("form.responsibilities.map");
+    expect(apply).not.toContain("Antes de comenzar");
+    expect(routers).toContain("profile.objective AS profile_objective");
+    expect(routers).toContain("profile.required_requirements");
+    expect(routers).toContain("profile.responsibilities");
+    expect(routers).toContain("jsonb_array_length");
+    expect(routers).toContain(
+      "La plaza requiere un perfil activo con objetivo, responsabilidades y requisitos obligatorios antes de publicarse."
+    );
     expect(phoneInput).toContain("🇬🇹");
     expect(phoneInput).toContain('autoComplete="off"');
     expect(phoneInput).not.toContain("+502 5555 5555");
@@ -332,7 +359,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.120");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.121");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -341,6 +368,11 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.121");
+    expect(readme).toContain("La landing compacta la tarjeta");
+    expect(readme).toContain(
+      "impiden publicar una plaza sin perfil activo, objetivo, responsabilidades y requisitos"
+    );
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.120");
     expect(readme).toContain("Tratamiento institucional «usted» homologado");
     expect(readme).toContain("Tres confirmaciones obligatorias");

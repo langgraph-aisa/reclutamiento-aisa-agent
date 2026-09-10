@@ -70,6 +70,10 @@ const demoForm = {
   locationLabel: "Ciudad de Guatemala · Modalidad presencial",
   description:
     "Buscamos una persona cercana, organizada y con energía para acompañar a nuestros clientes.",
+  responsibilities: [
+    "Atender consultas y acompañar a clientes durante el proceso comercial.",
+    "Registrar el seguimiento de oportunidades y preparar cotizaciones.",
+  ],
   form: {
     title: "Información de la persona postulante",
     intro:
@@ -262,12 +266,20 @@ export default function Apply() {
               </div>
             </div>
             <CardContent className="p-7 sm:p-10">
-              <h2 className="text-xl font-800 text-primary">
-                Antes de comenzar
+              <h2 className="text-xl font-800 uppercase tracking-[.08em] text-primary">
+                RESPONSABILIDADES DEL PUESTO
               </h2>
-              <p className="mt-3 leading-7 text-muted-foreground">
-                {form.description}
-              </p>
+              <ul className="mt-4 space-y-2 text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7">
+                {form.responsibilities.map((responsibility, index) => (
+                  <li key={`${index}-${responsibility}`} className="flex gap-3">
+                    <span
+                      aria-hidden="true"
+                      className="mt-[.65rem] h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-600"
+                    />
+                    <span>{responsibility}</span>
+                  </li>
+                ))}
+              </ul>
               <div className="mt-6 rounded-2xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-950">
                 <strong>Esta aplicación corresponde a:</strong> {form.title}. Al
                 enviarla, quedará registrada para esta plaza y no será necesario
