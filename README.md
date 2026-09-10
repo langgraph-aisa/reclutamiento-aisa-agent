@@ -27,7 +27,7 @@ Empleos de energia solar en guatemala, Talento AISA es la plataforma especializa
 
 Este README funciona como introducción comercial y base académica reproducible. Describe el sistema observado en el repositorio, no una arquitectura aspiracional. La alineación con ISO/IEC 25010:2023, ISO/IEC 27001:2022 e ISO/IEC/IEEE 29119-1:2022 es metodológica: **no constituye certificación, declaración de conformidad ni auditoría de tercera parte**. Las referencias siguen APA 7.ª, edición oficial vigente en septiembre de 2026; denominarla “APA 8” sería académicamente inexacto (American Psychological Association, 2020).
 
-## 1. Problema, objeto y método de investigación
+## 1. Reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora
 
 El objeto sociotécnico no es “la IA” aislada, sino el ensamblaje persona/plaza/formulario/evidencia/regla/modelo/revisor. La pregunta rectora es: **¿cómo acelerar la preclasificación de talento especializado manteniendo procedencia, seguridad, posibilidad de refutación y autoridad humana?** Se aplicó investigación de ciencia del diseño: inspección estática de código, reconstrucción del modelo de datos, análisis de dependencias, pruebas de comportamiento observable y contraste normativo. La unidad de análisis es una postulación; las unidades de evidencia son respuestas declaradas, reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora.
 
@@ -153,20 +153,18 @@ Un diseño cuasiexperimental por etapas compararía proceso manual, reglas sin I
 
 Las amenazas principales son sesgo de selección del corpus, criterios históricos discriminatorios, baja frecuencia de algunas plazas, dependencia entre evaluadores, cambio de contexto laboral y efecto de automatización sobre el juicio humano. La mitigación exige preregistro de hipótesis y umbrales, separación entre desarrollo y evaluación, réplica temporal, revisión ética, documentación de exclusiones y publicación de resultados negativos. README, pruebas y bitácora aportan trazabilidad, pero no sustituyen esa evaluación empírica.
 
-## 9. Antecedente comercial y palabras clave
+## 9. Acerca de Talento AISA
 
-La estrategia SEO se trata como hipótesis de adquisición, no como garantía de primer lugar: exige investigación de intención, contenido útil, datos estructurados, rendimiento, autoridad y medición en Search Console. Se preservan las diez expresiones suministradas, incluida su grafía, como antecedentes del proyecto:
-
-1. empleos de energia solar en guatemala
-2. tecnico en refrigeracion solar guatemala
-3. plazas de bombeo solar guatemala
-4. ingeniero fotovoltaico guatemala
-5. instalador de paneles solares empleo guatemala
-6. mantenimiento industrial alimentario panales solares
-7. trabajo energias renovables guatemala
-8. proyectos solares agricolas plazas
-9. tecnico hvac solar guatemala
-10. bolsa de empleo tecnico industrial guatemala
+1. Empleos de energia solar en guatemala
+2. Tecnico en refrigeracion solar guatemala
+3. Plazas de bombeo solar guatemala
+4. Ingeniero fotovoltaico guatemala
+5. Instalador de paneles solares empleo guatemala
+6. Mantenimiento industrial alimentario panales solares
+7. Trabajo energias renovables guatemala
+8. Proyectos solares agricolas plazas
+9. Tecnico hvac solar guatemala
+10. Bolsa de empleo tecnico industrial guatemala
 
 ## Referencias
 
