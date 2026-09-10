@@ -1,10 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@custom-variant dark (&:is(.dark *));
+
 @theme inline {
-  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --color-background: oklch(0.975 0.012 85);
   --color-foreground: oklch(0.19 0.025 255);
   --color-card: oklch(0.995 0.006 85);
@@ -23,23 +25,98 @@
   --color-border: oklch(0.88 0.025 255);
   --color-input: oklch(0.88 0.025 255);
   --color-ring: oklch(0.55 0.12 170);
+  --color-sidebar: oklch(0.955 0.016 85);
+  --color-sidebar-foreground: oklch(0.19 0.025 255);
+  --color-sidebar-primary: oklch(0.27 0.07 252);
+  --color-sidebar-primary-foreground: oklch(0.98 0.01 85);
+  --color-sidebar-accent: oklch(0.9 0.028 171);
+  --color-sidebar-accent-foreground: oklch(0.22 0.045 252);
+  --color-sidebar-border: oklch(0.84 0.03 255);
+  --color-sidebar-ring: oklch(0.55 0.12 170);
   --radius: 1rem;
 }
 
+.dark {
+  --color-background: oklch(0.155 0.025 252);
+  --color-foreground: oklch(0.93 0.014 85);
+  --color-card: oklch(0.205 0.028 252);
+  --color-card-foreground: oklch(0.93 0.014 85);
+  --color-popover: oklch(0.195 0.028 252);
+  --color-popover-foreground: oklch(0.93 0.014 85);
+  --color-primary: oklch(0.75 0.12 168);
+  --color-primary-foreground: oklch(0.16 0.03 252);
+  --color-secondary: oklch(0.285 0.052 172);
+  --color-secondary-foreground: oklch(0.93 0.014 85);
+  --color-muted: oklch(0.245 0.025 252);
+  --color-muted-foreground: oklch(0.72 0.025 252);
+  --color-accent: oklch(0.31 0.06 170);
+  --color-accent-foreground: oklch(0.95 0.012 85);
+  --color-destructive: oklch(0.68 0.18 25);
+  --color-border: oklch(0.33 0.03 252);
+  --color-input: oklch(0.34 0.03 252);
+  --color-ring: oklch(0.72 0.12 168);
+  --color-sidebar: oklch(0.185 0.034 252);
+  --color-sidebar-foreground: oklch(0.91 0.016 85);
+  --color-sidebar-primary: oklch(0.75 0.12 168);
+  --color-sidebar-primary-foreground: oklch(0.16 0.03 252);
+  --color-sidebar-accent: oklch(0.255 0.045 252);
+  --color-sidebar-accent-foreground: oklch(0.95 0.012 85);
+  --color-sidebar-border: oklch(0.32 0.035 252);
+  --color-sidebar-ring: oklch(0.72 0.12 168);
+}
+
 @layer base {
-  * { @apply border-border; }
-  html { scroll-behavior: smooth; }
-  body { @apply bg-background text-foreground font-sans antialiased; }
-  h1, h2, h3, h4 { @apply font-display; }
-  button, a { @apply transition-all duration-200; }
-  button:active { transform: scale(.98); }
+  * {
+    @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply min-h-screen bg-background text-foreground font-sans antialiased;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display;
+  }
+  button,
+  a {
+    @apply transition-all duration-200;
+  }
+  button:active {
+    transform: scale(0.98);
+  }
 }
 
 @layer utilities {
-  .text-balance { text-wrap: balance; }
-  .shadow-soft { box-shadow: 0 18px 55px rgba(24, 40, 63, .08); }
-  .shadow-lift { box-shadow: 0 22px 70px rgba(24, 40, 63, .13); }
-  .grid-paper { background-image: linear-gradient(rgba(33, 53, 80, .035) 1px, transparent 1px), linear-gradient(90deg, rgba(33, 53, 80, .035) 1px, transparent 1px); background-size: 32px 32px; }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .shadow-soft {
+    box-shadow: 0 18px 55px rgba(24, 40, 63, 0.08);
+  }
+  .shadow-lift {
+    box-shadow: 0 22px 70px rgba(24, 40, 63, 0.13);
+  }
+  .grid-paper {
+    background-image:
+      linear-gradient(rgba(33, 53, 80, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(33, 53, 80, 0.035) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  .dark .shadow-soft {
+    box-shadow: 0 18px 55px rgba(0, 0, 0, 0.2);
+  }
+  .dark .shadow-lift {
+    box-shadow: 0 22px 70px rgba(0, 0, 0, 0.3);
+  }
+  .dark .grid-paper {
+    background-image:
+      linear-gradient(rgba(205, 232, 225, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(205, 232, 225, 0.035) 1px, transparent 1px);
+  }
 }
 
 /* The review workspace responds to its usable width after the sidebar, not to
@@ -54,12 +131,12 @@
 .human-review-filter-grid {
   display: grid;
   min-width: 0;
-  gap: .5rem;
+  gap: 0.5rem;
 }
 
 .human-review-summary-grid {
   align-items: center;
-  gap: .75rem;
+  gap: 0.75rem;
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -81,7 +158,8 @@
 
 .human-review-matrix-scroll {
   overscroll-behavior: contain;
-  scrollbar-color: color-mix(in oklab, var(--color-primary) 42%, transparent) transparent;
+  scrollbar-color: color-mix(in oklab, var(--color-primary) 42%, transparent)
+    transparent;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
 }
@@ -113,7 +191,7 @@
 
   .human-review-quick-grid {
     grid-column: 1 / -1;
-    grid-template-columns: minmax(9rem, .75fr) minmax(11rem, 1fr) auto;
+    grid-template-columns: minmax(9rem, 0.75fr) minmax(11rem, 1fr) auto;
   }
 
   .human-review-filter-grid {
@@ -155,7 +233,7 @@
 
 @media (min-width: 48rem) and (max-height: 47.5rem) {
   .human-review-workspace {
-    gap: .5rem;
+    gap: 0.5rem;
   }
 
   .human-review-viewer {

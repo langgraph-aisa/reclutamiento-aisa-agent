@@ -280,7 +280,7 @@ function CandidateDetail({
     });
   };
   return (
-    <Card className="rounded-3xl border-0 bg-primary text-white shadow-lift">
+    <Card className="rounded-3xl border-0 bg-[#0b2d4b] text-white shadow-lift dark:bg-[#09243d]">
       <CardHeader className="flex flex-row items-start justify-between">
         <div>
           <Badge className="rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-200">
@@ -338,7 +338,7 @@ function CandidateDetail({
                 : "Evaluar con agente IA"}
           </Button>
         </div>
-        <div className="rounded-2xl bg-white p-5 text-primary">
+        <div className="rounded-2xl bg-card p-5 text-card-foreground shadow-sm">
           <p className="text-sm font-semibold">Cambio humano</p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
             Al seleccionar “Solicitar CV por WhatsApp”, Talento AISA solicitará

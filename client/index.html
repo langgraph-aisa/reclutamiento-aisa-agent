@@ -1,11 +1,22 @@
 <!doctype html>
-<html lang="en">
-
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+      content="width=device-width, initial-scale=1.0, maximum-scale=1"
+    />
+    <meta name="theme-color" content="#f7f4ed" />
+    <script>
+      try {
+        const theme = localStorage.getItem("jarvi-rh-theme");
+        if (theme === "dark") {
+          document.documentElement.classList.add("dark");
+          document.documentElement.dataset.theme = "dark";
+          document.documentElement.style.colorScheme = "dark";
+        }
+      } catch {}
+    </script>
     <link
       rel="icon"
       type="image/png"
@@ -26,7 +37,7 @@
     <script
       defer
       src="%VITE_ANALYTICS_ENDPOINT%/umami"
-      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
+      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"
+    ></script>
   </body>
-
 </html>

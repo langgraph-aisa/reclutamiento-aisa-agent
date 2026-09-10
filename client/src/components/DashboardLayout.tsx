@@ -1,5 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AppBrand } from "@/components/AppBrand";
+import { ReleaseSummary } from "@/components/ReleaseSummary";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -21,6 +23,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
+import { RELEASE_LABEL } from "@shared/release";
 import {
   BarChart3,
   Bot,
@@ -205,10 +208,10 @@ function DashboardLayoutContent({
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
-          className="border-r-0"
+          className="border-r border-sidebar-border/80 bg-sidebar shadow-[8px_0_30px_rgba(15,35,55,.05)]"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center">
+          <SidebarHeader className="h-16 justify-center border-b border-sidebar-border/70 bg-sidebar/95">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
                 onClick={toggleSidebar}
@@ -218,8 +221,8 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <AppBrand className="h-8 max-w-full" />
+                <div className="flex min-w-0 items-center gap-2">
+                  <AppBrand className="h-8 max-w-full rounded-lg bg-white/90 px-1.5 py-1" />
                 </div>
               ) : null}
             </div>
@@ -248,35 +251,57 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border shrink-0">
-                    <AvatarFallback className="text-xs font-medium">
-                      {user?.name?.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
-                      {user?.name || "-"}
+          <SidebarFooter className="border-t border-sidebar-border/70 bg-sidebar/95 p-2.5">
+            <div
+              className={
+                isCollapsed
+                  ? "flex flex-col items-center gap-2"
+                  : "flex items-center gap-2"
+              }
+            >
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1 py-1 text-left transition-colors hover:bg-sidebar-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center">
+                    <Avatar
+                      className={`${isCollapsed ? "h-8 w-8" : "h-9 w-9"} shrink-0 border border-sidebar-border`}
+                    >
+                      <AvatarFallback className="bg-sidebar-accent text-xs font-medium text-sidebar-accent-foreground">
+                        {user?.name?.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    {!isCollapsed && (
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold leading-none text-sidebar-foreground">
+                          {user?.name || "-"}
+                        </p>
+                        <p className="mt-1.5 truncate font-mono text-[10px] font-medium text-sidebar-foreground/60">
+                          {RELEASE_LABEL}
+                        </p>
+                      </div>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <div className="px-2 py-2">
+                    <p className="truncate text-xs font-semibold">
+                      {user?.name || "Usuario"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.email || "-"}
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      {user?.email || "Sin correo"}
                     </p>
                   </div>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem
-                  onClick={logout}
-                  className="cursor-pointer text-destructive focus:text-destructive"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Cerrar sesión</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem
+                    onClick={logout}
+                    className="cursor-pointer text-destructive focus:text-destructive"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Cerrar sesión</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <ThemeToggle compact={isCollapsed} />
+            </div>
+            {!isCollapsed && <ReleaseSummary />}
           </SidebarFooter>
         </Sidebar>
         <div
@@ -304,9 +329,7 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="min-w-0 flex-1 overflow-x-clip p-4">
-          {children}
-        </main>
+        <main className="min-w-0 flex-1 overflow-x-clip p-4">{children}</main>
       </SidebarInset>
     </>
   );

@@ -1,10 +1,10 @@
-import { Skeleton } from './ui/skeleton';
+import { Skeleton } from "./ui/skeleton";
 
 export function DashboardLayoutSkeleton() {
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar skeleton */}
-      <div className="w-[280px] border-r border-border bg-background p-4 space-y-6">
+      <div className="w-[280px] space-y-6 border-r border-sidebar-border bg-sidebar p-4">
         {/* Logo area */}
         <div className="flex items-center gap-3 px-2">
           <Skeleton className="h-8 w-8 rounded-md" />

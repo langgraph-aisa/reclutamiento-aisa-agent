@@ -1,6 +1,7 @@
 import { jsxLocPlugin } from "@builder.io/vite-plugin-jsx-loc";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
@@ -15,6 +16,93 @@ const PROJECT_ROOT = import.meta.dirname;
 const LOG_DIR = path.join(PROJECT_ROOT, ".manus-logs");
 const MAX_LOG_SIZE_BYTES = 1 * 1024 * 1024; // 1MB per log file
 const TRIM_TARGET_BYTES = Math.floor(MAX_LOG_SIZE_BYTES * 0.6); // Trim to 60% to avoid constant re-trimming
+
+function gitOutput(args: string[], fallback: string) {
+  try {
+    return execFileSync("git", args, {
+      cwd: PROJECT_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return fallback;
+  }
+}
+
+function githubSyncPercentage() {
+  const divergence = gitOutput(
+    ["rev-list", "--left-right", "--count", "HEAD...origin/main"],
+    "0 0"
+  )
+    .split(/\s+/)
+    .map(Number);
+  if (
+    divergence.length !== 2 ||
+    divergence.some(value => !Number.isFinite(value))
+  ) {
+    return 100;
+  }
+  return Math.max(0, 100 - Math.min(100, (divergence[0] + divergence[1]) * 10));
+}
+
+function repositoryLanguages() {
+  const languageByExtension: Record<string, string> = {
+    ".ts": "TypeScript",
+    ".tsx": "TypeScript",
+    ".typ": "Typst",
+    ".js": "JavaScript",
+    ".mjs": "JavaScript",
+    ".cjs": "JavaScript",
+    ".py": "Python",
+    ".css": "CSS",
+    ".sql": "PLpgSQL",
+    ".html": "Other",
+    ".sh": "Other",
+    ".yaml": "Other",
+    ".yml": "Other",
+  };
+  const bytes = new Map<string, number>();
+  const files = gitOutput(["ls-files"], "").split("\n").filter(Boolean);
+  for (const file of files) {
+    const language = languageByExtension[path.extname(file).toLowerCase()];
+    if (!language) continue;
+    try {
+      const size = fs.statSync(path.join(PROJECT_ROOT, file)).size;
+      bytes.set(language, (bytes.get(language) ?? 0) + size);
+    } catch {
+      // El archivo pudo cambiar entre el índice Git y la lectura del build.
+    }
+  }
+  const total = Array.from(bytes.values()).reduce(
+    (sum, value) => sum + value,
+    0
+  );
+  if (!total) return [];
+  const languages = Array.from(bytes.entries())
+    .map(([name, size]) => ({
+      name,
+      percentage: Math.round((size / total) * 1000) / 10,
+    }))
+    .sort((a, b) => b.percentage - a.percentage);
+  const roundedTotal = languages.reduce(
+    (sum, language) => sum + language.percentage,
+    0
+  );
+  languages[0].percentage =
+    Math.round((languages[0].percentage + 100 - roundedTotal) * 10) / 10;
+  return languages;
+}
+
+const buildMetadata = {
+  branch:
+    process.env.GITHUB_REF_NAME ??
+    gitOutput(["rev-parse", "--abbrev-ref", "HEAD"], "main"),
+  commit:
+    process.env.GITHUB_SHA?.slice(0, 8) ??
+    gitOutput(["rev-parse", "--short=8", "HEAD"], "local"),
+  githubSyncPercentage: githubSyncPercentage(),
+  languages: repositoryLanguages(),
+};
 
 type LogSource = "browserConsole" | "networkRequests" | "sessionReplay";
 
@@ -56,7 +144,7 @@ function writeToLogFile(source: LogSource, entries: unknown[]) {
   const logPath = path.join(LOG_DIR, `${source}.log`);
 
   // Format entries with timestamps
-  const lines = entries.map((entry) => {
+  const lines = entries.map(entry => {
     const ts = new Date().toISOString();
     return `[${ts}] ${JSON.stringify(entry)}`;
   });
@@ -132,7 +220,7 @@ function vitePluginManusDebugCollector(): Plugin {
         }
 
         let body = "";
-        req.on("data", (chunk) => {
+        req.on("data", chunk => {
           body += chunk.toString();
         });
 
@@ -150,10 +238,26 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+const plugins = [
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  vitePluginManusRuntime(),
+  vitePluginManusDebugCollector(),
+];
 
 export default defineConfig({
   plugins,
+  define: {
+    "import.meta.env.VITE_BUILD_BRANCH": JSON.stringify(buildMetadata.branch),
+    "import.meta.env.VITE_BUILD_COMMIT": JSON.stringify(buildMetadata.commit),
+    "import.meta.env.VITE_GITHUB_SYNC_PERCENTAGE": JSON.stringify(
+      String(buildMetadata.githubSyncPercentage)
+    ),
+    "import.meta.env.VITE_REPOSITORY_LANGUAGES": JSON.stringify(
+      JSON.stringify(buildMetadata.languages)
+    ),
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),

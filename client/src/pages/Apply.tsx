@@ -64,10 +64,10 @@ export default function Apply() {
   };
 
   if (!form && formQuery.isLoading) return <Loading />;
-  if (!form) return <main className="grid min-h-screen place-items-center bg-[#f7f4ed] p-6"><Card className="max-w-md rounded-3xl border-0 p-4 shadow-soft"><CardContent className="pt-6 text-center"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-100 text-amber-700"><ShieldCheck className="h-6 w-6" /></div><h1 className="mt-5 text-2xl font-800 text-primary">Este enlace ya no está disponible</h1><p className="mt-3 text-muted-foreground">La plaza pudo haber sido cerrada o el enlace no es válido.</p></CardContent></Card></main>;
+  if (!form) return <main className="grid min-h-screen place-items-center bg-background p-6"><Card className="max-w-md rounded-3xl border-0 p-4 shadow-soft"><CardContent className="pt-6 text-center"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-100 text-amber-700"><ShieldCheck className="h-6 w-6" /></div><h1 className="mt-5 text-2xl font-800 text-primary">Este enlace ya no está disponible</h1><p className="mt-3 text-muted-foreground">La plaza pudo haber sido cerrada o el enlace no es válido.</p></CardContent></Card></main>;
 
   return (
-    <main className="min-h-screen bg-[#f7f4ed] px-4 py-5 sm:px-6 sm:py-10">
+    <main className="min-h-screen bg-background px-4 py-5 sm:px-6 sm:py-10">
       <div className="mx-auto max-w-2xl">
         <header className="mb-8 flex items-center justify-between"><Link href="/"><AppBrand className="h-10" /></Link><span className="text-xs font-semibold uppercase tracking-[.16em] text-muted-foreground">Postulación segura</span></header>
         {step === "intro" && <Card className="overflow-hidden rounded-[2rem] border-0 shadow-lift"><div className="bg-primary p-7 text-white sm:p-10"><p className="text-sm font-semibold uppercase tracking-[.18em] text-emerald-200">Plaza disponible</p><h1 className="mt-3 text-4xl font-800 tracking-[-.05em] sm:text-5xl">{form.title}</h1><div className="mt-5 flex flex-wrap gap-4 text-sm text-white/70"><span className="flex items-center gap-2"><MapPin className="h-4 w-4 text-emerald-300" />{form.locationLabel ?? form.department ?? "Guatemala"}</span><span className="flex items-center gap-2"><Clock3 className="h-4 w-4 text-emerald-300" />{STANDARD_WORK_SCHEDULE}</span><span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-300" />Enlace verificado</span></div></div><CardContent className="p-7 sm:p-10"><h2 className="text-xl font-800 text-primary">Antes de comenzar</h2><p className="mt-3 leading-7 text-muted-foreground">{form.description}</p><div className="mt-6 rounded-2xl bg-emerald-50 p-4 text-sm leading-6 text-emerald-950"><strong>Esta aplicación corresponde a:</strong> {form.title}. Al enviarla, quedará registrada para esta plaza y no será necesario repetirla.</div><Button onClick={() => setStep("form")} size="lg" className="mt-8 w-full rounded-2xl">Comenzar formulario <ChevronRight className="ml-2 h-4 w-4" /></Button></CardContent></Card>}
@@ -91,7 +91,7 @@ function Field({ label, required, help, children }: { label: string; required?: 
 }
 
 function Loading() {
-  return <main className="grid min-h-screen place-items-center bg-[#f7f4ed] p-6"><div className="text-center"><div className="mx-auto h-10 w-10 animate-pulse rounded-2xl bg-primary/15" /><p className="mt-4 text-sm text-muted-foreground">Cargando formulario…</p></div></main>;
+  return <main className="grid min-h-screen place-items-center bg-background p-6"><div className="text-center"><div className="mx-auto h-10 w-10 animate-pulse rounded-2xl bg-primary/15" /><p className="mt-4 text-sm text-muted-foreground">Cargando formulario…</p></div></main>;
 }
 
 function ClipboardIcon() {

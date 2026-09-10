@@ -1,0 +1,55 @@
+name: JARVI RH · caja negra
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gate:
+    name: Release y comportamiento observable
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Obtener repositorio y dos versiones
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Preparar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependencias bloqueadas
+        run: pnpm install --frozen-lockfile
+
+      - name: Verificar metadata de release
+        run: pnpm release:verify
+
+      - name: Verificar incremento en main
+        if: github.event_name == 'push'
+        run: pnpm release:verify -- --compare-git
+
+      - name: Ejecutar pruebas de caja negra
+        run: pnpm test:black-box
+
+      - name: Ejecutar regresión funcional
+        run: pnpm test
+
+      - name: Validar contratos TypeScript
+        run: pnpm check
+
+      - name: Compilar artefacto de producción
+        run: pnpm build

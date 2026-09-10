@@ -1,21 +1,24 @@
-# Validación final
+# Validación final · JARVI RH 2.0.111
 
-## Evidencia visual registrada
+Fecha de ejecución: 2026-09-10. Rama objetivo: `main`.
 
-El manual PDF compiló en modo estricto, pasó la verificación determinista y su revisión estándar de páginas representativas no mostró recortes, desbordes ni tablas ilegibles.
+## Alcance verificado
 
-La pantalla de acceso en escritorio presenta correctamente el flujo inicial de solicitud de código para `adminit@aisa.com.gt`, con jerarquía legible y sin campos de contraseña. El formulario público de ejemplo conserva la confirmación explícita de la plaza, el enlace verificado y la acción para comenzar el cuestionario.
+Esta hoja registra únicamente el release que incorpora tema claro/oscuro persistente, menú lateral diferenciado, identidad de versión, metadata Git del artefacto y gobierno automatizado de releases. Los casos observables están especificados en [PRUEBAS_CAJA_NEGRA_2.0.111.md](PRUEBAS_CAJA_NEGRA_2.0.111.md).
 
-En viewport móvil de 375 × 812, la tarjeta de acceso mantiene márgenes, contraste y controles legibles. El formulario público conserva la identidad visual, la plaza, ubicación, confirmación y botón principal sin desbordes horizontales.
+## Evidencia automatizada
 
-## Validaciones automatizadas
+| Validación                                         | Resultado                                 |
+| -------------------------------------------------- | ----------------------------------------- |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.111`             |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · `2.0.112`                      |
+| Caja negra (`pnpm test:black-box`)                 | 4 de 4 pruebas aprobadas                  |
+| Regresión Vitest (`pnpm test`)                     | 60 de 60 pruebas aprobadas en 13 archivos |
+| Contratos TypeScript (`pnpm check`)                | Aprobado                                  |
+| Build cliente/servidor (`pnpm build`)              | Aprobado                                  |
 
-| Validación | Resultado |
-|---|---|
-| TypeScript (`pnpm check`) | Aprobado |
-| Vitest | 18 de 18 pruebas aprobadas |
-| Build de producción | Aprobado; advertencia no bloqueante de tamaño de bundle |
-| Workflows n8n | 4 de 4 JSON válidos y marcadores semánticos presentes |
-| Manual PDF | Compilación estricta y verificación determinista aprobadas |
+El build conserva advertencias no bloqueantes preexistentes para variables opcionales de analítica y tamaño del paquete principal; no afectan la generación del artefacto ni las operaciones verificadas.
 
-La prueba real de entrega SMTP, migración PostgreSQL, ejecución n8n y envío ApiChat debe realizarse en EasyPanel con las credenciales de la organización.
+## Dictamen
+
+El release cumple la puerta técnica local. La aplicación de ISO/IEC 25010:2023, ISO/IEC 27001:2022 e ISO/IEC/IEEE 29119-1:2022 es metodológica y no implica certificación formal. La verificación posterior al despliegue debe confirmar visualmente los casos BN-UI-01 a BN-UI-09 en el dominio productivo.

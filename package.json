@@ -1,6 +1,6 @@
 {
   "name": "reclutamiento-automatizado",
-  "version": "1.0.0",
+  "version": "2.0.111",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -10,6 +10,9 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:black-box": "vitest run server/releaseGovernance.test.ts",
+    "release:bump": "node scripts/bump-release.mjs",
+    "release:verify": "node scripts/verify-release.mjs",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {
