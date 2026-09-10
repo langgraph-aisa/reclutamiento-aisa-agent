@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 
-const { getPool, normalizeProfileRequirements } = vi.hoisted(() => ({
+const { getPool, normalizePublicCopy } = vi.hoisted(() => ({
   getPool: vi.fn(),
-  normalizeProfileRequirements: vi.fn(),
+  normalizePublicCopy: vi.fn(),
 }));
 
 vi.mock("./db", () => ({
@@ -18,8 +18,9 @@ vi.mock("./cvRequest", () => ({
 }));
 
 vi.mock("./profileEditorial", () => ({
-  normalizeProfileRequirements,
+  normalizePublicCopy,
   PROFILE_EDITORIAL_MODEL: "gpt-4.1-mini-2025-04-14",
+  PUBLIC_COPY_EDITORIAL_MODEL: "gpt-4.1-mini-2025-04-14",
 }));
 
 import { appRouter } from "./routers";
@@ -47,6 +48,25 @@ function createAdminContext(): TrpcContext {
     res: {} as TrpcContext["res"],
   };
 }
+
+beforeEach(() => {
+  normalizePublicCopy.mockImplementation(async (_pool, input) => ({
+    fields: Object.fromEntries(
+      input.fields.map((field: { key: string; text: string }) => [
+        field.key,
+        field.text,
+      ])
+    ),
+    lists: Object.fromEntries(
+      input.lists.map((list: { key: string; items: string[] }) => [
+        list.key,
+        list.items,
+      ])
+    ),
+    model: "gpt-4.1-mini-2025-04-14",
+    keySlot: "primary",
+  }));
+});
 
 afterEach(() => vi.clearAllMocks());
 
@@ -198,29 +218,50 @@ describe("jobs.setPublished profile readiness", () => {
 
   it("publishes the position when its active profile is complete", async () => {
     const published = { id: 8, published: true };
-    const originalRequirements = [
-      "5 años de experiencia en ventas",
-      "licensia tipo B",
-    ];
-    const correctedRequirements = [
-      "Mínimo cinco años de experiencia en ventas.",
-      "Licencia de conducir tipo B vigente.",
-    ];
-    normalizeProfileRequirements.mockResolvedValue({
-      requirements: correctedRequirements,
-      model: "gpt-4.1-mini-2025-04-14",
-      keySlot: "primary",
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes("SELECT profile.id AS profile_id")) {
+        return {
+          rows: [
+            {
+              profile_id: 15,
+              name: "Ejecutivo comercial",
+              objective: "Convertir prospectos en clientes.",
+              responsibilities: ["Prospectar clientes."],
+              required_requirements: ["Licencia vigente."],
+              technical_skills: [],
+              soft_skills: [],
+              knowledge: [],
+              languages: [],
+              licenses: [],
+            },
+          ],
+        };
+      }
+      if (sql.includes("SELECT id,title,department,location_label")) {
+        return {
+          rows: [
+            {
+              id: 8,
+              title: "Ejecutivo de Negocios (Ventas)",
+              department: "Comercial",
+              location_label: "Ciudad de Guatemala",
+              description: "Gestión comercial.",
+              whatsapp_message: "Hola {{nombre}}, su plaza es {{plaza}}.",
+            },
+          ],
+        };
+      }
+      if (sql.includes("SELECT EXISTS")) {
+        return { rows: [{ validated: false }] };
+      }
+      if (sql.includes("SELECT id FROM application_forms")) {
+        return { rows: [] };
+      }
+      if (sql.includes("UPDATE job_positions SET published")) {
+        return { rows: [published] };
+      }
+      return { rows: [] };
     });
-    const query = vi
-      .fn()
-      .mockResolvedValueOnce({
-        rows: [{ profile_id: 15, required_requirements: originalRequirements }],
-      })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ validated: false }] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [published] });
     getPool.mockResolvedValue({ query });
 
     await expect(
@@ -240,47 +281,80 @@ describe("jobs.setPublished profile readiness", () => {
     expect(String(query.mock.calls[0]?.[0])).toContain(
       "LOWER(BTRIM(profile.name)) = LOWER(BTRIM(position.title))"
     );
-    expect(String(query.mock.calls[1]?.[0])).toContain(
-      "INSERT INTO job_profile_positions"
-    );
-    expect(query.mock.calls[1]?.[1]).toEqual([15, 8]);
-    expect(normalizeProfileRequirements).toHaveBeenCalledWith(
-      expect.anything(),
-      originalRequirements
-    );
-    expect(String(query.mock.calls[2]?.[0])).toContain("SELECT EXISTS");
-    expect(String(query.mock.calls[3]?.[0])).toContain("UPDATE job_profiles");
-    expect(query.mock.calls[3]?.[1]).toEqual([
-      JSON.stringify(correctedRequirements),
-      15,
-    ]);
-    expect(String(query.mock.calls[4]?.[0])).toContain(
-      "requirements_editorially_normalized"
-    );
-    expect(String(query.mock.calls[5]?.[0])).toContain("UPDATE job_positions");
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("INSERT INTO job_profile_positions")
+      )
+    ).toBe(true);
+    expect(normalizePublicCopy).toHaveBeenCalledTimes(2);
+    expect(
+      normalizePublicCopy.mock.calls.some(call =>
+        call[1].lists.some(
+          (list: { key: string }) => list.key === "responsibilities"
+        )
+      )
+    ).toBe(true);
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("public_copy_editorially_normalized")
+      )
+    ).toBe(true);
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("UPDATE job_positions SET published")
+      )
+    ).toBe(true);
   });
 
-  it("reuses auditable validation for unchanged requirements", async () => {
-    const requirements = ["Licencia de conducir tipo B vigente."];
-    const query = vi
-      .fn()
-      .mockResolvedValueOnce({
-        rows: [{ profile_id: 15, required_requirements: requirements }],
-      })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ validated: true }] })
-      .mockResolvedValueOnce({ rows: [{ id: 8, published: true }] });
+  it("reuses auditable validation for unchanged public copy", async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes("SELECT profile.id AS profile_id")) {
+        return {
+          rows: [
+            {
+              profile_id: 15,
+              name: "Ejecutivo comercial",
+              objective: "Convertir prospectos en clientes.",
+              responsibilities: ["Prospectar clientes."],
+              required_requirements: ["Licencia vigente."],
+            },
+          ],
+        };
+      }
+      if (sql.includes("SELECT id,title,department,location_label")) {
+        return {
+          rows: [
+            {
+              id: 8,
+              title: "Ejecutivo de Negocios (Ventas)",
+              department: "Comercial",
+            },
+          ],
+        };
+      }
+      if (sql.includes("SELECT EXISTS")) {
+        return { rows: [{ validated: true }] };
+      }
+      if (sql.includes("SELECT id FROM application_forms")) {
+        return { rows: [] };
+      }
+      if (sql.includes("UPDATE job_positions SET published")) {
+        return { rows: [{ id: 8, published: true }] };
+      }
+      return { rows: [] };
+    });
     getPool.mockResolvedValue({ query });
 
     await appRouter
       .createCaller(createAdminContext())
       .positions.setPublished({ id: 8, published: true });
 
-    expect(normalizeProfileRequirements).not.toHaveBeenCalled();
-    expect(String(query.mock.calls[2]?.[0])).toContain(
-      "after_json->'requiredRequirements'"
-    );
-    expect(String(query.mock.calls[3]?.[0])).toContain("UPDATE job_positions");
+    expect(normalizePublicCopy).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("after_json->>'contentHash'")
+      )
+    ).toBe(true);
   });
 });
 
@@ -315,11 +389,17 @@ describe("profiles.upsert editorial validation", () => {
       "Mínimo cinco años de experiencia en ventas.",
       "Licencia de conducir tipo B vigente.",
     ];
-    normalizeProfileRequirements.mockResolvedValue({
-      requirements: correctedRequirements,
+    normalizePublicCopy.mockImplementationOnce(async (_pool, input) => ({
+      fields: Object.fromEntries(
+        input.fields.map((field: { key: string; text: string }) => [
+          field.key,
+          field.text,
+        ])
+      ),
+      lists: { requiredRequirements: correctedRequirements },
       model: "gpt-4.1-mini-2025-04-14",
       keySlot: "primary",
-    });
+    }));
     const savedProfile = {
       id: 21,
       name: "Ejecutivo comercial",
@@ -347,10 +427,11 @@ describe("profiles.upsert editorial validation", () => {
       })
     ).resolves.toEqual(savedProfile);
 
-    expect(normalizeProfileRequirements).toHaveBeenCalledWith(
-      expect.anything(),
-      originalRequirements
-    );
+    expect(normalizePublicCopy).toHaveBeenCalledOnce();
+    expect(normalizePublicCopy.mock.calls[0]?.[1].lists).toContainEqual({
+      key: "requiredRequirements",
+      items: originalRequirements,
+    });
     expect(String(client.query.mock.calls[1]?.[0])).toContain(
       "INSERT INTO job_profiles"
     );
@@ -358,9 +439,232 @@ describe("profiles.upsert editorial validation", () => {
       JSON.stringify(correctedRequirements)
     );
     expect(String(client.query.mock.calls[2]?.[0])).toContain(
-      "requirements_editorially_normalized"
+      "public_copy_editorially_normalized"
     );
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it("normalizes a historical profile before reactivating it", async () => {
+    const historicalProfile = {
+      id: 21,
+      name: "Ejecutivo comercial",
+      objective: "Dirigir operacion comercial",
+      responsibilities: ["dar seguimiento clientes"],
+      required_requirements: ["licensia vigente"],
+      technical_skills: [],
+      soft_skills: [],
+      knowledge: [],
+      languages: [],
+      licenses: [],
+    };
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes("SELECT * FROM job_profiles")) {
+        return { rows: [historicalProfile] };
+      }
+      if (sql.includes("SELECT EXISTS")) {
+        return { rows: [{ validated: false }] };
+      }
+      return { rows: [] };
+    });
+    getPool.mockResolvedValue({ query });
+
+    await appRouter
+      .createCaller(createAdminContext())
+      .profiles.setActive({ id: 21, active: true });
+
+    expect(normalizePublicCopy).toHaveBeenCalledOnce();
+    expect(
+      normalizePublicCopy.mock.calls[0]?.[1].lists.map(
+        (list: { key: string }) => list.key
+      )
+    ).toEqual(
+      expect.arrayContaining(["responsibilities", "requiredRequirements"])
+    );
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("public_copy_editorially_normalized")
+      )
+    ).toBe(true);
+    const activation = query.mock.calls.find(call =>
+      String(call[0]).includes("UPDATE job_profiles SET active")
+    );
+    expect(activation?.[1]).toEqual([true, 21]);
+  });
+});
+
+describe("forms public-copy editorial validation", () => {
+  it("corrects question text and preserves accepted answers when an option changes", async () => {
+    normalizePublicCopy.mockImplementationOnce(async (_pool, input) => ({
+      fields: Object.fromEntries(
+        input.fields.map((field: { key: string; text: string }) => [
+          field.key,
+          field.key === "label"
+            ? "¿Cuenta con licencia vigente?"
+            : field.key === "option.0"
+              ? "Sí"
+              : field.text,
+        ])
+      ),
+      lists: {},
+      model: "gpt-4.1-mini-2025-04-14",
+      keySlot: "primary",
+    }));
+    const saved = { id: 31, label: "¿Cuenta con licencia vigente?" };
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes("INSERT INTO form_questions")) return { rows: [saved] };
+      return { rows: [] };
+    });
+    getPool.mockResolvedValue({ query });
+
+    await expect(
+      appRouter.createCaller(createAdminContext()).forms.saveQuestion({
+        formId: 11,
+        fieldKey: "licencia",
+        label: "cuenta con licensia vigente",
+        type: "select",
+        required: true,
+        hardFail: true,
+        answerConfig: { options: ["Si", "No"] },
+        acceptedAnswers: ["Si"],
+        orderIndex: 0,
+      })
+    ).resolves.toEqual(saved);
+
+    const insert = query.mock.calls.find(call =>
+      String(call[0]).includes("INSERT INTO form_questions")
+    );
+    expect(insert?.[1]?.[2]).toBe("¿Cuenta con licencia vigente?");
+    expect(JSON.parse(String(insert?.[1]?.[7]))).toEqual({
+      options: ["Sí", "No"],
+    });
+    expect(JSON.parse(String(insert?.[1]?.[8]))).toEqual(["Sí"]);
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("public_copy_editorially_normalized")
+      )
+    ).toBe(true);
+  });
+
+  it("normalizes a historical question before reactivating it", async () => {
+    const question = {
+      id: 31,
+      label: "describa su esperiencia",
+      help_text: "indique puestos y años",
+      evaluation_criteria: null,
+      ai_prompt: null,
+      answer_config: {},
+      accepted_answers: [],
+    };
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes("FROM form_questions") && sql.includes("WHERE id=$1")) {
+        return { rows: [question] };
+      }
+      if (sql.includes("SELECT EXISTS")) {
+        return { rows: [{ validated: false }] };
+      }
+      if (sql.includes("UPDATE form_questions SET active")) {
+        return { rows: [{ ...question, active: true }] };
+      }
+      return { rows: [] };
+    });
+    getPool.mockResolvedValue({ query });
+
+    await appRouter
+      .createCaller(createAdminContext())
+      .forms.setQuestionActive({ id: 31, active: true });
+
+    expect(normalizePublicCopy).toHaveBeenCalledOnce();
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("public_copy_editorially_normalized")
+      )
+    ).toBe(true);
+    expect(
+      query.mock.calls.find(call =>
+        String(call[0]).includes("UPDATE form_questions SET active")
+      )?.[1]
+    ).toEqual([true, 31]);
+  });
+
+  it("keeps a form unpublished when its final bundle cannot be validated", async () => {
+    normalizePublicCopy.mockRejectedValueOnce(
+      new Error("No fue posible validar el paquete editorial.")
+    );
+    const query = vi.fn(
+      async (sql: string, params?: unknown[]): Promise<{ rows: any[] }> => {
+        if (sql.includes("SELECT profile.id AS profile_id")) {
+          return {
+            rows: [
+              {
+                profile_id: 15,
+                name: "Ejecutivo comercial",
+                objective: "Convertir prospectos en clientes.",
+                responsibilities: ["Prospectar clientes."],
+                required_requirements: ["Licencia vigente."],
+              },
+            ],
+          };
+        }
+        if (sql.includes("SELECT id,title,department,location_label")) {
+          return {
+            rows: [
+              {
+                id: 8,
+                title: "Ejecutivo comercial",
+                department: "Comercial",
+              },
+            ],
+          };
+        }
+        if (sql.includes("SELECT EXISTS")) {
+          return {
+            rows: [{ validated: params?.[0] !== "application_form_bundle" }],
+          };
+        }
+        if (sql.includes("SELECT id,title,intro FROM application_forms")) {
+          return {
+            rows: [
+              {
+                id: 11,
+                title: "Formulario comercial",
+                intro: "Complete la información requerida.",
+              },
+            ],
+          };
+        }
+        if (sql.includes("FROM form_questions") && sql.includes("form_id=$1")) {
+          return { rows: [] };
+        }
+        if (
+          sql.includes("UPDATE application_forms SET title") &&
+          sql.includes("published=$3")
+        ) {
+          return { rows: [{ id: 11, published: false }] };
+        }
+        return { rows: [] };
+      }
+    );
+    getPool.mockResolvedValue({ query });
+
+    await expect(
+      appRouter.createCaller(createAdminContext()).forms.upsert({
+        id: 11,
+        positionId: 8,
+        title: "Formulario comercial",
+        intro: "Complete la información requerida.",
+        published: true,
+      })
+    ).rejects.toThrow("No fue posible validar el paquete editorial.");
+
+    const stagedUpdate = query.mock.calls.find(call =>
+      String(call[0]).includes("published=$3")
+    );
+    expect(stagedUpdate?.[1]?.[2]).toBe(false);
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("SET published=true")
+      )
+    ).toBe(false);
   });
 });
 

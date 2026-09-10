@@ -13,7 +13,7 @@ const split = (value: string) =>
     .split(",")
     .map(item => item.trim())
     .filter(Boolean);
-const splitRequirements = (value: string) =>
+const splitBullets = (value: string) =>
   value
     .split(/\r?\n/)
     .map(item => item.replace(/^(?:[-*•▪◦]|\d+[.)])\s*/, "").trim())
@@ -48,7 +48,7 @@ const toForm = (profile: any) => ({
   name: profile.name ?? "",
   summary: profile.summary ?? "",
   objective: profile.objective ?? "",
-  responsibilities: (profile.responsibilities ?? []).join(", "),
+  responsibilities: (profile.responsibilities ?? []).join("\n"),
   requiredRequirements: (profile.required_requirements ?? []).join("\n"),
   technicalSkills: (profile.technical_skills ?? []).join(", "),
   softSkills: (profile.soft_skills ?? []).join(", "),
@@ -77,7 +77,7 @@ export default function Profiles() {
   });
   const save = trpc.profiles.upsert.useMutation({
     onSuccess: () => {
-      toast.success("Perfil laboral guardado");
+      toast.success("Perfil revisado editorialmente y guardado");
       setForm(empty);
       utils.profiles.list.invalidate();
     },
@@ -109,8 +109,8 @@ export default function Profiles() {
       name: form.name,
       summary: form.summary || undefined,
       objective: form.objective || undefined,
-      responsibilities: split(form.responsibilities),
-      requiredRequirements: splitRequirements(form.requiredRequirements),
+      responsibilities: splitBullets(form.responsibilities),
+      requiredRequirements: splitBullets(form.requiredRequirements),
       technicalSkills: split(form.technicalSkills),
       softSkills: split(form.softSkills),
       knowledge: split(form.knowledge),
@@ -422,8 +422,8 @@ function Field({
         value={value}
         onChange={event => onChange(event.target.value)}
         placeholder={
-          label === "Requisitos obligatorios"
-            ? "Escriba un requisito completo por línea"
+          label === "Requisitos obligatorios" || label === "Responsabilidades"
+            ? "Escriba una idea completa por línea"
             : "Separe los elementos con comas"
         }
       />

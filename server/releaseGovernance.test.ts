@@ -2,6 +2,7 @@ import { ThemeToggle } from "../client/src/components/ThemeToggle";
 import { VerticalNavigator } from "../client/src/components/VerticalNavigator";
 import { ThemeProvider } from "../client/src/contexts/ThemeContext";
 import { auditFormalSpanish } from "../scripts/verify-formal-spanish.mjs";
+import { auditPublicCopyControls } from "../scripts/verify-public-copy.mjs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import fs from "node:fs";
@@ -53,8 +54,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.123");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.123");
+    expect(APP_VERSION).toBe("2.0.124");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.124");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -301,16 +302,30 @@ describe("black-box release contract", () => {
     expect(profiles).toContain(
       'requiredRequirements: (profile.required_requirements ?? []).join("\\n")'
     );
-    expect(profiles).toContain("splitRequirements(form.requiredRequirements)");
+    expect(profiles).toContain("splitBullets(form.responsibilities)");
+    expect(profiles).toContain("splitBullets(form.requiredRequirements)");
+    expect(profiles).toContain(
+      'responsibilities: (profile.responsibilities ?? []).join("\\n")'
+    );
     expect(profileEditorial).toContain(
       'PROFILE_EDITORIAL_MODEL = "gpt-4.1-mini-2025-04-14"'
     );
     expect(profileEditorial).toContain("client.responses.parse");
     expect(profileEditorial).toContain("zodTextFormat");
     expect(profileEditorial).toContain("store: false");
+    expect(profileEditorial).toContain("normalizePublicCopy");
+    expect(profileEditorial).toContain("RAE/ASALE");
+    expect(profileEditorial).toContain(
+      "Preserve literalmente variables delimitadas por llaves dobles"
+    );
     expect(profileEditorial).not.toContain("console.warn(error");
-    expect(routers).toContain("requirements_editorially_normalized");
-    expect(routers).toContain("hasCurrentProfileEditorialValidation");
+    expect(routers).toContain("public_copy_editorially_normalized");
+    expect(routers).toContain("hasCurrentEditorialValidation");
+    expect(routers).toContain("profilePublicCopyInput");
+    expect(routers).toContain("positionPublicCopyInput");
+    expect(routers).toContain("formBundlePublicCopyInput");
+    expect(routers).toContain("normalizeStoredQuestion");
+    expect(routers).toContain("auditPublishedPublicCopy");
     expect(jobs).toContain("Plaza publicada correctamente");
     expect(jobs).toContain("onError: error => toast.error(error.message)");
     expect(routers).toContain(
@@ -363,6 +378,7 @@ describe("black-box release contract", () => {
 
   it("enforces formal institutional treatment across runtime surfaces", () => {
     const audit = auditFormalSpanish();
+    const publicCopyAudit = auditPublicCopyControls();
     const apply = fs.readFileSync(
       path.resolve("client/src/pages/Apply.tsx"),
       "utf8"
@@ -382,6 +398,8 @@ describe("black-box release contract", () => {
 
     expect(audit.files).toHaveLength(77);
     expect(audit.findings).toEqual([]);
+    expect(publicCopyAudit.files).toHaveLength(77);
+    expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
     expect(loginEmail).toContain("Si usted no solicitó este acceso");
@@ -391,6 +409,7 @@ describe("black-box release contract", () => {
     expect(packageMetadata.scripts.build).toContain(
       "verify-formal-spanish.mjs"
     );
+    expect(packageMetadata.scripts.build).toContain("verify-public-copy.mjs");
   });
 
   it("publishes the academic-commercial README with auditable proportions and references", () => {
@@ -401,7 +420,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.123");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.124");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -410,6 +429,10 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.124");
+    expect(readme).toContain("control editorial transversal");
+    expect(readme).toContain("plazas públicas ya existentes");
+    expect(readme).toContain("una idea completa por línea");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.123");
     expect(readme).toContain("GPT-4.1 mini corrige ortografía");
     expect(readme).toContain("sin consumir tokens durante las visitas");

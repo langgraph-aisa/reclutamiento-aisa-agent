@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { auditFormalSpanish } from "./verify-formal-spanish.mjs";
+import { auditPublicCopyControls } from "./verify-public-copy.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -96,6 +97,13 @@ if (formalSpanishAudit.findings.length > 0) {
     .map(finding => `${finding.file}:${finding.line} ${finding.context}`)
     .join("; ");
   fail(`La auditoría de tratamiento formal falló: ${details}`);
+}
+
+const publicCopyAudit = auditPublicCopyControls();
+if (publicCopyAudit.findings.length > 0) {
+  fail(
+    `La auditoría de textos públicos falló: ${publicCopyAudit.findings.join("; ")}`
+  );
 }
 
 if (process.argv.includes("--compare-git")) {

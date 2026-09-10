@@ -5,7 +5,8 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 // Nota: registerOAuthRoutes fue removido, ya que el sistema nuevo usa códigos por correo.
 import { registerStorageProxy } from "./storageProxy";
-import { appRouter } from "../routers";
+import { appRouter, auditPublishedPublicCopy } from "../routers";
+import { getPool } from "../db";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -35,7 +36,7 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
-  
+
   // tRPC API
   app.use(
     "/api/trpc",
@@ -44,7 +45,7 @@ async function startServer() {
       createContext,
     })
   );
-  
+
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
@@ -61,6 +62,20 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    void getPool()
+      .then(pool => (pool ? auditPublishedPublicCopy(pool) : null))
+      .then(result => {
+        if (result && !result.skipped) {
+          console.log(
+            `[PublicCopyAudit] Completed: ${result.audited} position(s), ${result.failed} failure(s).`
+          );
+        }
+      })
+      .catch(error => {
+        console.warn(
+          `[PublicCopyAudit] Startup audit failed (${error instanceof Error ? error.name : "unknown"}).`
+        );
+      });
   });
 }
 

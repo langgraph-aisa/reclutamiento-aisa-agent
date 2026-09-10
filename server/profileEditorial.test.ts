@@ -22,6 +22,7 @@ vi.mock("./agentSettings", () => ({ getAgentRuntimeSettings }));
 
 import {
   compactRequirements,
+  normalizePublicCopy,
   normalizeProfileRequirements,
   PROFILE_EDITORIAL_MODEL,
 } from "./profileEditorial";
@@ -55,7 +56,13 @@ describe("profile requirement editorial validation", () => {
     });
     parse.mockResolvedValue({
       output_parsed: {
-        requirements: ["Licencia de conducir tipo B vigente."],
+        fields: [],
+        lists: [
+          {
+            key: "requiredRequirements",
+            items: ["Licencia de conducir tipo B vigente."],
+          },
+        ],
       },
     });
 
@@ -93,7 +100,15 @@ describe("profile requirement editorial validation", () => {
     parse
       .mockRejectedValueOnce(new Error("Unauthorized: primary-secret"))
       .mockResolvedValueOnce({
-        output_parsed: { requirements: ["Bachillerato concluido."] },
+        output_parsed: {
+          fields: [],
+          lists: [
+            {
+              key: "requiredRequirements",
+              items: ["Bachillerato concluido."],
+            },
+          ],
+        },
       });
 
     await expect(
@@ -119,8 +134,110 @@ describe("profile requirement editorial validation", () => {
     await expect(
       normalizeProfileRequirements({} as never, ["Experiencia comercial"])
     ).rejects.toThrow(
-      "Configure y verifique una API Key de OpenAI antes de guardar o publicar requisitos del puesto."
+      "Configure y verifique una API Key de OpenAI antes de guardar o publicar textos públicos."
     );
     expect(parse).not.toHaveBeenCalled();
+  });
+
+  it("corrects every keyed field and recomposes fragmented public lists", async () => {
+    getAgentRuntimeSettings.mockResolvedValue({
+      useResponsesApi: true,
+      secrets: {
+        openai_api_key: "primary-secret",
+        openai_api_key_backup: null,
+      },
+    });
+    parse.mockResolvedValue({
+      output_parsed: {
+        fields: [
+          {
+            key: "title",
+            text: "Ejecutivo de Negocios (Ventas)",
+          },
+          {
+            key: "message",
+            text: "Hola {{nombre}}.\n\nSu plaza es {{plaza}}.",
+          },
+        ],
+        lists: [
+          {
+            key: "responsibilities",
+            items: [
+              "Prospectar nuevos clientes mediante contacto en frío y referidos.",
+              "Crear documentos, incluidas presentaciones y hojas de cálculo en Excel.",
+            ],
+          },
+        ],
+      },
+    });
+
+    await expect(
+      normalizePublicCopy({} as never, {
+        fields: [
+          { key: "title", text: "executivo ventas", style: "title" },
+          {
+            key: "message",
+            text: "Hola {{nombre}}.\n\nSu plaza es {{plaza}}.",
+            style: "message",
+          },
+        ],
+        lists: [
+          {
+            key: "responsibilities",
+            items: [
+              "Prospectar nuevos clientes (toque frío",
+              "referidos)",
+              "Crear documentos (presentaciones",
+              "Excel)",
+            ],
+          },
+        ],
+      })
+    ).resolves.toMatchObject({
+      fields: {
+        title: "Ejecutivo de Negocios (Ventas)",
+        message: "Hola {{nombre}}.\n\nSu plaza es {{plaza}}.",
+      },
+      lists: {
+        responsibilities: [
+          "Prospectar nuevos clientes mediante contacto en frío y referidos.",
+          "Crear documentos, incluidas presentaciones y hojas de cálculo en Excel.",
+        ],
+      },
+    });
+  });
+
+  it("fails closed if the model changes keys or protected variables", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    getAgentRuntimeSettings.mockResolvedValue({
+      useResponsesApi: true,
+      secrets: {
+        openai_api_key: "primary-secret",
+        openai_api_key_backup: null,
+      },
+    });
+    parse.mockResolvedValue({
+      output_parsed: {
+        fields: [{ key: "message", text: "Hola, candidato." }],
+        lists: [],
+      },
+    });
+
+    await expect(
+      normalizePublicCopy({} as never, {
+        fields: [
+          {
+            key: "message",
+            text: "Hola {{nombre}}.",
+            style: "message",
+          },
+        ],
+        lists: [],
+      })
+    ).rejects.toThrow(
+      "No fue posible validar editorialmente los textos públicos con OpenAI."
+    );
+    expect(warning).toHaveBeenCalled();
+    warning.mockRestore();
   });
 });

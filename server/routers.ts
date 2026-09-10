@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { getPool, getUserById, getUserByOpenId } from "./db";
 import {
@@ -48,9 +49,11 @@ import {
   APPLICATION_CONSENT_VERSION,
 } from "../shared/applicationConsent";
 import {
-  normalizeProfileRequirements,
-  PROFILE_EDITORIAL_MODEL,
-  type ProfileEditorialResult,
+  normalizePublicCopy,
+  PUBLIC_COPY_EDITORIAL_MODEL,
+  type EditorialFieldStyle,
+  type PublicCopyEditorialInput,
+  type PublicCopyEditorialResult,
 } from "./profileEditorial";
 
 const statusValues = applicationStatuses;
@@ -83,7 +86,22 @@ async function requireCompletePositionProfile(
 ) {
   const profileReadiness = await pool.query(
     `SELECT profile.id AS profile_id,
-            profile.required_requirements
+            profile.name,
+            profile.summary,
+            profile.objective,
+            profile.responsibilities,
+            profile.required_requirements,
+            profile.technical_skills,
+            profile.soft_skills,
+            profile.knowledge,
+            profile.academic_level,
+            profile.languages,
+            profile.licenses,
+            profile.availability,
+            profile.location,
+            profile.salary_range,
+            profile.work_mode,
+            profile.ai_criteria
        FROM job_positions position
        JOIN job_profiles profile ON profile.active = true
        LEFT JOIN job_profile_positions link
@@ -115,98 +133,629 @@ async function requireCompletePositionProfile(
      ON CONFLICT DO NOTHING`,
     [profileId, positionId]
   );
-  return {
-    profileId,
-    requiredRequirements: (Array.isArray(
-      profileReadiness.rows[0]?.required_requirements
-    )
-      ? profileReadiness.rows[0].required_requirements
-      : []
-    ).filter(
-      (requirement: unknown): requirement is string =>
-        typeof requirement === "string" && requirement.trim().length > 0
-    ),
+  return profileReadiness.rows[0] as Record<string, any> & {
+    profile_id: number;
   };
 }
 
-async function recordProfileEditorialValidation(
-  pool: Pick<DatabasePool, "query">,
-  input: {
-    profileId: number;
-    actorUserId: number;
-    before: string[];
-    result: ProfileEditorialResult;
-  }
-) {
-  await pool.query(
-    `UPDATE job_profiles
-        SET required_requirements=$1::jsonb,updated_at=now()
-      WHERE id=$2`,
-    [asJson(input.result.requirements), input.profileId]
-  );
-  await pool.query(
-    `INSERT INTO audit_log
-       (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment)
-     VALUES ($1,'job_profile',$2,'requirements_editorially_normalized',$3::jsonb,$4::jsonb,$5)`,
-    [
-      input.actorUserId,
-      input.profileId,
-      asJson({ requiredRequirements: input.before }),
-      asJson({
-        requiredRequirements: input.result.requirements,
-        model: input.result.model,
-        keySlot: input.result.keySlot,
-      }),
-      `Corrección editorial mediante OpenAI Responses API con ${input.result.model}.`,
-    ]
-  );
+type ValidatedPublicCopy = {
+  fields: Record<string, string>;
+  lists: Record<string, string[]>;
+  audit: null | {
+    before: PublicCopyEditorialInput;
+    after: PublicCopyEditorialInput;
+    result: PublicCopyEditorialResult;
+    contentHash: string;
+  };
+};
+
+function editorialField(
+  key: string,
+  value: unknown,
+  style: EditorialFieldStyle,
+  maxLength?: number
+): PublicCopyEditorialInput["fields"][number] | null {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text ? { key, text, style, maxLength } : null;
 }
 
-async function hasCurrentProfileEditorialValidation(
+function editorialList(key: string, value: unknown) {
+  const items = (Array.isArray(value) ? value : []).filter(
+    (item): item is string => typeof item === "string" && item.trim().length > 0
+  );
+  return items.length ? { key, items } : null;
+}
+
+function publicCopyHash(input: PublicCopyEditorialInput) {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+
+function copyFromInput(input: PublicCopyEditorialInput) {
+  return {
+    fields: Object.fromEntries(
+      input.fields.map(field => [field.key, field.text])
+    ),
+    lists: Object.fromEntries(input.lists.map(list => [list.key, list.items])),
+  };
+}
+
+function copyFromResult(
+  input: PublicCopyEditorialInput,
+  result: PublicCopyEditorialResult
+): PublicCopyEditorialInput {
+  return {
+    fields: input.fields.map(field => ({
+      ...field,
+      text: result.fields[field.key],
+    })),
+    lists: input.lists.map(list => ({
+      key: list.key,
+      items: result.lists[list.key],
+    })),
+  };
+}
+
+async function hasCurrentEditorialValidation(
   pool: Pick<DatabasePool, "query">,
-  profileId: number,
-  requirements: string[]
+  entityType: string,
+  entityId: number,
+  contentHash: string
 ) {
   const result = await pool.query<{ validated: boolean }>(
     `SELECT EXISTS (
        SELECT 1
          FROM audit_log
-        WHERE entity_type='job_profile'
-          AND entity_id=$1
-          AND action='requirements_editorially_normalized'
-          AND after_json->'requiredRequirements'=$2::jsonb
-          AND after_json->>'model'=$3
+        WHERE entity_type=$1
+          AND entity_id=$2
+          AND action='public_copy_editorially_normalized'
+          AND after_json->>'contentHash'=$3
+          AND after_json->>'model'=$4
      ) AS validated`,
-    [profileId, asJson(requirements), PROFILE_EDITORIAL_MODEL]
+    [entityType, entityId, contentHash, PUBLIC_COPY_EDITORIAL_MODEL]
   );
   return result.rows[0]?.validated === true;
+}
+
+async function validateEntityPublicCopy(
+  pool: DatabasePool,
+  entityType: string,
+  entityId: number | undefined,
+  input: PublicCopyEditorialInput
+): Promise<ValidatedPublicCopy> {
+  const contentHash = publicCopyHash(input);
+  if (
+    entityId &&
+    (await hasCurrentEditorialValidation(
+      pool,
+      entityType,
+      entityId,
+      contentHash
+    ))
+  ) {
+    return { ...copyFromInput(input), audit: null };
+  }
+  const result = await normalizePublicCopy(pool, input);
+  const after = copyFromResult(input, result);
+  return {
+    fields: result.fields,
+    lists: result.lists,
+    audit: {
+      before: input,
+      after,
+      result,
+      contentHash: publicCopyHash(after),
+    },
+  };
+}
+
+async function recordEditorialValidation(
+  db: Pick<DatabasePool, "query">,
+  entityType: string,
+  entityId: number,
+  actorUserId: number | null,
+  validation: ValidatedPublicCopy
+) {
+  if (!validation.audit) return;
+  await db.query(
+    `INSERT INTO audit_log
+       (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment)
+     VALUES ($1,$2,$3,'public_copy_editorially_normalized',$4::jsonb,$5::jsonb,$6)`,
+    [
+      actorUserId,
+      entityType,
+      entityId,
+      asJson(validation.audit.before),
+      asJson({
+        ...validation.audit.after,
+        contentHash: validation.audit.contentHash,
+        model: validation.audit.result.model,
+        keySlot: validation.audit.result.keySlot,
+      }),
+      `Revisión integral de texto público mediante OpenAI Responses API con ${validation.audit.result.model}.`,
+    ]
+  );
+}
+
+function profilePublicCopyInput(profile: Record<string, any>) {
+  const fields = [
+    editorialField("name", profile.name, "title", 180),
+    editorialField("summary", profile.summary, "paragraph", 2_000),
+    editorialField("objective", profile.objective, "paragraph", 5_000),
+    editorialField("academicLevel", profile.academicLevel, "paragraph", 120),
+    editorialField("availability", profile.availability, "paragraph", 1_000),
+    editorialField("location", profile.location, "proper_noun", 1_000),
+    editorialField("salaryRange", profile.salaryRange, "paragraph", 160),
+    editorialField("workMode", profile.workMode, "paragraph", 80),
+    editorialField(
+      "aiCriteria",
+      profile.aiCriteria,
+      "internal_criterion",
+      5_000
+    ),
+  ].filter(Boolean) as PublicCopyEditorialInput["fields"];
+  const lists = [
+    editorialList("responsibilities", profile.responsibilities),
+    editorialList("requiredRequirements", profile.requiredRequirements),
+    editorialList("technicalSkills", profile.technicalSkills),
+    editorialList("softSkills", profile.softSkills),
+    editorialList("knowledge", profile.knowledge),
+    editorialList("languages", profile.languages),
+    editorialList("licenses", profile.licenses),
+  ].filter(Boolean) as PublicCopyEditorialInput["lists"];
+  return { fields, lists };
+}
+
+function profileCopyFromRow(row: Record<string, any>) {
+  return {
+    name: row.name,
+    summary: row.summary,
+    objective: row.objective,
+    responsibilities: row.responsibilities,
+    requiredRequirements: row.required_requirements,
+    technicalSkills: row.technical_skills,
+    softSkills: row.soft_skills,
+    knowledge: row.knowledge,
+    academicLevel: row.academic_level,
+    languages: row.languages,
+    licenses: row.licenses,
+    availability: row.availability,
+    location: row.location,
+    salaryRange: row.salary_range,
+    workMode: row.work_mode,
+    aiCriteria: row.ai_criteria,
+  };
+}
+
+function applyProfileEditorialCopy(
+  profile: Record<string, any>,
+  validation: ValidatedPublicCopy
+) {
+  const field = (key: string, fallback: unknown) =>
+    validation.fields[key] ?? fallback ?? null;
+  const list = (key: string, fallback: unknown) =>
+    validation.lists[key] ?? (Array.isArray(fallback) ? fallback : []);
+  return {
+    ...profile,
+    name: field("name", profile.name),
+    summary: field("summary", profile.summary),
+    objective: field("objective", profile.objective),
+    responsibilities: list("responsibilities", profile.responsibilities),
+    requiredRequirements: list(
+      "requiredRequirements",
+      profile.requiredRequirements
+    ),
+    technicalSkills: list("technicalSkills", profile.technicalSkills),
+    softSkills: list("softSkills", profile.softSkills),
+    knowledge: list("knowledge", profile.knowledge),
+    academicLevel: field("academicLevel", profile.academicLevel),
+    languages: list("languages", profile.languages),
+    licenses: list("licenses", profile.licenses),
+    availability: field("availability", profile.availability),
+    location: field("location", profile.location),
+    salaryRange: field("salaryRange", profile.salaryRange),
+    workMode: field("workMode", profile.workMode),
+    aiCriteria: field("aiCriteria", profile.aiCriteria),
+  };
+}
+
+async function normalizeStoredProfile(
+  pool: DatabasePool,
+  row: Record<string, any>,
+  actorUserId: number | null
+) {
+  const profile = profileCopyFromRow(row);
+  const validation = await validateEntityPublicCopy(
+    pool,
+    "job_profile",
+    Number(row.profile_id ?? row.id),
+    profilePublicCopyInput(profile)
+  );
+  if (!validation.audit) return row;
+  const normalized = applyProfileEditorialCopy(profile, validation);
+  await pool.query(
+    `UPDATE job_profiles
+        SET name=$1,summary=$2,objective=$3,responsibilities=$4::jsonb,
+            required_requirements=$5::jsonb,technical_skills=$6::jsonb,
+            soft_skills=$7::jsonb,knowledge=$8::jsonb,academic_level=$9,
+            languages=$10::jsonb,licenses=$11::jsonb,availability=$12,
+            location=$13,salary_range=$14,work_mode=$15,ai_criteria=$16,
+            updated_at=now()
+      WHERE id=$17`,
+    [
+      normalized.name,
+      normalized.summary,
+      normalized.objective,
+      asJson(normalized.responsibilities),
+      asJson(normalized.requiredRequirements),
+      asJson(normalized.technicalSkills),
+      asJson(normalized.softSkills),
+      asJson(normalized.knowledge),
+      normalized.academicLevel,
+      asJson(normalized.languages),
+      asJson(normalized.licenses),
+      normalized.availability,
+      normalized.location,
+      normalized.salaryRange,
+      normalized.workMode,
+      normalized.aiCriteria,
+      Number(row.profile_id ?? row.id),
+    ]
+  );
+  await recordEditorialValidation(
+    pool,
+    "job_profile",
+    Number(row.profile_id ?? row.id),
+    actorUserId,
+    validation
+  );
+  return { ...row, ...normalized };
 }
 
 async function preparePositionProfileForPublication(
   pool: DatabasePool,
   positionId: number,
-  actorUserId: number
+  actorUserId: number | null
 ) {
   const profile = await requireCompletePositionProfile(pool, positionId);
-  if (
-    await hasCurrentProfileEditorialValidation(
-      pool,
-      profile.profileId,
-      profile.requiredRequirements
-    )
-  ) {
-    return;
-  }
-  const editorialResult = await normalizeProfileRequirements(
-    pool,
-    profile.requiredRequirements
+  return normalizeStoredProfile(pool, profile, actorUserId);
+}
+
+function positionPublicCopyInput(position: Record<string, any>) {
+  const fields = [
+    editorialField("title", position.title, "title", 180),
+    editorialField("department", position.department, "proper_noun", 160),
+    editorialField("locationLabel", position.locationLabel, "proper_noun", 240),
+    editorialField("description", position.description, "paragraph", 5_000),
+    editorialField(
+      "whatsappMessage",
+      position.whatsappMessage,
+      "message",
+      1_000
+    ),
+  ].filter(Boolean) as PublicCopyEditorialInput["fields"];
+  return { fields, lists: [] };
+}
+
+function positionCopyFromRow(row: Record<string, any>) {
+  return {
+    title: row.title,
+    department: row.department,
+    locationLabel: row.location_label,
+    description: row.description,
+    whatsappMessage: row.whatsapp_message,
+  };
+}
+
+function applyPositionEditorialCopy(
+  position: Record<string, any>,
+  validation: ValidatedPublicCopy
+) {
+  const field = (key: string, fallback: unknown) =>
+    validation.fields[key] ?? fallback ?? null;
+  return {
+    ...position,
+    title: field("title", position.title),
+    department: field("department", position.department),
+    locationLabel: field("locationLabel", position.locationLabel),
+    description: field("description", position.description),
+    whatsappMessage: field("whatsappMessage", position.whatsappMessage),
+  };
+}
+
+async function normalizeStoredPosition(
+  pool: DatabasePool,
+  positionId: number,
+  actorUserId: number | null
+) {
+  const current = await pool.query(
+    `SELECT id,title,department,location_label,description,whatsapp_message
+       FROM job_positions
+      WHERE id=$1`,
+    [positionId]
   );
-  await recordProfileEditorialValidation(pool, {
-    profileId: profile.profileId,
+  if (!current.rows[0]) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Plaza no encontrada." });
+  }
+  const position = positionCopyFromRow(current.rows[0]);
+  const validation = await validateEntityPublicCopy(
+    pool,
+    "job_position",
+    positionId,
+    positionPublicCopyInput(position)
+  );
+  if (!validation.audit) return current.rows[0];
+  const normalized = applyPositionEditorialCopy(position, validation);
+  await pool.query(
+    `UPDATE job_positions
+        SET title=$1,department=$2,location_label=$3,description=$4,
+            whatsapp_message=$5,updated_at=now()
+      WHERE id=$6`,
+    [
+      normalized.title,
+      normalized.department,
+      normalized.locationLabel,
+      normalized.description,
+      normalized.whatsappMessage,
+      positionId,
+    ]
+  );
+  await recordEditorialValidation(
+    pool,
+    "job_position",
+    positionId,
     actorUserId,
-    before: profile.requiredRequirements,
-    result: editorialResult,
+    validation
+  );
+  return { ...current.rows[0], ...normalized };
+}
+
+function formPublicCopyInput(form: Record<string, any>) {
+  const fields = [
+    editorialField("title", form.title, "title", 240),
+    editorialField("intro", form.intro, "paragraph", 3_000),
+  ].filter(Boolean) as PublicCopyEditorialInput["fields"];
+  return { fields, lists: [] };
+}
+
+function applyFormEditorialCopy(
+  form: Record<string, any>,
+  validation: ValidatedPublicCopy
+) {
+  return {
+    ...form,
+    title: validation.fields.title ?? form.title,
+    intro: validation.fields.intro ?? form.intro ?? null,
+  };
+}
+
+function questionPublicCopyInput(question: Record<string, any>) {
+  const answerConfig = question.answerConfig ?? question.answer_config ?? {};
+  const options: string[] = Array.isArray(answerConfig.options)
+    ? answerConfig.options.map(String)
+    : [];
+  const fields = [
+    editorialField("label", question.label, "question", 5_000),
+    editorialField(
+      "helpText",
+      question.helpText ?? question.help_text,
+      "paragraph",
+      600
+    ),
+    editorialField(
+      "evaluationCriteria",
+      question.evaluationCriteria ?? question.evaluation_criteria,
+      "internal_criterion",
+      2_000
+    ),
+    editorialField(
+      "aiPrompt",
+      question.aiPrompt ?? question.ai_prompt,
+      "internal_criterion",
+      2_000
+    ),
+    ...options.map((option, index) =>
+      editorialField(`option.${index}`, option, "option", 500)
+    ),
+  ].filter(Boolean) as PublicCopyEditorialInput["fields"];
+  return { fields, lists: [] };
+}
+
+function applyQuestionEditorialCopy(
+  question: Record<string, any>,
+  validation: ValidatedPublicCopy,
+  keyPrefix = ""
+) {
+  const answerConfig = {
+    ...(question.answerConfig ?? question.answer_config ?? {}),
+  };
+  const originalOptions: string[] = Array.isArray(answerConfig.options)
+    ? answerConfig.options.map(String)
+    : [];
+  const optionKey = (index: number) => `${keyPrefix}option.${index}`;
+  const normalizedOptions = originalOptions.map(
+    (option, index) => validation.fields[optionKey(index)] ?? option
+  );
+  if (originalOptions.length) answerConfig.options = normalizedOptions;
+  const originalAccepted =
+    question.acceptedAnswers ?? question.accepted_answers ?? [];
+  const acceptedAnswers = (
+    Array.isArray(originalAccepted) ? originalAccepted : []
+  ).map(answer => {
+    if (typeof answer !== "string") return answer;
+    const optionIndex = originalOptions.indexOf(answer);
+    return optionIndex >= 0 ? normalizedOptions[optionIndex] : answer;
   });
+  const field = (key: string, fallback: unknown) =>
+    validation.fields[`${keyPrefix}${key}`] ?? fallback ?? null;
+  return {
+    ...question,
+    label: field("label", question.label),
+    helpText: field("helpText", question.helpText ?? question.help_text),
+    evaluationCriteria: field(
+      "evaluationCriteria",
+      question.evaluationCriteria ?? question.evaluation_criteria
+    ),
+    aiPrompt: field("aiPrompt", question.aiPrompt ?? question.ai_prompt),
+    answerConfig,
+    acceptedAnswers,
+  };
+}
+
+function formBundlePublicCopyInput(
+  form: Record<string, any>,
+  questions: Record<string, any>[]
+) {
+  const fields = [
+    editorialField("form.title", form.title, "title"),
+    editorialField("form.intro", form.intro, "paragraph"),
+  ];
+  for (const question of questions) {
+    const prefix = `question.${question.id}.`;
+    for (const field of questionPublicCopyInput(question).fields) {
+      fields.push({ ...field, key: `${prefix}${field.key}` });
+    }
+  }
+  return {
+    fields: fields.filter(Boolean) as PublicCopyEditorialInput["fields"],
+    lists: [],
+  };
+}
+
+async function normalizeStoredFormBundle(
+  pool: DatabasePool,
+  formId: number,
+  actorUserId: number | null
+) {
+  const formResult = await pool.query(
+    `SELECT id,title,intro FROM application_forms WHERE id=$1`,
+    [formId]
+  );
+  if (!formResult.rows[0]) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Formulario no encontrado.",
+    });
+  }
+  const questionsResult = await pool.query(
+    `SELECT id,label,help_text,evaluation_criteria,ai_prompt,
+            answer_config,accepted_answers
+       FROM form_questions
+      WHERE form_id=$1
+      ORDER BY order_index,id`,
+    [formId]
+  );
+  const form = formResult.rows[0];
+  const questions = questionsResult.rows;
+  const validation = await validateEntityPublicCopy(
+    pool,
+    "application_form_bundle",
+    formId,
+    formBundlePublicCopyInput(form, questions)
+  );
+  if (!validation.audit) return;
+  const normalizedForm = {
+    title: validation.fields["form.title"] ?? form.title,
+    intro: validation.fields["form.intro"] ?? form.intro,
+  };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE application_forms SET title=$1,intro=$2,updated_at=now() WHERE id=$3`,
+      [normalizedForm.title, normalizedForm.intro, formId]
+    );
+    for (const question of questions) {
+      const normalized = applyQuestionEditorialCopy(
+        question,
+        validation,
+        `question.${question.id}.`
+      );
+      await client.query(
+        `UPDATE form_questions
+            SET label=$1,help_text=$2,evaluation_criteria=$3,ai_prompt=$4,
+                answer_config=$5::jsonb,accepted_answers=$6::jsonb
+          WHERE id=$7`,
+        [
+          normalized.label,
+          normalized.helpText,
+          normalized.evaluationCriteria,
+          normalized.aiPrompt,
+          asJson(normalized.answerConfig),
+          asJson(normalized.acceptedAnswers),
+          question.id,
+        ]
+      );
+    }
+    await recordEditorialValidation(
+      client,
+      "application_form_bundle",
+      formId,
+      actorUserId,
+      validation
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function normalizeStoredQuestion(
+  pool: DatabasePool,
+  row: Record<string, any>,
+  actorUserId: number | null
+) {
+  const questionId = Number(row.id);
+  const validation = await validateEntityPublicCopy(
+    pool,
+    "form_question",
+    questionId,
+    questionPublicCopyInput(row)
+  );
+  if (!validation.audit) return row;
+  const normalized = applyQuestionEditorialCopy(row, validation);
+  await pool.query(
+    `UPDATE form_questions
+        SET label=$1,help_text=$2,evaluation_criteria=$3,ai_prompt=$4,
+            answer_config=$5::jsonb,accepted_answers=$6::jsonb
+      WHERE id=$7`,
+    [
+      normalized.label,
+      normalized.helpText,
+      normalized.evaluationCriteria,
+      normalized.aiPrompt,
+      asJson(normalized.answerConfig),
+      asJson(normalized.acceptedAnswers),
+      questionId,
+    ]
+  );
+  await recordEditorialValidation(
+    pool,
+    "form_question",
+    questionId,
+    actorUserId,
+    validation
+  );
+  return { ...row, ...normalized };
+}
+
+async function normalizeLatestPositionForm(
+  pool: DatabasePool,
+  positionId: number,
+  actorUserId: number | null
+) {
+  const form = await pool.query<{ id: number }>(
+    `SELECT id FROM application_forms
+      WHERE job_position_id=$1
+      ORDER BY version DESC,id DESC
+      LIMIT 1`,
+    [positionId]
+  );
+  if (form.rows[0]) {
+    await normalizeStoredFormBundle(pool, form.rows[0].id, actorUserId);
+  }
 }
 
 function asJson(value: unknown) {
@@ -232,6 +781,59 @@ function safeIntegrationMessage(error: unknown, fallback: string) {
       ? Number((error as { status?: unknown }).status)
       : Number.NaN;
   return Number.isFinite(status) ? `${fallback} (HTTP ${status}).` : fallback;
+}
+
+export async function auditPublishedPublicCopy(pool: DatabasePool) {
+  const lockClient = await pool.connect();
+  let acquired = false;
+  try {
+    const lock = await lockClient.query<{ acquired: boolean }>(
+      `SELECT pg_try_advisory_lock($1,$2) AS acquired`,
+      [1095320385, 20260910]
+    );
+    acquired = lock.rows[0]?.acquired === true;
+    if (!acquired) return { audited: 0, failed: 0, skipped: true };
+
+    const positions = await pool.query<{ id: number }>(
+      `SELECT DISTINCT position.id
+         FROM job_positions position
+         JOIN application_forms form ON form.job_position_id=position.id
+        WHERE position.published=true AND form.published=true
+        ORDER BY position.id`
+    );
+    let audited = 0;
+    let failed = 0;
+    for (const position of positions.rows) {
+      try {
+        await normalizeStoredPosition(pool, position.id, null);
+        await preparePositionProfileForPublication(pool, position.id, null);
+        const forms = await pool.query<{ id: number }>(
+          `SELECT id FROM application_forms
+            WHERE job_position_id=$1 AND published=true
+            ORDER BY version,id`,
+          [position.id]
+        );
+        for (const form of forms.rows) {
+          await normalizeStoredFormBundle(pool, form.id, null);
+        }
+        audited += 1;
+      } catch (error) {
+        failed += 1;
+        console.warn(
+          `[PublicCopyAudit] Position ${position.id} failed (${error instanceof Error ? error.name : "unknown"}).`
+        );
+      }
+    }
+    return { audited, failed, skipped: false };
+  } finally {
+    if (acquired) {
+      await lockClient.query(
+        `SELECT pg_advisory_unlock($1,$2)`,
+        [1095320385, 20260910]
+      );
+    }
+    lockClient.release();
+  }
 }
 
 function requestIp(req: { ip?: string; headers: Record<string, unknown> }) {
@@ -425,7 +1027,7 @@ export const appRouter = router({
           active: z.boolean().default(true),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
         const duplicate = await pool.query(
           `SELECT id FROM users WHERE lower(email)=lower($1) AND ($2::integer IS NULL OR id<>$2) LIMIT 1`,
@@ -581,45 +1183,38 @@ export const appRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
-        const editorialAlreadyValid =
-          input.id && input.requiredRequirements.length
-            ? await hasCurrentProfileEditorialValidation(
-                pool,
-                input.id,
-                input.requiredRequirements
-              )
-            : false;
-        const editorialResult =
-          input.requiredRequirements.length && !editorialAlreadyValid
-            ? await normalizeProfileRequirements(
-                pool,
-                input.requiredRequirements
-              )
-            : null;
-        const requiredRequirements =
-          editorialResult?.requirements ?? input.requiredRequirements;
+        const profileValidation = await validateEntityPublicCopy(
+          pool,
+          "job_profile",
+          input.id,
+          profilePublicCopyInput(input)
+        );
+        const normalizedInput = applyProfileEditorialCopy(
+          input,
+          profileValidation
+        );
         const client = await pool.connect();
         try {
           await client.query("BEGIN");
           const values = [
-            input.name,
-            input.summary ?? null,
-            input.objective ?? null,
-            asJson(input.responsibilities),
-            asJson(requiredRequirements),
-            asJson(input.technicalSkills),
-            asJson(input.softSkills),
-            asJson(input.knowledge),
-            input.academicLevel ?? null,
+            normalizedInput.name,
+            normalizedInput.summary ?? null,
+            normalizedInput.objective ?? null,
+            asJson(normalizedInput.responsibilities),
+            asJson(normalizedInput.requiredRequirements),
+            asJson(normalizedInput.technicalSkills),
+            asJson(normalizedInput.softSkills),
+            asJson(normalizedInput.knowledge),
+            normalizedInput.academicLevel ?? null,
             input.experienceYearsMin ?? null,
             input.experienceYearsMax ?? null,
-            asJson(input.languages),
-            asJson(input.licenses),
-            input.availability ?? null,
-            input.location ?? null,
-            input.salaryRange ?? null,
-            input.workMode ?? null,
-            input.aiCriteria ?? null,
+            asJson(normalizedInput.languages),
+            asJson(normalizedInput.licenses),
+            normalizedInput.availability ?? null,
+            normalizedInput.location ?? null,
+            normalizedInput.salaryRange ?? null,
+            normalizedInput.workMode ?? null,
+            normalizedInput.aiCriteria ?? null,
             input.active,
           ];
           let result;
@@ -634,26 +1229,13 @@ export const appRouter = router({
               [...values, ctx.user.id]
             );
           const profileId = result.rows[0].id;
-          if (editorialResult) {
-            await client.query(
-              `INSERT INTO audit_log
-                 (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment)
-               VALUES ($1,'job_profile',$2,'requirements_editorially_normalized',$3::jsonb,$4::jsonb,$5)`,
-              [
-                ctx.user.id,
-                profileId,
-                asJson({
-                  requiredRequirements: input.requiredRequirements,
-                }),
-                asJson({
-                  requiredRequirements: editorialResult.requirements,
-                  model: editorialResult.model,
-                  keySlot: editorialResult.keySlot,
-                }),
-                `Corrección editorial mediante OpenAI Responses API con ${editorialResult.model}.`,
-              ]
-            );
-          }
+          await recordEditorialValidation(
+            client,
+            "job_profile",
+            profileId,
+            ctx.user.id,
+            profileValidation
+          );
           await client.query(
             `DELETE FROM job_profile_positions WHERE profile_id=$1`,
             [profileId]
@@ -674,8 +1256,21 @@ export const appRouter = router({
       }),
     setActive: adminProcedure
       .input(z.object({ id: z.number(), active: z.boolean() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
+        if (input.active) {
+          const current = await pool.query(
+            `SELECT * FROM job_profiles WHERE id=$1`,
+            [input.id]
+          );
+          if (!current.rows[0]) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Perfil laboral no encontrado.",
+            });
+          }
+          await normalizeStoredProfile(pool, current.rows[0], ctx.user.id);
+        }
         await pool.query(
           `UPDATE job_profiles SET active=$1,updated_at=now() WHERE id=$2`,
           [input.active, input.id]
@@ -1070,6 +1665,16 @@ export const appRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
+        const positionValidation = await validateEntityPublicCopy(
+          pool,
+          "job_position",
+          input.id,
+          positionPublicCopyInput(input)
+        );
+        const normalizedInput = applyPositionEditorialCopy(
+          input,
+          positionValidation
+        );
         if (input.published) {
           if (!input.id) {
             throw new TRPCError({
@@ -1083,6 +1688,7 @@ export const appRouter = router({
             input.id,
             ctx.user.id
           );
+          await normalizeLatestPositionForm(pool, input.id, ctx.user.id);
         }
         const publicSlug = input.id
           ? undefined
@@ -1092,16 +1698,23 @@ export const appRouter = router({
             `UPDATE job_positions SET code=$1,title=$2,department=$3,location_label=$4,description=$5,agent_key=$6,whatsapp_message=$7,default_country=$8,published=$9,updated_at=now() WHERE id=$10 RETURNING *`,
             [
               input.code,
-              input.title,
-              input.department ?? null,
-              input.locationLabel ?? null,
-              input.description ?? null,
+              normalizedInput.title,
+              normalizedInput.department ?? null,
+              normalizedInput.locationLabel ?? null,
+              normalizedInput.description ?? null,
               input.agentKey,
-              input.whatsappMessage ?? null,
+              normalizedInput.whatsappMessage ?? null,
               input.defaultCountry,
               input.published,
               input.id,
             ]
+          );
+          await recordEditorialValidation(
+            pool,
+            "job_position",
+            input.id,
+            ctx.user.id,
+            positionValidation
           );
           return result.rows[0];
         }
@@ -1110,12 +1723,12 @@ export const appRouter = router({
           [
             publicSlug,
             input.code,
-            input.title,
-            input.department ?? null,
-            input.locationLabel ?? null,
-            input.description ?? null,
+            normalizedInput.title,
+            normalizedInput.department ?? null,
+            normalizedInput.locationLabel ?? null,
+            normalizedInput.description ?? null,
             input.agentKey,
-            input.whatsappMessage ?? null,
+            normalizedInput.whatsappMessage ?? null,
             input.defaultCountry,
             input.published,
             ctx.user.id,
@@ -1125,10 +1738,17 @@ export const appRouter = router({
           `INSERT INTO application_forms (job_position_id,version,title,intro,published,created_by_user_id) VALUES ($1,1,$2,$3,false,$4)`,
           [
             result.rows[0].id,
-            `Formulario · ${input.title}`,
+            `Formulario · ${normalizedInput.title}`,
             "Complete sus datos para postularse a esta plaza.",
             ctx.user.id,
           ]
+        );
+        await recordEditorialValidation(
+          pool,
+          "job_position",
+          result.rows[0].id,
+          ctx.user.id,
+          positionValidation
         );
         return result.rows[0];
       }),
@@ -1142,6 +1762,8 @@ export const appRouter = router({
             input.id,
             ctx.user.id
           );
+          await normalizeStoredPosition(pool, input.id, ctx.user.id);
+          await normalizeLatestPositionForm(pool, input.id, ctx.user.id);
         }
         const result = await pool.query(
           `UPDATE job_positions SET published=$1,updated_at=now() WHERE id=$2 RETURNING *`,
@@ -1892,11 +2514,46 @@ export const appRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
+        if (input.published) {
+          await preparePositionProfileForPublication(
+            pool,
+            input.positionId,
+            ctx.user.id
+          );
+          await normalizeStoredPosition(pool, input.positionId, ctx.user.id);
+        }
+        const formValidation = await validateEntityPublicCopy(
+          pool,
+          "application_form",
+          input.id,
+          formPublicCopyInput(input)
+        );
+        const normalizedInput = applyFormEditorialCopy(input, formValidation);
         if (input.id) {
           const result = await pool.query(
             `UPDATE application_forms SET title=$1,intro=$2,published=$3,updated_at=now() WHERE id=$4 RETURNING *`,
-            [input.title, input.intro ?? null, input.published, input.id]
+            [
+              normalizedInput.title,
+              normalizedInput.intro ?? null,
+              false,
+              input.id,
+            ]
           );
+          await recordEditorialValidation(
+            pool,
+            "application_form",
+            input.id,
+            ctx.user.id,
+            formValidation
+          );
+          if (input.published) {
+            await normalizeStoredFormBundle(pool, input.id, ctx.user.id);
+            const published = await pool.query(
+              `UPDATE application_forms SET published=true,updated_at=now() WHERE id=$1 RETURNING *`,
+              [input.id]
+            );
+            return published.rows[0];
+          }
           return result.rows[0];
         }
         const version = await pool.query(
@@ -1908,12 +2565,27 @@ export const appRouter = router({
           [
             input.positionId,
             version.rows[0].version,
-            input.title,
-            input.intro ?? null,
-            input.published,
+            normalizedInput.title,
+            normalizedInput.intro ?? null,
+            false,
             ctx.user.id,
           ]
         );
+        await recordEditorialValidation(
+          pool,
+          "application_form",
+          result.rows[0].id,
+          ctx.user.id,
+          formValidation
+        );
+        if (input.published) {
+          await normalizeStoredFormBundle(pool, result.rows[0].id, ctx.user.id);
+          const published = await pool.query(
+            `UPDATE application_forms SET published=true,updated_at=now() WHERE id=$1 RETURNING *`,
+            [result.rows[0].id]
+          );
+          return published.rows[0];
+        }
         return result.rows[0];
       }),
     saveQuestion: adminProcedure
@@ -1934,7 +2606,7 @@ export const appRouter = router({
           aiPrompt: z.string().max(2000).optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const options = Array.isArray(input.answerConfig.options)
           ? input.answerConfig.options.map(String).filter(Boolean)
           : [];
@@ -1957,23 +2629,40 @@ export const appRouter = router({
               "Una pregunta de descarte debe definir respuestas aprobadas o un rango permitido.",
           });
         const pool = await requirePool();
+        const questionValidation = await validateEntityPublicCopy(
+          pool,
+          "form_question",
+          input.id,
+          questionPublicCopyInput(input)
+        );
+        const normalizedInput = applyQuestionEditorialCopy(
+          input,
+          questionValidation
+        );
         if (input.id) {
           const result = await pool.query(
             `UPDATE form_questions SET field_key=$1,label=$2,help_text=$3,type=$4,required=$5,order_index=$6,answer_config=$7::jsonb,accepted_answers=$8::jsonb,hard_fail=$9,evaluation_criteria=$10,ai_prompt=$11 WHERE id=$12 RETURNING *`,
             [
               input.fieldKey,
-              input.label,
-              input.helpText ?? null,
+              normalizedInput.label,
+              normalizedInput.helpText ?? null,
               input.type,
               input.required,
               input.orderIndex,
-              asJson(input.answerConfig),
-              asJson(input.acceptedAnswers),
+              asJson(normalizedInput.answerConfig),
+              asJson(normalizedInput.acceptedAnswers),
               input.hardFail,
-              input.evaluationCriteria ?? null,
-              input.aiPrompt ?? null,
+              normalizedInput.evaluationCriteria ?? null,
+              normalizedInput.aiPrompt ?? null,
               input.id,
             ]
+          );
+          await recordEditorialValidation(
+            pool,
+            "form_question",
+            input.id,
+            ctx.user.id,
+            questionValidation
           );
           return result.rows[0];
         }
@@ -1982,17 +2671,24 @@ export const appRouter = router({
           [
             input.formId,
             input.fieldKey,
-            input.label,
-            input.helpText ?? null,
+            normalizedInput.label,
+            normalizedInput.helpText ?? null,
             input.type,
             input.required,
             input.orderIndex,
-            asJson(input.answerConfig),
-            asJson(input.acceptedAnswers),
+            asJson(normalizedInput.answerConfig),
+            asJson(normalizedInput.acceptedAnswers),
             input.hardFail,
-            input.evaluationCriteria ?? null,
-            input.aiPrompt ?? null,
+            normalizedInput.evaluationCriteria ?? null,
+            normalizedInput.aiPrompt ?? null,
           ]
+        );
+        await recordEditorialValidation(
+          pool,
+          "form_question",
+          result.rows[0].id,
+          ctx.user.id,
+          questionValidation
         );
         return result.rows[0];
       }),
@@ -2030,8 +2726,28 @@ export const appRouter = router({
       }),
     setPublished: adminProcedure
       .input(z.object({ id: z.number(), published: z.boolean() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
+        if (input.published) {
+          const form = await pool.query<{ job_position_id: number }>(
+            `SELECT job_position_id FROM application_forms WHERE id=$1`,
+            [input.id]
+          );
+          if (!form.rows[0]) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Formulario no encontrado.",
+            });
+          }
+          const positionId = form.rows[0].job_position_id;
+          await preparePositionProfileForPublication(
+            pool,
+            positionId,
+            ctx.user.id
+          );
+          await normalizeStoredPosition(pool, positionId, ctx.user.id);
+          await normalizeStoredFormBundle(pool, input.id, ctx.user.id);
+        }
         const result = await pool.query(
           `UPDATE application_forms SET published=$1,updated_at=now() WHERE id=$2 RETURNING *`,
           [input.published, input.id]
@@ -2049,8 +2765,24 @@ export const appRouter = router({
       }),
     setQuestionActive: adminProcedure
       .input(z.object({ id: z.number(), active: z.boolean() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
+        if (input.active) {
+          const current = await pool.query(
+            `SELECT id,label,help_text,evaluation_criteria,ai_prompt,
+                    answer_config,accepted_answers
+               FROM form_questions
+              WHERE id=$1`,
+            [input.id]
+          );
+          if (!current.rows[0]) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Pregunta no encontrada.",
+            });
+          }
+          await normalizeStoredQuestion(pool, current.rows[0], ctx.user.id);
+        }
         const result = await pool.query(
           `UPDATE form_questions SET active=$1 WHERE id=$2 RETURNING *`,
           [input.active, input.id]
