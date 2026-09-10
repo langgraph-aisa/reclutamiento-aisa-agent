@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.118</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.119</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.118-0b2d4b" alt="JARVI RH 2.0.118" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.119-0b2d4b" alt="JARVI RH 2.0.119" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse-3.38.20-orange" alt="Langfuse 3.38.20" />
@@ -23,16 +23,23 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.118 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.119 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
-Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH 2.0.118 integra plazas, formularios versionados, evaluación asistida por IA, revisión humana, solicitud controlada de currículum por WhatsApp y auditoría. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar: el personal autorizado conserva la decisión.
+Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH 2.0.119 integra plazas, formularios versionados, evaluación asistida por IA, revisión humana, solicitud controlada de currículum por WhatsApp y auditoría. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar: el personal autorizado conserva la decisión.
 
 ## 1. Reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora
 
 ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
+
+### 10SEP2026 · JARVI RH 2.0.119
+
+- Tratamiento institucional «usted» homologado en portal público, formularios, administración, correo, WhatsApp y mensajes de validación.
+- Auditoría automática de 76 archivos de ejecución y migración de textos predeterminados históricos.
+
+Descripción: elimina el tuteo de las interacciones, preserva el contenido libre de administración y bloquea regresiones lingüísticas durante verificación y build.
 
 ### 10SEP2026 · JARVI RH 2.0.118
 
@@ -127,6 +134,8 @@ Este diseño combina automatización simbólica y generativa. Las reglas son fal
 
 **Epistemología.** JARVI conoce únicamente lo persistido y configurado. Una respuesta es testimonio, no verificación de experiencia; una ausencia es brecha, no evidencia negativa. El sistema mejora la criticabilidad al separar resultado determinista, evidencia citada, inferencia, resumen, modelo y decisión humana. La posibilidad de revisar o contradecir el dictamen aproxima una racionalidad crítica: una recomendación útil debe poder fallar de forma observable (Popper, 2002). Sin conjunto de referencia etiquetado, acuerdo interevaluador, calibración y monitoreo de deriva, el puntaje debe interpretarse como apoyo ordinal, no probabilidad científica de desempeño.
 
+La interacción escrita adopta **usted** como forma institucional de segunda persona y combina verbos en tercera persona gramatical con posesivos como **su**. Se sustituyó el tuteo en instrucciones, preguntas, advertencias, errores, estados vacíos, confirmaciones, correo de acceso y mensajes de WhatsApp. El oráculo `scripts/verify-formal-spanish.mjs` examina literales de las superficies de ejecución y detiene el release si reaparecen pronombres, posesivos, conjugaciones o imperativos informales; la migración `0012_dear_lifeguard.sql` corrige solo valores predeterminados reconocidos y conserva textos libres. Este criterio sigue la descripción de las formas de tratamiento de RAE/ASALE y distingue la cortesía institucional de una mera sustitución léxica.
+
 **Fenomenología.** La postulación es también una experiencia vivida: la persona interpreta preguntas, expone trayectoria y enfrenta una interfaz que distribuye poder. Desde la reducción fenomenológica, el análisis debe suspender la presunción de que el puntaje agota el fenómeno y volver a cómo la decisión aparece ante quien postula (Husserl, 2012; Moustakas, 1994). Reducir esa experiencia a seis números puede invisibilizar contexto, aprendizaje o desigualdad de acceso. La revisión 360° reabre el horizonte mostrando respuesta, pregunta, brecha, motivo e historial en vez de presentar solo el total. Una práctica responsable añade aviso comprensible de uso de IA, accesibilidad, canal de corrección/impugnación y lenguaje no estigmatizante. La eficiencia comercial es legítima únicamente cuando conserva dignidad, agencia y responsabilidad institucional (UNESCO, 2021).
 
 ## 5. Diseño de datos y procedencia para auditoría
@@ -185,7 +194,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.118](docs/PRUEBAS_CAJA_NEGRA_2.0.118.md).
+`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.119](docs/PRUEBAS_CAJA_NEGRA_2.0.119.md).
 
 ## 8. Protocolo de Ingenierìa de Software
 
@@ -247,6 +256,8 @@ Las páginas técnicas evolutivas se consultaron el 10 de septiembre de 2026. La
 37. Raji, I. D., Smart, A., White, R. N., Mitchell, M., Gebru, T., Hutchinson, B., Smith-Loud, J., Theron, D., & Barnes, P. (2020). Closing the AI accountability gap. In _Proceedings of the 2020 Conference on Fairness, Accountability, and Transparency_ (pp. 33–44). ACM. https://doi.org/10.1145/3351095.3372873
 38. Selbst, A. D., Boyd, D., Friedler, S. A., Venkatasubramanian, S., & Vertesi, J. (2019). Fairness and abstraction in sociotechnical systems. In _Proceedings of FAT '19_ (pp. 59–68). ACM. https://doi.org/10.1145/3287560.3287598
 39. UNESCO. (2021). _Recommendation on the ethics of artificial intelligence_. https://unesdoc.unesco.org/ark:/48223/pf0000381137
+40. Real Academia Española & Asociación de Academias de la Lengua Española. (s. f.-a). _Las formas de tratamiento (II). Sustantivos y grupos nominales_. https://www.rae.es/gram%C3%A1tica/sintaxis/las-formas-de-tratamiento-ii-sustantivos-y-grupos-nominales
+41. Real Academia Española & Asociación de Academias de la Lengua Española. (s. f.-b). _Tutear_. En _Diccionario de la lengua española_. https://dle.rae.es/tutear
 
 ## Licencia y alcance
 

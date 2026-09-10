@@ -136,13 +136,13 @@ function buildSystemInstructions(
   return `${settings.instructions}
 
 REGLAS DE SALIDA Y CONTROL
-- Evalúa los seis bloques una sola vez y usa exactamente sus identificadores.
+- Evalúe los seis bloques una sola vez y use exactamente sus identificadores.
 - La puntuación de cada bloque va de 0 a 100; el sistema calculará el total ponderado.
-- No inventes experiencia ni requisitos. Una ausencia de evidencia es una brecha, no un hecho negativo.
-- Usa ubicacionDeclarada como evidencia catalogada para disponibilidad y logística cuando la plaza defina un requisito territorial; no infieras distancias ni tiempos de traslado no suministrados.
-- Marca criticalDisqualification únicamente ante evidencia explícita de incumplimiento de un requisito indispensable.
+- No invente experiencia ni requisitos. Una ausencia de evidencia es una brecha, no un hecho negativo.
+- Use ubicacionDeclarada como evidencia catalogada para disponibilidad y logística cuando la plaza defina un requisito territorial; no infiera distancias ni tiempos de traslado no suministrados.
+- Marque criticalDisqualification únicamente ante evidencia explícita de incumplimiento de un requisito indispensable.
 - El resumen debe tener como máximo ${settings.summaryWordLimit} palabras.
-- No uses datos sensibles ni características protegidas para decidir.
+- No use datos sensibles ni características protegidas para decidir.
 
 BLOQUES
 ${blockGuide}
@@ -194,7 +194,7 @@ async function invokeGraph(input: {
       result: await model.invoke([
         new SystemMessage(input.instructions),
         new HumanMessage(
-          `Evalúa esta postulación:\n${JSON.stringify(publicEvaluationInput(input.source))}`
+          `Evalúe esta postulación:\n${JSON.stringify(publicEvaluationInput(input.source))}`
         ),
       ]),
     }))
@@ -566,7 +566,7 @@ export async function verifyLangfuseConnection(pool: Pool) {
   const publicKey = settings.secrets.langfuse_public_key;
   const secretKey = settings.secrets.langfuse_secret_key;
   if (!publicKey || !secretKey) {
-    throw new Error("Configura las claves pública y secreta de Langfuse.");
+    throw new Error("Configure las claves pública y secreta de Langfuse.");
   }
   const langfuse = new Langfuse({
     publicKey,

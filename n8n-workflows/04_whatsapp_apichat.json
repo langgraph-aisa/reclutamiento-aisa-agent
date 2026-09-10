@@ -9,23 +9,17 @@
       "name": "Continuación por WhatsApp",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
-      "position": [
-        0,
-        0
-      ]
+      "position": [0, 0]
     },
     {
       "parameters": {
-        "jsCode": "const input = $json.body ?? $json;\nconst position = input.positionTitle ?? 'la plaza';\nconst recipientList = input.internalRecipients ?? [];\nreturn [{ json: { ...input, candidateMessage: `Gracias por aplicar a la plaza de ${position}, agradeceremos nos pueda brindar su Curriculum Vitae para continuar con su proceso de evaluación.`, internalMessages: recipientList.map(phone => ({ phone, message: `Nuevo candidato calificado para entrevista: ${position}. Teléfono: ${input.phoneInternational}` })) } }];"
+        "jsCode": "const input = $json.body ?? $json;\nconst position = input.positionTitle ?? 'la plaza';\nconst recipientList = input.internalRecipients ?? [];\nreturn [{ json: { ...input, candidateMessage: `Gracias por postularse a la plaza de ${position}. Agradeceremos que nos envíe su currículum vitae para continuar con el proceso de evaluación.`, internalMessages: recipientList.map(phone => ({ phone, message: `Nuevo candidato calificado para entrevista: ${position}. Teléfono: ${input.phoneInternational}` })) } }];"
       },
       "id": "preparar-mensajes",
       "name": "Preparar mensajes",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        260,
-        0
-      ]
+      "position": [260, 0]
     },
     {
       "parameters": {
@@ -55,10 +49,7 @@
       "name": "Enviar mensaje al candidato",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        560,
-        -100
-      ]
+      "position": [560, -100]
     },
     {
       "parameters": {
@@ -68,10 +59,7 @@
       "name": "Enviar alertas internas",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [
-        560,
-        160
-      ]
+      "position": [560, 160]
     },
     {
       "parameters": {
@@ -101,10 +89,7 @@
       "name": "HTTP ApiChat alertas",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        820,
-        160
-      ]
+      "position": [820, 160]
     },
     {
       "parameters": {
@@ -116,10 +101,7 @@
       "name": "Actualizar conversación",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        1080,
-        -100
-      ],
+      "position": [1080, -100],
       "credentials": {
         "postgres": {
           "id": "PENDIENTE",
@@ -133,10 +115,7 @@
       "name": "Finalizar WhatsApp",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [
-        1340,
-        -100
-      ]
+      "position": [1340, -100]
     }
   ],
   "pinData": {},

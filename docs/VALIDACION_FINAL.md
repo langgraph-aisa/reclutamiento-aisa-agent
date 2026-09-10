@@ -1,19 +1,20 @@
-# Validación final · JARVI RH 2.0.118
+# Validación final · JARVI RH 2.0.119
 
 Fecha de ejecución: 2026-09-10. Rama objetivo: `main`.
 
 ## Alcance verificado
 
-Esta hoja registra la página interna de privacidad, términos y condiciones y el vínculo de la tercera confirmación. Comprueba apertura en pestaña paralela sin navegación del formulario, contenido depurado, responsable y contacto, metadata, URL canónica, impresión, tres temas y sincronización de la versión aceptada en bitácora. Los casos observables están especificados en [PRUEBAS_CAJA_NEGRA_2.0.118.md](PRUEBAS_CAJA_NEGRA_2.0.118.md).
+Esta hoja registra la auditoría del tratamiento formal institucional en las superficies públicas y administrativas, preguntas generadas, validaciones, correo, WhatsApp y plantillas operativas. Comprueba el uso coherente de «usted», la migración acotada de valores históricos predeterminados y la puerta automática contra regresiones, sin alterar contenido libre de administración. Los casos observables están especificados en [PRUEBAS_CAJA_NEGRA_2.0.119.md](PRUEBAS_CAJA_NEGRA_2.0.119.md).
 
 ## Evidencia automatizada
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.118` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.119` |
+| Tratamiento (`pnpm text:verify`)                   | Aprobado · 76 archivos        |
 | Próxima versión (`pnpm release:bump -- --dry-run`) | Incremento semántico aprobado |
-| Caja negra (`pnpm test:black-box`)                 | Aprobado · 8 de 8 pruebas     |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 73 de 73 pruebas   |
+| Caja negra (`pnpm test:black-box`)                 | Aprobado · 9 de 9 pruebas     |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 74 de 74 pruebas   |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Build cliente/servidor (`pnpm build`)              | Aprobado                      |
 
@@ -21,4 +22,4 @@ El build conserva advertencias no bloqueantes preexistentes para variables opcio
 
 ## Dictamen
 
-El release cumple la puerta técnica local cuando toda la evidencia anterior resulte aprobada. La aplicación de WCAG 2.2, ISO/IEC 25010:2023, ISO/IEC 27001:2022 e ISO/IEC/IEEE 29119-1:2022 es metodológica y no implica certificación formal. La verificación posterior al despliegue debe confirmar BN-LEGAL-01 a BN-LEGAL-06 y la regresión visual en los tres temas, navegadores y resoluciones objetivo. El contenido se contrastó con fuentes oficiales, pero debe recibir aprobación jurídica organizacional antes de considerarse política definitiva.
+El release cumple la puerta técnica local cuando toda la evidencia anterior resulte aprobada. La aplicación de ISO/IEC 25010:2023, ISO/IEC 27001:2022 e ISO/IEC/IEEE 29119-1:2022 es metodológica y no implica certificación formal. La inspección posterior al despliegue debe confirmar BN-LANG-01 a BN-LANG-06 en portal, formulario, administración, correo y WhatsApp. El estándar lingüístico se contrastó con RAE/ASALE; los textos libres añadidos por administración requieren revisión editorial dentro de su propio control de publicación.

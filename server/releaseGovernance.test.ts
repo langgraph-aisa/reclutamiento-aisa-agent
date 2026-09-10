@@ -1,6 +1,7 @@
 import { ThemeToggle } from "../client/src/components/ThemeToggle";
 import { VerticalNavigator } from "../client/src/components/VerticalNavigator";
 import { ThemeProvider } from "../client/src/contexts/ThemeContext";
+import { auditFormalSpanish } from "../scripts/verify-formal-spanish.mjs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import fs from "node:fs";
@@ -52,8 +53,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.118");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.118");
+    expect(APP_VERSION).toBe("2.0.119");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.119");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -287,6 +288,38 @@ describe("black-box release contract", () => {
     );
   });
 
+  it("enforces formal institutional treatment across runtime surfaces", () => {
+    const audit = auditFormalSpanish();
+    const apply = fs.readFileSync(
+      path.resolve("client/src/pages/Apply.tsx"),
+      "utf8"
+    );
+    const loginEmail = fs.readFileSync(
+      path.resolve("server/localAuth.ts"),
+      "utf8"
+    );
+    const schema = fs.readFileSync(path.resolve("drizzle/schema.ts"), "utf8");
+    const migration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0012_dear_lifeguard.sql"),
+      "utf8"
+    );
+    const packageMetadata = JSON.parse(
+      fs.readFileSync(path.resolve("package.json"), "utf8")
+    );
+
+    expect(audit.files).toHaveLength(76);
+    expect(audit.findings).toEqual([]);
+    expect(apply).toContain("Escriba su nombre y teléfono");
+    expect(apply).toContain("nos pondremos en contacto con usted");
+    expect(loginEmail).toContain("Si usted no solicitó este acceso");
+    expect(schema).toContain("Nos pondremos en contacto con usted");
+    expect(migration).toContain('ALTER COLUMN "whatsapp_message" SET DEFAULT');
+    expect(migration).toContain('UPDATE "application_forms"');
+    expect(packageMetadata.scripts.build).toContain(
+      "verify-formal-spanish.mjs"
+    );
+  });
+
   it("publishes the academic-commercial README with auditable proportions and references", () => {
     const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
     const academicBody = readme.slice(0, readme.indexOf("## Referencias"));
@@ -295,16 +328,17 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.118");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.119");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
     expect(wordCount).toBeGreaterThanOrEqual(2_400);
-    expect(wordCount).toBeLessThanOrEqual(2_800);
-    expect(bibliography).toHaveLength(39);
+    expect(wordCount).toBeLessThanOrEqual(3_000);
+    expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.118");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.119");
+    expect(readme).toContain("Tratamiento institucional «usted» homologado");
     expect(readme).toContain("Tres confirmaciones obligatorias");
     expect(readme).toContain("tokens compilados como variables dinámicas");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.115");

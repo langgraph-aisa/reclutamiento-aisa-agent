@@ -464,7 +464,7 @@ export default function AgentEvaluator() {
                 placeholder="production"
               />
               <p className="text-xs text-muted-foreground">
-                Separa las trazas por ambiente, por ejemplo: production, staging
+                Separe las trazas por ambiente, por ejemplo: production, staging
                 o development.
               </p>
             </div>

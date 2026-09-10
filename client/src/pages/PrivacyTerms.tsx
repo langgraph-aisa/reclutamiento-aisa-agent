@@ -552,8 +552,8 @@ export default function PrivacyTerms() {
             />
             <SummaryItem
               icon={ShieldCheck}
-              title="Consulta y corrección"
-              text="Puedes solicitar información, actualización o revisión."
+              title="Derecho de consulta y corrección"
+              text="Usted puede solicitar información, actualización o revisión."
             />
           </div>
         </section>
@@ -561,8 +561,8 @@ export default function PrivacyTerms() {
         <div className="mt-5 flex items-start gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-sm leading-6 text-emerald-950 print:hidden">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
           <p>
-            El formulario permanece abierto en la pestaña anterior. Consulta
-            este documento y vuelve a esa pestaña para completar tu postulación.
+            El formulario permanece abierto en la pestaña anterior. Consulte
+            este documento y vuelva a esa pestaña para completar su postulación.
           </p>
         </div>
 

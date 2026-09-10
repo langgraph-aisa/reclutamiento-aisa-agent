@@ -80,7 +80,7 @@ function safeIntegrationMessage(error: unknown, fallback: string) {
     "La API Key",
     "La OpenAI Responses API",
     "No hay una API key",
-    "Configura las claves pública",
+    "Configure las claves pública",
     "Postulación no encontrada",
     "Esta postulación ya está siendo evaluada",
   ];
@@ -186,7 +186,7 @@ export const appRouter = router({
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message:
-              "No fue posible enviar el código de acceso. Revisa la configuración SMTP en EasyPanel.",
+              "No fue posible enviar el código de acceso. Revise la configuración SMTP en EasyPanel.",
           });
         }
         return {
@@ -327,7 +327,7 @@ export const appRouter = router({
         if (input.id === ctx.user.id)
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "No puedes desactivarte a ti mismo.",
+            message: "No puede desactivar su propia cuenta.",
           });
         const pool = await requirePool();
         await pool.query(
@@ -879,7 +879,7 @@ export const appRouter = router({
           [
             result.rows[0].id,
             `Formulario · ${input.title}`,
-            "Completa tus datos para aplicar a esta plaza.",
+            "Complete sus datos para postularse a esta plaza.",
             ctx.user.id,
           ]
         );

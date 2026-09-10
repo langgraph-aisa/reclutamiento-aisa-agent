@@ -11,10 +11,7 @@
       "name": "Entrada de evaluación",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [
-        0,
-        0
-      ]
+      "position": [0, 0]
     },
     {
       "parameters": {
@@ -26,10 +23,7 @@
       "name": "Cargar reglas de la plaza",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        240,
-        0
-      ],
+      "position": [240, 0],
       "credentials": {
         "postgres": {
           "id": "PENDIENTE",
@@ -45,10 +39,7 @@
       "name": "Evaluar reglas deterministas",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        520,
-        0
-      ]
+      "position": [520, 0]
     },
     {
       "parameters": {
@@ -61,10 +52,7 @@
       "name": "OpenAI Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.2,
-      "position": [
-        760,
-        220
-      ],
+      "position": [760, 220],
       "credentials": {
         "openAiApi": {
           "id": "PENDIENTE",
@@ -75,17 +63,14 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Evalúa el candidato para la plaza {{ $json.evaluation_input?.application?.job_position_id }} usando también el perfil laboral asociado en evaluation_input.profile y las reglas operativas de profileCriteria. Aplica obligatoriamente ai_criteria como criterio de razonamiento para respuestas abiertas y explica su efecto en reason, profileSummary y ruleResults. Respeta las reglas deterministas y razona las respuestas abiertas según evaluation_criteria y ai_prompt. Entrega score de 0 a 100 y asigna status exactamente así: 90–100 pre_calificado_prioritario; 80–89 pre_calificado; 70–79 pre_calificado_condicionado; 60–69 pendiente_revision_humana; 0–59 no_calificado. Si deterministic.passed es false, el estado final debe ser no_calificado sin importar el score. Devuelve un JSON con score, status, reason, profileSummary, keyPoints, confidence y ruleResults. ruleResults debe ser una lista de objetos con question_id y result (`passed`, `failed` o `not_applicable`).\n\nDatos: {{ JSON.stringify($json) }}",
+        "text": "=Evalúe a la persona candidata para la plaza {{ $json.evaluation_input?.application?.job_position_id }} usando también el perfil laboral asociado en evaluation_input.profile y las reglas operativas de profileCriteria. Aplique obligatoriamente ai_criteria como criterio de razonamiento para respuestas abiertas y explique su efecto en reason, profileSummary y ruleResults. Respete las reglas deterministas y razone las respuestas abiertas según evaluation_criteria y ai_prompt. Entregue un puntaje de 0 a 100 y asigne el estado exactamente así: 90–100 pre_calificado_prioritario; 80–89 pre_calificado; 70–79 pre_calificado_condicionado; 60–69 pendiente_revision_humana; 0–59 no_calificado. Si deterministic.passed es false, el estado final debe ser no_calificado sin importar el score. Devuelva un JSON con score, status, reason, profileSummary, keyPoints, confidence y ruleResults. ruleResults debe ser una lista de objetos con question_id y result (`passed`, `failed` o `not_applicable`).\n\nDatos: {{ JSON.stringify($json) }}",
         "hasOutputParser": true
       },
       "id": "evaluar-respuestas-abiertas",
       "name": "Evaluar respuestas abiertas",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.7,
-      "position": [
-        1020,
-        0
-      ]
+      "position": [1020, 0]
     },
     {
       "parameters": {
@@ -95,10 +80,7 @@
       "name": "Salida estructurada",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
-      "position": [
-        1020,
-        260
-      ]
+      "position": [1020, 260]
     },
     {
       "parameters": {
@@ -112,10 +94,7 @@
       "name": "Guardar evaluación",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        1280,
-        0
-      ],
+      "position": [1280, 0],
       "credentials": {
         "postgres": {
           "id": "PENDIENTE",
@@ -135,10 +114,7 @@
       "name": "Responder evaluación",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [
-        1530,
-        0
-      ]
+      "position": [1530, 0]
     }
   ],
   "pinData": {},

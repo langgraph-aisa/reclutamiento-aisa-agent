@@ -1,4 +1,9 @@
-import { randomBytes, randomInt, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import {
+  randomBytes,
+  randomInt,
+  scrypt as scryptCallback,
+  timingSafeEqual,
+} from "node:crypto";
 import { promisify } from "node:util";
 import { SignJWT, jwtVerify } from "jose";
 import nodemailer from "nodemailer";
@@ -13,7 +18,9 @@ export const LOGIN_CODE_MAX_ATTEMPTS = 5;
 export const LOGIN_CODE_RESEND_SECONDS = 60;
 
 function secretKey() {
-  return new TextEncoder().encode(process.env.JWT_SECRET || "development-only-change-me");
+  return new TextEncoder().encode(
+    process.env.JWT_SECRET || "development-only-change-me"
+  );
 }
 
 export async function hashPassword(password: string) {
@@ -22,7 +29,10 @@ export async function hashPassword(password: string) {
   return `scrypt:${salt}:${derived.toString("hex")}`;
 }
 
-export async function verifyPassword(password: string, encoded: string | null | undefined) {
+export async function verifyPassword(
+  password: string,
+  encoded: string | null | undefined
+) {
   if (!encoded?.startsWith("scrypt:")) return false;
   const [, salt, expectedHex] = encoded.split(":");
   if (!salt || !expectedHex) return false;
@@ -41,7 +51,10 @@ export async function hashLoginCode(code: string) {
   return `otp-scrypt:${salt}:${derived.toString("hex")}`;
 }
 
-export async function verifyLoginCode(code: string, encoded: string | null | undefined) {
+export async function verifyLoginCode(
+  code: string,
+  encoded: string | null | undefined
+) {
   if (!encoded?.startsWith("otp-scrypt:")) return false;
   const [, salt, expectedHex] = encoded.split(":");
   if (!salt || !expectedHex) return false;
@@ -75,7 +88,8 @@ export async function readLocalSession(req: Request) {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secretKey());
-    if (payload.kind !== "local" || typeof payload.userId !== "number") return null;
+    if (payload.kind !== "local" || typeof payload.userId !== "number")
+      return null;
     return payload.userId;
   } catch {
     return null;
@@ -102,34 +116,59 @@ export async function hashResetToken(token: string) {
   return derived.toString("hex");
 }
 
-export async function notifyPasswordReset(webhook: string | undefined, payload: { email: string; token: string; expiresInMinutes: number }) {
+export async function notifyPasswordReset(
+  webhook: string | undefined,
+  payload: { email: string; token: string; expiresInMinutes: number }
+) {
   if (!webhook) return { configured: false, delivered: false } as const;
   try {
-    const response = await fetch(webhook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-    return { configured: true, delivered: response.ok, status: response.status } as const;
+    const response = await fetch(webhook, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return {
+      configured: true,
+      delivered: response.ok,
+      status: response.status,
+    } as const;
   } catch (error) {
-    console.warn("[Auth] Password reset delivery failed", error instanceof Error ? error.message : "unknown error");
+    console.warn(
+      "[Auth] Password reset delivery failed",
+      error instanceof Error ? error.message : "unknown error"
+    );
     return { configured: true, delivered: false } as const;
   }
 }
 
-export async function sendLoginCode(payload: { email: string; code: string; expiresInMinutes?: number }) {
+export async function sendLoginCode(payload: {
+  email: string;
+  code: string;
+  expiresInMinutes?: number;
+}) {
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const password = process.env.SMTP_PASSWORD;
   const from = process.env.SMTP_FROM;
   const port = Number(process.env.SMTP_PORT || 587);
   const secure = process.env.SMTP_SECURE === "true" || port === 465;
-  if (!host || !user || !password || !from) throw new Error("SMTP no está configurado en EasyPanel.");
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("SMTP_PORT no es válido.");
+  if (!host || !user || !password || !from)
+    throw new Error("SMTP no está configurado en EasyPanel.");
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw new Error("SMTP_PORT no es válido.");
 
   const expiresInMinutes = payload.expiresInMinutes ?? LOGIN_CODE_TTL_MINUTES;
-  const transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass: password } });
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass: password },
+  });
   await transporter.sendMail({
     from,
     to: payload.email,
     subject: "Código de acceso · Talento AISA",
-    text: `Tu código de acceso es ${payload.code}. Expira en ${expiresInMinutes} minutos. Si no solicitaste este acceso, ignora este mensaje.`,
-    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#0b2f53"><h1 style="font-size:22px">Talento AISA</h1><p>Utiliza el siguiente código para ingresar a la plataforma:</p><p style="font-size:34px;letter-spacing:8px;font-weight:700;margin:28px 0">${payload.code}</p><p>El código expira en <strong>${expiresInMinutes} minutos</strong> y solo puede utilizarse una vez.</p><p style="color:#64748b;font-size:13px">Si no solicitaste este acceso, ignora este mensaje.</p></div>`,
+    text: `Su código de acceso es ${payload.code}. Expira en ${expiresInMinutes} minutos. Si usted no solicitó este acceso, ignore este mensaje.`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#0b2f53"><h1 style="font-size:22px">Talento AISA</h1><p>Utilice el siguiente código para ingresar a la plataforma:</p><p style="font-size:34px;letter-spacing:8px;font-weight:700;margin:28px 0">${payload.code}</p><p>El código expira en <strong>${expiresInMinutes} minutos</strong> y solo puede utilizarse una vez.</p><p style="color:#64748b;font-size:13px">Si usted no solicitó este acceso, ignore este mensaje.</p></div>`,
   });
 }

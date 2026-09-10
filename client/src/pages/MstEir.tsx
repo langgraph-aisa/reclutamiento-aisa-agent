@@ -31,7 +31,7 @@ export default function MstEir() {
           MST-EIR
         </h1>
         <p className="mt-2 max-w-3xl text-muted-foreground">
-          Administra la metodología SIERA y el Modelo Sistémico de Talento para Energías Inteligentes y Renovables.
+          Administre la metodología SIERA y el Modelo Sistémico de Talento para Energías Inteligentes y Renovables.
         </p>
       </div>
 

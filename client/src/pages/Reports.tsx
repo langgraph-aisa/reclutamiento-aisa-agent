@@ -48,7 +48,7 @@ export default function Reports() {
             Informes
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Convierte el movimiento de postulaciones en decisiones de equipo.
+            Convierta el movimiento de postulaciones en decisiones de equipo.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -132,7 +132,7 @@ export default function Reports() {
                 />
               ))
             ) : (
-              <Empty text="Crea una plaza y publica su formulario para comenzar." />
+              <Empty text="Cree una plaza y publique su formulario para comenzar." />
             )}
           </div>
         </ReportCard>

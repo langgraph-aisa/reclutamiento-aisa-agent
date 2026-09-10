@@ -1,8 +1,8 @@
-# Pruebas de caja negra · JARVI RH 2.0.118
+# Pruebas de caja negra · JARVI RH 2.0.119
 
 ## Alcance del cambio
 
-La especificación cubre la página interna de privacidad, términos y condiciones, su hipervínculo en el consentimiento, apertura paralela sin pérdida del formulario, metadata, accesibilidad, adaptación temática y referencias oficiales. Confirmaciones, identidad, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general.
+La especificación cubre el tratamiento formal institucional en portal público, formularios, administración, mensajes de validación, correo de acceso, WhatsApp, preguntas generadas y plantillas operativas. También verifica la migración acotada de valores predeterminados históricos y la puerta automática contra tuteo. Privacidad, confirmaciones, identidad, ubicación, evaluación, estados, temas y decisión humana permanecen bajo regresión general.
 
 ## Matriz funcional observable
 
@@ -39,19 +39,26 @@ La especificación cubre la página interna de privacidad, términos y condicion
 | BN-DARK-06  | Dark Dimmed activo                                   | Inspeccionar superficies estructurales         | Body usa `#0B1118`; menús y tarjetas `#111A24`; paneles antes azules usan gris grafito `#162333`              | ISO/IEC 25010:2023 · consistencia            |
 | BN-STATE-01 | Listado o detalle con estado                         | Inspeccionar publicación, revisión, IA o error | Cada señal conserva nombre y, cuando aplica, icono o forma; ninguna decisión depende únicamente del color     | WCAG 2.2 · 1.4.1                             |
 | BN-LEG-01   | Postulación histórica sin referencias geográficas    | Consultar candidatos existentes                | La lectura permanece operativa; la obligatoriedad se aplica a nuevos envíos                                   | ISO/IEC 25010:2023 · compatibilidad          |
-| BN-DOC-01   | Repositorio en versión vigente                       | Ejecutar puerta de release                     | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.118`                             | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
+| BN-LANG-01  | Portal o formulario público abierto                  | Revisar preguntas, ayudas, campos y resultado  | Toda interacción dirigida a la persona utiliza verbos formales y los posesivos `su/sus`                       | ISO/IEC 25010:2023 · interacción             |
+| BN-LANG-02  | Sesión administrativa activa                         | Recorrer vistas, vacíos, ayudas y advertencias | Las instrucciones mantienen tratamiento institucional coherente y no alternan con tuteo                       | ISO/IEC 25010:2023 · consistencia            |
+| BN-LANG-03  | Código de acceso o solicitud de CV emitidos          | Inspeccionar correo y mensaje saliente         | El correo utiliza «usted» y WhatsApp emplea formulación profesional sin pronombres informales                 | ISO/IEC 25010:2023 · adecuación funcional    |
+| BN-LANG-04  | Perfil vinculado a un formulario                     | Generar preguntas desde el perfil              | Preguntas, ayudas y criterios nuevos se generan con conjugación formal                                        | ISO/IEC/IEEE 29119-1:2022 · repetibilidad    |
+| BN-LANG-05  | Base con valores predeterminados anteriores          | Ejecutar migración `0012`                      | Se homologan los valores conocidos; las plantillas libres de administración permanecen intactas               | ISO/IEC 27001:2022 · integridad              |
+| BN-LANG-06  | Código introduce un patrón informal prohibido        | Ejecutar verificación o build                  | El proceso termina con código distinto de cero e identifica archivo, línea y regla                            | ISO/IEC 25010:2023 · mantenibilidad          |
+| BN-DOC-01   | Repositorio en versión vigente                       | Ejecutar puerta de release                     | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.119`                             | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
 
 ## Pruebas automatizadas
 
-| Comando                          | Oráculo                                                                             |
-| -------------------------------- | ----------------------------------------------------------------------------------- |
-| `pnpm release:verify`            | Versión, historial, documentos y dependencias auditadas están sincronizados         |
-| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.119`                                          |
-| `pnpm test:black-box`            | Ruta, enlace, metadata, contenido, tema, artefacto y README son exactos             |
-| `pnpm test`                      | Consentimientos, normalización `+502`, geografía y endpoints conservan la regresión |
-| `pnpm check`                     | Cliente, tRPC, servidor y esquema mantienen contratos TypeScript consistentes       |
-| `pnpm build`                     | Genera el artefacto y rechaza utilidades temáticas fijadas al tema claro            |
+| Comando                          | Oráculo                                                                       |
+| -------------------------------- | ----------------------------------------------------------------------------- |
+| `pnpm release:verify`            | Versión, historial, documentos y dependencias auditadas están sincronizados   |
+| `pnpm text:verify`               | Los literales de ejecución no contienen patrones de tratamiento informal      |
+| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.120`                                    |
+| `pnpm test:black-box`            | Tratamiento, migración, correo, formulario, artefacto y README son exactos    |
+| `pnpm test`                      | Mensajería, formularios, geografía y endpoints conservan la regresión         |
+| `pnpm check`                     | Cliente, tRPC, servidor y esquema mantienen contratos TypeScript consistentes |
+| `pnpm build`                     | Genera el artefacto y rechaza regresiones lingüísticas o temáticas            |
 
 ## Criterio de aprobación
 
-El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación visual posterior al despliegue debe ejecutar BN-LEGAL-01 a BN-LEGAL-06 y la regresión pública en Day, Dark Dimmed y Dark High Contrast. El documento requiere aprobación final de asesoría jurídica de AISA; las referencias oficiales, WCAG e ISO son guía metodológica y no constituyen certificación ni dictamen legal.
+El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación posterior al despliegue debe ejecutar BN-LANG-01 a BN-LANG-06 y muestrear rutas públicas, administrativas, correo y WhatsApp. RAE/ASALE sustenta la distinción lingüística; las referencias ISO se utilizan como guía metodológica y no constituyen certificación.

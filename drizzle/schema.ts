@@ -170,7 +170,7 @@ export const jobPositions = pgTable("job_positions", {
   published: boolean("published").default(false).notNull(),
   agentKey: varchar("agent_key", { length: 120 }).notNull(),
   whatsappMessage: text("whatsapp_message").default(
-    "Gracias por aplicar. Te contactaremos para continuar con tu proceso de evaluación."
+    "Gracias por postularse. Nos pondremos en contacto con usted para continuar con el proceso de evaluación."
   ),
   defaultCountry: varchar("default_country", { length: 2 })
     .default("GT")

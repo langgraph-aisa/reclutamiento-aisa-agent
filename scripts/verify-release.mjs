@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { auditFormalSpanish } from "./verify-formal-spanish.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -87,6 +88,14 @@ for (const [dependency, expected] of [
       `${dependency} debe documentarse y validarse con la versión instalada.`
     );
   }
+}
+
+const formalSpanishAudit = auditFormalSpanish();
+if (formalSpanishAudit.findings.length > 0) {
+  const details = formalSpanishAudit.findings
+    .map(finding => `${finding.file}:${finding.line} ${finding.context}`)
+    .join("; ");
+  fail(`La auditoría de tratamiento formal falló: ${details}`);
 }
 
 if (process.argv.includes("--compare-git")) {

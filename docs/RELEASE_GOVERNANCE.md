@@ -1,10 +1,14 @@
-# Gobierno de release JARVI RH 2.0.118
+# Gobierno de release JARVI RH 2.0.119
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.118**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.119**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-La versión 2.0.118 publica `/privacidad-terminos` como documento interno de referencia, separado del formulario y disponible en una pestaña paralela mediante `target="_blank"` y `rel="noopener noreferrer"`. La ruta identifica a Alternativas Inteligentes, S.A., elimina marcadores editoriales, explica uso y límites de IA, categorías y finalidades de datos, proveedores, seguridad, conservación y solicitudes. Título, descripción y URL canónica se establecen como metadata de la página. El texto distingue compromisos voluntarios y normas aplicables; no presenta una iniciativa legislativa como ley vigente ni equivale a dictamen jurídico.
+La versión 2.0.119 homologa el tratamiento escrito institucional a **usted** en portal público, formularios, administración, validaciones, correo de acceso, WhatsApp y plantillas operativas. Los verbos dirigidos a una persona se expresan en tercera persona gramatical y los posesivos se ajustan a **su/sus**. `scripts/verify-formal-spanish.mjs` inspecciona literales de 76 archivos de ejecución y forma parte de `release:verify`, `test:black-box` y `build`; una regresión lingüística detiene el release.
+
+La migración `0012_dear_lifeguard.sql` cambia el valor predeterminado de WhatsApp y homologa únicamente introducciones, mensajes y preguntas históricas que coinciden con textos predeterminados conocidos. No reescribe descripciones ni plantillas libres creadas por administración, porque una sustitución automática podría alterar su significado. El criterio se apoya en la descripción de las formas de tratamiento de RAE/ASALE y no pretende sustituir una revisión editorial humana de contenido libre.
+
+Desde 2.0.118, `/privacidad-terminos` funciona como documento interno de referencia, separado del formulario y disponible en una pestaña paralela mediante `target="_blank"` y `rel="noopener noreferrer"`. La ruta identifica a Alternativas Inteligentes, S.A., elimina marcadores editoriales, explica uso y límites de IA, categorías y finalidades de datos, proveedores, seguridad, conservación y solicitudes. Título, descripción y URL canónica se establecen como metadata de la página. El texto distingue compromisos voluntarios y normas aplicables; no presenta una iniciativa legislativa como ley vigente ni equivale a dictamen jurídico.
 
 Desde 2.0.117, todos los formularios públicos incorporan un bloque común e inalterable con tres manifestaciones: mayoría de edad, veracidad y actualización de la información, y autorización de tratamiento. La interfaz exige cada casilla y el contrato tRPC vuelve a validar los tres booleanos antes de acceder a PostgreSQL. La transacción guarda en `audit_log` la versión del texto, cada enunciado y su aceptación junto con la postulación. La versión del aviso cambia a `2026-09-10.2`, por lo que las nuevas aceptaciones preservan exactamente el nuevo enunciado enlazado.
 
@@ -56,7 +60,7 @@ Estas normas se aplican como referencias metodológicas. Este documento no afirm
 
 Cada push o solicitud de cambio a `main` ejecuta:
 
-1. validación de versión y dependencias auditadas;
+1. validación de versión, dependencias auditadas y tratamiento formal;
 2. pruebas del contrato observable de tema y release;
 3. regresión funcional Vitest;
 4. comprobación TypeScript;
@@ -64,8 +68,8 @@ Cada push o solicitud de cambio a `main` ejecuta:
 
 La migración `0011_application_location.sql` mantiene nulos los nuevos campos para lecturas históricas, pero el contrato `publicJobs.submit` los exige en toda postulación nueva. También siembra de forma idempotente las zonas 1–25 y los municipios del departamento de Guatemala necesarios para la operación inicial; cambios posteriores permanecen administrables desde Configuración > Catálogo.
 
-Las confirmaciones de 2.0.117 son controles institucionales transversales, no preguntas configurables de una plaza. El endpoint rechaza propiedades ausentes, falsas o adicionales y registra las aceptaciones únicamente cuando la postulación completa confirma su transacción. La ruta jurídica de 2.0.118 no recibe ni expone datos de la postulación.
+Las confirmaciones de 2.0.117 son controles institucionales transversales, no preguntas configurables de una plaza. El endpoint rechaza propiedades ausentes, falsas o adicionales y registra las aceptaciones únicamente cuando la postulación completa confirma su transacción. La ruta jurídica de 2.0.119 no recibe ni expone datos de la postulación.
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.118.md](PRUEBAS_CAJA_NEGRA_2.0.118.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.119.md](PRUEBAS_CAJA_NEGRA_2.0.119.md).

@@ -112,7 +112,7 @@ export default function DashboardLayout({
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex flex-col items-center gap-6">
             <h1 className="text-2xl font-semibold tracking-tight text-center">
-              Ingresa para continuar
+              Ingrese para continuar
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
               Este espacio requiere autenticación. Continúa para abrir el panel

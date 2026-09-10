@@ -71,15 +71,15 @@ const demoForm = {
   description:
     "Buscamos una persona cercana, organizada y con energía para acompañar a nuestros clientes.",
   form: {
-    title: "Cuéntanos sobre ti",
+    title: "Información de la persona postulante",
     intro:
-      "Completar este formulario toma menos de 3 minutos. Tus respuestas se usarán únicamente para esta plaza.",
+      "Completar este formulario toma menos de 3 minutos. Sus respuestas se utilizarán únicamente para esta plaza.",
   },
   questions: [
     {
       id: 1,
       fieldKey: "vehicle",
-      label: "¿Tienes licencia vigente y puedes conducir vehículo mecánico?",
+      label: "¿Tiene licencia vigente y puede conducir un vehículo mecánico?",
       helpText: "Esta es una condición esencial para la plaza.",
       type: "select",
       required: true,
@@ -88,8 +88,9 @@ const demoForm = {
     {
       id: 2,
       fieldKey: "experience",
-      label: "¿Cuánto tiempo de experiencia tienes en ventas?",
-      helpText: "Indica el tiempo total, aunque sea en diferentes empresas.",
+      label: "¿Cuánto tiempo de experiencia tiene en ventas?",
+      helpText:
+        "Indique el tiempo total, aunque corresponda a diferentes empresas.",
       type: "text",
       required: true,
       answerConfig: {},
@@ -97,8 +98,8 @@ const demoForm = {
     {
       id: 3,
       fieldKey: "motivation",
-      label: "¿Qué te interesa de esta oportunidad?",
-      helpText: "Cuéntanoslo con tus propias palabras.",
+      label: "¿Qué le interesa de esta oportunidad?",
+      helpText: "Descríbalo con sus propias palabras.",
       type: "textarea",
       required: true,
       answerConfig: {},
@@ -151,7 +152,7 @@ export default function Apply() {
   const send = async () => {
     setError("");
     if (!contact.fullName.trim() || !contact.phone.trim()) {
-      setError("Escribe tu nombre y teléfono para continuar.");
+      setError("Escriba su nombre y teléfono para continuar.");
       return;
     }
     if (
@@ -159,7 +160,7 @@ export default function Apply() {
       !location.departmentId ||
       !location.municipalityId
     ) {
-      setError("Selecciona zona, departamento y municipio para continuar.");
+      setError("Seleccione zona, departamento y municipio para continuar.");
       return;
     }
     const missing = questions.find(
@@ -167,12 +168,12 @@ export default function Apply() {
         question.required && !String(values[question.fieldKey] ?? "").trim()
     );
     if (missing) {
-      setError(`Completa la pregunta: ${missing.label}`);
+      setError(`Complete la pregunta: ${missing.label}`);
       return;
     }
     if (!APPLICATION_CONSENTS.every(consent => consents[consent.id])) {
       setError(
-        "Marca las tres confirmaciones obligatorias para enviar tu postulación."
+        "Marque las tres confirmaciones obligatorias para enviar su postulación."
       );
       return;
     }
@@ -197,7 +198,7 @@ export default function Apply() {
       setError(
         submissionError instanceof Error
           ? submissionError.message
-          : "No pudimos enviar tu solicitud. Intenta nuevamente."
+          : "No fue posible enviar su postulación. Inténtelo nuevamente."
       );
     }
   };
@@ -310,7 +311,7 @@ export default function Apply() {
                     onChange={event =>
                       setContact({ ...contact, fullName: event.target.value })
                     }
-                    placeholder="Tu nombre y apellidos"
+                    placeholder="Su nombre y apellidos"
                   />
                 </Field>
                 <Field label="Teléfono móvil" required>
@@ -337,7 +338,7 @@ export default function Apply() {
                       disabled={zonesQuery.isLoading}
                       required
                     >
-                      <option value="">Selecciona una zona</option>
+                      <option value="">Seleccione una zona</option>
                       {zones.map(zone => (
                         <option key={zone.id} value={zone.id}>
                           {zone.code}
@@ -368,7 +369,7 @@ export default function Apply() {
                       }
                       required
                     >
-                      <option value="">Selecciona un municipio</option>
+                      <option value="">Seleccione un municipio</option>
                       {municipalities.map(municipality => (
                         <option key={municipality.id} value={municipality.id}>
                           {municipality.name}
@@ -384,7 +385,7 @@ export default function Apply() {
                   onChange={event =>
                     setContact({ ...contact, email: event.target.value })
                   }
-                  placeholder="tu@correo.com"
+                  placeholder="correo@ejemplo.com"
                   type="email"
                 />
               </Field>
@@ -439,7 +440,7 @@ export default function Apply() {
                                 rel="noopener noreferrer"
                                 onClick={event => event.stopPropagation()}
                                 className="font-semibold text-sky-700 underline decoration-sky-500/70 underline-offset-4 hover:text-sky-800 dark:text-[#58a6ff] dark:hover:text-[#8bc2ff]"
-                                aria-label={`${PRIVACY_TERMS_LINK_TEXT} (abre en una pestaña nueva)`}
+                                aria-label={`${PRIVACY_TERMS_LINK_TEXT} (se abre en una pestaña nueva)`}
                               >
                                 {PRIVACY_TERMS_LINK_TEXT}
                               </a>{" "}
@@ -482,16 +483,16 @@ export default function Apply() {
                 <CheckCircle2 className="h-8 w-8" />
               </div>
               <h1 className="mt-6 text-3xl font-800 tracking-[-.04em] text-primary">
-                Tu aplicación fue enviada
+                Su postulación fue enviada
               </h1>
               <p className="mx-auto mt-4 max-w-md leading-7 text-muted-foreground">
-                Gracias por aplicar a la plaza de {form.title}. Revisaremos tus
-                respuestas y te contactaremos por WhatsApp si avanzas a la
-                siguiente fase.
+                Gracias por postularse a la plaza de {form.title}. Revisaremos
+                sus respuestas y nos pondremos en contacto con usted por
+                WhatsApp si avanza a la siguiente fase.
               </p>
               <div className="mt-8 rounded-2xl bg-secondary p-4 text-sm text-secondary-foreground">
-                Conserva tu teléfono disponible. No necesitas volver a llenar
-                este formulario.
+                Mantenga su teléfono disponible. No necesita completar
+                nuevamente este formulario.
               </div>
             </CardContent>
           </Card>
@@ -515,7 +516,7 @@ function QuestionControl({
       <Textarea
         value={value}
         onChange={event => onChange(event.target.value)}
-        placeholder="Escribe tu respuesta"
+        placeholder="Escriba su respuesta"
         rows={4}
       />
     );
@@ -526,7 +527,7 @@ function QuestionControl({
         value={value}
         onChange={event => onChange(event.target.value)}
       >
-        <option value="">Selecciona una opción</option>
+        <option value="">Seleccione una opción</option>
         {(question.answerConfig.options ?? []).map(option => (
           <option key={option} value={option}>
             {option}
@@ -543,7 +544,7 @@ function QuestionControl({
         max={question.answerConfig.max}
         value={value}
         onChange={event => onChange(event.target.value)}
-        placeholder="Escribe un valor"
+        placeholder="Escriba un valor"
       />
     );
   if (question.type === "phone")
@@ -552,7 +553,7 @@ function QuestionControl({
     <Input
       value={value}
       onChange={event => onChange(event.target.value)}
-      placeholder="Escribe tu respuesta"
+      placeholder="Escriba su respuesta"
     />
   );
 }

@@ -241,7 +241,7 @@ export default function HumanReview() {
                 className="mt-1 max-w-full truncate text-left text-xs text-muted-foreground underline decoration-border underline-offset-4 hover:text-primary disabled:no-underline"
               >
                 {selected?.profile_summary ??
-                  "Selecciona una postulación para abrir su nota inicial de IA."}
+                  "Seleccione una postulación para abrir su nota inicial de IA."}
               </button>
             </div>
           </div>
@@ -711,7 +711,7 @@ function ViewerPanel({
         >
           {!candidate ? (
             <div className="grid h-full place-items-center text-sm text-white/60">
-              Selecciona un candidato en la matriz inferior.
+              Seleccione una persona candidata en la matriz inferior.
             </div>
           ) : selection.kind === "answer" ? (
             <div className="grid gap-3 md:grid-cols-[minmax(0,.75fr)_minmax(0,1.25fr)]">

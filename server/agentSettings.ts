@@ -51,7 +51,7 @@ function encryptionMaterials() {
   const uniqueMaterials = Array.from(new Set(materials));
   if (uniqueMaterials.length === 0) {
     throw new Error(
-      "No existe una fuente estable para cifrar credenciales. Configura AGENT_SETTINGS_ENCRYPTION_KEY, JWT_SECRET o DATABASE_URL."
+      "No existe una fuente estable para cifrar credenciales. Configure AGENT_SETTINGS_ENCRYPTION_KEY, JWT_SECRET o DATABASE_URL."
     );
   }
   return uniqueMaterials.map(material =>

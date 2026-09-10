@@ -25,7 +25,7 @@ export const EVALUATION_BLOCKS = [
     id: "competencias",
     label: "Competencias técnicas/comerciales",
     weight: 25,
-    purpose: "Evalúa las competencias centrales del puesto.",
+    purpose: "Evaluación de las competencias centrales del puesto.",
   },
   {
     id: "disponibilidad_logistica",
@@ -81,9 +81,9 @@ export const SCORE_BANDS = [
   },
 ] as const;
 
-export const DEFAULT_AGENT_INSTRUCTIONS = `Evalúa cada postulación con un modelo porcentual de 100 puntos. No dependas del número exacto de palabras de cada respuesta: asigna el peso según la importancia de la evidencia para la decisión de preselección.
+export const DEFAULT_AGENT_INSTRUCTIONS = `Evalúe cada postulación con un modelo porcentual de 100 puntos. No dependa del número exacto de palabras de cada respuesta: asigne el peso según la importancia de la evidencia para la decisión de preselección.
 
-Usa estos seis bloques:
+Use estos seis bloques:
 1. Identificación del ajuste: 10 %.
 2. Evidencia de experiencia: 20 %.
 3. Competencias técnicas/comerciales: 25 %.
@@ -91,9 +91,9 @@ Usa estos seis bloques:
 5. Riesgos o brechas: 20 %.
 6. Dictamen IA: 15 %.
 
-El dictamen debe sintetizar las cinco dimensiones anteriores, citar únicamente evidencia presente en la postulación y separar hechos de inferencias. Entrega una puntuación de 0 a 100 y aplica esta interpretación: 90–100 Precalificado prioritario; 80–89 Precalificado; 70–79 Precalificado condicionado; 60–69 Revisión humana; 0–59 No precalificado.
+El dictamen debe sintetizar las cinco dimensiones anteriores, citar únicamente evidencia presente en la postulación y separar hechos de inferencias. Entregue una puntuación de 0 a 100 y aplique esta interpretación: 90–100 Precalificado prioritario; 80–89 Precalificado; 70–79 Precalificado condicionado; 60–69 Revisión humana; 0–59 No precalificado.
 
-Una causa crítica de descalificación prevalece siempre sobre el promedio. No infieras edad, género, etnia, religión, salud, discapacidad, orientación sexual, situación familiar ni cualquier otro atributo sensible. Si falta evidencia, indícalo como requisito por validar.`;
+Una causa crítica de descalificación prevalece siempre sobre el promedio. No infiera edad, género, etnia, religión, salud, discapacidad, orientación sexual, situación familiar ni cualquier otro atributo sensible. Si falta evidencia, indíquelo como requisito por validar.`;
 
 export const DEFAULT_METHODOLOGY_INTERPRETATION = `El mayor peso corresponde a competencias técnicas/comerciales (25 %) porque son el núcleo del desempeño profesional. La evidencia de experiencia (20 %) y la identificación de riesgos o brechas (20 %) tienen el mismo peso porque el sistema debe demostrar tanto lo que el candidato puede hacer como aquello que todavía debe validarse.
 

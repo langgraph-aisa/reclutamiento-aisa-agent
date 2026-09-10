@@ -7,7 +7,7 @@ export default function Account() {
   const user = session.data;
   return (
     <div className="max-w-3xl space-y-6">
-      <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Seguridad personal</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Mi cuenta</h1><p className="mt-2 text-muted-foreground">Consulta el mecanismo de acceso y los datos asociados a tu sesión.</p></div>
+      <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Seguridad personal</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Mi cuenta</h1><p className="mt-2 text-muted-foreground">Consulte el mecanismo de acceso y los datos asociados a su sesión.</p></div>
       <Card>
         <CardHeader><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary"><ShieldCheck className="h-5 w-5" /></div><CardTitle className="mt-3">Acceso sin contraseña</CardTitle><CardDescription>Cada inicio de sesión requiere un código temporal enviado al correo registrado.</CardDescription></CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">

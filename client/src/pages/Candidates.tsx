@@ -73,7 +73,7 @@ export default function Candidates() {
             Candidatos
           </h1>
           <p className="mt-2 text-muted-foreground">
-            Revisa respuestas, decisiones y el siguiente paso de cada
+            Revise respuestas, decisiones y el siguiente paso de cada
             postulación.
           </p>
         </div>
@@ -217,7 +217,7 @@ function CandidateDetail({
         toast.success("Estado guardado y solicitud de CV enviada por WhatsApp");
       } else if (result.whatsapp?.status === "failed") {
         toast.error(
-          "Estado guardado, pero ApiChat no pudo enviar el mensaje. Puedes reintentarlo."
+          "Estado guardado, pero ApiChat no pudo enviar el mensaje. Puede reintentarlo."
         );
       } else if (result.whatsapp?.status === "unknown") {
         toast.warning(
@@ -249,7 +249,7 @@ function CandidateDetail({
         );
       else
         toast.error(
-          "ApiChat no pudo enviar el mensaje. Revisa la configuración e inténtalo nuevamente."
+          "ApiChat no pudo enviar el mensaje. Revise la configuración e inténtelo nuevamente."
         );
     },
     onError: error =>
@@ -419,8 +419,8 @@ function CandidateDetail({
                   )}
                   {data.application.whatsapp_status === "desconocido" ? (
                     <p className="mt-2 font-semibold">
-                      Verifica la conversación del postulante antes de realizar
-                      otro envío.
+                      Verifique la conversación de la persona postulante antes
+                      de realizar otro envío.
                     </p>
                   ) : (
                     <Button

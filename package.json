@@ -1,16 +1,17 @@
 {
   "name": "reclutamiento-automatizado",
-  "version": "2.0.118",
+  "version": "2.0.119",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
-    "build": "vite build && node scripts/verify-theme-css.mjs && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "node scripts/verify-formal-spanish.mjs && vite build && node scripts/verify-theme-css.mjs && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:black-box": "vitest run server/releaseGovernance.test.ts",
+    "text:verify": "node scripts/verify-formal-spanish.mjs",
     "release:bump": "node scripts/bump-release.mjs",
     "release:verify": "node scripts/verify-release.mjs",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"

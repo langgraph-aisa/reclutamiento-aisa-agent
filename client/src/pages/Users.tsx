@@ -28,7 +28,7 @@ export default function Users() {
 
   return (
     <div className="space-y-6">
-      <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Control de acceso</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Usuarios y permisos</h1><p className="mt-2 max-w-2xl text-muted-foreground">Administra quién puede ingresar. Cada usuario recibe su propio código temporal en el correo registrado.</p></div>
+      <div><p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Control de acceso</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Usuarios y permisos</h1><p className="mt-2 max-w-2xl text-muted-foreground">Administre quién puede ingresar. Cada usuario recibe su propio código temporal en el correo registrado.</p></div>
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <Card>
           <CardHeader><CardTitle className="text-lg">Usuarios registrados</CardTitle><Input className="mt-3" placeholder="Buscar por nombre o correo" value={search} onChange={event => setSearch(event.target.value)} /><div className="mt-3 grid grid-cols-2 gap-2"><select value={roleFilter} onChange={event => setRoleFilter(event.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm"><option value="all">Todos los roles</option><option value="admin">Administradores</option><option value="reclutador">Reclutadores</option></select><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)} className="h-10 rounded-xl border border-input bg-background px-3 text-sm"><option value="all">Todos los estados</option><option value="active">Activos</option><option value="inactive">Inactivos</option></select></div></CardHeader>
