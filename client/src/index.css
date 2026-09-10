@@ -11,6 +11,7 @@
   --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --color-background: oklch(0.975 0.012 85);
   --color-foreground: oklch(0.19 0.025 255);
+  --color-heading: oklch(0.19 0.025 255);
   --color-card: oklch(0.995 0.006 85);
   --color-card-foreground: oklch(0.19 0.025 255);
   --color-popover: oklch(0.995 0.006 85);
@@ -41,6 +42,7 @@
 .dark {
   --color-background: #0b1118;
   --color-foreground: #e6edf3;
+  --color-heading: #ffffff;
   --color-card: #111a24;
   --color-card-foreground: #e6edf3;
   --color-popover: #162333;
@@ -75,6 +77,7 @@
 .high-contrast {
   --color-background: #000000;
   --color-foreground: #ffffff;
+  --color-heading: #ffffff;
   --color-card: #0b1118;
   --color-card-foreground: #ffffff;
   --color-popover: #111a24;
@@ -133,6 +136,12 @@
 
 .dark :where(.text-primary) {
   color: var(--color-foreground);
+}
+
+/* Every page-level title uses a single semantic contrast contract. The
+   important modifier intentionally wins over inherited hero/button colors. */
+.dark :where(h1) {
+  color: var(--color-heading) !important;
 }
 
 .dark

@@ -1,8 +1,8 @@
-# Pruebas de caja negra · JARVI RH 2.0.119
+# Pruebas de caja negra · JARVI RH 2.0.120
 
 ## Alcance del cambio
 
-La especificación cubre el tratamiento formal institucional en portal público, formularios, administración, mensajes de validación, correo de acceso, WhatsApp, preguntas generadas y plantillas operativas. También verifica la migración acotada de valores predeterminados históricos y la puerta automática contra tuteo. Privacidad, confirmaciones, identidad, ubicación, evaluación, estados, temas y decisión humana permanecen bajo regresión general.
+La especificación cubre el contraste de todos los títulos `h1` en portal público, formularios, privacidad y administración. Verifica un token semántico blanco en Dark Dimmed y Dark High Contrast, precedencia sobre colores heredados y legibilidad del encabezado jurídico completo. Tratamiento formal, privacidad, confirmaciones, identidad, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general.
 
 ## Matriz funcional observable
 
@@ -37,6 +37,7 @@ La especificación cubre el tratamiento formal institucional en portal público,
 | BN-DARK-04  | Paleta Dark Dimmed cargada                           | Ejecutar oráculo de contraste                  | Texto principal, secundario y teal sobre fondo global superan 4.5:1; controles y foco conservan al menos 3:1  | WCAG 2.2 · 1.4.3 y 1.4.11                    |
 | BN-DARK-05  | Build de producción iniciado                         | Compilar utilidades temáticas                  | Fondo, tarjeta, menú, popover y texto referencian `var(--color-*)`; ningún valor claro queda fijado           | ISO/IEC 25010:2023 · corrección funcional    |
 | BN-DARK-06  | Dark Dimmed activo                                   | Inspeccionar superficies estructurales         | Body usa `#0B1118`; menús y tarjetas `#111A24`; paneles antes azules usan gris grafito `#162333`              | ISO/IEC 25010:2023 · consistencia            |
+| BN-DARK-07  | Cualquier ruta pública o administrativa en modo oscuro | Inspeccionar su título `h1`                   | El título adopta `#FFFFFF`; en el héroe jurídico, etiqueta, versión e introducción también permanecen legibles | WCAG 2.2 · 1.4.3                             |
 | BN-STATE-01 | Listado o detalle con estado                         | Inspeccionar publicación, revisión, IA o error | Cada señal conserva nombre y, cuando aplica, icono o forma; ninguna decisión depende únicamente del color     | WCAG 2.2 · 1.4.1                             |
 | BN-LEG-01   | Postulación histórica sin referencias geográficas    | Consultar candidatos existentes                | La lectura permanece operativa; la obligatoriedad se aplica a nuevos envíos                                   | ISO/IEC 25010:2023 · compatibilidad          |
 | BN-LANG-01  | Portal o formulario público abierto                  | Revisar preguntas, ayudas, campos y resultado  | Toda interacción dirigida a la persona utiliza verbos formales y los posesivos `su/sus`                       | ISO/IEC 25010:2023 · interacción             |
@@ -45,7 +46,7 @@ La especificación cubre el tratamiento formal institucional en portal público,
 | BN-LANG-04  | Perfil vinculado a un formulario                     | Generar preguntas desde el perfil              | Preguntas, ayudas y criterios nuevos se generan con conjugación formal                                        | ISO/IEC/IEEE 29119-1:2022 · repetibilidad    |
 | BN-LANG-05  | Base con valores predeterminados anteriores          | Ejecutar migración `0012`                      | Se homologan los valores conocidos; las plantillas libres de administración permanecen intactas               | ISO/IEC 27001:2022 · integridad              |
 | BN-LANG-06  | Código introduce un patrón informal prohibido        | Ejecutar verificación o build                  | El proceso termina con código distinto de cero e identifica archivo, línea y regla                            | ISO/IEC 25010:2023 · mantenibilidad          |
-| BN-DOC-01   | Repositorio en versión vigente                       | Ejecutar puerta de release                     | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.119`                             | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
+| BN-DOC-01   | Repositorio en versión vigente                       | Ejecutar puerta de release                     | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.120`                             | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
 
 ## Pruebas automatizadas
 
@@ -53,12 +54,12 @@ La especificación cubre el tratamiento formal institucional en portal público,
 | -------------------------------- | ----------------------------------------------------------------------------- |
 | `pnpm release:verify`            | Versión, historial, documentos y dependencias auditadas están sincronizados   |
 | `pnpm text:verify`               | Los literales de ejecución no contienen patrones de tratamiento informal      |
-| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.120`                                    |
-| `pnpm test:black-box`            | Tratamiento, migración, correo, formulario, artefacto y README son exactos    |
+| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.121`                                    |
+| `pnpm test:black-box`            | Token de título, regla global, héroe jurídico, artefacto y README son exactos |
 | `pnpm test`                      | Mensajería, formularios, geografía y endpoints conservan la regresión         |
 | `pnpm check`                     | Cliente, tRPC, servidor y esquema mantienen contratos TypeScript consistentes |
 | `pnpm build`                     | Genera el artefacto y rechaza regresiones lingüísticas o temáticas            |
 
 ## Criterio de aprobación
 
-El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación posterior al despliegue debe ejecutar BN-LANG-01 a BN-LANG-06 y muestrear rutas públicas, administrativas, correo y WhatsApp. RAE/ASALE sustenta la distinción lingüística; las referencias ISO se utilizan como guía metodológica y no constituyen certificación.
+El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación posterior al despliegue debe ejecutar BN-DARK-07 en ambos temas oscuros y muestrear los títulos de login, portada, postulación, privacidad y administración. WCAG e ISO se utilizan como guías metodológicas y no constituyen certificación.

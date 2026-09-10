@@ -34,6 +34,10 @@ for (const token of [
 if (
   !compiledCss.includes(".dark{") ||
   !compiledCss.includes("--color-background:#0b1118") ||
+  !compiledCss.includes("--color-heading:#fff") ||
+  !compiledCss.includes(
+    ".dark :where(h1){color:var(--color-heading)!important}"
+  ) ||
   !compiledCss.includes(".high-contrast{")
 ) {
   throw new Error("[theme] Faltan los temas alternativos en el CSS compilado.");

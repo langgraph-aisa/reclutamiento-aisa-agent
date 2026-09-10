@@ -521,7 +521,7 @@ export default function PrivacyTerms() {
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         <section className="overflow-hidden rounded-[2rem] border border-border bg-card shadow-lift">
-          <div className="bg-primary px-6 py-8 text-primary-foreground dark:bg-[#162333] sm:px-10 sm:py-11">
+          <div className="bg-primary px-6 py-8 text-primary-foreground dark:bg-[#162333] dark:text-white sm:px-10 sm:py-11">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[.16em]">
               <span className="rounded-full border border-current/25 px-3 py-1">
                 Documento vigente

@@ -1,12 +1,14 @@
-# Gobierno de release JARVI RH 2.0.119
+# Gobierno de release JARVI RH 2.0.120
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.119**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.120**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-La versión 2.0.119 homologa el tratamiento escrito institucional a **usted** en portal público, formularios, administración, validaciones, correo de acceso, WhatsApp y plantillas operativas. Los verbos dirigidos a una persona se expresan en tercera persona gramatical y los posesivos se ajustan a **su/sus**. `scripts/verify-formal-spanish.mjs` inspecciona literales de 76 archivos de ejecución y forma parte de `release:verify`, `test:black-box` y `build`; una regresión lingüística detiene el release.
+La versión 2.0.120 establece un contrato transversal para títulos de página: los 20 elementos `h1` usan `--color-heading`, que conserva el tono institucional en Day y adopta `#FFFFFF` en Dark Dimmed y Dark High Contrast. La regla global tiene precedencia deliberada sobre colores heredados de héroes y controles. En `/privacidad-terminos`, el encabezado completo recibe además texto blanco para que etiqueta, versión, título e introducción no hereden `primary-foreground`, cuyo valor oscuro corresponde exclusivamente a texto sobre superficies teal.
 
-La migración `0012_dear_lifeguard.sql` cambia el valor predeterminado de WhatsApp y homologa únicamente introducciones, mensajes y preguntas históricas que coinciden con textos predeterminados conocidos. No reescribe descripciones ni plantillas libres creadas por administración, porque una sustitución automática podría alterar su significado. El criterio se apoya en la descripción de las formas de tratamiento de RAE/ASALE y no pretende sustituir una revisión editorial humana de contenido libre.
+`scripts/verify-theme-css.mjs` inspecciona el artefacto minificado y exige tanto el valor blanco del token como la regla global de `h1`; la caja negra confirma su presencia junto con todas las superficies React implicadas. El contraste de blanco sobre el panel grafito `#162333` es 15.88:1, por encima de 4.5:1 para texto normal y 3:1 para texto grande según WCAG 2.2.
+
+Desde 2.0.119, el tratamiento escrito institucional utiliza **usted** en portal público, formularios, administración, validaciones, correo de acceso, WhatsApp y plantillas operativas. `scripts/verify-formal-spanish.mjs` inspecciona literales de 76 archivos de ejecución y forma parte de `release:verify`, `test:black-box` y `build`. La migración `0012_dear_lifeguard.sql` homologa únicamente textos históricos predeterminados y conserva contenido libre de administración.
 
 Desde 2.0.118, `/privacidad-terminos` funciona como documento interno de referencia, separado del formulario y disponible en una pestaña paralela mediante `target="_blank"` y `rel="noopener noreferrer"`. La ruta identifica a Alternativas Inteligentes, S.A., elimina marcadores editoriales, explica uso y límites de IA, categorías y finalidades de datos, proveedores, seguridad, conservación y solicitudes. Título, descripción y URL canónica se establecen como metadata de la página. El texto distingue compromisos voluntarios y normas aplicables; no presenta una iniciativa legislativa como ley vigente ni equivale a dictamen jurídico.
 
@@ -68,8 +70,8 @@ Cada push o solicitud de cambio a `main` ejecuta:
 
 La migración `0011_application_location.sql` mantiene nulos los nuevos campos para lecturas históricas, pero el contrato `publicJobs.submit` los exige en toda postulación nueva. También siembra de forma idempotente las zonas 1–25 y los municipios del departamento de Guatemala necesarios para la operación inicial; cambios posteriores permanecen administrables desde Configuración > Catálogo.
 
-Las confirmaciones de 2.0.117 son controles institucionales transversales, no preguntas configurables de una plaza. El endpoint rechaza propiedades ausentes, falsas o adicionales y registra las aceptaciones únicamente cuando la postulación completa confirma su transacción. La ruta jurídica de 2.0.119 no recibe ni expone datos de la postulación.
+Las confirmaciones de 2.0.117 son controles institucionales transversales, no preguntas configurables de una plaza. El endpoint rechaza propiedades ausentes, falsas o adicionales y registra las aceptaciones únicamente cuando la postulación completa confirma su transacción. La ruta jurídica de 2.0.120 no recibe ni expone datos de la postulación.
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.119.md](PRUEBAS_CAJA_NEGRA_2.0.119.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.120.md](PRUEBAS_CAJA_NEGRA_2.0.120.md).
