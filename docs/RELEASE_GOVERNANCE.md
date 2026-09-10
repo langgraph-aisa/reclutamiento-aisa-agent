@@ -1,17 +1,18 @@
-# Gobierno de release JARVI RH 2.0.112
+# Gobierno de release JARVI RH 2.0.113
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.112**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.113**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
 El porcentaje de sincronización es metadata del artefacto desplegado, no una consulta autenticada al API de GitHub. Un build sin divergencia entre `HEAD` y `origin/main` muestra 100 %. Esta decisión evita tokens GitHub en el navegador y conserva reproducibilidad.
 
 ## Secuencia de versiones
 
 - Cada push a `main` debe incrementar exactamente un release.
-- `2.0.112` continúa como `2.0.113` hasta `2.0.999`.
+- Una versión `x.y.n` continúa como `x.y.(n+1)` hasta el parche `999`.
 - Después de `2.0.999` sigue `2.1.0`; el mismo criterio se repite para los siguientes menores.
-- `pnpm release:bump` actualiza la fuente y las hojas vigentes.
+- `pnpm release:bump` actualiza la fuente y las hojas vigentes, preservando el historial del README.
+- Antes de publicar, se agrega al historial fecha, descripción y alcance del nuevo release; la puerta rechaza una versión sin entrada vigente.
 - `pnpm release:verify -- --compare-git` compara el release con el commit anterior.
 - GitHub Actions bloquea un push incoherente mediante `.github/workflows/black-box.yml`.
 
@@ -19,6 +20,7 @@ El porcentaje de sincronización es metadata del artefacto desplegado, no una co
 
 | Componente                 | Versión declarada | Evidencia                                         |
 | -------------------------- | ----------------: | ------------------------------------------------- |
+| Langfuse                   |           3.38.20 | `package.json` y `pnpm-lock.yaml`                 |
 | LangGraph JS               |            1.4.14 | `package.json` y `pnpm-lock.yaml`                 |
 | Adaptador LangChain OpenAI |            1.5.11 | `package.json` y `pnpm-lock.yaml`                 |
 | OpenAI SDK para JavaScript |            7.13.0 | `package.json` y `pnpm-lock.yaml`                 |
@@ -44,4 +46,4 @@ Cada push o solicitud de cambio a `main` ejecuta:
 4. comprobación TypeScript;
 5. build de producción.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.112.md](PRUEBAS_CAJA_NEGRA_2.0.112.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.113.md](PRUEBAS_CAJA_NEGRA_2.0.113.md).

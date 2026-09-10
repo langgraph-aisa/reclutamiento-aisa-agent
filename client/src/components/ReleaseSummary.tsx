@@ -17,7 +17,7 @@ export function ReleaseSummary() {
   return (
     <section
       aria-label="Estado de la versión y sincronización del repositorio"
-      className="mt-2 space-y-2 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/35 p-2.5"
+      className="release-summary mt-2 space-y-2 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/35 p-2.5"
     >
       <div className="flex items-center justify-between gap-2 text-[11px] text-sidebar-foreground/70">
         <span className="inline-flex min-w-0 items-center gap-1.5">

@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { VerticalNavigator } from "@/components/VerticalNavigator";
 import {
   Select,
   SelectContent,
@@ -16,6 +17,10 @@ import {
   applicationStatusTone,
 } from "@shared/applicationStatus";
 import {
+  adjacentReviewResultIndex,
+  type ReviewNavigationDirection,
+} from "@shared/reviewNavigation";
+import {
   ArrowDown,
   ArrowUp,
   Bot,
@@ -29,7 +34,7 @@ import {
   Sparkles,
   UserRound,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
 
@@ -64,6 +69,7 @@ export default function HumanReview() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [viewer, setViewer] = useState<ViewerSelection>({ kind: "ai" });
+  const matrixScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchText), 250);
@@ -157,6 +163,32 @@ export default function HumanReview() {
   const showForCandidate = (id: number, selection: ViewerSelection) => {
     setSelectedId(id);
     setViewer(selection);
+  };
+
+  const selectedIndex = selected
+    ? rows.findIndex((row: any) => row.id === selected.id)
+    : -1;
+
+  const moveThroughResults = (direction: ReviewNavigationDirection) => {
+    if (!rows.length) return;
+    const nextIndex = adjacentReviewResultIndex(
+      selectedIndex,
+      rows.length,
+      direction
+    );
+    const nextCandidate = rows[nextIndex] as any;
+    selectCandidate(nextCandidate.id);
+    window.requestAnimationFrame(() => {
+      const container = matrixScrollRef.current;
+      const row = container?.querySelector<HTMLElement>(
+        `[data-review-row="${nextCandidate.id}"]`
+      );
+      if (!container || !row) return;
+      container.scrollTo({
+        top: Math.max(0, row.offsetTop - 48),
+        behavior: "smooth",
+      });
+    });
   };
 
   const changeSort = (column: SortBy) => {
@@ -339,28 +371,16 @@ export default function HumanReview() {
         </div>
       </section>
 
-      <Card className="flex min-h-[320px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border-border/60 shadow-soft md:min-h-0">
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b bg-card px-3 py-2 sm:px-4">
-          <div>
-            <p className="text-sm font-semibold text-primary">
-              Matriz humana dinámica
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {rows.length} postulaciones · {questionColumns.length} campos de
-              formulario
-            </p>
-          </div>
-          {workspace.isFetching ? (
-            <span className="flex items-center text-xs text-muted-foreground">
-              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Actualizando
-            </span>
-          ) : (
-            <span className="hidden text-xs text-muted-foreground sm:inline">
-              Haz clic en una fila o evidencia
-            </span>
-          )}
-        </div>
-        <div className="human-review-matrix-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain">
+      <Card className="relative flex min-h-[320px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border-border/60 shadow-soft md:min-h-0">
+        {workspace.isFetching ? (
+          <span className="pointer-events-none absolute right-12 top-2 z-50 flex items-center rounded-full border bg-card/95 px-2.5 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Actualizando
+          </span>
+        ) : null}
+        <div
+          ref={matrixScrollRef}
+          className="human-review-matrix-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain pb-16"
+        >
           {workspace.error ? (
             <div className="grid h-full min-h-40 place-items-center p-6 text-center">
               <p className="text-sm text-destructive">
@@ -452,11 +472,12 @@ export default function HumanReview() {
                   return (
                     <tr
                       key={candidate.id}
+                      data-review-row={candidate.id}
                       onClick={() => selectCandidate(candidate.id)}
-                      className={`group cursor-pointer ${isSelected ? "bg-sky-50" : "bg-card hover:bg-muted/45"}`}
+                      className={`group cursor-pointer ${isSelected ? "bg-sky-50 dark:bg-neutral-800" : "bg-card hover:bg-muted/45"}`}
                     >
                       <td
-                        className={`sticky left-0 z-20 max-w-[230px] border-b border-r px-3 py-3 align-top sm:max-w-[270px] lg:max-w-[300px] ${isSelected ? "bg-sky-50" : "bg-card group-hover:bg-muted"}`}
+                        className={`sticky left-0 z-20 max-w-[230px] border-b border-r px-3 py-3 align-top sm:max-w-[270px] lg:max-w-[300px] ${isSelected ? "bg-sky-50 dark:bg-neutral-800" : "bg-card group-hover:bg-muted"}`}
                       >
                         <div className="flex gap-3">
                           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary text-[11px] font-bold text-primary-foreground">
@@ -518,7 +539,7 @@ export default function HumanReview() {
                                     fieldKey: column.fieldKey,
                                   });
                                 }}
-                                className="line-clamp-3 w-full text-left leading-5 text-primary hover:text-sky-800 hover:underline"
+                                className="line-clamp-3 w-full text-left leading-5 text-primary hover:text-sky-800 hover:underline dark:hover:text-white"
                                 title={formatAnswer(answer)}
                               >
                                 {formatAnswer(answer)}
@@ -538,7 +559,7 @@ export default function HumanReview() {
                             event.stopPropagation();
                             showForCandidate(candidate.id, { kind: "ai" });
                           }}
-                          className="inline-flex min-w-20 items-center justify-center rounded-xl border bg-background px-3 py-2 font-bold text-primary hover:border-sky-300 hover:bg-sky-50"
+                          className="inline-flex min-w-20 items-center justify-center rounded-xl border bg-background px-3 py-2 font-bold text-primary hover:border-sky-300 hover:bg-sky-50 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
                         >
                           <Bot className="mr-2 h-4 w-4" />
                           {scoreFor(candidate) ?? "—"}
@@ -551,7 +572,7 @@ export default function HumanReview() {
                             event.stopPropagation();
                             showForCandidate(candidate.id, { kind: "reason" });
                           }}
-                          className="inline-flex items-center rounded-xl border bg-background px-3 py-2 font-semibold text-primary hover:border-sky-300 hover:bg-sky-50"
+                          className="inline-flex items-center rounded-xl border bg-background px-3 py-2 font-semibold text-primary hover:border-sky-300 hover:bg-sky-50 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
                         >
                           <MessageSquareText className="mr-2 h-4 w-4" /> Ver
                         </button>
@@ -572,6 +593,19 @@ export default function HumanReview() {
             </table>
           )}
         </div>
+        {rows.length ? (
+          <VerticalNavigator
+            label="Navegación vertical de resultados"
+            previousLabel="Seleccionar candidato anterior"
+            nextLabel="Seleccionar candidato siguiente"
+            disablePrevious={selectedIndex <= 0}
+            disableNext={selectedIndex < 0 || selectedIndex >= rows.length - 1}
+            onPrevious={() => moveThroughResults(-1)}
+            onNext={() => moveThroughResults(1)}
+            status={`Resultado ${selectedIndex + 1} de ${rows.length}`}
+            className="absolute bottom-3 right-3 z-50"
+          />
+        ) : null}
       </Card>
     </div>
   );
@@ -601,9 +635,46 @@ function ViewerPanel({
         : selection.kind === "summary"
           ? "Nota inicial del candidato"
           : "Matriz de evaluación IA";
+  const viewerScrollRef = useRef<HTMLDivElement>(null);
+  const [scrollLimits, setScrollLimits] = useState({ up: false, down: false });
+  const selectionKey =
+    selection.kind === "answer"
+      ? `${selection.kind}:${selection.fieldKey}`
+      : selection.kind;
+
+  const updateScrollLimits = () => {
+    const element = viewerScrollRef.current;
+    if (!element) return;
+    setScrollLimits({
+      up: element.scrollTop > 2,
+      down: element.scrollTop + element.clientHeight < element.scrollHeight - 2,
+    });
+  };
+
+  useEffect(() => {
+    const element = viewerScrollRef.current;
+    if (!element) return;
+    element.scrollTop = 0;
+    const frame = window.requestAnimationFrame(updateScrollLimits);
+    const observer = new ResizeObserver(updateScrollLimits);
+    observer.observe(element);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [candidate?.id, selectionKey, blocks.length]);
+
+  const scrollViewer = (direction: -1 | 1) => {
+    const element = viewerScrollRef.current;
+    if (!element) return;
+    element.scrollBy({
+      top: direction * Math.max(72, element.clientHeight * 0.85),
+      behavior: "smooth",
+    });
+  };
 
   return (
-    <section className="human-review-viewer h-[240px] shrink-0 overflow-hidden rounded-2xl bg-[#0b2d4b] text-white shadow-lift sm:h-[220px] lg:h-[210px]">
+    <section className="human-review-viewer relative h-[220px] shrink-0 overflow-hidden rounded-2xl bg-[#0b2d4b] text-white shadow-lift dark:bg-neutral-950 sm:h-[184px] lg:h-[168px]">
       <div className="flex h-full flex-col px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
           <div>
@@ -633,7 +704,11 @@ function ViewerPanel({
             />
           </div>
         </div>
-        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div
+          ref={viewerScrollRef}
+          onScroll={updateScrollLimits}
+          className="mt-2 min-h-0 flex-1 overflow-y-auto pr-9 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {!candidate ? (
             <div className="grid h-full place-items-center text-sm text-white/60">
               Selecciona un candidato en la matriz inferior.
@@ -724,6 +799,19 @@ function ViewerPanel({
           )}
         </div>
       </div>
+      {candidate ? (
+        <VerticalNavigator
+          label="Navegación de bloques de evaluación"
+          previousLabel="Mostrar bloques anteriores"
+          nextLabel="Mostrar bloques siguientes"
+          disablePrevious={!scrollLimits.up}
+          disableNext={!scrollLimits.down}
+          onPrevious={() => scrollViewer(-1)}
+          onNext={() => scrollViewer(1)}
+          status={heading}
+          className="absolute right-2 top-1/2 z-20 -translate-y-1/2"
+        />
+      ) : null}
     </section>
   );
 }
@@ -869,7 +957,7 @@ function SortableHead({
       <button
         type="button"
         onClick={() => onSort(column)}
-        className="inline-flex items-center font-semibold text-primary hover:text-sky-800"
+        className="inline-flex items-center font-semibold text-primary hover:text-sky-800 dark:hover:text-white"
         title="Ordenar ascendente o descendente"
       >
         {label}
@@ -934,7 +1022,10 @@ function StatusBadge({ status }: { status: string }) {
     error: "border-rose-200 bg-rose-50 text-rose-800",
   }[applicationStatusTone(status)];
   return (
-    <Badge variant="outline" className={`rounded-full ${tone}`}>
+    <Badge
+      variant="outline"
+      className={`rounded-full dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 ${tone}`}
+    >
       {applicationStatusLabel(status)}
     </Badge>
   );

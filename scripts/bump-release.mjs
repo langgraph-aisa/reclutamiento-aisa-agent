@@ -36,6 +36,26 @@ const synchronizedFiles = [
   "server/releaseGovernance.test.ts",
   currentBlackBoxPath,
 ];
+
+function replaceVersion(relativePath, content) {
+  if (relativePath !== "README.md") {
+    return content.replaceAll(currentVersion, nextVersion);
+  }
+  const startMarker = "<!-- release-history:start -->";
+  const endMarker = "<!-- release-history:end -->";
+  const start = content.indexOf(startMarker);
+  const end = content.indexOf(endMarker);
+  if (start < 0 || end < start) {
+    throw new Error("README.md no contiene los marcadores del historial.");
+  }
+  const historyEnd = end + endMarker.length;
+  return [
+    content.slice(0, start).replaceAll(currentVersion, nextVersion),
+    content.slice(start, historyEnd),
+    content.slice(historyEnd).replaceAll(currentVersion, nextVersion),
+  ].join("");
+}
+
 const updates = synchronizedFiles.map(relativePath => {
   const target = path.join(repositoryRoot, relativePath);
   const content = fs.readFileSync(target, "utf8");
@@ -44,7 +64,7 @@ const updates = synchronizedFiles.map(relativePath => {
       `${relativePath} no contiene la versión ${currentVersion}.`
     );
   }
-  return { target, content: content.replaceAll(currentVersion, nextVersion) };
+  return { target, content: replaceVersion(relativePath, content) };
 });
 
 packageMetadata.version = nextVersion;

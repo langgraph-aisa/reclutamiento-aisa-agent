@@ -32,6 +32,8 @@ La separación principal es deliberada:
    plaza.
 6. El panel superior no depende del desplazamiento de la retícula. La tabla
    administra sus barras vertical y horizontal dentro de su propio contenedor.
+7. Los controles del visor desplazan solamente sus bloques; los controles de
+   resultados seleccionan la fila adyacente y sincronizan la barra vertical.
 
 ## Composición de datos
 
@@ -77,6 +79,12 @@ Seleccionar una fila restablece el visor a `ai`. Seleccionar una respuesta, el
 icono IA, el motivo o la nota cambia el contenido sin navegar ni perder filtros.
 El color de selección conecta perceptualmente fila, cabecera y visor.
 
+El visor usa una altura compacta adaptable. Dos controles verticales recorren
+el excedente cuando sus tarjetas no caben y se deshabilitan en los límites. En
+el extremo inferior de la retícula, otro par recorre postulaciones, actualiza el
+visor y aproxima la fila elegida a la cabecera fija. Ambos grupos exponen nombre,
+estado y acciones a tecnologías de asistencia.
+
 ## Consistencia y concurrencia
 
 La matriz es una proyección eventualmente fresca; después de guardar se
@@ -119,6 +127,8 @@ para habilitar el módulo y no alteran su contrato.
 - Cada enlace de evidencia sustituye el contenido del visor azul.
 - La ordenación alterna ascendente/descendente con un clic.
 - La matriz posee desplazamiento vertical y horizontal independiente.
+- Las flechas del visor recorren tarjetas sin mover la página.
+- Las flechas inferiores recorren resultados y sincronizan la fila visible.
 - Guardar un comentario sin cambiar estado produce auditoría.
 - Guardar un estado actualiza candidatos, informes y tablero.
 - `Calificado por AISA` no envía mensajes.

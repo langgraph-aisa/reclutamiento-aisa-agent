@@ -58,6 +58,13 @@ const blackBox = fs.readFileSync(blackBoxPath, "utf8");
 if (!readme.includes(`JARVI%20RH-${currentVersion}`)) {
   fail("El badge Markdown de README no coincide con package.json.");
 }
+if (
+  !new RegExp(
+    `### \\d{2}[A-Z]{3}\\d{4} · JARVI RH ${currentVersion.replaceAll(".", "\\.")}`
+  ).test(readme)
+) {
+  fail("El historial README no documenta el release vigente.");
+}
 if (!governance.includes(`JARVI RH ${currentVersion}`)) {
   fail("La hoja de gobierno no coincide con package.json.");
 }
@@ -69,6 +76,7 @@ if (
 }
 
 for (const [dependency, expected] of [
+  ["langfuse", "3.38.20"],
   ["@langchain/langgraph", "1.4.14"],
   ["@langchain/openai", "1.5.11"],
   ["openai", "7.13.0"],

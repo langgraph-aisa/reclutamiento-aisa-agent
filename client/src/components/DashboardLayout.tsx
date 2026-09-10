@@ -222,7 +222,7 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex min-w-0 items-center gap-2">
-                  <AppBrand className="h-8 max-w-full rounded-lg bg-white/90 px-1.5 py-1" />
+                  <AppBrand className="h-8 max-w-full dark:brightness-0 dark:invert" />
                 </div>
               ) : null}
             </div>

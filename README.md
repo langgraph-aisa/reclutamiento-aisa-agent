@@ -4,38 +4,55 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.112</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.113</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.112-0b2d4b" alt="JARVI RH 2.0.112" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.113-0b2d4b" alt="JARVI RH 2.0.113" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
-  <img src="https://img.shields.io/badge/Langfuse-3.9.0-orange" alt="Langfuse 3.9.0" />
-  <img src="https://img.shields.io/badge/LangGraph-0.2.56-purple" alt="LangGraph 0.2.56" />
-    <img src="https://img.shields.io/badge/ISO%2FIEC-25010%20%C2%B7%2027001%20%C2%B7%2029119-0284c7" alt="Referentes ISO/IEC" />
+  <img src="https://img.shields.io/badge/Langfuse-3.38.20-orange" alt="Langfuse 3.38.20" />
+  <img src="https://img.shields.io/badge/LangGraph-1.4.14-purple" alt="LangGraph 1.4.14" />
+  <img src="https://img.shields.io/badge/langchain--openai-1.5.11-0f766e" alt="LangChain OpenAI 1.5.11" />
+  <img src="https://img.shields.io/badge/OpenAI%20SDK-7.13.0-111827" alt="OpenAI SDK 7.13.0" />
+  <img src="https://img.shields.io/badge/Responses%20API-v1%2Fresponses-2563eb" alt="OpenAI Responses API" />
+  <img src="https://img.shields.io/badge/ISO%2FIEC-25010%20%C2%B7%2027001%20%C2%B7%2029119-0284c7" alt="Referentes ISO/IEC" />
 </p>
 
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.112 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.113 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
-Talento AISA es la plataforma No.1 especializada en reclutamiento propiedad de Alternativas Inteligentes, S. A. para vincular capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas. JARVI RH 2.0.112 integra publicación de plazas, formularios versionados, evaluación asistida por inteligencia artificial (IA), revisión humana, solicitud controlada de currículum por WhatsApp y evidencia de auditoría. Su propuesta comercial es reducir trabajo repetitivo sin transferir a un modelo estadístico la responsabilidad institucional de contratar. La automatización produce una recomendación explicada; el personal autorizado conserva la decisión.
+Talento AISA es la plataforma No.1 especializada en reclutamiento propiedad de Alternativas Inteligentes, S. A. para vincular capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas. JARVI RH 2.0.113 integra publicación de plazas, formularios versionados, evaluación asistida por inteligencia artificial (IA), revisión humana, solicitud controlada de currículum por WhatsApp y evidencia de auditoría. Su propuesta comercial es reducir trabajo repetitivo sin transferir a un modelo estadístico la responsabilidad institucional de contratar. La automatización produce una recomendación explicada; el personal autorizado conserva la decisión.
 
 ## 1. Reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora
 
 ACTUALIZACIÓN DE LA VERSIÓN
 
-10SEP2026 Implementado y publicado en main.
-- Commit: 27519b2
-- Versión: JARVI RH 2.0.112
-- Actualización README
-- Tema oscuro/claro persistente y accesible.
-- Menú, usuario, versión, rama, commit y porcentaje GitHub integrados.
-- Gobierno automático de versiones y workflow de caja negra.
+<!-- release-history:start -->
+
+### 10SEP2026 · JARVI RH 2.0.113
+
+- Estado: integrado para publicación en `main`.
+- Commit: `HEAD` de `main`; el hash se replica en el pie del artefacto.
+- Revisión Humana 360° compactada con navegación vertical asistida en el visor y los resultados.
+- Eliminado el encabezado redundante de la retícula para ampliar el área efectiva de trabajo.
+- Modo oscuro convertido a escala acromática de grises y negros, conservando contraste y estados funcionales.
+- Logotipo AISA transparente en claro y adaptación monocromática en oscuro.
+- Caja negra, documentación responsive y gobierno de release actualizados.
+
+Descripción: esta versión reduce la carga visual y la distancia de interacción sin modificar consultas, filtros, evaluación, comentarios, estados, auditoría ni navegación al detalle. Los controles se deshabilitan en sus límites y anuncian su función a tecnologías de asistencia.
+
+### 10SEP2026 · JARVI RH 2.0.112
+
+- Estado: implementado y publicado en `main`.
+- Actualización académica y comercial del README.
+- Tema persistente, metadata Git, gobierno automático de versiones y workflow de caja negra consolidados.
+
+<!-- release-history:end -->
 
 El objeto sociotécnico no es “la IA” aislada, sino el ensamblaje persona/plaza/formulario/evidencia/regla/modelo/revisor. La pregunta rectora es: **¿cómo acelerar la preclasificación de talento especializado manteniendo procedencia, seguridad, posibilidad de refutación y autoridad humana?** Se aplicó investigación de ciencia del diseño: inspección estática de código, reconstrucción del modelo de datos, análisis de dependencias, pruebas de comportamiento observable y contraste normativo. La unidad de análisis es una postulación; las unidades de evidencia son respuestas declaradas, reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora.
 
@@ -134,6 +151,8 @@ Persisten riesgos de procedencia. Las respuestas apuntan a preguntas mutables y 
 | ISO/IEC/IEEE 29119-1:2022                  | Casos Vitest, caja negra versionada y CI con release, regresión, tipos y build.                                     | Plan/niveles de prueba, trazabilidad requisito–riesgo–caso, cobertura, seguridad dinámica, pruebas E2E y evidencia firmada.                                                                          |
 | ISO/IEC 42001, 25059 y 23894 / NIST AI RMF | Intervención humana, configuración, evidencia, brechas, modelo registrado y telemetría minimizada.                  | Inventario de impactos, benchmark por plaza, sesgo desagregado, umbrales aprobados, deriva, apelación y retiro seguro del modelo.                                                                    |
 
+Esta matriz documenta referencias metodológicas y no constituye certificación, conformidad acreditada ni dictamen independiente de cumplimiento.
+
 El acceso usa códigos de seis dígitos de diez minutos, máximo cinco intentos, espera de reenvío y respuesta uniforme para reducir enumeración. Los secretos del agente se cifran y el navegador recibe máscara; Langfuse traza identificador de aplicación, modelo, puntaje y clasificación sin nombre, teléfono, correo ni respuestas. No obstante, marcar `is_secret` en configuraciones ApiChat solo oculta la lectura: el esquema actual no demuestra cifrado equivalente. Tampoco hay rate limiting global, protección CSRF explícita, escaneo de dependencias, cabeceras de seguridad o cobertura configurada. Son hallazgos de riesgo, no evidencia de explotación.
 
 ## 7. Verificación, despliegue y reproducibilidad
@@ -147,7 +166,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.112](docs/PRUEBAS_CAJA_NEGRA_2.0.112.md).
+`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.113](docs/PRUEBAS_CAJA_NEGRA_2.0.113.md).
 
 ## 8. Protocolo de Ingenierìa de Software
 

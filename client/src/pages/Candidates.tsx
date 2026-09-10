@@ -280,7 +280,7 @@ function CandidateDetail({
     });
   };
   return (
-    <Card className="rounded-3xl border-0 bg-[#0b2d4b] text-white shadow-lift dark:bg-[#09243d]">
+    <Card className="rounded-3xl border-0 bg-[#0b2d4b] text-white shadow-lift dark:bg-neutral-950">
       <CardHeader className="flex flex-row items-start justify-between">
         <div>
           <Badge className="rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-200">

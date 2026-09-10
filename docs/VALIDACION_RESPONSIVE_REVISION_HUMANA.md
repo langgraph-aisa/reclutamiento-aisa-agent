@@ -7,6 +7,8 @@
 3. El encabezado de persona, visor 360° y filtros permanecen fuera del desplazamiento de la tabla en tabletas y escritorios.
 4. Todos los controles conservan un ancho utilizable; cuando el espacio disminuye cambian de fila, nunca quedan fuera de pantalla.
 5. La matriz mantiene fija la cabecera y la primera columna durante la exploración de evidencias.
+6. El encabezado descriptivo redundante se elimina; la retícula comienza en la cabecera de datos.
+7. Los controles de flecha desplazan únicamente el contenedor al que pertenecen y publican etiquetas accesibles.
 
 ## Estrategia geométrica
 
@@ -17,18 +19,20 @@
 - Desde 1152 px: resumen, puntaje y revisión rápida se consolidan en una franja.
 - Desde 1248 px: los ocho filtros ocupan una sola fila con mínimos explícitos que preservan fechas y etiquetas.
 - En pantallas de altura menor a 760 px, el visor reduce su altura para reservar área operativa a la matriz.
+- El visor utiliza altura adaptativa de 168–220 px. Cuando el contenido excede ese espacio, sus flechas recorren bloques sin desplazar la página.
+- Las flechas inferiores seleccionan el resultado anterior/siguiente y sincronizan la posición vertical de la retícula con la persona visible.
 
 ## Matriz de comprobación
 
-| Entorno representativo | Resultado esperado |
-| --- | --- |
-| Móvil 360 × 640 | Herramientas accesibles mediante desplazamiento táctil interno; sin desbordamiento lateral del documento |
-| Tableta 768 × 1024 | Secciones superiores fijas y matriz con desplazamiento propio |
-| Tableta horizontal 1024 × 768 | Revisión rápida visible en segunda franja, sin controles recortados |
-| Pantalla cuadrada 1024 × 1024 | Uso equilibrado de altura y ancho; visor y matriz simultáneamente visibles |
-| Portátil 1366 × 768 | Filtros compactos en dos filas y tabla con área útil estable |
-| Monitor ancho 1920 × 600 | Controles superiores en una fila cuando existe ancho suficiente y visor reducido por altura |
+| Entorno representativo        | Resultado esperado                                                                                                          |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Móvil 360 × 640               | Herramientas accesibles mediante desplazamiento táctil interno y botones de apoyo; sin desbordamiento lateral del documento |
+| Tableta 768 × 1024            | Secciones superiores fijas y matriz con desplazamiento propio                                                               |
+| Tableta horizontal 1024 × 768 | Revisión rápida visible en segunda franja, sin controles recortados                                                         |
+| Pantalla cuadrada 1024 × 1024 | Uso equilibrado de altura y ancho; visor y matriz simultáneamente visibles                                                  |
+| Portátil 1366 × 768           | Filtros compactos en dos filas y tabla con área útil estable                                                                |
+| Monitor ancho 1920 × 600      | Controles superiores en una fila cuando existe ancho suficiente y visor reducido por altura                                 |
 
 ## Conservación funcional
 
-No se modificaron contratos tRPC, consultas, filtros, ordenamiento, selección del candidato, visor de evidencias, cambio de estado, comentarios, auditoría ni navegación al detalle. La intervención se limita a contención geométrica, reflujo y jerarquía visual.
+No se modificaron contratos tRPC, consultas, filtros, ordenamiento, cambio de estado, comentarios, auditoría ni navegación al detalle. La selección del candidato y el visor conservan su semántica y añaden navegación accesible. La intervención se limita a contención geométrica, desplazamiento asistido, reflujo y jerarquía visual.

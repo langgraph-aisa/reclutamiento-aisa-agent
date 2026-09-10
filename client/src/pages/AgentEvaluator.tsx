@@ -329,7 +329,7 @@ export default function AgentEvaluator() {
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-border/70">
-            <div className="grid grid-cols-[1fr_90px] bg-primary px-4 py-3 text-xs font-semibold uppercase tracking-wider text-white sm:grid-cols-[1.1fr_100px_1.8fr]">
+            <div className="grid grid-cols-[1fr_90px] bg-primary px-4 py-3 dark:bg-neutral-950 text-xs font-semibold uppercase tracking-wider text-white sm:grid-cols-[1.1fr_100px_1.8fr]">
               <span>Bloque de evaluación</span>
               <span>Peso</span>
               <span className="hidden sm:block">Función</span>

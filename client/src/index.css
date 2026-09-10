@@ -37,32 +37,32 @@
 }
 
 .dark {
-  --color-background: oklch(0.155 0.025 252);
-  --color-foreground: oklch(0.93 0.014 85);
-  --color-card: oklch(0.205 0.028 252);
-  --color-card-foreground: oklch(0.93 0.014 85);
-  --color-popover: oklch(0.195 0.028 252);
-  --color-popover-foreground: oklch(0.93 0.014 85);
-  --color-primary: oklch(0.75 0.12 168);
-  --color-primary-foreground: oklch(0.16 0.03 252);
-  --color-secondary: oklch(0.285 0.052 172);
-  --color-secondary-foreground: oklch(0.93 0.014 85);
-  --color-muted: oklch(0.245 0.025 252);
-  --color-muted-foreground: oklch(0.72 0.025 252);
-  --color-accent: oklch(0.31 0.06 170);
-  --color-accent-foreground: oklch(0.95 0.012 85);
+  --color-background: oklch(0.145 0 0);
+  --color-foreground: oklch(0.93 0 0);
+  --color-card: oklch(0.195 0 0);
+  --color-card-foreground: oklch(0.93 0 0);
+  --color-popover: oklch(0.18 0 0);
+  --color-popover-foreground: oklch(0.93 0 0);
+  --color-primary: oklch(0.84 0 0);
+  --color-primary-foreground: oklch(0.14 0 0);
+  --color-secondary: oklch(0.27 0 0);
+  --color-secondary-foreground: oklch(0.93 0 0);
+  --color-muted: oklch(0.235 0 0);
+  --color-muted-foreground: oklch(0.7 0 0);
+  --color-accent: oklch(0.29 0 0);
+  --color-accent-foreground: oklch(0.95 0 0);
   --color-destructive: oklch(0.68 0.18 25);
-  --color-border: oklch(0.33 0.03 252);
-  --color-input: oklch(0.34 0.03 252);
-  --color-ring: oklch(0.72 0.12 168);
-  --color-sidebar: oklch(0.185 0.034 252);
-  --color-sidebar-foreground: oklch(0.91 0.016 85);
-  --color-sidebar-primary: oklch(0.75 0.12 168);
-  --color-sidebar-primary-foreground: oklch(0.16 0.03 252);
-  --color-sidebar-accent: oklch(0.255 0.045 252);
-  --color-sidebar-accent-foreground: oklch(0.95 0.012 85);
-  --color-sidebar-border: oklch(0.32 0.035 252);
-  --color-sidebar-ring: oklch(0.72 0.12 168);
+  --color-border: oklch(0.32 0 0);
+  --color-input: oklch(0.34 0 0);
+  --color-ring: oklch(0.68 0 0);
+  --color-sidebar: oklch(0.17 0 0);
+  --color-sidebar-foreground: oklch(0.91 0 0);
+  --color-sidebar-primary: oklch(0.84 0 0);
+  --color-sidebar-primary-foreground: oklch(0.14 0 0);
+  --color-sidebar-accent: oklch(0.245 0 0);
+  --color-sidebar-accent-foreground: oklch(0.95 0 0);
+  --color-sidebar-border: oklch(0.3 0 0);
+  --color-sidebar-ring: oklch(0.68 0 0);
 }
 
 @layer base {
@@ -116,6 +116,9 @@
     background-image:
       linear-gradient(rgba(205, 232, 225, 0.035) 1px, transparent 1px),
       linear-gradient(90deg, rgba(205, 232, 225, 0.035) 1px, transparent 1px);
+  }
+  .dark .release-summary {
+    filter: grayscale(1);
   }
 }
 
