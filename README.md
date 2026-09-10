@@ -1,14 +1,14 @@
 <!-- Documento académico-comercial auditado el 10 de septiembre de 2026. -->
 
-<p align="center">
+<p align="justify">
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="left">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.112</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.112</h1><p></p>
 Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco
 
 <p></p>
-<p align="center">
+<p align="left">
   <img src="https://img.shields.io/badge/JARVI%20RH-2.0.112-0b2d4b" alt="JARVI RH 2.0.112" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
