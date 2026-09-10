@@ -192,7 +192,7 @@ Las páginas técnicas evolutivas se consultaron el 10 de septiembre de 2026. La
 18. Vite. (s. f.). _Building for production_. https://vite.dev/guide/build
 19. Vitest. (s. f.). _Writing tests_. https://vitest.dev/guide/learn/writing-tests
 
-### Normativa y literatura académica (17 de 36; 47,2 %)
+### Normativa aplicada
 
 20. American Psychological Association. (2020). _Publication manual of the American Psychological Association_ (7th ed.). American Psychological Association. https://www.apa.org/pubs/books/publication-manual-7th-edition-paperback
 21. Gruber, T. R. (1993). A translation approach to portable ontology specifications. _Knowledge Acquisition, 5_(2), 199–220. https://doi.org/10.1006/knac.1993.1008
@@ -214,4 +214,4 @@ Las páginas técnicas evolutivas se consultaron el 10 de septiembre de 2026. La
 
 ## Licencia y alcance
 
-Código distribuido bajo [licencia MIT](LICENSE). La documentación académica orienta evaluación y mejora continua; cualquier uso real debe observar legislación laboral, privacidad, no discriminación y políticas aplicables en Guatemala. Última revisión documental: **10 de septiembre de 2026**.
+Código distribuido bajo [licencia MIT](LICENSE). La documentación académica orienta evaluación y mejora continua; cualquier uso real debe observar legislación laboral, privacidad, no discriminación y políticas aplicables en Guatemala. Última revisión documental: **10 de septiembre de 2026**. Todos los derechos reservados por Alternativas Inteligetes, S.A.
