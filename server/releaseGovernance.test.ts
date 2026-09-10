@@ -53,8 +53,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.122");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.122");
+    expect(APP_VERSION).toBe("2.0.123");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.123");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -243,6 +243,10 @@ describe("black-box release contract", () => {
       path.resolve("server/agentEvaluator.ts"),
       "utf8"
     );
+    const profileEditorial = fs.readFileSync(
+      path.resolve("server/profileEditorial.ts"),
+      "utf8"
+    );
     const theme = fs.readFileSync(path.resolve("client/src/index.css"), "utf8");
     const bootstrap = fs.readFileSync(
       path.resolve("client/index.html"),
@@ -267,9 +271,16 @@ describe("black-box release contract", () => {
     );
     expect(home).toContain("Contactar a AISA");
     expect(home).toContain("https://www.aisa.com.gt/contactoaisa/");
-    expect(home).toContain(
+    expect(home).toContain("Privacidad, Términos y Condiciones");
+    expect(home).not.toContain(
       "Privacidad, Términos y Condiciones de Uso de Plataforma"
     );
+    expect(home).toContain("Cada candidato merece una evaluación");
+    expect(home).not.toContain("Cada plaza merece una evaluación");
+    expect(home).toContain(
+      "Talento AISA, plataforma tecnológica de oportunidades"
+    );
+    expect(home).not.toContain("Reglas configurables por plaza");
     expect(home).toContain("lg:w-[24rem]");
     expect(home).not.toContain("Entrar al panel");
     expect(apply).toContain("RESPONSABILIDADES DEL PUESTO");
@@ -287,6 +298,19 @@ describe("black-box release contract", () => {
     expect(profiles).toContain(
       'positionIds: (profile.position_ids ?? []).join(", ")'
     );
+    expect(profiles).toContain(
+      'requiredRequirements: (profile.required_requirements ?? []).join("\\n")'
+    );
+    expect(profiles).toContain("splitRequirements(form.requiredRequirements)");
+    expect(profileEditorial).toContain(
+      'PROFILE_EDITORIAL_MODEL = "gpt-4.1-mini-2025-04-14"'
+    );
+    expect(profileEditorial).toContain("client.responses.parse");
+    expect(profileEditorial).toContain("zodTextFormat");
+    expect(profileEditorial).toContain("store: false");
+    expect(profileEditorial).not.toContain("console.warn(error");
+    expect(routers).toContain("requirements_editorially_normalized");
+    expect(routers).toContain("hasCurrentProfileEditorialValidation");
     expect(jobs).toContain("Plaza publicada correctamente");
     expect(jobs).toContain("onError: error => toast.error(error.message)");
     expect(routers).toContain(
@@ -356,7 +380,7 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(76);
+    expect(audit.files).toHaveLength(77);
     expect(audit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -377,7 +401,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.122");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.123");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -386,7 +410,12 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.122");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.123");
+    expect(readme).toContain("GPT-4.1 mini corrige ortografía");
+    expect(readme).toContain("sin consumir tokens durante las visitas");
+    expect(readme).toContain(
+      "Cada candidato merece una evaluación a su medida"
+    );
     expect(readme).toContain("Perfiles laborales preserva `position_ids`");
     expect(readme).toContain(
       "Ejecutivo de Negocios (Ventas) conserva la primera posición"

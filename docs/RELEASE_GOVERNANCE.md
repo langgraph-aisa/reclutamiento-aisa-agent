@@ -1,10 +1,16 @@
-# Gobierno de release JARVI RH 2.0.122
+# Gobierno de release JARVI RH 2.0.123
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.122**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.123**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-La versión 2.0.122 corrige la causa del bloqueo de Publicar. `profiles.list` ahora agrega `position_ids` y la UI los precarga al editar; antes, el formulario los dejaba vacíos y `profiles.upsert` eliminaba el vínculo aun cuando el perfil conservara objetivo, responsabilidades y requisitos. La publicación busca primero una asociación explícita completa y, si no existe, admite un perfil activo completo cuyo nombre coincida exactamente con el título de la plaza; en ese caso inserta la relación con `ON CONFLICT DO NOTHING` antes de publicar. La ausencia de perfil válido permanece bloqueada y `Jobs.tsx` muestra el mensaje del endpoint.
+La versión 2.0.123 incorpora un control editorial previo sobre `required_requirements`. Al guardar un perfil con requisitos o publicar un perfil histórico, el servidor usa las credenciales OpenAI cifradas y su rotación principal/respaldo para solicitar una lista estructurada a `gpt-4.1-mini-2025-04-14` mediante Responses API. El encargo conserva hechos y condiciones, corrige ortografía, gramática, concordancia, puntuación y ambigüedad conforme al español estándar de RAE/ASALE, y prohíbe inventar o eliminar requisitos. La respuesta se valida con Zod, se compacta sin saltos internos ni marcadores y se persiste antes de exponerla.
+
+El control falla de forma cerrada ante una credencial ausente, Responses API deshabilitada o respuesta inválida. `store: false` evita solicitar almacenamiento de la respuesta y los registros técnicos nunca incluyen la clave. `audit_log` conserva modelo, ranura utilizada, entrada y salida; si el contenido y el modelo no cambiaron, esa evidencia evita otra llamada. Una modificación invalida la coincidencia y obliga a revisar de nuevo. La UI administrativa admite un requisito completo por línea, preserva las comas internas y la landing dibuja la viñeta de cada elemento sin consumir tokens por visita.
+
+La portada acorta el enlace visible a «Privacidad, Términos y Condiciones» sin cambiar la ruta ni la apertura paralela, reemplaza el lema por «Cada candidato merece una evaluación a su medida» y sustituye «Reglas configurables por plaza» por la descripción institucional de Talento AISA como plataforma tecnológica de oportunidades laborales.
+
+Desde 2.0.122, `profiles.list` agrega `position_ids` y la UI los precarga al editar; antes, el formulario los dejaba vacíos y `profiles.upsert` eliminaba el vínculo aun cuando el perfil conservara objetivo, responsabilidades y requisitos. La publicación busca primero una asociación explícita completa y, si no existe, admite un perfil activo completo cuyo nombre coincida exactamente con el título de la plaza; en ese caso inserta la relación con `ON CONFLICT DO NOTHING` antes de publicar. La ausencia de perfil válido permanece bloqueada y `Jobs.tsx` muestra el mensaje del endpoint.
 
 `publicJobs.listPublished` asigna prioridad determinista a Ejecutivo de Negocios (Ventas) antes de ordenar el resto por creación e identificador descendentes. La regla usa un parámetro SQL y afecta tanto la primera opción del selector como la selección inicial de la landing. No altera el orden administrativo ni las demás plazas.
 
@@ -16,7 +22,7 @@ Desde 2.0.120, los 20 elementos `h1` usan `--color-heading`, que conserva el ton
 
 `scripts/verify-theme-css.mjs` inspecciona el artefacto minificado y exige tanto el valor blanco del token como la regla global de `h1`; la caja negra confirma su presencia junto con todas las superficies React implicadas. El contraste de blanco sobre el panel grafito `#162333` es 15.88:1, por encima de 4.5:1 para texto normal y 3:1 para texto grande según WCAG 2.2.
 
-Desde 2.0.119, el tratamiento escrito institucional utiliza **usted** en portal público, formularios, administración, validaciones, correo de acceso, WhatsApp y plantillas operativas. `scripts/verify-formal-spanish.mjs` inspecciona literales de 76 archivos de ejecución y forma parte de `release:verify`, `test:black-box` y `build`. La migración `0012_dear_lifeguard.sql` homologa únicamente textos históricos predeterminados y conserva contenido libre de administración.
+Desde 2.0.119, el tratamiento escrito institucional utiliza **usted** en portal público, formularios, administración, validaciones, correo de acceso, WhatsApp y plantillas operativas. `scripts/verify-formal-spanish.mjs` inspecciona literales de 77 archivos de ejecución y forma parte de `release:verify`, `test:black-box` y `build`. La migración `0012_dear_lifeguard.sql` homologa únicamente textos históricos predeterminados y conserva contenido libre de administración.
 
 Desde 2.0.118, `/privacidad-terminos` funciona como documento interno de referencia, separado del formulario y disponible en una pestaña paralela mediante `target="_blank"` y `rel="noopener noreferrer"`. La ruta identifica a Alternativas Inteligentes, S.A., elimina marcadores editoriales, explica uso y límites de IA, categorías y finalidades de datos, proveedores, seguridad, conservación y solicitudes. Título, descripción y URL canónica se establecen como metadata de la página. El texto distingue compromisos voluntarios y normas aplicables; no presenta una iniciativa legislativa como ley vigente ni equivale a dictamen jurídico.
 
@@ -55,8 +61,9 @@ La corrección 2.0.116 eliminó `@theme inline`: esa directiva había convertido
 | Adaptador LangChain OpenAI |            1.5.11 | `package.json` y `pnpm-lock.yaml`                 |
 | OpenAI SDK para JavaScript |            7.13.0 | `package.json` y `pnpm-lock.yaml`                 |
 | OpenAI Responses API       |    `v1/responses` | Uso estructurado desde `server/agentEvaluator.ts` |
+| Modelo editorial           |      GPT-4.1 mini | Snapshot `gpt-4.1-mini-2025-04-14`                |
 
-La Responses API crea respuestas de modelo mediante `POST /responses`; el prefijo de servicio usado por el SDK es `/v1`. La API no comparte el versionado semántico del paquete npm, por lo que ambos datos se documentan por separado. Referencia: [documentación oficial de OpenAI](https://developers.openai.com/api/docs/guides/migrate-to-responses).
+La Responses API crea respuestas de modelo mediante `POST /responses`; el prefijo de servicio usado por el SDK es `/v1`. La API no comparte el versionado semántico del paquete npm, por lo que ambos datos se documentan por separado. Referencias: [Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses) y [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini), documentación oficial de OpenAI.
 
 ## Referencias de aseguramiento
 
@@ -82,4 +89,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.122.md](PRUEBAS_CAJA_NEGRA_2.0.122.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.123.md](PRUEBAS_CAJA_NEGRA_2.0.123.md).

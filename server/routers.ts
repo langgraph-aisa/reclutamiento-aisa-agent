@@ -47,6 +47,11 @@ import {
   APPLICATION_CONSENTS,
   APPLICATION_CONSENT_VERSION,
 } from "../shared/applicationConsent";
+import {
+  normalizeProfileRequirements,
+  PROFILE_EDITORIAL_MODEL,
+  type ProfileEditorialResult,
+} from "./profileEditorial";
 
 const statusValues = applicationStatuses;
 const featuredPublicPositionTitle = "Ejecutivo de Negocios (Ventas)";
@@ -77,7 +82,8 @@ async function requireCompletePositionProfile(
   positionId: number
 ) {
   const profileReadiness = await pool.query(
-    `SELECT profile.id AS profile_id
+    `SELECT profile.id AS profile_id,
+            profile.required_requirements
        FROM job_positions position
        JOIN job_profiles profile ON profile.active = true
        LEFT JOIN job_profile_positions link
@@ -109,6 +115,98 @@ async function requireCompletePositionProfile(
      ON CONFLICT DO NOTHING`,
     [profileId, positionId]
   );
+  return {
+    profileId,
+    requiredRequirements: (Array.isArray(
+      profileReadiness.rows[0]?.required_requirements
+    )
+      ? profileReadiness.rows[0].required_requirements
+      : []
+    ).filter(
+      (requirement: unknown): requirement is string =>
+        typeof requirement === "string" && requirement.trim().length > 0
+    ),
+  };
+}
+
+async function recordProfileEditorialValidation(
+  pool: Pick<DatabasePool, "query">,
+  input: {
+    profileId: number;
+    actorUserId: number;
+    before: string[];
+    result: ProfileEditorialResult;
+  }
+) {
+  await pool.query(
+    `UPDATE job_profiles
+        SET required_requirements=$1::jsonb,updated_at=now()
+      WHERE id=$2`,
+    [asJson(input.result.requirements), input.profileId]
+  );
+  await pool.query(
+    `INSERT INTO audit_log
+       (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment)
+     VALUES ($1,'job_profile',$2,'requirements_editorially_normalized',$3::jsonb,$4::jsonb,$5)`,
+    [
+      input.actorUserId,
+      input.profileId,
+      asJson({ requiredRequirements: input.before }),
+      asJson({
+        requiredRequirements: input.result.requirements,
+        model: input.result.model,
+        keySlot: input.result.keySlot,
+      }),
+      `Corrección editorial mediante OpenAI Responses API con ${input.result.model}.`,
+    ]
+  );
+}
+
+async function hasCurrentProfileEditorialValidation(
+  pool: Pick<DatabasePool, "query">,
+  profileId: number,
+  requirements: string[]
+) {
+  const result = await pool.query<{ validated: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1
+         FROM audit_log
+        WHERE entity_type='job_profile'
+          AND entity_id=$1
+          AND action='requirements_editorially_normalized'
+          AND after_json->'requiredRequirements'=$2::jsonb
+          AND after_json->>'model'=$3
+     ) AS validated`,
+    [profileId, asJson(requirements), PROFILE_EDITORIAL_MODEL]
+  );
+  return result.rows[0]?.validated === true;
+}
+
+async function preparePositionProfileForPublication(
+  pool: DatabasePool,
+  positionId: number,
+  actorUserId: number
+) {
+  const profile = await requireCompletePositionProfile(pool, positionId);
+  if (
+    await hasCurrentProfileEditorialValidation(
+      pool,
+      profile.profileId,
+      profile.requiredRequirements
+    )
+  ) {
+    return;
+  }
+  const editorialResult = await normalizeProfileRequirements(
+    pool,
+    profile.requiredRequirements
+  );
+  await recordProfileEditorialValidation(pool, {
+    profileId: profile.profileId,
+    actorUserId,
+    before: profile.requiredRequirements,
+    result: editorialResult,
+  });
 }
 
 function asJson(value: unknown) {
@@ -460,7 +558,10 @@ export const appRouter = router({
           summary: z.string().max(2000).optional(),
           objective: z.string().max(5000).optional(),
           responsibilities: z.array(z.string().max(500)).default([]),
-          requiredRequirements: z.array(z.string().max(500)).default([]),
+          requiredRequirements: z
+            .array(z.string().max(500))
+            .max(50)
+            .default([]),
           technicalSkills: z.array(z.string().max(200)).default([]),
           softSkills: z.array(z.string().max(200)).default([]),
           knowledge: z.array(z.string().max(200)).default([]),
@@ -480,6 +581,23 @@ export const appRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
+        const editorialAlreadyValid =
+          input.id && input.requiredRequirements.length
+            ? await hasCurrentProfileEditorialValidation(
+                pool,
+                input.id,
+                input.requiredRequirements
+              )
+            : false;
+        const editorialResult =
+          input.requiredRequirements.length && !editorialAlreadyValid
+            ? await normalizeProfileRequirements(
+                pool,
+                input.requiredRequirements
+              )
+            : null;
+        const requiredRequirements =
+          editorialResult?.requirements ?? input.requiredRequirements;
         const client = await pool.connect();
         try {
           await client.query("BEGIN");
@@ -488,7 +606,7 @@ export const appRouter = router({
             input.summary ?? null,
             input.objective ?? null,
             asJson(input.responsibilities),
-            asJson(input.requiredRequirements),
+            asJson(requiredRequirements),
             asJson(input.technicalSkills),
             asJson(input.softSkills),
             asJson(input.knowledge),
@@ -516,6 +634,26 @@ export const appRouter = router({
               [...values, ctx.user.id]
             );
           const profileId = result.rows[0].id;
+          if (editorialResult) {
+            await client.query(
+              `INSERT INTO audit_log
+                 (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment)
+               VALUES ($1,'job_profile',$2,'requirements_editorially_normalized',$3::jsonb,$4::jsonb,$5)`,
+              [
+                ctx.user.id,
+                profileId,
+                asJson({
+                  requiredRequirements: input.requiredRequirements,
+                }),
+                asJson({
+                  requiredRequirements: editorialResult.requirements,
+                  model: editorialResult.model,
+                  keySlot: editorialResult.keySlot,
+                }),
+                `Corrección editorial mediante OpenAI Responses API con ${editorialResult.model}.`,
+              ]
+            );
+          }
           await client.query(
             `DELETE FROM job_profile_positions WHERE profile_id=$1`,
             [profileId]
@@ -940,7 +1078,11 @@ export const appRouter = router({
                 "La plaza requiere un perfil activo con objetivo, responsabilidades y requisitos obligatorios antes de publicarse.",
             });
           }
-          await requireCompletePositionProfile(pool, input.id);
+          await preparePositionProfileForPublication(
+            pool,
+            input.id,
+            ctx.user.id
+          );
         }
         const publicSlug = input.id
           ? undefined
@@ -992,10 +1134,14 @@ export const appRouter = router({
       }),
     setPublished: adminProcedure
       .input(z.object({ id: z.number(), published: z.boolean() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
         if (input.published) {
-          await requireCompletePositionProfile(pool, input.id);
+          await preparePositionProfileForPublication(
+            pool,
+            input.id,
+            ctx.user.id
+          );
         }
         const result = await pool.query(
           `UPDATE job_positions SET published=$1,updated_at=now() WHERE id=$2 RETURNING *`,

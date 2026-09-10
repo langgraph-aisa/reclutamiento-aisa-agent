@@ -85,7 +85,7 @@ export default function Home() {
                 Operación más humana, decisiones más claras
               </Badge>
               <h1 className="max-w-2xl text-balance text-5xl font-800 leading-[1.02] tracking-[-0.06em] text-primary sm:text-6xl xl:text-7xl">
-                Cada plaza merece una evaluación{" "}
+                Cada candidato merece una evaluación{" "}
                 <span className="text-emerald-700">a su medida.</span>
               </h1>
               <div className="mt-5 max-w-2xl">
@@ -137,13 +137,12 @@ export default function Home() {
                       className="flex w-fit items-start gap-2 rounded-lg underline-offset-4 transition hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
-                      <span>
-                        Privacidad, Términos y Condiciones de Uso de Plataforma
-                      </span>
+                      <span>Privacidad, Términos y Condiciones</span>
                     </a>
                     <span className="flex items-center gap-2">
                       <ClipboardCheck className="h-4 w-4 shrink-0 text-emerald-700" />
-                      Reglas configurables por plaza
+                      Talento AISA, plataforma tecnológica de oportunidades
+                      laborales.
                     </span>
                   </div>
                 </div>

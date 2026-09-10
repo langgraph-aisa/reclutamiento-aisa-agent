@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 
-const { getPool } = vi.hoisted(() => ({ getPool: vi.fn() }));
+const { getPool, normalizeProfileRequirements } = vi.hoisted(() => ({
+  getPool: vi.fn(),
+  normalizeProfileRequirements: vi.fn(),
+}));
 
 vi.mock("./db", () => ({
   getPool,
@@ -12,6 +15,11 @@ vi.mock("./db", () => ({
 vi.mock("./cvRequest", () => ({
   ensureCvRequestMessage: vi.fn(),
   deliverCvRequestMessage: vi.fn(),
+}));
+
+vi.mock("./profileEditorial", () => ({
+  normalizeProfileRequirements,
+  PROFILE_EDITORIAL_MODEL: "gpt-4.1-mini-2025-04-14",
 }));
 
 import { appRouter } from "./routers";
@@ -190,9 +198,27 @@ describe("jobs.setPublished profile readiness", () => {
 
   it("publishes the position when its active profile is complete", async () => {
     const published = { id: 8, published: true };
+    const originalRequirements = [
+      "5 años de experiencia en ventas",
+      "licensia tipo B",
+    ];
+    const correctedRequirements = [
+      "Mínimo cinco años de experiencia en ventas.",
+      "Licencia de conducir tipo B vigente.",
+    ];
+    normalizeProfileRequirements.mockResolvedValue({
+      requirements: correctedRequirements,
+      model: "gpt-4.1-mini-2025-04-14",
+      keySlot: "primary",
+    });
     const query = vi
       .fn()
-      .mockResolvedValueOnce({ rows: [{ profile_id: 15 }] })
+      .mockResolvedValueOnce({
+        rows: [{ profile_id: 15, required_requirements: originalRequirements }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ validated: false }] })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [published] });
     getPool.mockResolvedValue({ query });
@@ -218,7 +244,43 @@ describe("jobs.setPublished profile readiness", () => {
       "INSERT INTO job_profile_positions"
     );
     expect(query.mock.calls[1]?.[1]).toEqual([15, 8]);
-    expect(String(query.mock.calls[2]?.[0])).toContain("UPDATE job_positions");
+    expect(normalizeProfileRequirements).toHaveBeenCalledWith(
+      expect.anything(),
+      originalRequirements
+    );
+    expect(String(query.mock.calls[2]?.[0])).toContain("SELECT EXISTS");
+    expect(String(query.mock.calls[3]?.[0])).toContain("UPDATE job_profiles");
+    expect(query.mock.calls[3]?.[1]).toEqual([
+      JSON.stringify(correctedRequirements),
+      15,
+    ]);
+    expect(String(query.mock.calls[4]?.[0])).toContain(
+      "requirements_editorially_normalized"
+    );
+    expect(String(query.mock.calls[5]?.[0])).toContain("UPDATE job_positions");
+  });
+
+  it("reuses auditable validation for unchanged requirements", async () => {
+    const requirements = ["Licencia de conducir tipo B vigente."];
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [{ profile_id: 15, required_requirements: requirements }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ validated: true }] })
+      .mockResolvedValueOnce({ rows: [{ id: 8, published: true }] });
+    getPool.mockResolvedValue({ query });
+
+    await appRouter
+      .createCaller(createAdminContext())
+      .positions.setPublished({ id: 8, published: true });
+
+    expect(normalizeProfileRequirements).not.toHaveBeenCalled();
+    expect(String(query.mock.calls[2]?.[0])).toContain(
+      "after_json->'requiredRequirements'"
+    );
+    expect(String(query.mock.calls[3]?.[0])).toContain("UPDATE job_positions");
   });
 });
 
@@ -243,6 +305,62 @@ describe("profiles.list position associations", () => {
     expect(sql).toContain("AS position_ids");
     expect(sql).toContain("LEFT JOIN job_profile_positions");
     expect(sql).toContain("GROUP BY p.id");
+  });
+});
+
+describe("profiles.upsert editorial validation", () => {
+  it("persists the corrected requirements and its audit evidence", async () => {
+    const originalRequirements = ["5 años ventas y licensia tipo B"];
+    const correctedRequirements = [
+      "Mínimo cinco años de experiencia en ventas.",
+      "Licencia de conducir tipo B vigente.",
+    ];
+    normalizeProfileRequirements.mockResolvedValue({
+      requirements: correctedRequirements,
+      model: "gpt-4.1-mini-2025-04-14",
+      keySlot: "primary",
+    });
+    const savedProfile = {
+      id: 21,
+      name: "Ejecutivo comercial",
+      required_requirements: correctedRequirements,
+    };
+    const client = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [savedProfile] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] }),
+      release: vi.fn(),
+    };
+    getPool.mockResolvedValue({
+      query: vi.fn(),
+      connect: vi.fn().mockResolvedValue(client),
+    });
+
+    await expect(
+      appRouter.createCaller(createAdminContext()).profiles.upsert({
+        name: "Ejecutivo comercial",
+        requiredRequirements: originalRequirements,
+      })
+    ).resolves.toEqual(savedProfile);
+
+    expect(normalizeProfileRequirements).toHaveBeenCalledWith(
+      expect.anything(),
+      originalRequirements
+    );
+    expect(String(client.query.mock.calls[1]?.[0])).toContain(
+      "INSERT INTO job_profiles"
+    );
+    expect(client.query.mock.calls[1]?.[1]?.[4]).toBe(
+      JSON.stringify(correctedRequirements)
+    );
+    expect(String(client.query.mock.calls[2]?.[0])).toContain(
+      "requirements_editorially_normalized"
+    );
+    expect(client.release).toHaveBeenCalledOnce();
   });
 });
 
