@@ -1,15 +1,15 @@
-# Gobierno de release JARVI RH 2.0.111
+# Gobierno de release JARVI RH 2.0.112
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.111**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.112**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
 El porcentaje de sincronización es metadata del artefacto desplegado, no una consulta autenticada al API de GitHub. Un build sin divergencia entre `HEAD` y `origin/main` muestra 100 %. Esta decisión evita tokens GitHub en el navegador y conserva reproducibilidad.
 
 ## Secuencia de versiones
 
 - Cada push a `main` debe incrementar exactamente un release.
-- `2.0.111` continúa como `2.0.112` hasta `2.0.999`.
+- `2.0.112` continúa como `2.0.113` hasta `2.0.999`.
 - Después de `2.0.999` sigue `2.1.0`; el mismo criterio se repite para los siguientes menores.
 - `pnpm release:bump` actualiza la fuente y las hojas vigentes.
 - `pnpm release:verify -- --compare-git` compara el release con el commit anterior.
@@ -44,4 +44,4 @@ Cada push o solicitud de cambio a `main` ejecuta:
 4. comprobación TypeScript;
 5. build de producción.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.111.md](PRUEBAS_CAJA_NEGRA_2.0.111.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.112.md](PRUEBAS_CAJA_NEGRA_2.0.112.md).
