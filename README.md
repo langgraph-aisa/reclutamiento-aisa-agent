@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.113</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.114</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.113-0b2d4b" alt="JARVI RH 2.0.113" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.114-0b2d4b" alt="JARVI RH 2.0.114" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse-3.38.20-orange" alt="Langfuse 3.38.20" />
@@ -23,16 +23,26 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.113 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.114 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
-Talento AISA es la plataforma No.1 especializada en reclutamiento propiedad de Alternativas Inteligentes, S. A. para vincular capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas. JARVI RH 2.0.113 integra publicación de plazas, formularios versionados, evaluación asistida por inteligencia artificial (IA), revisión humana, solicitud controlada de currículum por WhatsApp y evidencia de auditoría. Su propuesta comercial es reducir trabajo repetitivo sin transferir a un modelo estadístico la responsabilidad institucional de contratar. La automatización produce una recomendación explicada; el personal autorizado conserva la decisión.
+Talento AISA es la plataforma No.1 especializada en reclutamiento propiedad de Alternativas Inteligentes, S. A. para vincular capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas. JARVI RH 2.0.114 integra publicación de plazas, formularios versionados, evaluación asistida por inteligencia artificial (IA), revisión humana, solicitud controlada de currículum por WhatsApp y evidencia de auditoría. Su propuesta comercial es reducir trabajo repetitivo sin transferir a un modelo estadístico la responsabilidad institucional de contratar. La automatización produce una recomendación explicada; el personal autorizado conserva la decisión.
 
 ## 1. Reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora
 
 ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
+
+### 10SEP2026 · JARVI RH 2.0.114
+
+- Estado: integrado para publicación en `main`.
+- Login y teléfono sin datos sugeridos; el servidor normaliza a `+502`.
+- Zona 1–25, departamento y municipio obligatorios, validados y persistidos.
+- Ubicación declarada incorporada al contexto auditable del agente.
+- Tema público, horario institucional y microtexto corregidos.
+
+Descripción: integra identidad y geografía verificadas sin romper registros históricos.
 
 ### 10SEP2026 · JARVI RH 2.0.113
 
@@ -81,21 +91,21 @@ flowchart LR
     N[n8n: flujos importables] -.integración opcional.- DB
 ```
 
-| Módulo         | Función especializada                                                                   | Evidencia principal                                    |
-| -------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Portal público | Lista plazas publicadas, resuelve token y registra aplicación única por teléfono/plaza. | `Home.tsx`, `Apply.tsx`, `publicJobs.*`                |
-| Administración | Usuarios y roles, plazas, perfiles, geografía INE, formularios y configuración.         | `App.tsx`, `routers.ts`                                |
-| Evaluación IA  | Reglas críticas, seis bloques, salida tipada, respaldo de credencial y persistencia.    | `agentEvaluator.ts`, `evaluation.ts`                   |
-| Revisión 360°  | Matriz dinámica, filtros, última evaluación, respuestas y decisión humana.              | `HumanReview.tsx`, `candidates.reviewWorkspace`        |
-| Comunicación   | Plantilla de CV, entrega idempotente, estados `pending/sending/sent/failed/unknown`.    | `cvRequest.ts`, `apichat.ts`                           |
-| Gobierno       | Release único, bitácora, Vitest, TypeScript, build y puerta CI.                         | `shared/release.ts`, `.github/workflows/black-box.yml` |
+| Módulo         | Función especializada                                                                | Evidencia principal                                    |
+| -------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| Portal público | Lista plazas, normaliza teléfono y exige ubicación catalogada antes de registrar.    | `Home.tsx`, `Apply.tsx`, `publicJobs.*`, `geo.*`       |
+| Administración | Usuarios y roles, plazas, perfiles, geografía INE, formularios y configuración.      | `App.tsx`, `routers.ts`                                |
+| Evaluación IA  | Reglas críticas, seis bloques, salida tipada, respaldo de credencial y persistencia. | `agentEvaluator.ts`, `evaluation.ts`                   |
+| Revisión 360°  | Matriz dinámica, filtros, última evaluación, respuestas y decisión humana.           | `HumanReview.tsx`, `candidates.reviewWorkspace`        |
+| Comunicación   | Plantilla de CV, entrega idempotente, estados `pending/sending/sent/failed/unknown`. | `cvRequest.ts`, `apichat.ts`                           |
+| Gobierno       | Release único, bitácora, Vitest, TypeScript, build y puerta CI.                      | `shared/release.ts`, `.github/workflows/black-box.yml` |
 
 Las dependencias no equivalen a capacidades automáticamente logradas. LangGraph contiene hoy un grafo lineal `START → evaluate → END`; ofrece una frontera explícita de orquestación, pero no un agente autónomo con múltiples herramientas. Drizzle tipa entidades, mientras varias consultas operativas usan SQL parametrizado directo. n8n contiene cuatro workflows importables (ingesta, evaluador por plaza, espera humana y WhatsApp), pero su activación depende de credenciales y webhooks del despliegue.
 
 ## 3. Proceso funcional y evaluación especializada de IA
 
 1. El administrador relaciona plaza, perfil, versión de formulario y preguntas. Cada pregunta puede definir respuestas aceptadas, rango, criterio, prompt y `hard_fail`.
-2. El postulante envía identidad de contacto y respuestas. Una restricción única evita duplicar la misma persona telefónica en una plaza.
+2. El postulante envía identidad, zona, departamento, municipio y respuestas. El servidor normaliza el teléfono con `+502`, valida la relación geográfica activa y evita duplicar la misma persona telefónica en una plaza.
 3. El evaluador normaliza y ejecuta reglas deterministas. Un incumplimiento indispensable finaliza como `no_calificado` sin consumir el modelo.
 4. Si las reglas pasan, el servidor reúne plaza, perfil, preguntas y respuestas; agrega, si fueron habilitados, los documentos institucionales SIERA y MST-EIR.
 5. LangChain solicita a Responses API una estructura validada por Zod: seis bloques únicos, razonamientos, resumen, motivo, evidencia, brechas y posible descalificación crítica. Si falla la clave principal, intenta la de respaldo.
@@ -136,6 +146,9 @@ erDiagram
     COUNTRIES ||--o{ GEO_DEPARTMENTS : agrupa
     GEO_DEPARTMENTS ||--o{ GEO_MUNICIPALITIES : agrupa
     GEO_MUNICIPALITIES ||--o{ GEO_ZONES : agrupa
+    GEO_DEPARTMENTS ||--o{ APPLICATIONS : localiza
+    GEO_MUNICIPALITIES ||--o{ APPLICATIONS : localiza
+    GEO_ZONES ||--o{ APPLICATIONS : localiza
 ```
 
 La auditoría primaria reside en `audit_log`: actor, tipo e identificador de entidad, acción, estado anterior/posterior, comentario y tiempo. `evaluations` conserva ejecuciones múltiples en lugar de sobrescribir; `conversation_messages` añade clave idempotente, intentos, proveedor, error y estado; las revisiones metodológicas preservan cada versión. Índices por aplicación, estado, plaza y entidad soportan reconstrucción. Las restricciones únicas protegen teléfono, slug, código, versión de formulario, pregunta por formulario y mensaje lógico.
@@ -166,7 +179,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.113](docs/PRUEBAS_CAJA_NEGRA_2.0.113.md).
+`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.114](docs/PRUEBAS_CAJA_NEGRA_2.0.114.md).
 
 ## 8. Protocolo de Ingenierìa de Software
 

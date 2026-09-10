@@ -15,6 +15,7 @@ import {
   verifyLoginCode,
 } from "./localAuth";
 import { normalizePhone } from "./phone";
+import { resolveApplicationLocation } from "./applicationLocation";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -602,6 +603,11 @@ export const appRouter = router({
           fullName: z.string().trim().min(2).max(240),
           email: z.string().email().max(320).optional().or(z.literal("")),
           phone: z.string().min(7).max(40),
+          location: z.object({
+            zoneId: z.number().int().positive(),
+            departmentId: z.number().int().positive(),
+            municipalityId: z.number().int().positive(),
+          }),
           answers: z.record(z.string(), z.unknown()),
         })
       )
@@ -611,6 +617,10 @@ export const appRouter = router({
         const client = await pool.connect();
         try {
           await client.query("BEGIN");
+          const location = await resolveApplicationLocation(
+            client,
+            input.location
+          );
           const positionResult = await client.query(
             `SELECT p.id, f.id AS form_id FROM job_positions p
              JOIN application_forms f ON f.job_position_id = p.id AND f.published = true
@@ -644,9 +654,18 @@ export const appRouter = router({
             [phone.e164, phone.country, input.fullName, input.email || null]
           );
           const application = await client.query(
-            `INSERT INTO applications (candidate_id, job_position_id, form_id, status)
-           VALUES ($1, $2, $3, 'en_revision') RETURNING id`,
-            [candidate.rows[0].id, position.id, position.form_id]
+            `INSERT INTO applications (
+               candidate_id,job_position_id,form_id,
+               location_zone_id,location_department_id,location_municipality_id,status
+             ) VALUES ($1,$2,$3,$4,$5,$6,'en_revision') RETURNING id`,
+            [
+              candidate.rows[0].id,
+              position.id,
+              position.form_id,
+              location.zoneId,
+              location.departmentId,
+              location.municipalityId,
+            ]
           );
           const questions = await client.query(
             `SELECT id,field_key,required,type,answer_config FROM form_questions WHERE form_id = $1 AND active = true`,
@@ -898,7 +917,17 @@ export const appRouter = router({
         }
         const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
         const result = await pool.query(
-          `SELECT a.id, a.status, a.submitted_at, a.evaluation_at, a.evaluation_reason, a.profile_summary, a.whatsapp_status, c.full_name, c.phone_international, c.email, p.title AS position_title, p.public_slug FROM applications a JOIN candidates c ON c.id=a.candidate_id JOIN job_positions p ON p.id=a.job_position_id ${where} ORDER BY a.submitted_at DESC LIMIT 200`,
+          `SELECT a.id,a.status,a.submitted_at,a.evaluation_at,a.evaluation_reason,
+                  a.profile_summary,a.whatsapp_status,c.full_name,c.phone_international,c.email,
+                  p.title AS position_title,p.public_slug,gz.name AS location_zone,
+                  gd.name AS location_department,gm.name AS location_municipality
+             FROM applications a
+             JOIN candidates c ON c.id=a.candidate_id
+             JOIN job_positions p ON p.id=a.job_position_id
+             LEFT JOIN geo_zones gz ON gz.id=a.location_zone_id
+             LEFT JOIN geo_departments gd ON gd.id=a.location_department_id
+             LEFT JOIN geo_municipalities gm ON gm.id=a.location_municipality_id
+             ${where} ORDER BY a.submitted_at DESC LIMIT 200`,
           values
         );
         return result.rows;
@@ -982,6 +1011,8 @@ export const appRouter = router({
              a.id,a.status,a.submitted_at,a.evaluation_at,a.evaluation_reason,
              a.profile_summary,a.whatsapp_status,c.full_name,c.phone_international,
              c.email,p.id AS position_id,p.title AS position_title,p.public_slug,
+             gz.name AS location_zone,gd.name AS location_department,
+             gm.name AS location_municipality,
              e.evaluation_id,e.evaluation_status,e.latest_reason,e.latest_profile_summary,
              e.ai_payload,e.ai_model,e.evaluation_created_at,
              ${scoreExpression} AS evaluation_score,
@@ -989,6 +1020,9 @@ export const appRouter = router({
            FROM applications a
            JOIN candidates c ON c.id=a.candidate_id
            JOIN job_positions p ON p.id=a.job_position_id
+           LEFT JOIN geo_zones gz ON gz.id=a.location_zone_id
+           LEFT JOIN geo_departments gd ON gd.id=a.location_department_id
+           LEFT JOIN geo_municipalities gm ON gm.id=a.location_municipality_id
            LEFT JOIN LATERAL (
              SELECT ev.id AS evaluation_id,ev.status AS evaluation_status,
                     ev.reason AS latest_reason,ev.profile_summary AS latest_profile_summary,
@@ -1024,7 +1058,17 @@ export const appRouter = router({
       .query(async ({ input }) => {
         const pool = await requirePool();
         const application = await pool.query(
-          `SELECT a.*, c.full_name, c.phone_international, c.email, p.title AS position_title, p.public_slug FROM applications a JOIN candidates c ON c.id=a.candidate_id JOIN job_positions p ON p.id=a.job_position_id WHERE a.id=$1`,
+          `SELECT a.*,c.full_name,c.phone_international,c.email,
+                  p.title AS position_title,p.public_slug,
+                  gz.name AS location_zone,gd.name AS location_department,
+                  gm.name AS location_municipality
+             FROM applications a
+             JOIN candidates c ON c.id=a.candidate_id
+             JOIN job_positions p ON p.id=a.job_position_id
+             LEFT JOIN geo_zones gz ON gz.id=a.location_zone_id
+             LEFT JOIN geo_departments gd ON gd.id=a.location_department_id
+             LEFT JOIN geo_municipalities gm ON gm.id=a.location_municipality_id
+            WHERE a.id=$1`,
           [input.id]
         );
         if (!application.rows[0])
@@ -1409,6 +1453,22 @@ export const appRouter = router({
         );
         return result.rows;
       }),
+    zones: publicProcedure.query(async () => {
+      const pool = await getPool();
+      if (!pool) return [];
+      const result = await pool.query(
+        `SELECT z.id,z.code,z.name,
+                d.id AS "departmentId",d.name AS "departmentName"
+           FROM geo_zones z
+           JOIN geo_municipalities m ON m.id=z.municipality_id AND m.active=true
+           JOIN geo_departments d ON d.id=m.department_id AND d.active=true
+           JOIN countries c ON c.id=d.country_id AND c.iso2='GT' AND c.active=true
+          WHERE z.active=true
+            AND z.code ~ '^(?:[1-9]|1[0-9]|2[0-5])$'
+          ORDER BY z.code::integer`
+      );
+      return result.rows;
+    }),
     adminCatalog: adminProcedure.query(async () => {
       const pool = await getPool();
       if (!pool) return { departments: [], municipalities: [], zones: [] };
@@ -1420,7 +1480,7 @@ export const appRouter = router({
           `SELECT m.id,m.code,m.name,m.active,d.code AS department_code,d.name AS department_name FROM geo_municipalities m JOIN geo_departments d ON d.id=m.department_id ORDER BY m.code`
         ),
         pool.query(
-          `SELECT z.id,z.code,z.name,z.active,m.code AS municipality_code,m.name AS municipality_name FROM geo_zones z JOIN geo_municipalities m ON m.id=z.municipality_id ORDER BY z.code`
+          `SELECT z.id,z.code,z.name,z.active,m.code AS municipality_code,m.name AS municipality_name,d.code AS department_code,d.name AS department_name FROM geo_zones z JOIN geo_municipalities m ON m.id=z.municipality_id JOIN geo_departments d ON d.id=m.department_id ORDER BY CASE WHEN z.code ~ '^[0-9]+$' THEN z.code::integer END,z.code`
         ),
       ]);
       return {

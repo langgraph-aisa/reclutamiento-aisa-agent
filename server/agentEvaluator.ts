@@ -63,6 +63,11 @@ type EvaluationSource = {
   applicationId: number;
   position: Record<string, unknown>;
   profile: Record<string, unknown> | null;
+  declaredLocation: {
+    zone: string | null;
+    department: string | null;
+    municipality: string | null;
+  };
   questions: Array<
     ConfiguredQuestion & { evaluationCriteria?: string; aiPrompt?: string }
   >;
@@ -134,6 +139,7 @@ REGLAS DE SALIDA Y CONTROL
 - Evalúa los seis bloques una sola vez y usa exactamente sus identificadores.
 - La puntuación de cada bloque va de 0 a 100; el sistema calculará el total ponderado.
 - No inventes experiencia ni requisitos. Una ausencia de evidencia es una brecha, no un hecho negativo.
+- Usa ubicacionDeclarada como evidencia catalogada para disponibilidad y logística cuando la plaza defina un requisito territorial; no infieras distancias ni tiempos de traslado no suministrados.
 - Marca criticalDisqualification únicamente ante evidencia explícita de incumplimiento de un requisito indispensable.
 - El resumen debe tener como máximo ${settings.summaryWordLimit} palabras.
 - No uses datos sensibles ni características protegidas para decidir.
@@ -152,6 +158,7 @@ function publicEvaluationInput(source: EvaluationSource) {
   return {
     plaza: source.position,
     perfilLaboral: source.profile,
+    ubicacionDeclarada: source.declaredLocation,
     respuestas: source.questions.map(question => ({
       pregunta: question.label,
       respuesta: source.answers[question.fieldKey] ?? null,
@@ -244,12 +251,17 @@ async function traceEvaluation(
 async function evaluationSource(pool: Pool, applicationId: number) {
   const application = await pool.query(
     `SELECT a.id,a.form_id,p.id AS position_id,p.title,p.department,p.location_label,p.description,
+            gz.name AS candidate_zone,gd.name AS candidate_department,
+            gm.name AS candidate_municipality,
             jp.name AS profile_name,jp.summary AS profile_summary,jp.objective AS profile_objective,
             jp.responsibilities,jp.required_requirements,jp.technical_skills,jp.soft_skills,
             jp.knowledge,jp.academic_level,jp.experience_years_min,jp.experience_years_max,
             jp.languages,jp.licenses,jp.availability,jp.location,jp.work_mode,jp.ai_criteria
        FROM applications a
        JOIN job_positions p ON p.id=a.job_position_id
+       LEFT JOIN geo_zones gz ON gz.id=a.location_zone_id
+       LEFT JOIN geo_departments gd ON gd.id=a.location_department_id
+       LEFT JOIN geo_municipalities gm ON gm.id=a.location_municipality_id
        LEFT JOIN job_profile_positions link ON link.job_position_id=p.id
        LEFT JOIN job_profiles jp ON jp.id=link.profile_id AND jp.active=true
       WHERE a.id=$1
@@ -311,6 +323,11 @@ async function evaluationSource(pool: Pool, applicationId: number) {
       description: row.description,
     },
     profile,
+    declaredLocation: {
+      zone: row.candidate_zone ?? null,
+      department: row.candidate_department ?? null,
+      municipality: row.candidate_municipality ?? null,
+    },
     questions,
     answers: answerValues,
   } satisfies EvaluationSource;

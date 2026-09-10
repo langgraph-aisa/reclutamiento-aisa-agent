@@ -3,6 +3,7 @@ import { AppBrand } from "@/components/AppBrand";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, ArrowRight, KeyRound, MailCheck, ShieldCheck } from "lucide-react";
 import { useState } from "react";
@@ -11,7 +12,7 @@ import { toast } from "sonner";
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const [email, setEmail] = useState("adminit@aisa.com.gt");
+  const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
 
@@ -33,7 +34,8 @@ export default function Login() {
   const request = () => requestCode.mutate({ email });
 
   return (
-    <main className="min-h-screen bg-background px-4 py-10 sm:px-6 lg:px-8">
+    <main className="relative min-h-screen bg-background px-4 py-10 sm:px-6 lg:px-8">
+      <ThemeToggle className="absolute right-4 top-4 sm:right-6 sm:top-6" />
       <div className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-5xl items-center gap-10 lg:grid-cols-[1fr_440px]">
         <section className="hidden lg:block">
           <div className="mb-6 flex items-center gap-4"><AppBrand className="h-14" /><span className="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Acceso seguro</span></div>
@@ -50,7 +52,7 @@ export default function Login() {
           <CardContent>
             {step === "email" ? (
               <form className="space-y-5" onSubmit={event => { event.preventDefault(); request(); }}>
-                <div className="space-y-2"><Label htmlFor="email">Correo electrónico</Label><Input id="email" type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required /></div>
+                <div className="space-y-2"><Label htmlFor="email">Correo electrónico</Label><Input id="email" name="login-email" type="email" autoComplete="off" value={email} onChange={event => setEmail(event.target.value)} required /></div>
                 <Button className="w-full" type="submit" disabled={requestCode.isPending}>{requestCode.isPending ? "Enviando…" : "Enviar código"}<ArrowRight className="ml-2 h-4 w-4" /></Button>
               </form>
             ) : (

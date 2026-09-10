@@ -82,3 +82,28 @@ describe("publicJobs.listPublished", () => {
     ).resolves.toEqual([]);
   });
 });
+
+describe("geo.zones", () => {
+  it("exposes only active Guatemala zones 1 through 25 in numeric order", async () => {
+    const rows = [
+      {
+        id: 1,
+        code: "1",
+        name: "Zona 1",
+        departmentId: 3,
+        departmentName: "Guatemala",
+      },
+    ];
+    const query = vi.fn().mockResolvedValue({ rows });
+    getPool.mockResolvedValue({ query });
+
+    await expect(
+      appRouter.createCaller(createPublicContext()).geo.zones()
+    ).resolves.toEqual(rows);
+
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain("c.iso2='GT'");
+    expect(sql).toContain("z.active=true");
+    expect(sql).toContain("ORDER BY z.code::integer");
+  });
+});

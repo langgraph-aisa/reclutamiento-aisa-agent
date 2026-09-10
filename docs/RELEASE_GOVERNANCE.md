@@ -1,8 +1,10 @@
-# Gobierno de release JARVI RH 2.0.113
+# Gobierno de release JARVI RH 2.0.114
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.113**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.114**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+En esta versión, `geo_zones`, `geo_departments` y `geo_municipalities` constituyen el catálogo autorizado para nuevas postulaciones. El cliente únicamente presenta opciones; el servidor vuelve a resolver su relación activa en PostgreSQL antes de insertar. Los identificadores se guardan en `applications` y los nombres resueltos alimentan el contexto del agente. Esta doble validación evita tratar valores visuales o texto libre como evidencia territorial confiable.
 
 El porcentaje de sincronización es metadata del artefacto desplegado, no una consulta autenticada al API de GitHub. Un build sin divergencia entre `HEAD` y `origin/main` muestra 100 %. Esta decisión evita tokens GitHub en el navegador y conserva reproducibilidad.
 
@@ -46,4 +48,6 @@ Cada push o solicitud de cambio a `main` ejecuta:
 4. comprobación TypeScript;
 5. build de producción.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.113.md](PRUEBAS_CAJA_NEGRA_2.0.113.md).
+La migración `0011_application_location.sql` mantiene nulos los nuevos campos para lecturas históricas, pero el contrato `publicJobs.submit` los exige en toda postulación nueva. También siembra de forma idempotente las zonas 1–25 y los municipios del departamento de Guatemala necesarios para la operación inicial; cambios posteriores permanecen administrables desde Configuración > Catálogo.
+
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.114.md](PRUEBAS_CAJA_NEGRA_2.0.114.md).

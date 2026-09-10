@@ -1,19 +1,19 @@
-# Validación final · JARVI RH 2.0.113
+# Validación final · JARVI RH 2.0.114
 
 Fecha de ejecución: 2026-09-10. Rama objetivo: `main`.
 
 ## Alcance verificado
 
-Esta hoja registra el release que compacta Revisión Humana 360°, incorpora navegación asistida en el visor y la retícula, corrige el modo oscuro acromático y elimina el fondo artificial del logotipo. También confirma la continuidad de filtros, selección, evaluación, cambios de estado, metadata Git y gobierno de releases. Los casos observables están especificados en [PRUEBAS_CAJA_NEGRA_2.0.113.md](PRUEBAS_CAJA_NEGRA_2.0.113.md).
+Esta hoja registra el release que elimina datos sugeridos en login y teléfono, unifica el horario institucional, retira el microtexto solicitado, conecta el formulario con el catálogo geográfico y persiste ubicación validada para uso del agente. También extiende el tema oscuro accesible a las rutas públicas y conserva compatibilidad de lectura con postulaciones históricas. Los casos observables están especificados en [PRUEBAS_CAJA_NEGRA_2.0.114.md](PRUEBAS_CAJA_NEGRA_2.0.114.md).
 
 ## Evidencia automatizada
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.113` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.114` |
 | Próxima versión (`pnpm release:bump -- --dry-run`) | Incremento semántico aprobado |
-| Caja negra (`pnpm test:black-box`)                 | Aprobado · 7 de 7 pruebas     |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 63 de 63 pruebas   |
+| Caja negra (`pnpm test:black-box`)                 | Aprobado · 8 de 8 pruebas     |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 69 de 69 pruebas   |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Build cliente/servidor (`pnpm build`)              | Aprobado                      |
 
@@ -21,4 +21,4 @@ El build conserva advertencias no bloqueantes preexistentes para variables opcio
 
 ## Dictamen
 
-El release cumple la puerta técnica local. La aplicación de ISO/IEC 25010:2023, ISO/IEC 27001:2022 e ISO/IEC/IEEE 29119-1:2022 es metodológica y no implica certificación formal. La verificación posterior al despliegue debe confirmar visualmente los casos BN-UI-01 a BN-UI-09, BN-DOC-01 a BN-DOC-04 y BN-HR-01 a BN-HR-06 en GitHub y el dominio productivo.
+El release cumple la puerta técnica local cuando toda la evidencia anterior resulte aprobada. La aplicación de ISO/IEC 25010:2023, ISO/IEC 27001:2022 e ISO/IEC/IEEE 29119-1:2022 es metodológica y no implica certificación formal. La verificación posterior al despliegue debe confirmar visualmente BN-AUTH-01 a BN-LEG-01 en GitHub y el dominio productivo.

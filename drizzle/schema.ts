@@ -321,6 +321,13 @@ export const applications = pgTable(
     formId: integer("form_id")
       .references(() => applicationForms.id)
       .notNull(),
+    locationZoneId: integer("location_zone_id").references(() => geoZones.id),
+    locationDepartmentId: integer("location_department_id").references(
+      () => geoDepartments.id
+    ),
+    locationMunicipalityId: integer("location_municipality_id").references(
+      () => geoMunicipalities.id
+    ),
     status: applicationStatusEnum("status").default("en_revision").notNull(),
     submittedAt: timestamp("submitted_at", { withTimezone: true })
       .defaultNow()
@@ -348,6 +355,11 @@ export const applications = pgTable(
     ),
     statusIdx: index("applications_status_idx").on(table.status),
     positionIdx: index("applications_position_idx").on(table.jobPositionId),
+    locationIdx: index("applications_location_idx").on(
+      table.locationDepartmentId,
+      table.locationMunicipalityId,
+      table.locationZoneId
+    ),
   })
 );
 

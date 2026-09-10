@@ -25,7 +25,9 @@ for code, name in departments:
     lines.append(f"INSERT INTO geo_departments (country_id,code,name,active) SELECT id,{q(code)},{q(name)},true FROM countries WHERE iso2='GT' ON CONFLICT (country_id,code) DO UPDATE SET name=EXCLUDED.name,active=true;")
 lines.append("")
 for code, name in municipalities:
-    department_code = code[:2]
+    # El código INE concatena departamento + dos dígitos municipales. Por
+    # ejemplo, 101 pertenece al departamento 01 y 2201 al departamento 22.
+    department_code = code[:-2].zfill(2)
     lines.append(f"INSERT INTO geo_municipalities (department_id,code,name,active) SELECT id,{q(code)},{q(name)},true FROM geo_departments WHERE code={q(department_code)} AND country_id=(SELECT id FROM countries WHERE iso2='GT') ON CONFLICT (department_id,code) DO UPDATE SET name=EXCLUDED.name,active=true;")
 lines.append("")
 out.write_text('\n'.join(lines) + '\n')

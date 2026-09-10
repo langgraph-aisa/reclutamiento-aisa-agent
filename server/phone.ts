@@ -1,15 +1,21 @@
-import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
+import {
+  parsePhoneNumberFromString,
+  type CountryCode,
+} from "libphonenumber-js";
 
 export type NormalizedPhone = {
   e164: string;
   country: string;
 };
 
-export function normalizePhone(input: string, defaultCountry: CountryCode = "GT"): NormalizedPhone {
+export function normalizePhone(
+  input: string,
+  defaultCountry: CountryCode = "GT"
+): NormalizedPhone {
   const clean = input.trim();
   const parsed = parsePhoneNumberFromString(clean, defaultCountry);
   if (!parsed || !parsed.isValid()) {
-    throw new Error("El número de teléfono no es válido. Usa un celular de Guatemala, por ejemplo +502 5555 5555.");
+    throw new Error("El número de teléfono móvil de Guatemala no es válido.");
   }
 
   return {
@@ -18,7 +24,10 @@ export function normalizePhone(input: string, defaultCountry: CountryCode = "GT"
   };
 }
 
-export function isValidInternationalPhone(input: string, defaultCountry: CountryCode = "GT") {
+export function isValidInternationalPhone(
+  input: string,
+  defaultCountry: CountryCode = "GT"
+) {
   try {
     normalizePhone(input, defaultCountry);
     return true;

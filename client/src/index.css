@@ -65,6 +65,83 @@
   --color-sidebar-ring: oklch(0.68 0 0);
 }
 
+/* High-contrast structural surfaces: semantic hues remain available for small
+   status indicators, while cards, callouts, controls and borders become
+   neutral in dark mode throughout authenticated and public routes. */
+.dark
+  :where(
+    .bg-amber-50,
+    .bg-amber-100,
+    .bg-cyan-50,
+    .bg-cyan-100,
+    .bg-emerald-50,
+    .bg-emerald-100,
+    .bg-fuchsia-50,
+    .bg-red-50,
+    .bg-red-100,
+    .bg-rose-50,
+    .bg-rose-100,
+    .bg-sky-50,
+    .bg-sky-100,
+    .bg-slate-50,
+    .bg-slate-100,
+    .bg-violet-50,
+    .bg-violet-100,
+    .bg-emerald-50\/35,
+    .bg-emerald-50\/40,
+    .bg-emerald-50\/70,
+    .bg-sky-50\/50,
+    .bg-white\/70
+  ) {
+  background-color: var(--color-muted) !important;
+}
+
+.dark
+  :where(
+    .text-amber-700,
+    .text-amber-800,
+    .text-amber-900,
+    .text-cyan-800,
+    .text-emerald-700,
+    .text-emerald-800,
+    .text-emerald-900,
+    .text-emerald-950,
+    .text-fuchsia-700,
+    .text-red-600,
+    .text-red-700,
+    .text-red-800,
+    .text-rose-800,
+    .text-sky-700,
+    .text-sky-800,
+    .text-slate-800,
+    .text-slate-950,
+    .text-violet-700,
+    .text-violet-800,
+    .text-violet-900
+  ) {
+  color: var(--color-foreground) !important;
+}
+
+.dark
+  :where(
+    .border-amber-200,
+    .border-cyan-200,
+    .border-emerald-200,
+    .border-emerald-300,
+    .border-red-200,
+    .border-rose-200,
+    .border-sky-200,
+    .border-slate-200,
+    .border-violet-200
+  ) {
+  border-color: var(--color-border) !important;
+}
+
+.dark :where(select, option) {
+  color: var(--color-foreground);
+  background-color: var(--color-background);
+}
+
 @layer base {
   * {
     @apply border-border;

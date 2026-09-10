@@ -78,6 +78,13 @@
       "when": 1788992951979,
       "tag": "0010_agent_score_statuses",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789059576340,
+      "tag": "0011_application_location",
+      "breakpoints": true
     }
   ]
 }

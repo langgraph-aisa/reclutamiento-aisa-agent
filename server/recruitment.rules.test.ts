@@ -1,11 +1,28 @@
 import { describe, expect, it } from "vitest";
 import { evaluateDeterministic } from "./evaluation";
 import { normalizePhone } from "./phone";
+import { STANDARD_WORK_SCHEDULE } from "../shared/jobPresentation";
+import { guatemalaLocalPhoneDigits } from "../shared/phone";
 
 describe("recruitment rules", () => {
   it("normalizes a Guatemala phone to E.164", () => {
-    expect(normalizePhone("5555 5555", "GT")).toEqual({ e164: "+50255555555", country: "GT" });
+    expect(normalizePhone("5555 5555", "GT")).toEqual({
+      e164: "+50255555555",
+      country: "GT",
+    });
     expect(normalizePhone("+502 5555 5555", "GT").e164).toBe("+50255555555");
+  });
+
+  it("keeps the public phone field local and blank-compatible", () => {
+    expect(guatemalaLocalPhoneDigits("")).toBe("");
+    expect(guatemalaLocalPhoneDigits("+502 5555 5555")).toBe("55555555");
+    expect(guatemalaLocalPhoneDigits("5555-5555")).toBe("55555555");
+  });
+
+  it("publishes the single approved work schedule", () => {
+    expect(STANDARD_WORK_SCHEDULE).toBe(
+      "Lunes a viernes de 9:00 a 18:00 y sábado de 8:00 a 12:00."
+    );
   });
 
   it("rejects an invalid Guatemala phone", () => {
@@ -13,32 +30,85 @@ describe("recruitment rules", () => {
   });
 
   it("fails a hard rule when the answer is not accepted", () => {
-    const result = evaluateDeterministic([{ fieldKey: "vehicle", label: "Licencia", hardFail: true, acceptedAnswers: ["Sí"] }], { vehicle: "No" });
+    const result = evaluateDeterministic(
+      [
+        {
+          fieldKey: "vehicle",
+          label: "Licencia",
+          hardFail: true,
+          acceptedAnswers: ["Sí"],
+        },
+      ],
+      { vehicle: "No" }
+    );
     expect(result.passed).toBe(false);
     expect(result.hardFailReason).toBe("Licencia");
   });
 
   it("supports minimum experience in months", () => {
-    const result = evaluateDeterministic([{ fieldKey: "experience", label: "Experiencia", hardFail: true, answerConfig: { minMonths: 12 } }], { experience: "8 meses" });
+    const result = evaluateDeterministic(
+      [
+        {
+          fieldKey: "experience",
+          label: "Experiencia",
+          hardFail: true,
+          answerConfig: { minMonths: 12 },
+        },
+      ],
+      { experience: "8 meses" }
+    );
     expect(result.passed).toBe(false);
     expect(result.results[0]?.reason).toContain("12 meses");
   });
 
   it("converts years to months for experience rules", () => {
-    const result = evaluateDeterministic([{ fieldKey: "experience", label: "Experiencia", hardFail: true, answerConfig: { minMonths: 12 } }], { experience: "1 año" });
+    const result = evaluateDeterministic(
+      [
+        {
+          fieldKey: "experience",
+          label: "Experiencia",
+          hardFail: true,
+          answerConfig: { minMonths: 12 },
+        },
+      ],
+      { experience: "1 año" }
+    );
     expect(result.passed).toBe(true);
   });
 
   it("compares accepted answers without case or accent differences", () => {
-    const result = evaluateDeterministic([{ fieldKey: "license", label: "Licencia", hardFail: true, acceptedAnswers: ["Sí"] }], { license: "si" });
+    const result = evaluateDeterministic(
+      [
+        {
+          fieldKey: "license",
+          label: "Licencia",
+          hardFail: true,
+          acceptedAnswers: ["Sí"],
+        },
+      ],
+      { license: "si" }
+    );
     expect(result.passed).toBe(true);
   });
 
   it("allows a candidate who meets all deterministic conditions", () => {
-    const result = evaluateDeterministic([
-      { fieldKey: "vehicle", label: "Licencia", hardFail: true, acceptedAnswers: ["Sí"] },
-      { fieldKey: "experience", label: "Experiencia", hardFail: true, answerConfig: { minMonths: 12 } },
-    ], { vehicle: "Sí", experience: "18 meses" });
+    const result = evaluateDeterministic(
+      [
+        {
+          fieldKey: "vehicle",
+          label: "Licencia",
+          hardFail: true,
+          acceptedAnswers: ["Sí"],
+        },
+        {
+          fieldKey: "experience",
+          label: "Experiencia",
+          hardFail: true,
+          answerConfig: { minMonths: 12 },
+        },
+      ],
+      { vehicle: "Sí", experience: "18 meses" }
+    );
     expect(result.passed).toBe(true);
     expect(result.results.every(item => item.passed)).toBe(true);
   });

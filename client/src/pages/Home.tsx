@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { STANDARD_WORK_SCHEDULE } from "@shared/jobPresentation";
 import { ArrowRight, BriefcaseBusiness, ClipboardCheck, Clock3, Database, GraduationCap, LayoutDashboard, Lightbulb, LockKeyhole, MapPin, MessageCircle, Sparkles, SunMedium, UsersRound } from "lucide-react";
 import { useState } from "react";
@@ -29,9 +30,12 @@ export default function Home() {
               <AppBrand className="h-12" />
               <p className="hidden text-xs text-muted-foreground sm:block">Reclutamiento por evidencia</p>
             </div>
-            <Link href="/login">
-              <Button variant="outline" className="rounded-full px-5">Ingresar</Button>
-            </Link>
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              <Link href="/login">
+                <Button variant="outline" className="rounded-full px-5">Ingresar</Button>
+              </Link>
+            </div>
           </header>
           <section className="grid gap-8 pb-12 pt-10 sm:pt-14 lg:grid-cols-[1.03fr_.97fr] lg:items-center lg:pt-16">
             <div className="min-w-0">
@@ -147,7 +151,6 @@ function PublicOpportunityCard({ jobs, loading }: { jobs: PublishedJob[]; loadin
                 Aplicar ahora <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
-            <p className="text-center text-xs text-white/50">Inicia el formulario en esta misma pestaña.</p>
           </>
         ) : (
           <div className="rounded-2xl border border-white/10 bg-white/8 p-6 text-center">

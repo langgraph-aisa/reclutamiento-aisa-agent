@@ -22,8 +22,8 @@ import {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.113");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.113");
+    expect(APP_VERSION).toBe("2.0.114");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.114");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -126,6 +126,53 @@ describe("black-box release contract", () => {
     expect(logo[25]).toBe(6);
   });
 
+  it("connects public identity, geographic catalog, persistence, and agent context", () => {
+    const login = fs.readFileSync(
+      path.resolve("client/src/pages/Login.tsx"),
+      "utf8"
+    );
+    const home = fs.readFileSync(
+      path.resolve("client/src/pages/Home.tsx"),
+      "utf8"
+    );
+    const apply = fs.readFileSync(
+      path.resolve("client/src/pages/Apply.tsx"),
+      "utf8"
+    );
+    const phoneInput = fs.readFileSync(
+      path.resolve("client/src/components/GuatemalaPhoneInput.tsx"),
+      "utf8"
+    );
+    const migration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0011_application_location.sql"),
+      "utf8"
+    );
+    const agent = fs.readFileSync(
+      path.resolve("server/agentEvaluator.ts"),
+      "utf8"
+    );
+    const theme = fs.readFileSync(path.resolve("client/src/index.css"), "utf8");
+
+    expect(login).toContain('useState("")');
+    expect(login).toContain('autoComplete="off"');
+    for (const publicSurface of [login, home, apply]) {
+      expect(publicSurface).toContain("<ThemeToggle");
+    }
+    expect(home).not.toContain("Inicia el formulario en esta misma pestaña.");
+    expect(phoneInput).toContain("🇬🇹");
+    expect(phoneInput).toContain('autoComplete="off"');
+    expect(phoneInput).not.toContain("+502 5555 5555");
+    expect(apply).toContain('label="Zona"');
+    expect(apply).toContain('label="Departamento"');
+    expect(apply).toContain('label="Municipio"');
+    expect(migration).toContain("generate_series(1,25)");
+    expect(migration).toContain('"location_zone_id"');
+    expect(agent).toContain("ubicacionDeclarada");
+    expect(theme).toContain("High-contrast structural surfaces");
+    expect(theme).toContain(".bg-amber-50");
+    expect(theme).toContain(".bg-violet-100");
+  });
+
   it("publishes the academic-commercial README with auditable proportions and references", () => {
     const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
     const academicBody = readme.slice(0, readme.indexOf("## Referencias"));
@@ -134,7 +181,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.113");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.114");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -143,7 +190,11 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(36);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.114");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.113");
+    expect(readme).toContain(
+      "Zona 1–25, departamento y municipio obligatorios"
+    );
     expect(readme).toContain("Revisión Humana 360° compactada");
     expect(readme).toContain("Langfuse-3.38.20");
     expect(readme).toContain("LangGraph-1.4.14");
