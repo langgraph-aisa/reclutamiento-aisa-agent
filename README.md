@@ -25,9 +25,17 @@
 
 Talento AISA es la plataforma No.1 especializada en reclutamiento propiedad de Alternativas Inteligentes, S. A. para vincular capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas. JARVI RH 2.0.112 integra publicación de plazas, formularios versionados, evaluación asistida por inteligencia artificial (IA), revisión humana, solicitud controlada de currículum por WhatsApp y evidencia de auditoría. Su propuesta comercial es reducir trabajo repetitivo sin transferir a un modelo estadístico la responsabilidad institucional de contratar. La automatización produce una recomendación explicada; el personal autorizado conserva la decisión.
 
-Este README funciona como introducción comercial y base académica reproducible. Describe el sistema observado en el repositorio, no una arquitectura aspiracional. La alineación con ISO/IEC 25010:2023, ISO/IEC 27001:2022 e ISO/IEC/IEEE 29119-1:2022 es metodológica: **no constituye certificación, declaración de conformidad ni auditoría de tercera parte**.
-
 ## 1. Reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora
+
+ACTUALIZACIÓN DE LA VERSIÓN
+
+10SEP2026 Implementado y publicado en main.
+- Commit: 27519b2
+- Versión: JARVI RH 2.0.112
+- Actualización README
+- Tema oscuro/claro persistente y accesible.
+- Menú, usuario, versión, rama, commit y porcentaje GitHub integrados.
+- Gobierno automático de versiones y workflow de caja negra.
 
 El objeto sociotécnico no es “la IA” aislada, sino el ensamblaje persona/plaza/formulario/evidencia/regla/modelo/revisor. La pregunta rectora es: **¿cómo acelerar la preclasificación de talento especializado manteniendo procedencia, seguridad, posibilidad de refutación y autoridad humana?** Se aplicó investigación de ciencia del diseño: inspección estática de código, reconstrucción del modelo de datos, análisis de dependencias, pruebas de comportamiento observable y contraste normativo. La unidad de análisis es una postulación; las unidades de evidencia son respuestas declaradas, reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora.
 
