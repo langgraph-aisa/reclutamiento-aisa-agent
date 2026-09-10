@@ -21,9 +21,9 @@
   <sub>Agente visual de producción de Talento AISA (PNG local con transparencia).</sub>
 </p>
 
-> **Empleos de Energia Solar en Guatemala** 
+> **Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco** 
 
-Talento AISA es la plataforma especializada de reclutamiento de Alternativas Inteligentes, S. A. para vincular capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas. JARVI RH 2.0.112 integra publicación de plazas, formularios versionados, evaluación asistida por inteligencia artificial (IA), revisión humana, solicitud controlada de currículum por WhatsApp y evidencia de auditoría. Su propuesta comercial es reducir trabajo repetitivo sin transferir a un modelo estadístico la responsabilidad institucional de contratar. La automatización produce una recomendación explicada; el personal autorizado conserva la decisión.
+Empleos de energia solar en guatemala, Talento AISA es la plataforma especializada de reclutamiento de Alternativas Inteligentes, S. A. para vincular capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas. JARVI RH 2.0.112 integra publicación de plazas, formularios versionados, evaluación asistida por inteligencia artificial (IA), revisión humana, solicitud controlada de currículum por WhatsApp y evidencia de auditoría. Su propuesta comercial es reducir trabajo repetitivo sin transferir a un modelo estadístico la responsabilidad institucional de contratar. La automatización produce una recomendación explicada; el personal autorizado conserva la decisión.
 
 Este README funciona como introducción comercial y base académica reproducible. Describe el sistema observado en el repositorio, no una arquitectura aspiracional. La alineación con ISO/IEC 25010:2023, ISO/IEC 27001:2022 e ISO/IEC/IEEE 29119-1:2022 es metodológica: **no constituye certificación, declaración de conformidad ni auditoría de tercera parte**. Las referencias siguen APA 7.ª, edición oficial vigente en septiembre de 2026; denominarla “APA 8” sería académicamente inexacto (American Psychological Association, 2020).
 
