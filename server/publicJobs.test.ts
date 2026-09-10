@@ -83,6 +83,50 @@ describe("publicJobs.listPublished", () => {
   });
 });
 
+describe("publicJobs.submit confirmations", () => {
+  const validSubmission = {
+    token: "ventas-8-abcd1234",
+    fullName: "Ana Pérez",
+    email: "",
+    phone: "55555555",
+    location: { zoneId: 1, departmentId: 1, municipalityId: 1 },
+    answers: {},
+  };
+
+  it("rejects the request when the three confirmations are absent", async () => {
+    await expect(
+      appRouter
+        .createCaller(createPublicContext())
+        .publicJobs.submit(validSubmission as never)
+    ).rejects.toThrow();
+
+    expect(getPool).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "adultConfirmed",
+    "informationTruthful",
+    "privacyAccepted",
+  ] as const)(
+    "rejects a false %s confirmation before accessing PostgreSQL",
+    async key => {
+      await expect(
+        appRouter.createCaller(createPublicContext()).publicJobs.submit({
+          ...validSubmission,
+          consents: {
+            adultConfirmed: true,
+            informationTruthful: true,
+            privacyAccepted: true,
+            [key]: false,
+          },
+        })
+      ).rejects.toThrow("La confirmación es obligatoria.");
+
+      expect(getPool).not.toHaveBeenCalled();
+    }
+  );
+});
+
 describe("geo.zones", () => {
   it("exposes only active Guatemala zones 1 through 25 in numeric order", async () => {
     const rows = [

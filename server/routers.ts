@@ -43,6 +43,10 @@ import {
   saveAgentSecret,
 } from "./agentSettings";
 import { applicationStatuses } from "./policy";
+import {
+  APPLICATION_CONSENTS,
+  APPLICATION_CONSENT_VERSION,
+} from "../shared/applicationConsent";
 
 const statusValues = applicationStatuses;
 const methodologyDocumentKeys = ["siera", "mst_eir"] as const;
@@ -51,6 +55,9 @@ const agentModelValues = AGENT_MODELS.map(model => model.value) as [
   ...(typeof AGENT_MODELS)[number]["value"][],
 ];
 const roleProcedure = recruiterProcedure;
+const requiredApplicationConfirmation = z.boolean().refine(Boolean, {
+  message: "La confirmación es obligatoria.",
+});
 
 async function requirePool() {
   const pool = await getPool();
@@ -608,6 +615,13 @@ export const appRouter = router({
             departmentId: z.number().int().positive(),
             municipalityId: z.number().int().positive(),
           }),
+          consents: z
+            .object({
+              adultConfirmed: requiredApplicationConfirmation,
+              informationTruthful: requiredApplicationConfirmation,
+              privacyAccepted: requiredApplicationConfirmation,
+            })
+            .strict(),
           answers: z.record(z.string(), z.unknown()),
         })
       )
@@ -707,6 +721,23 @@ export const appRouter = router({
               ]
             );
           }
+          await client.query(
+            `INSERT INTO audit_log
+               (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment)
+             VALUES (NULL,'application',$1,'application_consents_confirmed',NULL,$2::jsonb,$3)`,
+            [
+              application.rows[0].id,
+              asJson({
+                version: APPLICATION_CONSENT_VERSION,
+                confirmations: APPLICATION_CONSENTS.map(consent => ({
+                  id: consent.id,
+                  text: consent.text,
+                  accepted: input.consents[consent.id],
+                })),
+              }),
+              "Confirmaciones obligatorias aceptadas durante la postulación pública.",
+            ]
+          );
           await client.query("COMMIT");
           const applicationId = application.rows[0].id as number;
           setImmediate(() => {

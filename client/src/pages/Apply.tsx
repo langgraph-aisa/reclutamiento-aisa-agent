@@ -2,12 +2,18 @@ import { Button } from "@/components/ui/button";
 import { AppBrand } from "@/components/AppBrand";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GuatemalaPhoneInput } from "@/components/GuatemalaPhoneInput";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { STANDARD_WORK_SCHEDULE } from "@shared/jobPresentation";
+import {
+  APPLICATION_CONSENTS,
+  EMPTY_APPLICATION_CONSENTS,
+  type ApplicationConsents,
+} from "@shared/applicationConsent";
 import {
   CheckCircle2,
   ChevronRight,
@@ -123,6 +129,9 @@ export default function Apply() {
     departmentId: 0,
     municipalityId: 0,
   });
+  const [consents, setConsents] = useState<ApplicationConsents>({
+    ...EMPTY_APPLICATION_CONSENTS,
+  });
   const [error, setError] = useState("");
   const questions = useMemo(() => form?.questions ?? [], [form]);
   const zones = (isDemo ? demoZones : (zonesQuery.data ?? [])) as PublicZone[];
@@ -159,6 +168,12 @@ export default function Apply() {
       setError(`Completa la pregunta: ${missing.label}`);
       return;
     }
+    if (!APPLICATION_CONSENTS.every(consent => consents[consent.id])) {
+      setError(
+        "Marca las tres confirmaciones obligatorias para enviar tu postulación."
+      );
+      return;
+    }
     if (isDemo) {
       setStep("success");
       return;
@@ -168,6 +183,7 @@ export default function Apply() {
         token,
         ...contact,
         location,
+        consents,
         answers: values,
       });
       if (result.alreadyApplied) {
@@ -384,6 +400,39 @@ export default function Apply() {
                   />
                 </Field>
               ))}
+              <fieldset className="rounded-2xl border border-border bg-secondary/45 p-4 sm:p-5">
+                <legend className="px-2 text-sm font-800 text-primary">
+                  Confirmaciones obligatorias
+                </legend>
+                <div className="space-y-2">
+                  {APPLICATION_CONSENTS.map(consent => {
+                    const checkboxId = `consent-${consent.id}`;
+                    return (
+                      <label
+                        key={consent.id}
+                        htmlFor={checkboxId}
+                        className="flex cursor-pointer items-start gap-3 rounded-xl px-2 py-2 text-sm leading-5 text-foreground transition-colors hover:bg-accent/55 focus-within:bg-accent/55"
+                      >
+                        <Checkbox
+                          id={checkboxId}
+                          className="mt-0.5 size-5"
+                          checked={consents[consent.id]}
+                          onCheckedChange={checked => {
+                            setConsents(current => ({
+                              ...current,
+                              [consent.id]: checked === true,
+                            }));
+                            setError("");
+                          }}
+                          aria-required="true"
+                          aria-invalid={Boolean(error) && !consents[consent.id]}
+                        />
+                        <span>{consent.text}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
               {error && (
                 <div className="rounded-xl bg-red-50 p-4 text-sm leading-6 text-red-800">
                   {error}
@@ -397,10 +446,6 @@ export default function Apply() {
               >
                 {submitMutation.isPending ? "Enviando…" : "Enviar formulario"}
               </Button>
-              <p className="text-center text-xs leading-5 text-muted-foreground">
-                Al enviar confirmas que la información es tuya y autorizas su
-                uso para este proceso de selección.
-              </p>
             </CardContent>
           </Card>
         )}

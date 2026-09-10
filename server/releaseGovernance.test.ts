@@ -46,8 +46,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.116");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.116");
+    expect(APP_VERSION).toBe("2.0.117");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.117");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -202,6 +202,11 @@ describe("black-box release contract", () => {
       path.resolve("client/src/pages/Apply.tsx"),
       "utf8"
     );
+    const consent = fs.readFileSync(
+      path.resolve("shared/applicationConsent.ts"),
+      "utf8"
+    );
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
     const phoneInput = fs.readFileSync(
       path.resolve("client/src/components/GuatemalaPhoneInput.tsx"),
       "utf8"
@@ -232,6 +237,16 @@ describe("black-box release contract", () => {
     expect(apply).toContain('label="Zona"');
     expect(apply).toContain('label="Departamento"');
     expect(apply).toContain('label="Municipio"');
+    expect(apply).toContain("Confirmaciones obligatorias");
+    expect(apply).toContain("APPLICATION_CONSENTS.map");
+    expect(apply).toContain('aria-required="true"');
+    expect(consent).toContain("Confirmo que soy mayor de 18 años.");
+    expect(consent).toContain(
+      "Declaro que la información proporcionada es verdadera, exacta, completa y actualizada."
+    );
+    expect(consent).toContain("He leído el Aviso de Privacidad");
+    expect(routers).toContain("application_consents_confirmed");
+    expect(routers).toContain("requiredApplicationConfirmation");
     expect(migration).toContain("generate_series(1,25)");
     expect(migration).toContain('"location_zone_id"');
     expect(agent).toContain("ubicacionDeclarada");
@@ -251,7 +266,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.116");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.117");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -260,7 +275,8 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(39);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.116");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.117");
+    expect(readme).toContain("Tres confirmaciones obligatorias");
     expect(readme).toContain("tokens compilados como variables dinámicas");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.115");
     expect(readme).toContain("sistema de visualización alternativa");
