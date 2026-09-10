@@ -51,6 +51,7 @@ import {
 import {
   normalizePublicCopy,
   PUBLIC_COPY_EDITORIAL_MODEL,
+  PUBLIC_COPY_EDITORIAL_POLICY_VERSION,
   type EditorialFieldStyle,
   type PublicCopyEditorialInput,
   type PublicCopyEditorialResult,
@@ -146,6 +147,7 @@ type ValidatedPublicCopy = {
     after: PublicCopyEditorialInput;
     result: PublicCopyEditorialResult;
     contentHash: string;
+    policyVersion: string | null;
   };
 };
 
@@ -166,8 +168,19 @@ function editorialList(key: string, value: unknown) {
   return items.length ? { key, items } : null;
 }
 
+function publicCopyPolicyVersion(input: PublicCopyEditorialInput) {
+  return input.lists.some(list =>
+    ["responsibilities", "requiredRequirements"].includes(list.key)
+  )
+    ? PUBLIC_COPY_EDITORIAL_POLICY_VERSION
+    : null;
+}
+
 function publicCopyHash(input: PublicCopyEditorialInput) {
-  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  const policyVersion = publicCopyPolicyVersion(input);
+  return createHash("sha256")
+    .update(JSON.stringify(policyVersion ? { policyVersion, input } : input))
+    .digest("hex");
 }
 
 function copyFromInput(input: PublicCopyEditorialInput) {
@@ -199,7 +212,8 @@ async function hasCurrentEditorialValidation(
   pool: Pick<DatabasePool, "query">,
   entityType: string,
   entityId: number,
-  contentHash: string
+  contentHash: string,
+  policyVersion: string | null
 ) {
   const result = await pool.query<{ validated: boolean }>(
     `SELECT EXISTS (
@@ -210,8 +224,15 @@ async function hasCurrentEditorialValidation(
           AND action='public_copy_editorially_normalized'
           AND after_json->>'contentHash'=$3
           AND after_json->>'model'=$4
+          AND ($5::text IS NULL OR after_json->>'policyVersion'=$5)
      ) AS validated`,
-    [entityType, entityId, contentHash, PUBLIC_COPY_EDITORIAL_MODEL]
+    [
+      entityType,
+      entityId,
+      contentHash,
+      PUBLIC_COPY_EDITORIAL_MODEL,
+      policyVersion,
+    ]
   );
   return result.rows[0]?.validated === true;
 }
@@ -223,13 +244,15 @@ async function validateEntityPublicCopy(
   input: PublicCopyEditorialInput
 ): Promise<ValidatedPublicCopy> {
   const contentHash = publicCopyHash(input);
+  const policyVersion = publicCopyPolicyVersion(input);
   if (
     entityId &&
     (await hasCurrentEditorialValidation(
       pool,
       entityType,
       entityId,
-      contentHash
+      contentHash,
+      policyVersion
     ))
   ) {
     return { ...copyFromInput(input), audit: null };
@@ -244,6 +267,7 @@ async function validateEntityPublicCopy(
       after,
       result,
       contentHash: publicCopyHash(after),
+      policyVersion,
     },
   };
 }
@@ -270,6 +294,7 @@ async function recordEditorialValidation(
         contentHash: validation.audit.contentHash,
         model: validation.audit.result.model,
         keySlot: validation.audit.result.keySlot,
+        policyVersion: validation.audit.policyVersion,
       }),
       `Revisión integral de texto público mediante OpenAI Responses API con ${validation.audit.result.model}.`,
     ]

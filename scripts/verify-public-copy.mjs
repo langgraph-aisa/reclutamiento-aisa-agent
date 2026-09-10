@@ -73,6 +73,24 @@ export function auditPublicCopyControls() {
   requireSource(
     findings,
     editorial,
+    "PUBLIC_COPY_EDITORIAL_POLICY_VERSION",
+    "La política editorial debe estar versionada para revalidar contenido histórico."
+  );
+  requireSource(
+    findings,
+    editorial,
+    "beginsWithSpanishInfinitive",
+    "Las responsabilidades deben comenzar con un verbo en infinitivo."
+  );
+  requireSource(
+    findings,
+    editorial,
+    "hasBalancedDelimiters",
+    "Las listas públicas deben rechazar paréntesis e incisos incompletos."
+  );
+  requireSource(
+    findings,
+    editorial,
     "Preserve literalmente variables delimitadas por llaves dobles",
     "Las variables de mensajes públicos deben conservarse literalmente."
   );
@@ -105,6 +123,12 @@ export function auditPublicCopyControls() {
     routers,
     "public_copy_editorially_normalized",
     "La validación editorial debe dejar evidencia en la bitácora."
+  );
+  requireSource(
+    findings,
+    routers,
+    "after_json->>'policyVersion'",
+    "La evidencia previa solo debe reutilizarse con la política editorial vigente."
   );
   requireSource(
     findings,

@@ -25,6 +25,7 @@ import {
   normalizePublicCopy,
   normalizeProfileRequirements,
   PROFILE_EDITORIAL_MODEL,
+  PUBLIC_COPY_EDITORIAL_POLICY_VERSION,
 } from "./profileEditorial";
 
 beforeEach(() => {
@@ -75,6 +76,7 @@ describe("profile requirement editorial validation", () => {
     });
 
     expect(PROFILE_EDITORIAL_MODEL).toBe("gpt-4.1-mini-2025-04-14");
+    expect(PUBLIC_COPY_EDITORIAL_POLICY_VERSION).toBe("2026-09-10.3");
     expect(constructorOptions[0]).toMatchObject({
       apiKey: "primary-secret",
       maxRetries: 0,
@@ -238,6 +240,107 @@ describe("profile requirement editorial validation", () => {
       "No fue posible validar editorialmente los textos públicos con OpenAI."
     );
     expect(warning).toHaveBeenCalled();
+    warning.mockRestore();
+  });
+
+  it("rejects fragmented or nominal responsibilities and accepts a corrected backup", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    getAgentRuntimeSettings.mockResolvedValue({
+      useResponsesApi: true,
+      secrets: {
+        openai_api_key: "primary-secret",
+        openai_api_key_backup: "backup-secret",
+      },
+    });
+    parse
+      .mockResolvedValueOnce({
+        output_parsed: {
+          fields: [],
+          lists: [
+            {
+              key: "responsibilities",
+              items: [
+                "Prospectar nuevos clientes (contacto en frío",
+                "referidos)",
+                "Apoyo a Gerencia de Ventas.",
+              ],
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        output_parsed: {
+          fields: [],
+          lists: [
+            {
+              key: "responsibilities",
+              items: [
+                "Prospectar nuevos clientes mediante contacto en frío y referidos.",
+                "Apoyar a la Gerencia de Ventas.",
+              ],
+            },
+          ],
+        },
+      });
+
+    await expect(
+      normalizePublicCopy({} as never, {
+        fields: [],
+        lists: [
+          {
+            key: "responsibilities",
+            items: [
+              "Prospectar nuevos clientes (contacto en frío",
+              "referidos)",
+              "Apoyo a Gerencia de Ventas",
+            ],
+          },
+        ],
+      })
+    ).resolves.toMatchObject({
+      keySlot: "backup",
+      lists: {
+        responsibilities: [
+          "Prospectar nuevos clientes mediante contacto en frío y referidos.",
+          "Apoyar a la Gerencia de Ventas.",
+        ],
+      },
+    });
+    expect(parse).toHaveBeenCalledTimes(2);
+    expect(warning).toHaveBeenCalledOnce();
+    warning.mockRestore();
+  });
+
+  it("rejects incomplete requirement fragments even when the JSON schema is valid", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    getAgentRuntimeSettings.mockResolvedValue({
+      useResponsesApi: true,
+      secrets: {
+        openai_api_key: "primary-secret",
+        openai_api_key_backup: null,
+      },
+    });
+    parse.mockResolvedValue({
+      output_parsed: {
+        fields: [],
+        lists: [
+          {
+            key: "requiredRequirements",
+            items: ["Experiencia en ventas (tecnología", "industrial)"],
+          },
+        ],
+      },
+    });
+
+    await expect(
+      normalizeProfileRequirements({} as never, [
+        "Experiencia en ventas (tecnología",
+        "industrial)",
+      ])
+    ).rejects.toThrow(
+      "No fue posible validar editorialmente los textos públicos con OpenAI."
+    );
+    expect(warning).toHaveBeenCalledOnce();
     warning.mockRestore();
   });
 });

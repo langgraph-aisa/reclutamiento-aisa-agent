@@ -6,6 +6,7 @@ import { getAgentRuntimeSettings } from "./agentSettings";
 
 export const PROFILE_EDITORIAL_MODEL = "gpt-4.1-mini-2025-04-14";
 export const PUBLIC_COPY_EDITORIAL_MODEL = PROFILE_EDITORIAL_MODEL;
+export const PUBLIC_COPY_EDITORIAL_POLICY_VERSION = "2026-09-10.3";
 
 export type EditorialFieldStyle =
   | "title"
@@ -61,6 +62,8 @@ Reglas obligatorias:
 - Si un campo declara maxLength, el texto corregido no debe superar ese número de caracteres.
 - Preserve literalmente variables delimitadas por llaves dobles, por ejemplo {{nombre}} y {{plaza}}.
 - En lists, puede unir fragmentos que pertenezcan a una misma idea o separar ideas independientes. Cada elemento debe ser autónomo, inequívoco y completo.
+- En la lista responsibilities, redacte cada elemento como una sola oración de acción: debe comenzar con un verbo en infinitivo, iniciar con mayúscula y terminar con puntuación. Recomponga obligatoriamente los fragmentos separados dentro de paréntesis, enumeraciones o complementos; por ejemplo, «Prospectar clientes (contacto en frío» + «referidos)» constituye una sola responsabilidad.
+- En la lista requiredRequirements, redacte cada requisito como una oración o proposición autónoma, con mayúscula inicial, puntuación final y todos sus complementos unidos. Nunca devuelva como elementos separados carreras, herramientas, frecuencias, incisos o palabras que solo completan el elemento anterior.
 - No incluya viñetas, numeración, encabezados ni saltos de línea dentro de los elementos de una lista; la interfaz añadirá las viñetas.
 - En mensajes puede conservar párrafos, pero no introduzca espacios ni saltos de línea innecesarios.
 - No agregue comentarios, explicaciones ni recomendaciones.`;
@@ -123,6 +126,60 @@ function samePlaceholders(before: string, after: string) {
   );
 }
 
+function hasBalancedDelimiters(text: string) {
+  const openingByClosing: Record<string, string> = {
+    ")": "(",
+    "]": "[",
+    "}": "{",
+  };
+  const openings = new Set(Object.values(openingByClosing));
+  const stack: string[] = [];
+  for (const character of text) {
+    if (openings.has(character)) {
+      stack.push(character);
+      continue;
+    }
+    const expectedOpening = openingByClosing[character];
+    if (expectedOpening && stack.pop() !== expectedOpening) return false;
+  }
+  return stack.length === 0;
+}
+
+function hasSentenceEnding(text: string) {
+  const closingMarks = new Set([")", "]", "}", '"', "'", "»"]);
+  let lastIndex = text.length - 1;
+  while (lastIndex >= 0 && closingMarks.has(text[lastIndex])) lastIndex -= 1;
+  return ".!?".includes(text[lastIndex] ?? "");
+}
+
+function beginsWithUppercaseOrNumber(text: string) {
+  const first = text.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]/)?.[0] ?? "";
+  return /[0-9]/.test(first) || first === first.toLocaleUpperCase("es-GT");
+}
+
+function beginsWithSpanishInfinitive(text: string) {
+  const firstWord =
+    text
+      .match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/)?.[0]
+      ?.toLocaleLowerCase("es-GT") ?? "";
+  return /(?:ar|er|ir)(?:se)?$/.test(firstWord);
+}
+
+function validateEditorialListItem(key: string, text: string) {
+  if (!hasBalancedDelimiters(text)) {
+    throw new Error(`La lista ${key} contiene delimitadores incompletos.`);
+  }
+  if (key !== "responsibilities" && key !== "requiredRequirements") return;
+  if (!beginsWithUppercaseOrNumber(text) || !hasSentenceEnding(text)) {
+    throw new Error(`La lista ${key} contiene una idea incompleta.`);
+  }
+  if (key === "responsibilities" && !beginsWithSpanishInfinitive(text)) {
+    throw new Error(
+      "Cada responsabilidad debe comenzar con un verbo en infinitivo."
+    );
+  }
+}
+
 function validateEditorialOutput(
   input: PublicCopyEditorialInput,
   output: z.infer<typeof EditorialDocumentSchema>
@@ -157,7 +214,11 @@ function validateEditorialOutput(
     })
   );
   const lists = Object.fromEntries(
-    output.lists.map(list => [list.key, compactRequirements(list.items)])
+    output.lists.map(list => {
+      const items = compactRequirements(list.items);
+      for (const item of items) validateEditorialListItem(list.key, item);
+      return [list.key, items];
+    })
   );
   if (Object.values(lists).some(items => items.length === 0)) {
     throw new Error("La respuesta editorial dejó una lista pública vacía.");

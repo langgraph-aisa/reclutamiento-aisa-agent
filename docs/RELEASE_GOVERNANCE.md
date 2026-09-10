@@ -1,10 +1,16 @@
-# Gobierno de release JARVI RH 2.0.125
+# Gobierno de release JARVI RH 2.0.126
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.125**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.126**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-La versión 2.0.125 corrige la composición de Revisión Humana 360°. La matriz de evaluación deja de depender de un contenedor con altura fija y desplazamiento interno: `ResizeObserver` selecciona páginas de tres bloques cuando el panel dispone de al menos 760 píxeles y páginas de un bloque en anchos inferiores. Cada página muestra el razonamiento completo, iguala la altura visual de sus tarjetas y adapta el panel a la tarjeta más extensa. `reviewBlockPageRange` y `adjacentReviewBlockPage` limitan el rango y los extremos de forma determinista.
+La versión 2.0.126 fortalece la revisión de responsabilidades para las 25 plazas detectadas en el catálogo público. La auditoría previa al cambio confirmó fragmentos separados dentro de paréntesis, enumeraciones divididas, complementos en minúscula y construcciones nominales que no expresaban una acción completa. El defecto no estaba en la representación visual: la lista persistida ya contenía esos elementos aislados.
+
+`profileEditorial.ts` conserva Structured Outputs y añade una poscondición independiente del modelo. Para `responsibilities`, cada elemento debe mantener delimitadores balanceados, comenzar con mayúscula y verbo en infinitivo y terminar con puntuación; para `requiredRequirements`, cada proposición debe ser autónoma, iniciar correctamente, cerrar su puntuación y mantener completos sus incisos. Una salida que solo cumpla el esquema JSON, pero no estas reglas lingüísticas, se rechaza y no obtiene evidencia válida.
+
+La política `2026-09-10.3` forma parte del hash y de `audit_log`. Por ello, una validación hecha con la política anterior no puede omitir el nuevo control: al desplegar, `auditPublishedPublicCopy` vuelve a recorrer las 25 plazas publicadas, corrige PostgreSQL mediante GPT-4.1 mini y registra modelo, ranura, hash y versión de política. Las lecturas públicas continúan sin llamadas a OpenAI.
+
+La versión 2.0.125 corrigió la composición de Revisión Humana 360°. La matriz de evaluación deja de depender de un contenedor con altura fija y desplazamiento interno: `ResizeObserver` selecciona páginas de tres bloques cuando el panel dispone de al menos 760 píxeles y páginas de un bloque en anchos inferiores. Cada página muestra el razonamiento completo, iguala la altura visual de sus tarjetas y adapta el panel a la tarjeta más extensa. `reviewBlockPageRange` y `adjacentReviewBlockPage` limitan el rango y los extremos de forma determinista.
 
 La botonera de bloques comparte el encabezado con «Vista 360° del Candidato», informa el intervalo visible y es la única acción que cambia la página. La botonera que selecciona candidatos también abandona la esquina inferior y queda fija en la parte superior derecha de la matriz. Ambas usan controles con etiquetas accesibles, estado anunciado y disposición horizontal para evitar que oculten datos.
 
@@ -99,4 +105,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.125.md](PRUEBAS_CAJA_NEGRA_2.0.125.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.126.md](PRUEBAS_CAJA_NEGRA_2.0.126.md).

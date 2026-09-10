@@ -21,6 +21,7 @@ vi.mock("./profileEditorial", () => ({
   normalizePublicCopy,
   PROFILE_EDITORIAL_MODEL: "gpt-4.1-mini-2025-04-14",
   PUBLIC_COPY_EDITORIAL_MODEL: "gpt-4.1-mini-2025-04-14",
+  PUBLIC_COPY_EDITORIAL_POLICY_VERSION: "2026-09-10.3",
 }));
 
 import { appRouter } from "./routers";
@@ -353,6 +354,11 @@ describe("jobs.setPublished profile readiness", () => {
     expect(
       query.mock.calls.some(call =>
         String(call[0]).includes("after_json->>'contentHash'")
+      )
+    ).toBe(true);
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("after_json->>'policyVersion'")
       )
     ).toBe(true);
   });

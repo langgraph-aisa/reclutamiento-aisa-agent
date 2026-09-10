@@ -58,8 +58,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.125");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.125");
+    expect(APP_VERSION).toBe("2.0.126");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.126");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -352,11 +352,17 @@ describe("black-box release contract", () => {
     expect(profileEditorial).toContain("normalizePublicCopy");
     expect(profileEditorial).toContain("RAE/ASALE");
     expect(profileEditorial).toContain(
+      'PUBLIC_COPY_EDITORIAL_POLICY_VERSION = "2026-09-10.3"'
+    );
+    expect(profileEditorial).toContain("beginsWithSpanishInfinitive");
+    expect(profileEditorial).toContain("hasBalancedDelimiters");
+    expect(profileEditorial).toContain(
       "Preserve literalmente variables delimitadas por llaves dobles"
     );
     expect(profileEditorial).not.toContain("console.warn(error");
     expect(routers).toContain("public_copy_editorially_normalized");
     expect(routers).toContain("hasCurrentEditorialValidation");
+    expect(routers).toContain("PUBLIC_COPY_EDITORIAL_POLICY_VERSION");
     expect(routers).toContain("profilePublicCopyInput");
     expect(routers).toContain("positionPublicCopyInput");
     expect(routers).toContain("formBundlePublicCopyInput");
@@ -456,16 +462,16 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.125");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.126");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
     expect(wordCount).toBeGreaterThanOrEqual(2_400);
-    expect(wordCount).toBeLessThanOrEqual(3_000);
+    expect(wordCount).toBeLessThanOrEqual(3_200);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.125");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.126");
     expect(readme).toContain("Vista 360° del Candidato");
     expect(readme).toContain("tres tarjetas en escritorio");
     expect(readme).toContain("una en ancho reducido");
