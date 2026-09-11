@@ -55,7 +55,7 @@ La decisión técnica más importante es separar tres responsabilidades. La apli
   [API tRPC], [Contratos tipados y autorización por rol], [`/api/trpc`],
   [PostgreSQL], [Datos transaccionales y auditoría], [`DATABASE_URL`],
   [n8n], [Workflows maestros y agentes por plaza], [Credenciales y URLs de producción],
-  [ApiChat], [WhatsApp de candidatos y reclutadores], [`APICHAT_*`],
+  [ApiChat], [Solicitud directa de CV por WhatsApp], [Configuración cifrada en PostgreSQL],
 )
 
 #small-note[
@@ -234,21 +234,21 @@ La persistencia de ejecuciones de n8n debe estar habilitada para que `Wait` pued
 
 = WhatsApp y ApiChat
 
-El workflow de WhatsApp recibe el ID de aplicación, el teléfono internacional, el mensaje por plaza y la lista de receptores internos. Los mensajes al candidato y las alertas internas se separan para que un error en un destinatario no oculte el estado de la aplicación.
+El backend recibe el ID de aplicación, el teléfono internacional y el mensaje por plaza. La configuración se consulta en PostgreSQL después del commit y el envío mantiene trazabilidad local para prevenir duplicados.
 
 #table(
   columns: (5cm, 4cm, 5.4cm), inset: 7pt,
   fill: (x, y) => if y == 0 { navy } else { white },
-  table.header[*Variable*][*Obligatoria*][*Uso*],
-  [`APICHAT_WEBHOOK_URL`], [No], [Callbacks o eventos entrantes.],
-  [`APICHAT_CONNECT_TO`], [No], [Instancia o conexión de WhatsApp.],
-  [`APICHAT_API_ENDPOINT`], [No], [Endpoint HTTP de envío.],
-  [`APICHAT_ACCOUNT_ID`], [Sí], [Cuenta ApiChat.],
-  [`APICHAT_TOKEN`], [Sí], [Token Bearer secreto.],
+  table.header[*Campo*][*Clasificación*][*Uso*],
+  [`webhook_url`], [Configuración], [Callbacks o eventos entrantes.],
+  [`connect_to`], [Configuración], [Instancia o conexión de WhatsApp.],
+  [`api_endpoint`], [Configuración], [Endpoint HTTPS de envío.],
+  [`client_id`], [Secreto cifrado], [Identificador de API nativa.],
+  [`token`], [Secreto cifrado], [Autenticación ApiChat.],
 )
 
 #small-note[
-  *Advertencia.* La URL de edición de n8n con formato `/workflow/...` no es una URL de webhook. Activar el workflow, copiar la URL de producción del nodo Webhook y usar esa URL en la configuración.
+  *Advertencia.* ApiChat se administra desde Configuración > WhatsApp. No copie credenciales a EasyPanel, n8n, código ni documentación.
 ]
 
 = Roles y seguridad
@@ -312,7 +312,7 @@ Crear una plaza de prueba con formulario no publicado. Agregar teléfono obligat
 
 == Diagnóstico rápido
 
-Si el login produce un error SSL, revisar `DATABASE_URL`, certificado, host, puerto y `sslmode` del proveedor. Si el formulario devuelve `404`, comprobar que la plaza y el formulario estén publicados y que el slug coincida. Si el agente no recibe la aplicación, revisar la URL de producción del webhook y el payload. Si `Wait` no reanuda, habilitar persistencia de ejecuciones en n8n. Si ApiChat falla, comprobar `APICHAT_ACCOUNT_ID`, `APICHAT_TOKEN`, endpoint, conexión y formato de teléfono.
+Si el login produce un error SSL, revisar `DATABASE_URL`, certificado, host, puerto y `sslmode` del proveedor. Si el formulario devuelve `404`, comprobar que la plaza y el formulario estén publicados y que el slug coincida. Si el agente no recibe la aplicación, revisar la URL de producción del webhook y el payload. Si `Wait` no reanuda, habilitar persistencia de ejecuciones en n8n. Si ApiChat falla, usar **Verificar** y revisar endpoint, estado enmascarado de las credenciales, conexión y formato de teléfono.
 
 = Archivos de la entrega
 

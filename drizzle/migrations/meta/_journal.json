@@ -92,6 +92,13 @@
       "when": 1789068435779,
       "tag": "0012_dear_lifeguard",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789084282330,
+      "tag": "0013_apichat_credential_vault",
+      "breakpoints": true
     }
   ]
 }

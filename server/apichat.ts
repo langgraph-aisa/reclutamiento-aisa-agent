@@ -6,18 +6,17 @@ Le saludamos de parte de AISA Solar. Dando seguimiento a su solicitud de empleo 
 
 Quedamos atentos a recibirlo. ¡Muchas gracias por su interés en formar parte de AISA Solar!`;
 
-type ApiChatMode = "native" | "legacy";
+export type ApiChatMode = "native" | "legacy";
 
-type ApiChatConfig = {
+export type ApiChatConfig = {
   mode: ApiChatMode;
   endpoint: string;
   token: string;
   clientId?: string;
   accountId?: string;
   connectTo?: string;
+  webhookUrl?: string;
 };
-
-type ApiChatEnvironment = Record<string, string | undefined>;
 
 export type ApiChatSendResult = {
   providerMessageId: string | null;
@@ -28,81 +27,152 @@ export function renderCvRequestMessage(
   fullName: string | null | undefined,
   positionTitle: string | null | undefined,
   configuredTemplate?: string | null,
-  fallbackTemplate?: string | null,
+  fallbackTemplate?: string | null
 ) {
   const name = fullName?.trim() || "postulante";
   const position = positionTitle?.trim() || "la plaza solicitada";
   const customTemplate = configuredTemplate?.trim();
   const globalTemplate = fallbackTemplate?.trim();
-  const hasVariables = (value: string | undefined) => value?.includes("{{nombre}}") && value.includes("{{plaza}}");
+  const hasVariables = (value: string | undefined) =>
+    value?.includes("{{nombre}}") && value.includes("{{plaza}}");
   const template = hasVariables(customTemplate)
     ? customTemplate!
     : hasVariables(globalTemplate)
       ? globalTemplate!
       : CV_REQUEST_TEMPLATE;
-  return template.replaceAll("{{nombre}}", name).replaceAll("{{plaza}}", position);
+  return template
+    .replaceAll("{{nombre}}", name)
+    .replaceAll("{{plaza}}", position);
 }
 
-export function getApiChatConfig(env: ApiChatEnvironment = process.env): ApiChatConfig {
-  const endpoint = env.APICHAT_API_ENDPOINT?.trim();
-  const token = env.APICHAT_TOKEN?.trim();
-  const requestedMode = env.APICHAT_API_MODE?.trim().toLowerCase();
-  const clientId = env.APICHAT_CLIENT_ID?.trim();
-  const accountId = env.APICHAT_ACCOUNT_ID?.trim();
-  const connectTo = env.APICHAT_CONNECT_TO?.trim();
-  const mode: ApiChatMode = requestedMode === "native"
-    ? "native"
-    : requestedMode === "legacy"
-      ? "legacy"
-      : !clientId && (accountId || connectTo)
-        ? "legacy"
-        : "native";
+function required(value: string | null | undefined, label: string) {
+  const normalized = value?.trim();
+  if (!normalized) {
+    throw new Error(`ApiChat no está configurado: falta ${label}.`);
+  }
+  return normalized;
+}
 
-  if (!endpoint) throw new Error("ApiChat no está configurado: falta APICHAT_API_ENDPOINT.");
-  if (!token) throw new Error("ApiChat no está configurado: falta APICHAT_TOKEN.");
-  let parsedEndpoint: URL;
+function secureUrl(value: string, label: string) {
+  let parsed: URL;
   try {
-    parsedEndpoint = new URL(endpoint);
+    parsed = new URL(value);
   } catch {
-    throw new Error("ApiChat no está configurado: APICHAT_API_ENDPOINT no es una URL válida.");
+    throw new Error(
+      `ApiChat no está configurado: ${label} no es una URL válida.`
+    );
   }
-  if (env.NODE_ENV === "production" && parsedEndpoint.protocol !== "https:") {
-    throw new Error("ApiChat no está configurado: el endpoint de producción debe utilizar HTTPS.");
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+    throw new Error(
+      `ApiChat no está configurado: ${label} debe utilizar HTTPS y no debe incluir credenciales.`
+    );
   }
-  if (mode === "native" && !clientId) throw new Error("ApiChat no está configurado: falta APICHAT_CLIENT_ID.");
-  if (mode === "legacy" && !accountId) throw new Error("ApiChat no está configurado: falta APICHAT_ACCOUNT_ID.");
-  if (mode === "legacy" && !connectTo) throw new Error("ApiChat no está configurado: falta APICHAT_CONNECT_TO.");
+  return parsed;
+}
 
-  return { mode, endpoint: parsedEndpoint.toString(), token, clientId, accountId, connectTo };
+export function validateApiChatConfig(input: ApiChatConfig): ApiChatConfig {
+  const mode = input.mode;
+  if (mode !== "native" && mode !== "legacy") {
+    throw new Error(
+      "ApiChat no está configurado: el modo de API no es válido."
+    );
+  }
+  const endpoint = secureUrl(
+    required(input.endpoint, "el endpoint"),
+    "el endpoint"
+  );
+  const token = required(input.token, "el token");
+  const clientId = input.clientId?.trim() || undefined;
+  const accountId = input.accountId?.trim() || undefined;
+  const connectTo = input.connectTo?.trim() || undefined;
+  const webhookUrl = input.webhookUrl?.trim()
+    ? secureUrl(input.webhookUrl.trim(), "la URL del webhook").toString()
+    : undefined;
+
+  if (mode === "native" && !clientId) {
+    throw new Error("ApiChat no está configurado: falta el Client ID.");
+  }
+  if (
+    mode === "native" &&
+    endpoint.hostname.toLowerCase() !== "api.apichat.io"
+  ) {
+    throw new Error(
+      "ApiChat no está configurado: la API nativa debe utilizar el dominio oficial api.apichat.io."
+    );
+  }
+  if (
+    mode === "native" &&
+    endpoint.pathname.replace(/\/$/, "") !== "/v1/sendText"
+  ) {
+    throw new Error(
+      "ApiChat no está configurado: la API nativa debe utilizar la ruta /v1/sendText."
+    );
+  }
+  if (mode === "legacy" && !accountId) {
+    throw new Error(
+      "ApiChat no está configurado: falta el ID de cuenta del modo heredado."
+    );
+  }
+  if (mode === "legacy" && !connectTo) {
+    throw new Error(
+      "ApiChat no está configurado: falta la conexión del modo heredado."
+    );
+  }
+
+  return {
+    mode,
+    endpoint: endpoint.toString(),
+    token,
+    clientId,
+    accountId,
+    connectTo,
+    webhookUrl,
+  };
 }
 
 function providerMessageId(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
   const body = payload as Record<string, unknown>;
-  const data = body.data && typeof body.data === "object" ? body.data as Record<string, unknown> : null;
-  const value = body.id ?? body.messageId ?? body.message_id ?? data?.id ?? data?.messageId;
-  return typeof value === "string" || typeof value === "number" ? String(value).slice(0, 180) : null;
+  const data =
+    body.data && typeof body.data === "object"
+      ? (body.data as Record<string, unknown>)
+      : null;
+  const value =
+    body.id ?? body.messageId ?? body.message_id ?? data?.id ?? data?.messageId;
+  return typeof value === "string" || typeof value === "number"
+    ? String(value).slice(0, 180)
+    : null;
 }
 
 function providerErrorMessage(status: number, payload: unknown) {
   if (payload && typeof payload === "object") {
     const body = payload as Record<string, unknown>;
     const value = body.message ?? body.error ?? body.detail;
-    if (typeof value === "string" && value.trim()) return `ApiChat rechazó el mensaje (${status}): ${value.trim().slice(0, 300)}`;
+    if (typeof value === "string" && value.trim()) {
+      return `ApiChat rechazó el mensaje (${status}): ${value.trim().slice(0, 300)}`;
+    }
   }
   return `ApiChat rechazó el mensaje con código HTTP ${status}.`;
 }
 
 export async function sendApiChatText(
   input: { phoneInternational: string; message: string },
-  options: { env?: ApiChatEnvironment; fetchImpl?: typeof fetch; timeoutMs?: number } = {},
+  configInput: ApiChatConfig,
+  options: { fetchImpl?: typeof fetch; timeoutMs?: number } = {}
 ): Promise<ApiChatSendResult> {
-  const config = getApiChatConfig(options.env ?? process.env);
+  const config = validateApiChatConfig(configInput);
   const fetchImpl = options.fetchImpl ?? fetch;
   const phoneDigits = input.phoneInternational.replace(/\D/g, "");
-  if (!phoneDigits) throw new Error("No es posible enviar por ApiChat: el teléfono no es válido.");
+  if (!phoneDigits) {
+    throw new Error(
+      "No es posible enviar por ApiChat: el teléfono no es válido."
+    );
+  }
 
-  const headers: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
   let body: Record<string, string>;
   if (config.mode === "native") {
     headers["client-id"] = config.clientId!;
@@ -127,7 +197,10 @@ export async function sendApiChatText(
       signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     });
   } catch (error) {
-    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+    if (
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError")
+    ) {
       throw new Error("ApiChat no respondió dentro del tiempo permitido.");
     }
     throw new Error("No fue posible establecer conexión con ApiChat.");
@@ -142,7 +215,15 @@ export async function sendApiChatText(
       payload = null;
     }
   }
-  const providerRejected = payload && typeof payload === "object" && (payload as Record<string, unknown>).success === false;
-  if (!response.ok || providerRejected) throw new Error(providerErrorMessage(response.status, payload));
-  return { providerMessageId: providerMessageId(payload), statusCode: response.status };
+  const providerRejected =
+    payload &&
+    typeof payload === "object" &&
+    (payload as Record<string, unknown>).success === false;
+  if (!response.ok || providerRejected) {
+    throw new Error(providerErrorMessage(response.status, payload));
+  }
+  return {
+    providerMessageId: providerMessageId(payload),
+    statusCode: response.status,
+  };
 }

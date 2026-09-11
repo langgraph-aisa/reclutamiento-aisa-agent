@@ -58,8 +58,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.128");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.128");
+    expect(APP_VERSION).toBe("2.0.129");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.129");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -440,9 +440,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(77);
+    expect(audit.files).toHaveLength(78);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(77);
+    expect(publicCopyAudit.files).toHaveLength(78);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -456,6 +456,40 @@ describe("black-box release contract", () => {
     expect(packageMetadata.scripts.build).toContain("verify-public-copy.mjs");
   });
 
+  it("stores and consumes ApiChat credentials through the encrypted PostgreSQL vault", () => {
+    const client = fs.readFileSync(
+      path.resolve("client/src/pages/Config.tsx"),
+      "utf8"
+    );
+    const settings = fs.readFileSync(
+      path.resolve("server/apiChatSettings.ts"),
+      "utf8"
+    );
+    const transport = fs.readFileSync(
+      path.resolve("server/apichat.ts"),
+      "utf8"
+    );
+    const delivery = fs.readFileSync(
+      path.resolve("server/cvRequest.ts"),
+      "utf8"
+    );
+    const migration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0013_apichat_credential_vault.sql"),
+      "utf8"
+    );
+
+    expect(client).toContain("apiChatConfiguration");
+    expect(client).toContain("El navegador recibe únicamente máscaras");
+    expect(settings).toContain("encryptAgentSecret");
+    expect(settings).toContain('new URL("/v1/status"');
+    expect(settings).toContain("credential_rotated");
+    expect(delivery).toContain("getApiChatRuntimeSettings(pool)");
+    expect(transport).not.toContain("process.env");
+    expect(transport).not.toContain("APICHAT_API_");
+    expect(migration).toContain("'client_id', NULL, true");
+    expect(migration).toContain("'token', NULL, true");
+  });
+
   it("publishes the academic-commercial README with auditable proportions and references", () => {
     const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
     const academicBody = readme.slice(0, readme.indexOf("## Referencias"));
@@ -464,7 +498,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.128");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.129");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -473,7 +507,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.128");
+    expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.129");
     expect(readme).toContain("Vista 360° del Candidato");
     expect(readme).toContain("tres tarjetas en escritorio");
     expect(readme).toContain("una en ancho reducido");

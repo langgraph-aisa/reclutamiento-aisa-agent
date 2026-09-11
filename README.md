@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.128</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.129</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.128-0b2d4b" alt="JARVI RH 2.0.128" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.129-0b2d4b" alt="JARVI RH 2.0.129" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse-3.38.20-orange" alt="Langfuse 3.38.20" />
@@ -23,10 +23,10 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.128 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.129 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
-Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH 2.0.128 integra plazas, formularios versionados, evaluación asistida por IA, revisión humana, solicitud controlada de currículum por WhatsApp y auditoría. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar: el personal autorizado conserva la decisión.
+Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH 2.0.129 integra plazas, formularios versionados, evaluación asistida por IA, revisión humana, solicitud controlada de currículum por WhatsApp y auditoría. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar: el personal autorizado conserva la decisión.
 
 ## 1. Reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora
 
@@ -34,34 +34,33 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
 
+### 10SEP2026 · JARVI RH 2.0.129
+
+- Configuración > WhatsApp administra modo, endpoint, conexión, webhook, Client ID, token e ID heredado; los secretos se cifran con AES-256-GCM y la interfaz solo recibe máscaras.
+- El envío y el reintento consultan exclusivamente PostgreSQL; se elimina la caída silenciosa a variables ApiChat de EasyPanel y la ruta genérica deja de aceptar secretos.
+- La verificación usa el endpoint de estado de la API nativa sin enviar mensajes ni exponer códigos QR; la migración `0013` inicializa valores públicos y filas secretas vacías.
+
+Descripción: almacén central de credenciales ApiChat con control administrativo, auditoría, rotación y consumo seguro en servidor.
+
 ### 10SEP2026 · JARVI RH 2.0.128
 
 - La landing corrige el mensaje institucional a «Plataforma Laboral No.1».
 - La prueba de caja negra bloquea específicamente el sufijo retirado «de Guatemala».
-
-Descripción: corrección exacta del texto solicitado, sin cambios de composición visual.
 
 ### 10SEP2026 · JARVI RH 2.0.127
 
 - La landing sustituye la descripción secundaria por «Plataforma Laboral No.1 de Guatemala».
 - La prueba de caja negra exige el texto aprobado y bloquea la frase anterior.
 
-Descripción: mensaje institucional directo y visible junto a los accesos públicos de la portada.
-
 ### 10SEP2026 · JARVI RH 2.0.126
 
-- Las responsabilidades de las 25 plazas publicadas ingresan a una nueva revisión editorial integral; cada viñeta debe ser una oración autónoma, comenzar con verbo en infinitivo y terminar con puntuación.
-- La poscondición determinista rechaza fragmentos, paréntesis desbalanceados, complementos aislados y redacción nominal aunque la respuesta de IA cumpla el esquema JSON.
-- La política editorial versionada invalida la evidencia anterior y obliga al barrido de todas las plazas vigentes al iniciar el servicio, sin consumir OpenAI durante las visitas públicas.
-
-Descripción: responsabilidades profesionales y coherentes conforme al español estándar, con control preventivo para nuevas ediciones y reparación de contenido publicado.
+- Las responsabilidades de las plazas publicadas exigen una oración autónoma, verbo en infinitivo y puntuación; la poscondición rechaza fragmentos aunque cumplan el esquema JSON.
+- La política versionada renueva la evidencia y audita las plazas al iniciar, sin consumir OpenAI durante las visitas.
 
 ### 10SEP2026 · JARVI RH 2.0.125
 
 - Vista 360° del Candidato pagina la evaluación en bloques estáticos: tres tarjetas en escritorio y una en ancho reducido, con texto íntegro y navegación exclusiva por botonera superior.
 - La navegación de resultados sube al encabezado; la columna fija usa contraste propio en Day y Dark, reduce su ancho y muestra únicamente nombre y plaza.
-
-Descripción: matriz más legible, compacta y controlable, sin tarjetas cortadas ni desplazamiento interno accidental.
 
 ### 10SEP2026 · JARVI RH 2.0.124
 
@@ -69,14 +68,10 @@ Descripción: matriz más legible, compacta y controlable, sin tarjetas cortadas
 - La validación recompone fragmentos en una idea completa por línea, preserva variables y condiciones, rota credenciales, falla de forma cerrada y registra evidencia reutilizable; al iniciar, un barrido controlado alcanza las plazas públicas ya existentes.
 - El build audita también los textos institucionales fijos y bloquea cualquier ruta que pierda el control editorial.
 
-Descripción: redacción pública profesional, formal y trazable en todas las plazas, sin llamadas de IA durante las visitas.
-
 ### 10SEP2026 · JARVI RH 2.0.123
 
-- GPT-4.1 mini corrige ortografía, gramática, redacción y estructura de los requisitos antes de guardarlos o publicarlos; Responses API entrega una lista validada y `audit_log` permite reutilizar resultados idénticos.
+- GPT-4.1 mini corrige ortografía, gramática, redacción y estructura antes de publicar; la evidencia se reutiliza sin consumir tokens durante las visitas.
 - La portada dice «Cada candidato merece una evaluación a su medida», acorta el enlace jurídico y presenta a Talento AISA como plataforma tecnológica de oportunidades laborales.
-
-Descripción: requisitos completos, una línea administrativa y una viñeta pública por idea, sin consumir tokens durante las visitas.
 
 ### 10SEP2026 · JARVI RH 2.0.122
 
@@ -161,7 +156,7 @@ flowchart LR
 | Comunicación   | Plantilla de CV, entrega idempotente, estados `pending/sending/sent/failed/unknown`. | `cvRequest.ts`, `apichat.ts`                           |
 | Gobierno       | Release único, bitácora, Vitest, TypeScript, build y puerta CI.                      | `shared/release.ts`, `.github/workflows/black-box.yml` |
 
-Las dependencias no equivalen a capacidades automáticamente logradas. LangGraph contiene hoy un grafo lineal `START → evaluate → END`; ofrece una frontera explícita de orquestación, pero no un agente autónomo con múltiples herramientas. Drizzle tipa entidades, mientras varias consultas operativas usan SQL parametrizado directo. n8n contiene cuatro workflows importables (ingesta, evaluador por plaza, espera humana y WhatsApp), pero su activación depende de credenciales y webhooks del despliegue.
+Las dependencias no equivalen a capacidades automáticamente logradas. LangGraph contiene hoy un grafo lineal `START → evaluate → END`; ofrece una frontera explícita de orquestación, pero no un agente autónomo con múltiples herramientas. Drizzle tipa entidades, mientras varias consultas operativas usan SQL parametrizado directo. n8n conserva flujos importables; el de WhatsApp es histórico e inactivo porque el backend ejecuta el envío actual.
 
 ## 3. Proceso funcional y evaluación especializada de IA
 
@@ -229,7 +224,7 @@ Persisten riesgos de procedencia. Las respuestas apuntan a preguntas mutables y 
 
 Esta matriz documenta referencias metodológicas y no constituye certificación, conformidad acreditada ni dictamen independiente de cumplimiento.
 
-El acceso usa códigos de seis dígitos de diez minutos, máximo cinco intentos, espera de reenvío y respuesta uniforme para reducir enumeración. Los secretos del agente se cifran y el navegador recibe máscara; Langfuse traza identificador de aplicación, modelo, puntaje y clasificación sin nombre, teléfono, correo ni respuestas. No obstante, marcar `is_secret` en configuraciones ApiChat solo oculta la lectura: el esquema actual no demuestra cifrado equivalente. Tampoco hay rate limiting global, protección CSRF explícita, escaneo de dependencias, cabeceras de seguridad o cobertura configurada. Son hallazgos de riesgo, no evidencia de explotación.
+El acceso usa códigos de seis dígitos de diez minutos, máximo cinco intentos, espera de reenvío y respuesta uniforme para reducir enumeración. Los secretos del agente y ApiChat se cifran, y el navegador recibe máscaras; Langfuse traza identificador, modelo, puntaje y clasificación sin nombre, teléfono, correo ni respuestas. Todavía faltan rate limiting global, protección CSRF explícita, escaneo de dependencias, cabeceras de seguridad y cobertura configurada. Son hallazgos de riesgo, no evidencia de explotación.
 
 ## 7. Verificación, despliegue y reproducibilidad
 
@@ -242,7 +237,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP, ApiChat y, para IA, `AGENT_SETTINGS_ENCRYPTION_KEY` más credenciales administradas desde la interfaz. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.128](docs/PRUEBAS_CAJA_NEGRA_2.0.128.md).
+`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP y una fuente estable `AGENT_SETTINGS_ENCRYPTION_KEY`. Las credenciales de ApiChat y del agente se administran cifradas desde la interfaz, no mediante variables de entorno de la integración. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.129](docs/PRUEBAS_CAJA_NEGRA_2.0.129.md).
 
 ## 8. Protocolo de Ingenierìa de Software
 

@@ -168,8 +168,8 @@ Importar los archivos en el siguiente orden y asignar las credenciales dentro de
 | ----: | ------------------------------------- | -------------------------------------------------- |
 |     1 | `01_flujo_maestro_postulaciones.json` | Recepción, normalización, deduplicación y despacho |
 |     2 | `02_agente_plaza_template.json`       | Perfil, reglas, OpenAI y persistencia              |
-|     3 | `03_revision_humana_30s.json`         | Espera de 30 segundos y cancelación                |
-|     4 | `04_whatsapp_apichat.json`            | Mensaje al candidato y alertas internas            |
+|     3 | `03_revision_humana_30s.json`         | Referencia histórica de espera y cancelación       |
+|     4 | `04_whatsapp_apichat.json`            | Artefacto histórico inactivo                       |
 
 El agente normaliza mayúsculas y tildes en respuestas aceptadas, interpreta años o meses, aplica `min`, `max`, `minMonths`, `maxMonths`, requisitos, licencias, idiomas, ubicación, nivel académico y `ai_criteria`. Después solicita a OpenAI una salida estructurada y persiste `status`, `reason`, `profileSummary`, `keyPoints`, `confidence` y `ruleResults`.
 
@@ -181,14 +181,11 @@ El agente normaliza mayúsculas y tildes en respuestas aceptadas, interpreta añ
 | Credencial OpenAI/ChatGPT  | Nodo `OpenAI Chat Model`      |           Sí           |
 | `OPENAI_MODEL`             | Entorno de n8n                | Según política interna |
 | `N8N_AGENT_EVALUATION_URL` | Entorno de n8n                |           Sí           |
-| ID de workflow WhatsApp    | Nodo `Execute Workflow`       |           Sí           |
-| `APICHAT_API_ENDPOINT`     | Entorno de n8n                |     Sí para envío      |
-| `APICHAT_ACCOUNT_ID`       | Entorno de n8n                |           Sí           |
-| `APICHAT_TOKEN`            | Entorno de n8n                |           Sí           |
-| `APICHAT_CONNECT_TO`       | Entorno de n8n                |      Según cuenta      |
-| `APICHAT_WEBHOOK_URL`      | Entorno de n8n                | Solo eventos entrantes |
+| ApiChat                    | Configuración > WhatsApp      |     Sí para envío      |
 
 Los marcadores `PENDIENTE` del JSON indican credenciales o IDs propios de cada instalación; no son errores estructurales. Deben sustituirse desde la interfaz de n8n, nunca con secretos dentro del archivo exportado.
+
+ApiChat no recibe credenciales de n8n ni de variables de EasyPanel. La migración `0013_apichat_credential_vault.sql` inicializa la configuración y el módulo administrativo cifra Client ID y token antes de persistirlos en PostgreSQL.
 
 ## 10. Pruebas de aceptación en EasyPanel
 
@@ -219,7 +216,7 @@ pnpm build
 python3 scripts/validate_workflows.py
 ```
 
-La validación final de esta entrega debe mostrar TypeScript sin errores, todas las pruebas Vitest aprobadas, build de producción correcto y cuatro workflows n8n válidos. La conexión SMTP real y el recorrido PostgreSQL/n8n/ApiChat se validan en EasyPanel porque dependen de credenciales externas.
+La validación final debe mostrar TypeScript sin errores, todas las pruebas Vitest aprobadas, build de producción correcto y artefactos n8n estructuralmente válidos. La conexión SMTP se valida en EasyPanel; ApiChat se verifica desde el módulo administrativo y el envío real se confirma con un número controlado.
 
 ## 12. Diagnóstico
 

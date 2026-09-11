@@ -1,8 +1,8 @@
-# Pruebas de caja negra · JARVI RH 2.0.128
+# Pruebas de caja negra · JARVI RH 2.0.129
 
 ## Alcance del cambio
 
-La especificación cubre la corrección exacta del mensaje institucional de la landing: «Plataforma Laboral No.1», eliminación del sufijo no aprobado, integración responsive y contraste temático. La coherencia editorial de responsabilidades, Revisión Humana 360°, asociación de perfiles, prioridad pública, tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general.
+La especificación cubre el almacén cifrado de ApiChat, su interfaz administrativa, migración, rotación, verificación y consumo runtime desde PostgreSQL. La mensajería, coherencia editorial, Revisión Humana 360°, tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general.
 
 ## Matriz funcional observable
 
@@ -63,7 +63,7 @@ La especificación cubre la corrección exacta del mensaje institucional de la l
 | BN-EDIT-17  | Persona visita landing o solicitud ya validada         | Cargar o navegar por las páginas                   | La lectura usa únicamente PostgreSQL; no llama a OpenAI ni consume tokens por visita                               | ISO/IEC 25010:2023 · eficiencia              |
 | BN-EDIT-18  | Catálogo geográfico oficial activo                     | Mostrar zona, departamento o municipio             | La interfaz conserva la nomenclatura autoritativa sin reescritura generativa                                       | ISO/IEC 27001:2022 · integridad              |
 | BN-EDIT-19  | IA devuelve una responsabilidad fragmentada o nominal  | Validar la salida estructurada                     | El servidor rechaza paréntesis abiertos, complementos aislados, falta de puntuación o ausencia de verbo infinitivo | ISO/IEC 25010:2023 · prevención de errores   |
-| BN-EDIT-20  | Contenido validado con una política editorial anterior | Iniciar la versión 2.0.128                         | El hash anterior no se reutiliza; las 25 plazas publicadas vuelven a revisión y registran la política vigente      | ISO/IEC/IEEE 29119-1:2022 · repetibilidad    |
+| BN-EDIT-20  | Contenido validado con una política editorial anterior | Iniciar la versión 2.0.126                         | El hash anterior no se reutiliza; las 25 plazas publicadas vuelven a revisión y registran la política vigente      | ISO/IEC/IEEE 29119-1:2022 · repetibilidad    |
 | BN-EDIT-21  | Barrido editorial finalizado                           | Consultar cada solicitud pública                   | Toda responsabilidad es autónoma, coherente, legible y conserva las condiciones sustantivas del perfil             | ISO/IEC 25010:2023 · corrección funcional    |
 | BN-CONS-01  | Formulario público completo                            | Inspeccionar el bloque final                       | Se muestran tres casillas separadas, compactas, legibles, sin doble espaciado y marcadas como obligatorias         | ISO/IEC 25010:2023 · interacción             |
 | BN-CONS-02  | Falta una o más confirmaciones                         | Pulsar Enviar formulario                           | La interfaz impide el envío y comunica que deben marcarse las tres confirmaciones                                  | ISO/IEC 25010:2023 · prevención de errores   |
@@ -90,7 +90,14 @@ La especificación cubre la corrección exacta del mensaje institucional de la l
 | BN-LANG-04  | Perfil vinculado a un formulario                       | Generar preguntas desde el perfil                  | Preguntas, ayudas y criterios nuevos se generan con conjugación formal                                             | ISO/IEC/IEEE 29119-1:2022 · repetibilidad    |
 | BN-LANG-05  | Base con valores predeterminados anteriores            | Ejecutar migración `0012`                          | Se homologan los valores conocidos; las plantillas libres de administración permanecen intactas                    | ISO/IEC 27001:2022 · integridad              |
 | BN-LANG-06  | Código introduce un patrón informal prohibido          | Ejecutar verificación o build                      | El proceso termina con código distinto de cero e identifica archivo, línea y regla                                 | ISO/IEC 25010:2023 · mantenibilidad          |
-| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.128`                                  | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
+| BN-API-01   | Migración `0013` pendiente                             | Ejecutar el query previo al despliegue             | Los valores públicos y las filas secretas vacías se crean idempotentemente; ningún secreto aparece en SQL          | ISO/IEC 27001:2022 · confidencialidad        |
+| BN-API-02   | Sesión de administrador activa                         | Guardar Client ID o token                          | El servidor cifra con AES-256-GCM, persiste `enc:v1:` y audita la acción sin conservar el valor en la bitácora     | ISO/IEC 27001:2022 · criptografía            |
+| BN-API-03   | Credencial configurada                                 | Recargar Configuración > WhatsApp                  | La UI muestra “Configurada” y una máscara con cuatro caracteres; la respuesta nunca contiene el secreto completo   | ISO/IEC 27001:2022 · minimización            |
+| BN-API-04   | Fila secreta histórica en texto plano                  | Intentar verificar o enviar                        | El servidor falla de forma cerrada y exige guardar nuevamente la credencial desde el módulo seguro                 | ISO/IEC 25010:2023 · prevención de errores   |
+| BN-API-05   | Client ID y token cifrados en modo nativo              | Pulsar Verificar                                   | Se consulta `GET /v1/status`; no se envía WhatsApp y la respuesta omite token, Client ID y contenido QR            | ISO/IEC 27001:2022 · exposición mínima       |
+| BN-API-06   | Postulación calificada con mensaje pendiente           | Ejecutar envío o reintento                         | `cvRequest` lee configuración desde PostgreSQL y no consulta variables ApiChat del entorno                         | ISO/IEC 25010:2023 · corrección funcional    |
+| BN-API-07   | Cliente manipulado usa la ruta genérica                | Intentar guardar proveedor ApiChat o `isSecret`    | El contrato rechaza la entrada; solo los endpoints dedicados y la lista cerrada pueden administrar credenciales    | ISO/IEC 27001:2022 · control de acceso       |
+| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.129`                                  | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
 
 ## Pruebas automatizadas
 
@@ -98,7 +105,7 @@ La especificación cubre la corrección exacta del mensaje institucional de la l
 | -------------------------------- | ----------------------------------------------------------------------------- |
 | `pnpm release:verify`            | Versión, historial, documentos y dependencias auditadas están sincronizados   |
 | `pnpm text:verify`               | El tratamiento formal y la cobertura de rutas editoriales permanecen íntegros |
-| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.129`                                    |
+| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.130`                                    |
 | `pnpm test:black-box`            | Modelo editorial, textos públicos, artefacto, versión y README son exactos    |
 | `pnpm test`                      | Mensajería, formularios, geografía y endpoints conservan la regresión         |
 | `pnpm check`                     | Cliente, tRPC, servidor y esquema mantienen contratos TypeScript consistentes |
@@ -106,4 +113,4 @@ La especificación cubre la corrección exacta del mensaje institucional de la l
 
 ## Criterio de aprobación
 
-El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación posterior al despliegue debe ejecutar BN-LAND-09 en Day, Dark Dimmed y Dark High Contrast; los casos editoriales y BN-360-01 a BN-360-08 continúan como regresión. WCAG e ISO se utilizan como guías metodológicas y no constituyen certificación.
+El release se aprueba únicamente cuando todos los comandos terminan con código cero. La verificación posterior al despliegue debe ejecutar BN-API-01 a BN-API-05 antes de un envío controlado; los casos editoriales, temáticos y BN-360-01 a BN-360-08 continúan como regresión. WCAG e ISO se utilizan como guías metodológicas y no constituyen certificación.

@@ -24,7 +24,7 @@ La documentación [OpenAI Functions Agent](https://docs.n8n.io/integrations/buil
 
 La aplicación se diseñó como React + Express + tRPC con una capa PostgreSQL dedicada, porque el proyecto requiere formularios públicos, autenticación y administración. La infraestructura administrada del proyecto de desarrollo trae una configuración de base distinta, por lo que la migración PostgreSQL se entrega como artefacto explícito para EasyPanel y no se aplica contra una base incompatible mientras las credenciales permanezcan pendientes.
 
-La URL compartida por el usuario (`https://aisa-testing-n8n-testing.4ugrim.easypanel.host/workflow/ZY6v5gZ3pUN5EL_KVJSpe`) es una URL del editor de n8n; la integración de producción debe utilizar la URL pública de cada webhook, no la URL del editor. Los workflows dejan `APICHAT_WEBHOOK_URL`, `APICHAT_CONNECT_TO`, `APICHAT_API_ENDPOINT`, `APICHAT_ACCOUNT_ID`, `APICHAT_TOKEN`, `N8N_AGENT_EVALUATION_URL` y `N8N_MANUAL_STATUS_WEBHOOK_URL` parametrizados.
+La URL compartida por el usuario (`https://aisa-testing-n8n-testing.4ugrim.easypanel.host/workflow/ZY6v5gZ3pUN5EL_KVJSpe`) es una URL del editor de n8n; la integración de producción debe utilizar la URL pública de cada webhook, no la URL del editor. Desde JARVI RH 2.0.129, ApiChat se configura exclusivamente en PostgreSQL por medio del módulo administrativo; n8n conserva únicamente sus variables específicas de evaluación y revisión.
 
 ## Verificación del archivo oficial
 

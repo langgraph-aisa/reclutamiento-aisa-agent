@@ -1,19 +1,23 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const looksConfigured = (value: string | undefined) => Boolean(value && value.trim() && !value.includes("PENDIENTE") && !value.includes("pending"));
+describe("integration secret governance", () => {
+  it("uses the PostgreSQL vault instead of ApiChat environment variables", () => {
+    const runtimeSources = ["server/apichat.ts", "server/cvRequest.ts"].map(
+      file => fs.readFileSync(path.resolve(file), "utf8")
+    );
+    const settings = fs.readFileSync(
+      path.resolve("server/apiChatSettings.ts"),
+      "utf8"
+    );
 
-describe("integration secrets", () => {
-  it("validates ApiChat configuration shape without network access", () => {
-    const endpoint = process.env.APICHAT_API_ENDPOINT;
-    const token = process.env.APICHAT_TOKEN;
-    const clientId = process.env.APICHAT_CLIENT_ID;
-    const accountId = process.env.APICHAT_ACCOUNT_ID;
-    const configured = { endpoint: looksConfigured(endpoint), token: looksConfigured(token), clientId: looksConfigured(clientId), accountId: looksConfigured(accountId) };
-
-    expect(configured).toEqual({ endpoint: configured.endpoint, token: configured.token, clientId: configured.clientId, accountId: configured.accountId });
-    expect(typeof configured.endpoint).toBe("boolean");
-    expect(typeof configured.clientId).toBe("boolean");
-    expect(typeof configured.token).toBe("boolean");
-    expect(typeof configured.accountId).toBe("boolean");
+    for (const source of runtimeSources) {
+      expect(source).not.toContain("process.env");
+      expect(source).not.toContain("APICHAT_");
+    }
+    expect(settings).toContain("integration_settings");
+    expect(settings).toContain("encryptAgentSecret");
+    expect(settings).toContain("enc:v1:");
   });
 });

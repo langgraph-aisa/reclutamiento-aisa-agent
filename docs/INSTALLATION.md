@@ -8,13 +8,13 @@ Este proyecto contiene una aplicación web responsive para postulaciones y opera
 
 ## Componentes
 
-| Componente                        | Responsabilidad                                                                       | Credencial pendiente                                           |
-| --------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Aplicación React + Express + tRPC | Formulario público, panel, configuración e informes                                   | `DATABASE_URL`, autenticación del proveedor elegido            |
-| PostgreSQL                        | Plazas, formularios, respuestas, candidatos, evaluaciones, conversaciones y auditoría | Usuario, contraseña, host, puerto, SSL                         |
-| n8n on-premise                    | Orquestación, agentes por plaza, espera y WhatsApp                                    | Credenciales Postgres, OpenAI/ChatGPT y ApiChat                |
-| ApiChat                           | Mensajes de WhatsApp y alertas internas                                               | `APICHAT_ACCOUNT_ID`, `APICHAT_TOKEN` y parámetros de conexión |
-| OpenAI/ChatGPT                    | Razonamiento de respuestas abiertas                                                   | Credencial del nodo nativo de n8n                              |
+| Componente                        | Responsabilidad                                                                       | Credencial pendiente                                 |
+| --------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Aplicación React + Express + tRPC | Formulario público, panel, configuración e informes                                   | `DATABASE_URL`, autenticación del proveedor elegido  |
+| PostgreSQL                        | Plazas, formularios, respuestas, candidatos, evaluaciones, conversaciones y auditoría | Usuario, contraseña, host, puerto, SSL               |
+| n8n on-premise                    | Orquestación opcional y agentes por plaza                                             | Credenciales Postgres y OpenAI/ChatGPT               |
+| ApiChat                           | Solicitud directa de CV por WhatsApp                                                  | Credenciales cifradas desde Configuración > WhatsApp |
+| OpenAI/ChatGPT                    | Razonamiento de respuestas abiertas                                                   | Credencial del nodo nativo de n8n                    |
 
 ## PostgreSQL
 
@@ -42,13 +42,7 @@ Las funciones `process_public_application` y `finalize_application_evaluation` s
 
 ### ApiChat
 
-| Variable               | Uso                                   |
-| ---------------------- | ------------------------------------- |
-| `APICHAT_WEBHOOK_URL`  | URL de callbacks o eventos entrantes. |
-| `APICHAT_CONNECT_TO`   | Conexión o instancia de WhatsApp.     |
-| `APICHAT_API_ENDPOINT` | Endpoint HTTP para enviar mensajes.   |
-| `APICHAT_ACCOUNT_ID`   | ID de cuenta, obligatorio.            |
-| `APICHAT_TOKEN`        | Token, obligatorio y secreto.         |
+ApiChat no utiliza variables de entorno en JARVI RH 2.0.129. Ejecute `drizzle/migrations/0013_apichat_credential_vault.sql` y configure endpoint, conexión, webhook, Client ID y token desde Administración > Configuración > WhatsApp. Los secretos se cifran en el servidor antes de almacenarse en `integration_settings`; no se devuelven al navegador.
 
 No copiar la URL del editor de n8n (`/workflow/...`) como webhook. Cada nodo Webhook muestra su URL de producción después de activar el workflow; esas URLs son las que se deben colocar en las variables.
 
@@ -58,12 +52,12 @@ Importar los archivos en este orden:
 
 1. `01_flujo_maestro_postulaciones.json` recibe el POST de la aplicación, guarda la postulación, bloquea duplicados y llama al agente.
 2. `02_agente_plaza_template.json` es una plantilla. Duplicarla una vez por plaza, cambiar el nombre, `path`, criterios o referencias de plaza y conservar la conexión al nodo OpenAI Chat Model y al Structured Output Parser.
-3. `03_revision_humana_30s.json` recibe la acción humana **Solicitar CV por WhatsApp** (estado interno `calificado`), guarda la ventana, espera 30 segundos, consulta el estado actual y cancela si cambió.
-4. `04_whatsapp_apichat.json` prepara el mensaje configurado, envía al candidato, separa las alertas internas y actualiza la conversación.
+3. `03_revision_humana_30s.json` se conserva como referencia de la ventana histórica de revisión.
+4. `04_whatsapp_apichat.json` es un artefacto heredado inactivo y no debe activarse: el backend actual realiza el envío directo con la configuración cifrada de PostgreSQL.
 
 Después de importar, asignar una credencial PostgreSQL a cada nodo Postgres y una credencial OpenAI/ChatGPT al nodo `OpenAI Chat Model`. Los IDs `PENDIENTE` y `PENDIENTE_WORKFLOW_WHATSAPP` son marcadores intencionales: deben reemplazarse por la credencial o workflow correspondiente dentro de la instancia n8n, sin guardar secretos en los JSON.
 
-El flujo de revisión humana depende de `Wait` y debe tener persistencia de ejecuciones habilitada en n8n. Si se cambia el estado durante la pausa, la consulta posterior evita iniciar la entrevista.
+El flujo runtime de solicitud de CV no depende de las credenciales de n8n ni del artefacto heredado de WhatsApp.
 
 ## Publicación de la aplicación
 
@@ -75,7 +69,7 @@ Enviar una postulación completa y comprobar que solo se crea al pulsar `Enviar 
 
 ## Validación de workflows y límites de la plantilla
 
-Los cuatro archivos JSON fueron validados localmente como JSON importable, con nombres de nodo únicos, conexiones internas válidas y marcadores semánticos para duplicados, PostgreSQL, OpenAI/ChatGPT estructurado, espera de 30 segundos, cancelación por cambio de estado y ApiChat. La validación final se ejecuta con `python3 scripts/validate_workflows.py`.
+Los cuatro archivos JSON se conservan como artefactos históricos importables. La integración activa de ApiChat está implementada en `server/cvRequest.ts`, `server/apiChatSettings.ts` y `server/apichat.ts`, y se valida con Vitest sin realizar envíos reales.
 
 Los valores `PENDIENTE` se mantienen deliberadamente en credenciales de PostgreSQL, OpenAI/ChatGPT y el ID del subworkflow de WhatsApp. No son secretos ni deben sustituirse por valores inventados: deben mapearse a credenciales y workflow IDs reales después de importar los JSON en la instancia on-premise.
 
@@ -83,4 +77,4 @@ El archivo `02_agente_plaza_template.json` funciona como plantilla versionada pa
 
 La fuente inicial del catálogo contiene 22 departamentos y 338 municipios. Las zonas no se tratan como nomenclatura nacional única dentro de la fuente inicial; por ello se dejaron como catálogo configurable, con importación JSON y mantenimiento administrativo de nombre y estado activo.
 
-La aplicación se verificó con TypeScript, pruebas Vitest y build de producción. La prueba real de envío a OpenAI, PostgreSQL y ApiChat queda pendiente hasta que el operador configure las credenciales y endpoints de su infraestructura.
+La aplicación se verificó con TypeScript, pruebas Vitest y build de producción. La prueba real de ApiChat debe ejecutarse desde el botón **Verificar** después de configurar las credenciales cifradas; esta acción consulta el estado y no envía mensajes.

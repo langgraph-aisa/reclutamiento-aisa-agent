@@ -1,70 +1,65 @@
-# Envío directo de solicitud de CV por ApiChat
+# ApiChat directo · credenciales administradas en PostgreSQL
 
-Talento AISA envía una sola solicitud de CV cuando una postulación cambia desde cualquier estado distinto de `calificado` hacia `calificado`. El flujo no utiliza n8n.
+Talento AISA envía la solicitud de CV directamente desde el backend. El flujo activo no utiliza n8n ni variables `APICHAT_*` del servicio en EasyPanel. Administración > Configuración > WhatsApp es la única interfaz autorizada para configurar y rotar estas credenciales.
 
-El estado **Calificado por AISA** utiliza el valor técnico `calificado_aisa` y
-no dispara ApiChat, webhooks ni mensajes. Únicamente registra el cambio y su
-auditoría como cualquier otro estado manual.
+## Migración previa al despliegue
 
-## Preparación de PostgreSQL
+Ejecute [0013_apichat_credential_vault.sql](../drizzle/migrations/0013_apichat_credential_vault.sql) antes de iniciar JARVI RH 2.0.129. El query es idempotente: configura los valores públicos de la API nativa y crea vacías las filas reservadas para secretos.
 
-Ejecutar la migración `drizzle/migrations/0005_direct_apichat.sql` antes de desplegar el código. La columna `message_key` y su índice único garantizan una sola solicitud lógica por postulación. El identificador tiene la forma `cv_request:{applicationId}`.
+```sql
+BEGIN;
 
-Para habilitar **Calificado por AISA**, aplicar además
-`drizzle/migrations/0009_calificado_aisa.sql` antes de iniciar la nueva versión
-de la aplicación.
+INSERT INTO integration_settings
+  (provider, setting_key, setting_value, is_secret, updated_at)
+VALUES
+  ('apichat', 'api_mode', 'native', false, now()),
+  ('apichat', 'api_endpoint', 'https://api.apichat.io/v1/sendText', false, now()),
+  ('apichat', 'connect_to', 'apichat.io', false, now()),
+  ('apichat', 'webhook_url', 'https://aisa-testing-n8n-testing.4ugrim.easypanel.host/webhook/apichat/incoming', false, now()),
+  ('apichat', 'client_id', NULL, true, now()),
+  ('apichat', 'token', NULL, true, now()),
+  ('apichat', 'account_id', NULL, true, now())
+ON CONFLICT (provider, setting_key) DO NOTHING;
 
-## Variables de EasyPanel
-
-Las variables pertenecen al servicio de Talento AISA, no al frontend y no al servicio n8n. Nunca deben llevar el prefijo `VITE_`.
-
-### Contrato nativo de apichat.io
-
-```dotenv
-APICHAT_API_MODE=native
-APICHAT_API_ENDPOINT=https://api.apichat.io/v1/sendText
-APICHAT_CLIENT_ID=REEMPLAZAR_EN_EASYPANEL
-APICHAT_TOKEN=REEMPLAZAR_EN_EASYPANEL
+COMMIT;
 ```
 
-El backend envía los encabezados `client-id` y `token`, y el cuerpo `{ "number": "502...", "text": "..." }`.
+No inserte el Client ID ni el token como texto mediante SQL. Después de ejecutar la migración, ingréselos en las tarjetas seguras del módulo administrativo. El servidor los cifra con AES-256-GCM y prefijo `enc:v1:` antes de escribirlos. El navegador solo recibe el estado y los últimos cuatro caracteres enmascarados.
 
-### Contrato heredado documentado previamente
+## Fuente de cifrado
 
-Utilizarlo únicamente si el proveedor confirma este contrato:
+El cifrado requiere una fuente estable del servidor. Se recomienda `AGENT_SETTINGS_ENCRYPTION_KEY`; durante una rotación, el servidor también intenta las fuentes estables existentes `JWT_SECRET` y `DATABASE_URL` para conservar la lectura del material cifrado anteriormente. No cambie simultáneamente todas las fuentes sin un procedimiento de recifrado.
 
-```dotenv
-APICHAT_API_MODE=legacy
-APICHAT_API_ENDPOINT=https://ENDPOINT_CONFIRMADO
-APICHAT_ACCOUNT_ID=REEMPLAZAR_EN_EASYPANEL
-APICHAT_CONNECT_TO=REEMPLAZAR_EN_EASYPANEL
-APICHAT_TOKEN=REEMPLAZAR_EN_EASYPANEL
-```
+## Configuración inicial
 
-El backend envía autorización Bearer y el cuerpo `{ accountId, connectTo, to, message }`.
+1. Ingrese a Administración > Configuración > WhatsApp.
+2. Conserve **API nativa** y el endpoint oficial `https://api.apichat.io/v1/sendText`.
+3. Revise la conexión y la URL del webhook.
+4. Guarde por separado el Client ID y el token; cada operación queda registrada en `audit_log` sin el valor secreto.
+5. Active **Verificar**. El servidor consulta `GET https://api.apichat.io/v1/status` con los encabezados oficiales `client-id` y `token`; no envía mensajes y no devuelve códigos QR al navegador.
+6. Cuando la verificación resulte satisfactoria, elimine las antiguas variables `APICHAT_*` del servicio de aplicación en EasyPanel y vuelva a desplegar.
 
-Después de modificar variables, guardar y volver a desplegar el servicio. No registrar valores secretos en capturas, tickets, pruebas o logs.
+El modo heredado conserva las cajas de ID de cuenta y conexión únicamente para compatibilidad controlada. La verificación integrada corresponde al contrato nativo.
 
 ## Comportamiento operativo
 
-1. El reclutador selecciona **Solicitar CV por WhatsApp** (estado interno `calificado`).
+1. El reclutador selecciona **Solicitar CV por WhatsApp**.
 2. PostgreSQL guarda el estado, la auditoría y el mensaje pendiente en una transacción.
-3. Después del commit, el backend llama a ApiChat con un timeout de 15 segundos.
-4. En éxito, guarda el identificador del proveedor y marca `whatsapp_status='enviado'`.
-5. En error, conserva el estado interno `calificado`, marca `whatsapp_status='error'` y muestra el reintento manual.
-6. Si ApiChat acepta la solicitud pero falla la confirmación local, marca el envío como `unknown` / `desconocido`, bloquea el reintento y pide verificar primero la conversación del postulante. Esto evita duplicados inciertos.
-7. Guardar de nuevo el mismo estado no crea ni envía otro mensaje.
+3. Después del commit, `getApiChatRuntimeSettings` lee y descifra la configuración desde `integration_settings`.
+4. El backend llama a ApiChat con un tiempo límite de 15 segundos.
+5. En éxito, guarda el identificador del proveedor y marca `whatsapp_status='enviado'`.
+6. En error, conserva el estado interno, marca el envío como fallido y habilita el reintento manual.
+7. Si el proveedor pudo aceptar el mensaje pero falla la confirmación local, el estado queda como desconocido para impedir un duplicado automático.
 
-El reintento manual solo está disponible para postulaciones calificadas. Un mensaje ya marcado como enviado nunca se vuelve a despachar desde ese botón.
+El estado **Calificado por AISA** (`calificado_aisa`) no envía mensajes. La recepción y almacenamiento de adjuntos requiere un webhook entrante independiente.
 
-## Prueba de aceptación
+## Controles de seguridad
 
-1. Usar una plaza y teléfono controlados.
-2. Cambiar de **En revisión** a **Solicitar CV por WhatsApp**.
-3. Confirmar que el teléfono recibe el texto con nombre y plaza reales.
-4. Confirmar en el detalle que WhatsApp aparece como enviado.
-5. Guardar nuevamente **Solicitar CV por WhatsApp** y verificar que no llega un duplicado.
-6. Probar credenciales inválidas, confirmar que el estado queda guardado y que aparece `Reintentar solicitud de CV`.
-7. Restaurar la credencial y ejecutar el reintento una sola vez.
+- Solo `adminProcedure` puede leer estados enmascarados, modificar o verificar la integración.
+- Las claves permitidas se definen mediante listas cerradas; la ruta genérica de configuración no acepta ApiChat ni secretos.
+- Un valor histórico sin el prefijo cifrado se rechaza y debe rotarse desde la interfaz.
+- El endpoint nativo exige HTTPS, el dominio oficial y la ruta `/v1/sendText`.
+- La bitácora conserva la acción y el nombre de la clave, nunca su valor.
+- Las pruebas usan credenciales ficticias y transporte simulado; no realizan envíos reales.
 
-Solicitar el CV no descarga el archivo en Talento AISA. La recepción y almacenamiento de adjuntos requiere un webhook entrante independiente.
+Fuentes del contrato: [documentación oficial de ApiChat](https://apichat.io/api-docs) y [Swagger oficial](https://panel.apichat.io/docs/swagger).

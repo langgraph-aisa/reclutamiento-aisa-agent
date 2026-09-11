@@ -43,6 +43,13 @@ import {
   saveAgentPreferences,
   saveAgentSecret,
 } from "./agentSettings";
+import {
+  APICHAT_SECRET_KEYS,
+  getApiChatConfiguration,
+  saveApiChatPreferences,
+  saveApiChatSecret,
+  verifyApiChatConnection,
+} from "./apiChatSettings";
 import { applicationStatuses } from "./policy";
 import {
   APPLICATION_CONSENTS,
@@ -795,6 +802,10 @@ function safeIntegrationMessage(error: unknown, fallback: string) {
     "La OpenAI Responses API",
     "No hay una API key",
     "Configure las claves pública",
+    "ApiChat no está configurado",
+    "ApiChat rechazó la verificación",
+    "La verificación integrada de ApiChat",
+    "No fue posible establecer conexión con ApiChat",
     "Postulación no encontrada",
     "Esta postulación ya está siendo evaluada",
   ];
@@ -2990,7 +3001,7 @@ export const appRouter = router({
                 CASE WHEN is_secret THEN NULL ELSE setting_value END AS setting_value,
                 is_secret,(is_secret AND COALESCE(setting_value,'')<>'') AS configured
            FROM integration_settings
-          WHERE provider IN ('recruitment','apichat')
+          WHERE provider='recruitment'
           ORDER BY provider,setting_key`
       );
       return result.rows;
@@ -2998,20 +3009,87 @@ export const appRouter = router({
     saveSetting: adminProcedure
       .input(
         z.object({
-          provider: z.enum(["recruitment", "apichat"]),
+          provider: z.literal("recruitment"),
           settingKey: z.string().min(2).max(120),
           settingValue: z.string().max(3000),
-          isSecret: z.boolean().default(false),
+          isSecret: z.literal(false).default(false),
         })
       )
       .mutation(async ({ input }) => {
         const pool = await requirePool();
         const result = await pool.query(
           `INSERT INTO integration_settings (provider,setting_key,setting_value,is_secret,updated_at) VALUES ($1,$2,$3,$4,now()) ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,is_secret=EXCLUDED.is_secret,updated_at=now() RETURNING provider,setting_key,CASE WHEN is_secret THEN NULL ELSE setting_value END AS setting_value,is_secret`,
-          [input.provider, input.settingKey, input.settingValue, input.isSecret]
+          [input.provider, input.settingKey, input.settingValue, false]
         );
         return result.rows[0];
       }),
+    apiChatConfiguration: adminProcedure.query(async () => {
+      return getApiChatConfiguration(await getPool());
+    }),
+    saveApiChatPreferences: adminProcedure
+      .input(
+        z.object({
+          mode: z.enum(["native", "legacy"]),
+          endpoint: z.url().max(500),
+          connectTo: z.string().trim().max(160),
+          webhookUrl: z.union([z.literal(""), z.url().max(500)]),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveApiChatPreferences(
+            await requirePool(),
+            input,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar la configuración de ApiChat."
+            ),
+          });
+        }
+      }),
+    saveApiChatSecret: adminProcedure
+      .input(
+        z.object({
+          key: z.enum(APICHAT_SECRET_KEYS),
+          value: z.string().trim().min(3).max(1_000).nullable(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveApiChatSecret(
+            await requirePool(),
+            input.key,
+            input.value,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar la credencial de ApiChat."
+            ),
+          });
+        }
+      }),
+    verifyApiChat: adminProcedure.mutation(async () => {
+      try {
+        return await verifyApiChatConnection(await requirePool());
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: safeIntegrationMessage(
+            error,
+            "No fue posible verificar la conexión con ApiChat."
+          ),
+        });
+      }
+    }),
     recipients: adminProcedure.query(async () => {
       const pool = await getPool();
       if (!pool) return [];

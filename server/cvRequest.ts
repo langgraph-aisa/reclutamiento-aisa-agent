@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import { renderCvRequestMessage, sendApiChatText } from "./apichat";
+import { getApiChatRuntimeSettings } from "./apiChatSettings";
 
 type ApplicationContact = {
   id: number;
@@ -28,43 +29,55 @@ export function cvRequestMessageKey(applicationId: number) {
   return `cv_request:${applicationId}`;
 }
 
-export async function ensureCvRequestMessage(client: PoolClient, application: ApplicationContact) {
+export async function ensureCvRequestMessage(
+  client: PoolClient,
+  application: ApplicationContact
+) {
   const existingConversation = await client.query(
     `SELECT id FROM conversations WHERE application_id=$1 AND provider='apichat' ORDER BY id LIMIT 1`,
-    [application.id],
+    [application.id]
   );
-  const conversationId = existingConversation.rows[0]?.id ?? (
-    await client.query(
-      `INSERT INTO conversations (application_id,provider,status) VALUES ($1,'apichat','pendiente') RETURNING id`,
-      [application.id],
-    )
-  ).rows[0].id;
+  const conversationId =
+    existingConversation.rows[0]?.id ??
+    (
+      await client.query(
+        `INSERT INTO conversations (application_id,provider,status) VALUES ($1,'apichat','pendiente') RETURNING id`,
+        [application.id]
+      )
+    ).rows[0].id;
   const message = renderCvRequestMessage(
     application.full_name,
     application.position_title,
     application.whatsapp_message,
-    application.global_whatsapp_message,
+    application.global_whatsapp_message
   );
   const inserted = await client.query<MessageRecord>(
     `INSERT INTO conversation_messages (conversation_id,direction,message_type,body,message_key,delivery_status)
      VALUES ($1,'outbound','text',$2,$3,'pending')
      ON CONFLICT (message_key) DO NOTHING
      RETURNING id,delivery_status`,
-    [conversationId, message, cvRequestMessageKey(application.id)],
+    [conversationId, message, cvRequestMessageKey(application.id)]
   );
   if (inserted.rows[0]) return { ...inserted.rows[0], created: true };
   const existing = await client.query<MessageRecord>(
     `SELECT id,delivery_status FROM conversation_messages WHERE message_key=$1 LIMIT 1`,
-    [cvRequestMessageKey(application.id)],
+    [cvRequestMessageKey(application.id)]
   );
   return existing.rows[0] ? { ...existing.rows[0], created: false } : null;
 }
 
 function safeDeliveryError(error: unknown) {
-  return (error instanceof Error ? error.message : "No fue posible enviar el mensaje por ApiChat.").slice(0, 1000);
+  return (
+    error instanceof Error
+      ? error.message
+      : "No fue posible enviar el mensaje por ApiChat."
+  ).slice(0, 1000);
 }
 
-export async function deliverCvRequestMessage(pool: Pool, messageId: number): Promise<CvRequestDelivery> {
+export async function deliverCvRequestMessage(
+  pool: Pool,
+  messageId: number
+): Promise<CvRequestDelivery> {
   const claimed = await pool.query<{
     id: number;
     body: string;
@@ -81,19 +94,25 @@ export async function deliverCvRequestMessage(pool: Pool, messageId: number): Pr
         AND cm.direction='outbound'
         AND (cm.delivery_status IN ('pending','failed') OR (cm.delivery_status='sending' AND cm.updated_at < now() - interval '2 minutes'))
       RETURNING cm.id,cm.body,a.id AS application_id,c.phone_international`,
-    [messageId],
+    [messageId]
   );
   const message = claimed.rows[0];
   if (!message) {
-    const current = await pool.query<{ delivery_status: string; last_error: string | null }>(
+    const current = await pool.query<{
+      delivery_status: string;
+      last_error: string | null;
+    }>(
       `SELECT delivery_status,last_error FROM conversation_messages WHERE id=$1`,
-      [messageId],
+      [messageId]
     );
-    if (current.rows[0]?.delivery_status === "sent") return { status: "already_sent" };
+    if (current.rows[0]?.delivery_status === "sent")
+      return { status: "already_sent" };
     if (current.rows[0]?.delivery_status === "unknown") {
       return {
         status: "unknown",
-        error: current.rows[0].last_error || "ApiChat recibió la solicitud, pero no fue posible confirmar el resultado.",
+        error:
+          current.rows[0].last_error ||
+          "ApiChat recibió la solicitud, pero no fue posible confirmar el resultado.",
       };
     }
     return { status: "in_progress" };
@@ -101,16 +120,23 @@ export async function deliverCvRequestMessage(pool: Pool, messageId: number): Pr
 
   let result: Awaited<ReturnType<typeof sendApiChatText>>;
   try {
-    result = await sendApiChatText({ phoneInternational: message.phone_international, message: message.body });
+    const apiChat = await getApiChatRuntimeSettings(pool);
+    result = await sendApiChatText(
+      {
+        phoneInternational: message.phone_international,
+        message: message.body,
+      },
+      apiChat
+    );
   } catch (error) {
     const safeError = safeDeliveryError(error);
     await pool.query(
       `UPDATE conversation_messages SET delivery_status='failed',last_error=$1,updated_at=now() WHERE id=$2`,
-      [safeError, message.id],
+      [safeError, message.id]
     );
     await pool.query(
       `UPDATE applications SET whatsapp_status='error',last_whatsapp_error=$1,updated_at=now() WHERE id=$2`,
-      [safeError, message.application_id],
+      [safeError, message.application_id]
     );
     return { status: "failed", error: safeError };
   }
@@ -124,16 +150,16 @@ export async function deliverCvRequestMessage(pool: Pool, messageId: number): Pr
             SET delivery_status='sent',provider_message_id=$1,last_error=NULL,sent_at=now(),updated_at=now(),
                 metadata=jsonb_build_object('provider','apichat','statusCode',$2)
           WHERE id=$3`,
-        [result.providerMessageId, result.statusCode, message.id],
+        [result.providerMessageId, result.statusCode, message.id]
       );
       await client.query(
         `UPDATE conversations SET status='activo',last_message_at=now(),updated_at=now()
           WHERE id=(SELECT conversation_id FROM conversation_messages WHERE id=$1)`,
-        [message.id],
+        [message.id]
       );
       await client.query(
         `UPDATE applications SET whatsapp_status='enviado',last_whatsapp_error=NULL,updated_at=now() WHERE id=$1`,
-        [message.application_id],
+        [message.application_id]
       );
       await client.query("COMMIT");
     } catch (error) {
@@ -144,15 +170,16 @@ export async function deliverCvRequestMessage(pool: Pool, messageId: number): Pr
     }
     return { status: "sent", providerMessageId: result.providerMessageId };
   } catch {
-    const safeError = "ApiChat aceptó la solicitud, pero no fue posible confirmar el registro local. Verifique el WhatsApp antes de intentar otro envío.";
+    const safeError =
+      "ApiChat aceptó la solicitud, pero no fue posible confirmar el registro local. Verifique el WhatsApp antes de intentar otro envío.";
     try {
       await pool.query(
         `UPDATE conversation_messages SET delivery_status='unknown',last_error=$1,updated_at=now() WHERE id=$2`,
-        [safeError, message.id],
+        [safeError, message.id]
       );
       await pool.query(
         `UPDATE applications SET whatsapp_status='desconocido',last_whatsapp_error=$1,updated_at=now() WHERE id=$2`,
-        [safeError, message.application_id],
+        [safeError, message.application_id]
       );
     } catch {
       // ApiChat may already have delivered the message. Never turn this into an automatic retry.
