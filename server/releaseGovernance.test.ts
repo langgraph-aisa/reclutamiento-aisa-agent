@@ -58,8 +58,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.131");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.131");
+    expect(APP_VERSION).toBe("2.0.132");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.132");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -501,7 +501,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.131");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.132");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -510,7 +510,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.131");
+    expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.132");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.129");
     expect(readme).toContain("Vista 360° del Candidato");
     expect(readme).toContain("tres tarjetas en escritorio");

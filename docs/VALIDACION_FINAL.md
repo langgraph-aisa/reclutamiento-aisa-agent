@@ -1,18 +1,18 @@
-# Validación final · JARVI RH 2.0.131
+# Validación final · JARVI RH 2.0.132
 
 Fecha de ejecución: 2026-09-11. Rama objetivo: `main`.
 
 ## Alcance verificado
 
-Esta hoja registra la migración al SDK modular de Langfuse 5.11.1 y OpenTelemetry, la inicialización previa al tráfico, instrumentación de flujos cognitivos y servicios, redacción, seudonimización, rotación en vivo, verificación diagnóstica y cierre ordenado. Las capacidades de 2.0.130 permanecen bajo regresión. Los casos observables están especificados en [PRUEBAS_CAJA_NEGRA_2.0.131.md](PRUEBAS_CAJA_NEGRA_2.0.131.md) y el protocolo operacional en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md).
+Esta hoja registra la migración al SDK modular de Langfuse 5.11.1 y OpenTelemetry, la inicialización previa al tráfico, instrumentación de flujos cognitivos y servicios, redacción, seudonimización, rotación en vivo, verificación diagnóstica y cierre ordenado. Las capacidades de 2.0.130 permanecen bajo regresión. Los casos observables están especificados en [PRUEBAS_CAJA_NEGRA_2.0.132.md](PRUEBAS_CAJA_NEGRA_2.0.132.md) y el protocolo operacional en [OBSERVABILIDAD_LANGFUSE_2.0.132.md](OBSERVABILIDAD_LANGFUSE_2.0.132.md).
 
 ## Evidencia automatizada
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.131` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.132` |
 | Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 89 archivos        |
-| Próxima versión (`pnpm release:bump -- --dry-run`) | Pendiente · debe indicar `2.0.131 → 2.0.132` |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Pendiente · debe indicar `2.0.132 → 2.0.132` |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 10 de 10 pruebas   |
 | Regresión Vitest (`pnpm test`)                     | Aprobado · 143 de 143 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |

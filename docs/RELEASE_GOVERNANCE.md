@@ -1,16 +1,16 @@
-# Gobierno de release JARVI RH 2.0.131
+# Gobierno de release JARVI RH 2.0.132
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.131**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.132**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-### Alcance candidato 2.0.131
+### Alcance candidato 2.0.132
 
 El release candidato incorpora observabilidad en vivo mediante el SDK modular de Langfuse 5.11.1 y OpenTelemetry 0.222.0. La instrumentación cubre evaluación LangGraph, generaciones OpenAI, edición asistida, ApiChat, solicitud de currículum, bandeja y audio; aplica seudonimización, redacción previa a exportación, muestreo, rotación inmediata y cierre ordenado. Las capacidades de 2.0.130 permanecen bajo regresión.
 
 El alcance no incluye todavía descarga productiva de medios ApiChat, bucket, antivirus, previsualización de PDF/Word/audio, ejecución adaptativa completa de pruebas, validación psicométrica ni ingestión de despliegues e incidentes para calcular DORA. La actividad usa sondeo de cuatro o cinco segundos según la vista, no streaming. Los resúmenes de actividad son deterministas aunque exista un selector reservado para un modelo futuro. El workflow 04 debe importarse, recibir su Header Auth interno y activarse antes de que la URL n8n configurada acepte el sobre `messages` de ApiChat.
 
-El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.131 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.132.
+El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.132.md](OBSERVABILIDAD_LANGFUSE_2.0.132.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.132 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.132.
 
 La versión 2.0.129 convirtió Configuración > WhatsApp en el almacén operativo de ApiChat. `integration_settings` conserva preferencias y secretos cifrados; el cliente recibe únicamente estado y máscara. `cvRequest.ts` obtiene la configuración mediante `getApiChatRuntimeSettings` después de confirmar la transacción y `apichat.ts` ya no consulta el entorno. La ruta genérica de configuración queda limitada al proveedor no secreto `recruitment`.
 
@@ -134,4 +134,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.131.md](PRUEBAS_CAJA_NEGRA_2.0.131.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.132.md](PRUEBAS_CAJA_NEGRA_2.0.132.md).

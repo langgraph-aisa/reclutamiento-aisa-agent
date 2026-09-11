@@ -168,12 +168,21 @@
   color: #a78bfa !important;
 }
 
-.dark :where(.text-amber-700, .text-amber-800, .text-amber-900) {
+.dark :where(.text-amber-700, .text-amber-800, .text-amber-900, .text-amber-950) {
   color: #f2b84b !important;
 }
 
-.dark :where(.text-red-600, .text-red-700, .text-red-800, .text-rose-800) {
-  color: #ff6b6b !important;
+.dark
+  :where(
+    .text-red-600,
+    .text-red-700,
+    .text-red-800,
+    .text-red-900,
+    .text-red-950,
+    .text-rose-800,
+    .text-rose-900
+  ) {
+  color: #f2b84b !important;
 }
 
 .dark :where(.text-slate-800, .text-slate-950) {

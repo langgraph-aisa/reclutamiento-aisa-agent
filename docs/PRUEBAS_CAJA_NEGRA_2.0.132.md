@@ -1,8 +1,8 @@
-# Pruebas de caja negra · JARVI RH 2.0.131
+# Pruebas de caja negra · JARVI RH 2.0.132
 
 ## Alcance del cambio
 
-La especificación candidata de 2.0.131 cubre observabilidad Langfuse en vivo sobre OpenTelemetry, instrumentación de LangGraph/OpenAI y servicios, redacción, seudonimización, rotación, verificación diagnóstica y cierre ordenado. Actividad, bandeja ApiChat, gobierno cognitivo, coherencia editorial, Revisión Humana 360°, tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general. Los casos describen resultados observables; no certifican ISO/DORA ni validez psicométrica.
+La especificación candidata de 2.0.132 cubre observabilidad Langfuse en vivo sobre OpenTelemetry, instrumentación de LangGraph/OpenAI y servicios, redacción, seudonimización, rotación, verificación diagnóstica y cierre ordenado. Actividad, bandeja ApiChat, gobierno cognitivo, coherencia editorial, Revisión Humana 360°, tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general. Los casos describen resultados observables; no certifican ISO/DORA ni validez psicométrica.
 
 ## Matriz funcional observable
 
@@ -147,7 +147,7 @@ La especificación candidata de 2.0.131 cubre observabilidad Langfuse en vivo so
 | BN-LF-10    | Árbol instrumentado con evaluación y generación        | Inspeccionar relaciones padre-hijo                 | La llamada de modelo permanece bajo la ejecución y nodo correspondientes, sin doble contabilización                 | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
 | BN-MIG-14   | Esquema anterior y migración `0014` pendiente           | Ejecutar una o más veces                           | Columnas, tablas, restricciones, índices y filas iniciales quedan disponibles sin insertar secretos ni eliminar datos | ISO 22301:2019 · recuperabilidad           |
 | BN-ROLL-01  | `0014` aplicada y fallo del nuevo artefacto             | Replegar versión anterior                          | La aplicación anterior puede operar ignorando la expansión; las tablas nuevas se conservan para análisis y rollback | ISO 22301:2019 · continuidad              |
-| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.131`                                  | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
+| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.132`                                  | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
 
 ## Pruebas automatizadas
 
