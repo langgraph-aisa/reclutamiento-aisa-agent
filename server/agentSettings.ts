@@ -8,6 +8,9 @@ import type { Pool, PoolClient } from "pg";
 import {
   AGENT_MODELS,
   DEFAULT_AGENT_SETTINGS,
+  OPENAI_TRANSCRIPTION_MODELS,
+  OPENAI_TTS_MODELS,
+  OPENAI_TTS_VOICES,
   type AgentPreferences,
 } from "../shared/agentConfig";
 
@@ -24,6 +27,13 @@ export type AgentSecretKey = (typeof AGENT_SECRET_KEYS)[number];
 
 const preferenceKeys = {
   model: "model",
+  psychometricModel: "psychometric_model",
+  activitySummaryModel: "activity_summary_model",
+  transcriptionModel: "transcription_model",
+  ttsModel: "tts_model",
+  ttsVoice: "tts_voice",
+  audioMaxMb: "audio_max_mb",
+  documentMaxMb: "document_max_mb",
   instructions: "instructions",
   summaryWordLimit: "summary_word_limit",
   useMethodologies: "use_methodologies",
@@ -42,47 +52,115 @@ type SettingRow = {
 
 type Queryable = Pick<Pool, "query"> | Pick<PoolClient, "query">;
 
-function encryptionMaterials() {
-  const materials = [
-    process.env.AGENT_SETTINGS_ENCRYPTION_KEY?.trim(),
-    process.env.JWT_SECRET?.trim(),
-    process.env.DATABASE_URL?.trim(),
-  ].filter((material): material is string => Boolean(material));
-  const uniqueMaterials = Array.from(new Set(materials));
-  if (uniqueMaterials.length === 0) {
-    throw new Error(
-      "No existe una fuente estable para cifrar credenciales. Configure AGENT_SETTINGS_ENCRYPTION_KEY, JWT_SECRET o DATABASE_URL."
-    );
-  }
-  return uniqueMaterials.map(material =>
-    createHash("sha256").update(material).digest()
-  );
+const MINIMUM_PRODUCTION_ENCRYPTION_KEY_BYTES = 32;
+
+function environmentMaterial(value: string | undefined) {
+  return value?.trim() || null;
 }
 
-export function encryptAgentSecret(value: string) {
+function encryptionMaterial(value: string) {
+  const key = createHash("sha256").update(value).digest();
+  return {
+    key,
+    id: createHash("sha256").update(key).digest("base64url").slice(0, 12),
+  };
+}
+
+function dedicatedEncryptionMaterial() {
+  const value = environmentMaterial(
+    process.env.AGENT_SETTINGS_ENCRYPTION_KEY
+  );
+  if (!value) {
+    throw new Error(
+      "No existe una clave dedicada para cifrar credenciales. Configure AGENT_SETTINGS_ENCRYPTION_KEY."
+    );
+  }
+  if (
+    process.env.NODE_ENV === "production" &&
+    Buffer.byteLength(value, "utf8") < MINIMUM_PRODUCTION_ENCRYPTION_KEY_BYTES
+  ) {
+    throw new Error(
+      `AGENT_SETTINGS_ENCRYPTION_KEY debe contener al menos ${MINIMUM_PRODUCTION_ENCRYPTION_KEY_BYTES} bytes UTF-8 en producción.`
+    );
+  }
+  return encryptionMaterial(value);
+}
+
+function decryptionMaterials() {
+  const dedicated = environmentMaterial(
+    process.env.AGENT_SETTINGS_ENCRYPTION_KEY
+  );
+  if (process.env.NODE_ENV === "production") {
+    // La lectura también falla cerrada si la raíz dedicada de producción falta
+    // o no alcanza el mínimo; los materiales heredados nunca la sustituyen.
+    dedicatedEncryptionMaterial();
+  }
+  const values = [
+    dedicated,
+    environmentMaterial(process.env.JWT_SECRET),
+    environmentMaterial(process.env.DATABASE_URL),
+  ].filter((material): material is string => Boolean(material));
+  const uniqueValues = Array.from(new Set(values));
+  if (uniqueValues.length === 0) {
+    throw new Error(
+      "No existe material disponible para descifrar la credencial almacenada."
+    );
+  }
+  return uniqueValues.map(encryptionMaterial);
+}
+
+export function integrationSecretContext(provider: string, key: string) {
+  return `${provider.trim().toLowerCase()}:${key.trim().toLowerCase()}`;
+}
+
+export function isEncryptedAgentSecret(value: string) {
+  return value.startsWith("enc:v1:") || value.startsWith("enc:v2:");
+}
+
+export function encryptAgentSecret(
+  value: string,
+  context = "integration:unscoped"
+) {
   const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", encryptionMaterials()[0], iv);
+  const material = dedicatedEncryptionMaterial();
+  const cipher = createCipheriv("aes-256-gcm", material.key, iv);
+  cipher.setAAD(Buffer.from(context, "utf8"));
   const encrypted = Buffer.concat([
     cipher.update(value, "utf8"),
     cipher.final(),
   ]);
   const tag = cipher.getAuthTag();
-  return `enc:v1:${iv.toString("base64url")}:${tag.toString("base64url")}:${encrypted.toString("base64url")}`;
+  return `enc:v2:${material.id}:${iv.toString("base64url")}:${tag.toString("base64url")}:${encrypted.toString("base64url")}`;
 }
 
-export function decryptAgentSecret(value: string) {
-  if (!value.startsWith("enc:v1:")) return value;
-  const [, , ivValue, tagValue, encryptedValue] = value.split(":");
+export function decryptAgentSecret(
+  value: string,
+  context = "integration:unscoped"
+) {
+  if (!isEncryptedAgentSecret(value)) {
+    throw new Error(
+      "La credencial debe utilizar el formato cifrado administrado por el servidor."
+    );
+  }
+  const parts = value.split(":");
+  const version = parts[1];
+  const keyId = version === "v2" ? parts[2] : null;
+  const offset = version === "v2" ? 3 : 2;
+  const [ivValue, tagValue, encryptedValue] = parts.slice(offset);
   if (!ivValue || !tagValue || !encryptedValue) {
     throw new Error("La credencial cifrada no tiene un formato válido.");
   }
-  for (const material of encryptionMaterials()) {
+  for (const material of decryptionMaterials()) {
+    if (keyId && material.id !== keyId) continue;
     try {
       const decipher = createDecipheriv(
         "aes-256-gcm",
-        material,
+        material.key,
         Buffer.from(ivValue, "base64url")
       );
+      if (version === "v2") {
+        decipher.setAAD(Buffer.from(context, "utf8"));
+      }
       decipher.setAuthTag(Buffer.from(tagValue, "base64url"));
       return Buffer.concat([
         decipher.update(Buffer.from(encryptedValue, "base64url")),
@@ -129,12 +207,44 @@ function settingMap(rows: SettingRow[]) {
 
 function preferencesFromRows(rows: SettingRow[]): AgentPreferences {
   const values = settingMap(rows);
-  const configuredModel = values.get(preferenceKeys.model);
-  const model = AGENT_MODELS.some(item => item.value === configuredModel)
-    ? (configuredModel as AgentPreferences["model"])
-    : DEFAULT_AGENT_SETTINGS.model;
+  const agentModel = (
+    key: "model" | "psychometricModel" | "activitySummaryModel"
+  ) => {
+    const configured = values.get(preferenceKeys[key]);
+    return AGENT_MODELS.some(item => item.value === configured)
+      ? (configured as AgentPreferences[typeof key])
+      : DEFAULT_AGENT_SETTINGS[key];
+  };
+  const configuredTranscription = values.get(
+    preferenceKeys.transcriptionModel
+  );
+  const configuredTts = values.get(preferenceKeys.ttsModel);
+  const configuredVoice = values.get(preferenceKeys.ttsVoice);
   return {
-    model,
+    model: agentModel("model"),
+    psychometricModel: agentModel("psychometricModel"),
+    activitySummaryModel: agentModel("activitySummaryModel"),
+    transcriptionModel: OPENAI_TRANSCRIPTION_MODELS.some(
+      item => item.value === configuredTranscription
+    )
+      ? (configuredTranscription as AgentPreferences["transcriptionModel"])
+      : DEFAULT_AGENT_SETTINGS.transcriptionModel,
+    ttsModel: OPENAI_TTS_MODELS.some(item => item.value === configuredTts)
+      ? (configuredTts as AgentPreferences["ttsModel"])
+      : DEFAULT_AGENT_SETTINGS.ttsModel,
+    ttsVoice: OPENAI_TTS_VOICES.includes(
+      configuredVoice as AgentPreferences["ttsVoice"]
+    )
+      ? (configuredVoice as AgentPreferences["ttsVoice"])
+      : DEFAULT_AGENT_SETTINGS.ttsVoice,
+    audioMaxMb: intValue(
+      values.get(preferenceKeys.audioMaxMb),
+      DEFAULT_AGENT_SETTINGS.audioMaxMb
+    ),
+    documentMaxMb: intValue(
+      values.get(preferenceKeys.documentMaxMb),
+      DEFAULT_AGENT_SETTINGS.documentMaxMb
+    ),
     instructions:
       values.get(preferenceKeys.instructions) ??
       DEFAULT_AGENT_SETTINGS.instructions,
@@ -163,15 +273,21 @@ function preferencesFromRows(rows: SettingRow[]): AgentPreferences {
 }
 
 function secretState(rows: SettingRow[], key: AgentSecretKey) {
-  const stored = rows.find(row => row.setting_key === key)?.setting_value;
+  const row = rows.find(candidate => candidate.setting_key === key);
+  const stored = row?.setting_value;
   if (!stored) return { configured: false, masked: null as string | null };
+  if (!row?.is_secret || !isEncryptedAgentSecret(stored)) {
+    return { configured: false, masked: null as string | null };
+  }
   try {
     return {
       configured: true,
-      masked: maskAgentSecret(decryptAgentSecret(stored)),
+      masked: maskAgentSecret(
+        decryptAgentSecret(stored, integrationSecretContext(AGENT_PROVIDER, key))
+      ),
     };
   } catch {
-    return { configured: true, masked: "••••••••" };
+    return { configured: false, masked: null as string | null };
   }
 }
 
@@ -210,8 +326,21 @@ export async function getAgentRuntimeSettings(pool: Pool) {
   const values = settingMap(rows);
   const secrets = Object.fromEntries(
     AGENT_SECRET_KEYS.map(key => {
-      const stored = values.get(key);
-      return [key, stored ? decryptAgentSecret(stored) : null];
+      const row = rows.find(candidate => candidate.setting_key === key);
+      const stored = row?.setting_value;
+      if (!stored) return [key, null];
+      if (!row?.is_secret || !isEncryptedAgentSecret(stored)) {
+        throw new Error(
+          `La credencial ${key} debe rotarse desde el módulo seguro antes de utilizarse.`
+        );
+      }
+      return [
+        key,
+        decryptAgentSecret(
+          stored,
+          integrationSecretContext(AGENT_PROVIDER, key)
+        ),
+      ];
     })
   ) as Record<AgentSecretKey, string | null>;
   return { ...preferencesFromRows(rows), secrets };
@@ -245,6 +374,13 @@ export async function saveAgentPreferences(
     await client.query("BEGIN");
     const entries: Array<[string, string]> = [
       [preferenceKeys.model, preferences.model],
+      [preferenceKeys.psychometricModel, preferences.psychometricModel],
+      [preferenceKeys.activitySummaryModel, preferences.activitySummaryModel],
+      [preferenceKeys.transcriptionModel, preferences.transcriptionModel],
+      [preferenceKeys.ttsModel, preferences.ttsModel],
+      [preferenceKeys.ttsVoice, preferences.ttsVoice],
+      [preferenceKeys.audioMaxMb, String(preferences.audioMaxMb)],
+      [preferenceKeys.documentMaxMb, String(preferences.documentMaxMb)],
       [preferenceKeys.instructions, preferences.instructions],
       [preferenceKeys.summaryWordLimit, String(preferences.summaryWordLimit)],
       [preferenceKeys.useMethodologies, String(preferences.useMethodologies)],
@@ -267,6 +403,13 @@ export async function saveAgentPreferences(
         actorUserId,
         JSON.stringify({
           model: preferences.model,
+          psychometricModel: preferences.psychometricModel,
+          activitySummaryModel: preferences.activitySummaryModel,
+          transcriptionModel: preferences.transcriptionModel,
+          ttsModel: preferences.ttsModel,
+          ttsVoice: preferences.ttsVoice,
+          audioMaxMb: preferences.audioMaxMb,
+          documentMaxMb: preferences.documentMaxMb,
           summaryWordLimit: preferences.summaryWordLimit,
           useMethodologies: preferences.useMethodologies,
           useResponsesApi: preferences.useResponsesApi,
@@ -293,7 +436,15 @@ export async function saveAgentSecret(
   try {
     await client.query("BEGIN");
     if (value) {
-      await upsertSetting(client, key, encryptAgentSecret(value.trim()), true);
+      await upsertSetting(
+        client,
+        key,
+        encryptAgentSecret(
+          value.trim(),
+          integrationSecretContext(AGENT_PROVIDER, key)
+        ),
+        true
+      );
     } else {
       await client.query(
         `DELETE FROM integration_settings WHERE provider=$1 AND setting_key=$2`,

@@ -1,6 +1,11 @@
 import type { Pool, PoolClient } from "pg";
-import { renderCvRequestMessage, sendApiChatText } from "./apichat";
+import {
+  ApiChatDeliveryUnknownError,
+  renderCvRequestMessage,
+  sendApiChatText,
+} from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
+import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
 
 type ApplicationContact = {
   id: number;
@@ -33,6 +38,18 @@ export async function ensureCvRequestMessage(
   client: PoolClient,
   application: ApplicationContact
 ) {
+  const message = renderCvRequestMessage(
+    application.full_name,
+    application.position_title,
+    application.whatsapp_message,
+    application.global_whatsapp_message
+  );
+  assertNoAutomatedSalaryOffer(message);
+  // Serializa la creación por teléfono para que el receptor entrante pueda
+  // volver a comprobar de forma unívoca la conversación dentro de su tx.
+  await client.query(`SELECT pg_advisory_xact_lock(130, hashtext($1))`, [
+    application.phone_international,
+  ]);
   const existingConversation = await client.query(
     `SELECT id FROM conversations WHERE application_id=$1 AND provider='apichat' ORDER BY id LIMIT 1`,
     [application.id]
@@ -45,12 +62,6 @@ export async function ensureCvRequestMessage(
         [application.id]
       )
     ).rows[0].id;
-  const message = renderCvRequestMessage(
-    application.full_name,
-    application.position_title,
-    application.whatsapp_message,
-    application.global_whatsapp_message
-  );
   const inserted = await client.query<MessageRecord>(
     `INSERT INTO conversation_messages (conversation_id,direction,message_type,body,message_key,delivery_status)
      VALUES ($1,'outbound','text',$2,$3,'pending')
@@ -120,6 +131,7 @@ export async function deliverCvRequestMessage(
 
   let result: Awaited<ReturnType<typeof sendApiChatText>>;
   try {
+    assertNoAutomatedSalaryOffer(message.body);
     const apiChat = await getApiChatRuntimeSettings(pool);
     result = await sendApiChatText(
       {
@@ -130,6 +142,17 @@ export async function deliverCvRequestMessage(
     );
   } catch (error) {
     const safeError = safeDeliveryError(error);
+    if (error instanceof ApiChatDeliveryUnknownError) {
+      await pool.query(
+        `UPDATE conversation_messages SET delivery_status='unknown',last_error=$1,updated_at=now() WHERE id=$2`,
+        [safeError, message.id]
+      );
+      await pool.query(
+        `UPDATE applications SET whatsapp_status='desconocido',last_whatsapp_error=$1,updated_at=now() WHERE id=$2`,
+        [safeError, message.application_id]
+      );
+      return { status: "unknown", error: safeError };
+    }
     await pool.query(
       `UPDATE conversation_messages SET delivery_status='failed',last_error=$1,updated_at=now() WHERE id=$2`,
       [safeError, message.id]

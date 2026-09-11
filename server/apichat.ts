@@ -23,6 +23,17 @@ export type ApiChatSendResult = {
   statusCode: number;
 };
 
+/**
+ * The request may have reached ApiChat even though no response was received.
+ * Callers must not retry these failures automatically.
+ */
+export class ApiChatDeliveryUnknownError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApiChatDeliveryUnknownError";
+  }
+}
+
 export function renderCvRequestMessage(
   fullName: string | null | undefined,
   positionTitle: string | null | undefined,
@@ -92,12 +103,9 @@ export function validateApiChatConfig(input: ApiChatConfig): ApiChatConfig {
   if (mode === "native" && !clientId) {
     throw new Error("ApiChat no está configurado: falta el Client ID.");
   }
-  if (
-    mode === "native" &&
-    endpoint.hostname.toLowerCase() !== "api.apichat.io"
-  ) {
+  if (endpoint.hostname.toLowerCase() !== "api.apichat.io") {
     throw new Error(
-      "ApiChat no está configurado: la API nativa debe utilizar el dominio oficial api.apichat.io."
+      "ApiChat no está configurado: el endpoint debe utilizar el dominio oficial api.apichat.io."
     );
   }
   if (
@@ -201,9 +209,13 @@ export async function sendApiChatText(
       error instanceof Error &&
       (error.name === "TimeoutError" || error.name === "AbortError")
     ) {
-      throw new Error("ApiChat no respondió dentro del tiempo permitido.");
+      throw new ApiChatDeliveryUnknownError(
+        "ApiChat no respondió dentro del tiempo permitido; verifique la conversación antes de reintentar."
+      );
     }
-    throw new Error("No fue posible establecer conexión con ApiChat.");
+    throw new ApiChatDeliveryUnknownError(
+      "No fue posible confirmar la entrega con ApiChat; verifique la conversación antes de reintentar."
+    );
   }
 
   const rawBody = await response.text();
@@ -226,4 +238,66 @@ export async function sendApiChatText(
     providerMessageId: providerMessageId(payload),
     statusCode: response.status,
   };
+}
+
+export async function verifyApiChatInboundText(
+  input: {
+    providerMessageId: string;
+    phoneInternational: string;
+    text: string;
+  },
+  configInput: ApiChatConfig,
+  options: { fetchImpl?: typeof fetch; timeoutMs?: number } = {}
+) {
+  const config = validateApiChatConfig(configInput);
+  if (config.mode !== "native") {
+    throw new Error(
+      "La verificación de mensajes entrantes exige el modo nativo de ApiChat."
+    );
+  }
+  const url = new URL("/v1/messages", config.endpoint);
+  url.searchParams.set("messageId", input.providerMessageId);
+  url.searchParams.set("number", input.phoneInternational.replace(/\D/g, ""));
+  url.searchParams.set("fromMe", "false");
+  url.searchParams.set("limit", "1");
+  let response: Response;
+  try {
+    response = await (options.fetchImpl ?? fetch)(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "client-id": config.clientId!,
+        token: config.token,
+      },
+      signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+    });
+  } catch {
+    throw new Error(
+      "No fue posible verificar el mensaje entrante con ApiChat."
+    );
+  }
+  if (!response.ok) {
+    throw new Error(
+      `ApiChat rechazó la verificación entrante con código HTTP ${response.status}.`
+    );
+  }
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if (!Array.isArray(payload)) return false;
+  const expectedPhone = input.phoneInternational.replace(/\D/g, "");
+  return payload.some(record => {
+    if (!record || typeof record !== "object") return false;
+    const container = record as Record<string, unknown>;
+    const message =
+      container.message && typeof container.message === "object"
+        ? (container.message as Record<string, unknown>)
+        : container;
+    const fromMe = message.from_me ?? container.from_me;
+    return (
+      String(message.id ?? "") === input.providerMessageId &&
+      String(message.type ?? "") === "text" &&
+      fromMe === false &&
+      String(message.number ?? "").replace(/\D/g, "") === expectedPhone &&
+      String(message.text ?? "").trim() === input.text.trim()
+    );
+  });
 }

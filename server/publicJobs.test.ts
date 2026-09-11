@@ -214,7 +214,13 @@ describe("jobs.setPublished profile readiness", () => {
       "La plaza requiere un perfil activo con objetivo, responsabilidades y requisitos obligatorios antes de publicarse."
     );
 
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(String(query.mock.calls[0]?.[0])).toContain(
+      "SELECT profile.id AS profile_id"
+    );
+    expect(String(query.mock.calls[1]?.[0])).toContain(
+      "INSERT INTO admin_activity_events"
+    );
   });
 
   it("publishes the position when its active profile is complete", async () => {

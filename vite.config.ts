@@ -32,7 +32,7 @@ function gitOutput(args: string[], fallback: string) {
 function githubSyncPercentage() {
   const divergence = gitOutput(
     ["rev-list", "--left-right", "--count", "HEAD...origin/main"],
-    "0 0"
+    ""
   )
     .split(/\s+/)
     .map(Number);
@@ -40,7 +40,7 @@ function githubSyncPercentage() {
     divergence.length !== 2 ||
     divergence.some(value => !Number.isFinite(value))
   ) {
-    return 100;
+    return 0;
   }
   return Math.max(0, 100 - Math.min(100, (divergence[0] + divergence[1]) * 10));
 }

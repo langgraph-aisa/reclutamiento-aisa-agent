@@ -1,10 +1,18 @@
-# Gobierno de release JARVI RH 2.0.129
+# Gobierno de release JARVI RH 2.0.130
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.129**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.130**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-La versión 2.0.129 convierte Configuración > WhatsApp en el almacén operativo de ApiChat. `integration_settings` conserva preferencias y secretos cifrados; el cliente recibe únicamente estado y máscara. `cvRequest.ts` obtiene la configuración mediante `getApiChatRuntimeSettings` después de confirmar la transacción y `apichat.ts` ya no consulta el entorno. La ruta genérica de configuración queda limitada al proveedor no secreto `recruitment`.
+### Alcance candidato 2.0.130
+
+El release candidato agrega actividad administrativa transversal con drilldown diario, navegación colapsable persistente, bandeja ApiChat, receptor normalizado de texto, asignación de JARVI HR, protocolos de evaluación versionados, política salarial inalterable y configuración especializada para transcripción y TTS. La migración expansiva `0014_cognitive_governance.sql` incorpora persistencia e índices sin eliminar datos existentes.
+
+El alcance no incluye todavía descarga productiva de medios ApiChat, bucket, antivirus, previsualización de PDF/Word/audio, ejecución adaptativa completa de pruebas, validación psicométrica ni ingestión de despliegues e incidentes para calcular DORA. La actividad usa sondeo de cuatro o cinco segundos según la vista, no streaming. Los resúmenes de actividad son deterministas aunque exista un selector reservado para un modelo futuro. El workflow 04 debe importarse, recibir su Header Auth interno y activarse antes de que la URL n8n configurada acepte el sobre `messages` de ApiChat.
+
+El análisis, protocolo de despliegue, rollback y query inicial sin secretos se documentan en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.130 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.131.
+
+La versión 2.0.129 convirtió Configuración > WhatsApp en el almacén operativo de ApiChat. `integration_settings` conserva preferencias y secretos cifrados; el cliente recibe únicamente estado y máscara. `cvRequest.ts` obtiene la configuración mediante `getApiChatRuntimeSettings` después de confirmar la transacción y `apichat.ts` ya no consulta el entorno. La ruta genérica de configuración queda limitada al proveedor no secreto `recruitment`.
 
 Client ID, token e ID de cuenta se cifran con AES-256-GCM y autenticación antes de persistirse. Cada rotación o eliminación registra clave y estado en `audit_log`, nunca el valor. Una fila histórica en texto plano se rechaza y exige rotación desde el módulo seguro. La verificación nativa ejecuta `GET /v1/status`, no envía mensajes y descarta cualquier contenido QR antes de responder al navegador.
 
@@ -85,17 +93,29 @@ La corrección 2.0.116 eliminó `@theme inline`: esa directiva había convertido
 | Adaptador LangChain OpenAI |            1.5.11 | `package.json` y `pnpm-lock.yaml`                 |
 | OpenAI SDK para JavaScript |            7.13.0 | `package.json` y `pnpm-lock.yaml`                 |
 | OpenAI Responses API       |    `v1/responses` | Uso estructurado desde `server/agentEvaluator.ts` |
+| OpenAI Transcriptions API  | `v1/audio/transcriptions` | Servicio aislado en `server/_core/voiceTranscription.ts` |
+| OpenAI Speech API          | `v1/audio/speech` | Servicio aislado en `server/_core/voiceTranscription.ts` |
 | Modelo editorial           |      GPT-4.1 mini | Snapshot `gpt-4.1-mini-2025-04-14`                |
+| Modelo de transcripción inicial | `gpt-4o-mini-transcribe` | Preferencia en PostgreSQL; flujo ApiChat de medios pendiente |
+| Modelo TTS inicial         | `gpt-4o-mini-tts` | Voz `coral`; integración productiva con bandeja pendiente |
 
-La Responses API crea respuestas de modelo mediante `POST /responses`; el prefijo de servicio usado por el SDK es `/v1`. La API no comparte el versionado semántico del paquete npm, por lo que ambos datos se documentan por separado. Referencias: [Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses) y [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini), documentación oficial de OpenAI.
+La Responses API crea respuestas de modelo mediante `POST /responses`; el prefijo de servicio usado por el SDK es `/v1`. La API no comparte el versionado semántico del paquete npm, por lo que ambos datos se documentan por separado. Referencias oficiales: [Responses API](https://developers.openai.com/api/docs/guides/migrate-to-responses), [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini), [transcripción](https://developers.openai.com/api/reference/cli/resources/audio/subresources/transcriptions/methods/create) y [texto a voz](https://developers.openai.com/api/reference/cli/resources/audio/subresources/speech/methods/create).
 
 ## Referencias de aseguramiento
 
 - [ISO/IEC 25010:2023](https://www.iso.org/standard/78176.html): modelo de calidad del producto; se usa para trazabilidad de adecuación funcional, usabilidad, compatibilidad, fiabilidad, seguridad y mantenibilidad.
 - [ISO/IEC 27001:2022](https://www.iso.org/standard/27001): referencia para gestión de riesgos de información. El tema se guarda como preferencia no sensible y no se introducen tokens GitHub en cliente.
+- [ISO 22301:2019](https://www.iso.org/standard/75106.html): continuidad del negocio; orienta BIA, objetivos de recuperación, planes, ejercicios y mejora.
+- [ISO/IEC 42001:2023](https://www.iso.org/standard/42001): sistema de gestión de IA; orienta autoridad humana, riesgos, impactos, trazabilidad y mejora.
 - [ISO/IEC/IEEE 29119-1:2022](https://www.iso.org/standard/81291.html): conceptos generales de pruebas; cada caso registra condición, estímulo y resultado observable.
+- [Métricas DORA](https://dora.dev/guides/dora-metrics/): tiempo de entrega del cambio, frecuencia de despliegue, tiempo de recuperación de despliegue fallido, tasa de fallos de cambio y tasa de retrabajo de despliegue.
+- [Standards for Educational and Psychological Testing](https://www.testingstandards.net/): evidencia de validez, confiabilidad, equidad y uso previsto de puntuaciones.
 
 Estas normas se aplican como referencias metodológicas. Este documento no afirma certificación ni conformidad evaluada por un organismo acreditado.
+
+DORA se refiere aquí a DevOps Research and Assessment: es un programa de investigación y mejora, no una certificación. El mapa de actividad administrativa y el conteo de commits no son métricas DORA. Para calcular las cinco métricas deben incorporarse eventos confiables de commit, despliegue, fallo, restauración y retrabajo por servicio y ambiente; esa integración queda pendiente. No se evalúa el reglamento financiero europeo que comparte el acrónimo.
+
+Del mismo modo, los protocolos y sus 64 criterios de gobierno no verificados orientan el proceso; no son controles acreditados ni un instrumento psicológico validado. Una prueba de caja negra demuestra el comportamiento cubierto del software; no demuestra validez psicométrica, cumplimiento legal integral ni certificación ISO.
 
 ## Puerta de caja negra
 
@@ -113,4 +133,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.129.md](PRUEBAS_CAJA_NEGRA_2.0.129.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.130.md](PRUEBAS_CAJA_NEGRA_2.0.130.md).

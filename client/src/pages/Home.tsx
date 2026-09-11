@@ -50,6 +50,15 @@ export default function Home() {
   const publishedJobsQuery = trpc.publicJobs.listPublished.useQuery(undefined, {
     enabled: !loading && !user,
   });
+  const recentConversations = trpc.inbox.list.useQuery(
+    { limit: 6 },
+    {
+      enabled: Boolean(user),
+      refetchInterval: 5_000,
+      refetchIntervalInBackground: false,
+      retry: false,
+    }
+  );
   const stats = statsQuery.data ?? emptyStats;
 
   if (loading)
@@ -243,6 +252,50 @@ export default function Home() {
           </Button>
         </Link>
       </div>
+      <Card className="rounded-3xl border-0 shadow-soft">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-xl text-primary">
+              Conversaciones recientes en actividad
+            </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Estado operativo actualizado cada cinco segundos.
+            </p>
+          </div>
+          <Link href="/admin/inbox">
+            <Button variant="outline" className="rounded-full">
+              Abrir bandeja <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {(recentConversations.data ?? []).map(conversation => (
+            <Link
+              key={conversation.id}
+              href={`/admin/inbox?application=${conversation.application_id}`}
+              className="flex min-w-0 items-center gap-3 rounded-2xl border border-border/70 p-3 transition hover:bg-muted/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-800">
+                <MessageCircle className="h-5 w-5" />
+                <span className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-card ${conversation.traffic_light === "verde" ? "bg-emerald-500" : conversation.traffic_light === "amarillo" ? "bg-amber-500" : "bg-red-500"}`} />
+              </span>
+              <span className="min-w-0">
+                <strong className="block truncate text-sm text-primary">
+                  {conversation.full_name ?? "Sin nombre"}
+                </strong>
+                <span className="mt-1 block truncate text-xs text-muted-foreground">
+                  {conversation.position_title} · {conversation.location_municipality ?? "Ubicación pendiente"}
+                </span>
+              </span>
+            </Link>
+          ))}
+          {!recentConversations.isLoading && !recentConversations.data?.length ? (
+            <p className="text-sm text-muted-foreground">
+              Aún no existen conversaciones registradas.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {metrics.map(metric => (
           <Card key={metric.label} className="rounded-3xl border-0 shadow-soft">

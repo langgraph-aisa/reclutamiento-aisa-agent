@@ -7,12 +7,15 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Account from "./pages/Account";
+import ActivityAudit from "./pages/ActivityAudit";
+import Assessments from "./pages/Assessments";
 import AgentEvaluator from "./pages/AgentEvaluator";
 import Apply from "./pages/Apply";
 import Candidates from "./pages/Candidates";
 import Config from "./pages/Config";
 import FormBuilder from "./pages/FormBuilder";
 import Home from "./pages/Home";
+import Inbox from "./pages/Inbox";
 import Jobs from "./pages/Jobs";
 import Login from "./pages/Login";
 import MstEir from "./pages/MstEir";
@@ -59,9 +62,19 @@ function Router() {
           <Jobs />
         </AdminShell>
       </Route>
+      <Route path="/admin/inbox">
+        <AdminShell>
+          <Inbox />
+        </AdminShell>
+      </Route>
       <Route path="/admin/profiles">
         <AdminShell>
           <Profiles />
+        </AdminShell>
+      </Route>
+      <Route path="/admin/assessments">
+        <AdminShell>
+          <Assessments />
         </AdminShell>
       </Route>
       <Route path="/admin/users">
@@ -100,6 +113,11 @@ function Router() {
       <Route path="/admin/agent-evaluator">
         <AdminShell>
           <AgentEvaluator />
+        </AdminShell>
+      </Route>
+      <Route path="/admin/activity">
+        <AdminShell>
+          <ActivityAudit />
         </AdminShell>
       </Route>
       <Route path="/admin/config">

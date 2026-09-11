@@ -1,312 +1,98 @@
-# Guía técnica para configurar variables de entorno en EasyPanel
+# Variables vigentes de EasyPanel · JARVI RH
 
-## Talento AISA · Aplicación web, n8n, PostgreSQL y ApiChat/WhatsApp
+Última revisión: 11 de septiembre de 2026.
 
-**Proyecto:** `reclutamiento-automatizado`  
-**Objetivo:** configurar las variables directamente en EasyPanel 2.33.2 sobre una VPS de Google  
-**Audiencia:** administrador técnico o responsable DevOps  
-**Fecha:** 29 de agosto de 2026
+## Fuente de verdad
 
----
+EasyPanel conserva únicamente secretos estructurales del servicio. Las credenciales operativas de OpenAI, Langfuse y ApiChat se administran desde la interfaz protegida y se almacenan cifradas en PostgreSQL. El navegador recibe estado y máscara, nunca el valor recuperable.
 
-## 1. Qué se va a configurar
+| Ámbito | Configuración | Fuente vigente |
+| --- | --- | --- |
+| Base de datos | `DATABASE_URL` | EasyPanel, secreto del servicio web |
+| Sesión | `JWT_SECRET` | EasyPanel, secreto del servicio web |
+| Cifrado de integraciones | `AGENT_SETTINGS_ENCRYPTION_KEY` | EasyPanel, secreto estable y dedicado |
+| Correo | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | EasyPanel |
+| ApiChat | Modo, endpoint, conexión, webhook, Client ID, token y secreto entrante | Administración > Configuración > WhatsApp |
+| OpenAI/Langfuse | Claves, modelos, voz, cuotas y preferencias | Administración > Agente de IA LangGraph |
+| Puerto | `PORT` | Inyectado por EasyPanel |
 
-La solución utiliza dos servicios de ejecución que deben configurarse por separado dentro de EasyPanel:
+No configure `APICHAT_*`, `OPENAI_API_KEY`, `N8N_AGENT_EVALUATION_URL` ni `N8N_MANUAL_STATUS_WEBHOOK_URL` para el runtime actual. Las funciones activas no consultan esas variables.
 
-| Servicio EasyPanel          | Variables principales                                                                          | Responsabilidad                                                                         |
-| --------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Aplicación web Talento AISA | `DATABASE_URL`, `JWT_SECRET`, `AGENT_SETTINGS_ENCRYPTION_KEY`, `N8N_MANUAL_STATUS_WEBHOOK_URL` | Frontend, API, autenticación, PostgreSQL, agente evaluador y disparo de revisión humana |
-| n8n                         | `N8N_AGENT_EVALUATION_URL`, `OPENAI_MODEL`                                                     | Workflows opcionales y evaluación                                                       |
-| PostgreSQL                  | Parámetros propios del servicio o URL de conexión                                              | Persistencia central                                                                    |
+## Bloque de aplicación
 
-En EasyPanel 2.33.2, la ruta operativa que debe utilizarse es **Project → Service → Environment**. Allí se agregan o editan las variables del servicio y posteriormente se aplica el cambio con **Save/Deploy** o la acción equivalente de despliegue visible en esa instalación. La documentación oficial de EasyPanel indica que las variables se utilizan durante el build y la ejecución, y que los cambios requieren redeploy o reinicio para afectar al proceso en ejecución [1]. n8n, por su parte, admite configuración mediante variables de entorno en instalaciones self-hosted [2]. Si la etiqueta de un botón difiere levemente en la interfaz de 2.33.2, debe utilizarse la acción que despliega o reinicia el servicio; no basta con guardar el formulario si el contenedor no se recrea.
+Cada nombre debe registrarse como entrada independiente. No copie valores reales a documentación, capturas o logs.
 
-> **Regla principal:** una variable debe configurarse en el servicio que la consume. Definirla únicamente en el servicio web no la hace visible para n8n, y definirla únicamente en n8n no la hace visible para la aplicación Node.
-
----
-
-## 2. Preparación antes de entrar a EasyPanel
-
-Antes de modificar la configuración, reunir los siguientes datos:
-
-| Dato                                | Ejemplo de formato                  | Dónde se obtiene         |
-| ----------------------------------- | ----------------------------------- | ------------------------ |
-| URL pública de la aplicación        | `https://reclutamiento.example.com` | Dominio de EasyPanel     |
-| URL pública de n8n                  | `https://n8n.example.com`           | Dominio de n8n           |
-| URL interna o externa de PostgreSQL | Host, puerto, base, usuario y SSL   | Servicio PostgreSQL      |
-| Credencial PostgreSQL para n8n      | Nombre de credencial                | n8n → Credentials        |
-| Credencial OpenAI                   | API key o credencial administrada   | n8n → Credentials        |
-| URL ApiChat                         | Endpoint HTTPS oficial              | Documentación de ApiChat |
-| Client ID y token ApiChat           | Credenciales de API                 | Cuenta ApiChat           |
-| Conexión WhatsApp                   | Nombre o identificador              | ApiChat                  |
-
-Realizar un respaldo de PostgreSQL y anotar los valores actuales antes de reemplazarlos. No copiar tokens en capturas de pantalla, repositorios, tickets ni archivos JSON de n8n.
-
----
-
-## 3. Configurar el servicio de la aplicación web
-
-### Paso 1: abrir el proyecto en EasyPanel 2.33.2
-
-1. Entrar al panel de administración de EasyPanel 2.33.2.
-2. Seleccionar el proyecto donde se ejecuta Talento AISA.
-3. Abrir el servicio correspondiente a la aplicación web, no el servicio n8n.
-4. Confirmar que el servicio tenga el código del proyecto `reclutamiento-automatizado`.
-5. Verificar en la vista del servicio que el estado sea operativo antes de modificar variables.
-
-### Paso 2: abrir `Environment`
-
-Dentro del servicio de la aplicación, abrir la pestaña **Environment**. En EasyPanel 2.33.2, crear cada variable como una entrada independiente. Si la pantalla ofrece una opción para ocultar o proteger el valor, utilizarla para secretos como `JWT_SECRET`, contraseña de PostgreSQL y tokens. No pegar todo el bloque como una sola variable: cada nombre debe tener su propio valor.
-
-### Paso 3: agregar variables de aplicación
-
-#### `DATABASE_URL`
-
-Esta es la conexión PostgreSQL que utiliza la aplicación Node y Drizzle. Debe incluir host, puerto, base, usuario, contraseña y los parámetros SSL exigidos por el proveedor.
-
-Ejemplo conceptual:
-
-```text
-postgresql://USUARIO:CONTRASEÑA@HOST:5432/NOMBRE_BASE?sslmode=require
+```dotenv
+NODE_ENV=production
+DATABASE_URL=postgresql://USUARIO:CONTRASENA@HOST:5432/BASE?sslmode=require
+JWT_SECRET=REEMPLAZAR_CON_VALOR_ALEATORIO_ESTABLE
+AGENT_SETTINGS_ENCRYPTION_KEY=REEMPLAZAR_CON_OTRO_VALOR_ALEATORIO_ESTABLE
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=notificaciones@example.com
+SMTP_PASSWORD=REEMPLAZAR
+SMTP_FROM=Talento AISA <notificaciones@example.com>
 ```
 
-No utilizar literalmente los valores del ejemplo. Si PostgreSQL está dentro del mismo proyecto EasyPanel, preferir el hostname interno del servicio en lugar de una IP pública. Si el proveedor usa certificado propio, seguir su formato de SSL y no eliminar `sslmode=require` sin comprobar la política de conexión.
-
-#### `JWT_SECRET`
-
-Se utiliza para firmar la sesión de la aplicación. Debe ser una cadena aleatoria larga y estable. No cambiarla durante una sesión operativa, porque invalidaría las sesiones existentes.
-
-Ejemplo de generación local:
+Genere `JWT_SECRET` y `AGENT_SETTINGS_ENCRYPTION_KEY` por separado, fuera del servidor:
 
 ```bash
 openssl rand -base64 48
 ```
 
-El valor generado se pega una sola vez en el campo secreto de EasyPanel. No debe registrarse en documentación ni logs.
+`AGENT_SETTINGS_ENCRYPTION_KEY` debe permanecer estable. El formato nuevo `enc:v2` usa AES-256-GCM, identificador de clave y AAD ligada a `provider:setting_key`. El servidor puede leer temporalmente valores `enc:v1` y materiales de respaldo para permitir su rotación; vuelva a guardar cada credencial para migrarla a `enc:v2` antes de retirar una fuente anterior.
 
-#### `AGENT_SETTINGS_ENCRYPTION_KEY`
+## Despliegue
 
-Clave estable de al menos 32 caracteres recomendada para cifrar exclusivamente las credenciales de OpenAI y Langfuse que el Administrador mantiene desde **Agente de IA LangGraph**. Se recomienda generar un valor diferente de `JWT_SECRET` con `openssl rand -base64 48`, marcarlo como secreto y conservarlo durante toda la vida de las credenciales guardadas. Si no está definida, el servidor deriva la clave desde `JWT_SECRET` o, como último respaldo, `DATABASE_URL`; por ello el guardado ya no queda bloqueado. Durante una rotación deben conservarse temporalmente las fuentes anteriores hasta volver a registrar las credenciales.
+1. Configure las variables y seleccione Deploy/Redeploy.
+2. Ejecute `pnpm install --frozen-lockfile` durante el build.
+3. Aplique el journal PostgreSQL con `pnpm db:push`; debe finalizar en `0014_cognitive_governance`.
+4. Ingrese como Administrador.
+5. Guarde y verifique OpenAI/Langfuse en Agente de IA LangGraph.
+6. Guarde y verifique ApiChat en Configuración > WhatsApp.
+7. Use datos ficticios para la primera prueba controlada.
 
-#### `N8N_MANUAL_STATUS_WEBHOOK_URL`
+La migración no contiene tokens ni Client ID reales. El query inicial documentado en `ANALISIS_COGNITIVO_DORA_2.0.130.md` crea preferencias públicas y filas secretas nulas; los valores recuperables se ingresan exclusivamente por las tarjetas seguras.
 
-La aplicación consume esta variable mediante `process.env.N8N_MANUAL_STATUS_WEBHOOK_URL` dentro de `server/routers.ts`, en la mutación `candidates.setStatus`. Se llama cuando un humano selecciona **Solicitar CV por WhatsApp**; el valor técnico enviado sigue siendo `calificado`.
+## n8n
 
-El valor debe ser la **URL de producción** del webhook de revisión humana, por ejemplo:
+Los workflows 01 a 03 son referencias históricas/importables. El backend evalúa directamente y envía ApiChat después del commit. El workflow 04 sí contiene un nodo Webhook real: después de importarlo, configure «Cabecera interna Talento AISA» con el mismo Bearer guardado en la UI, actívelo y registre la URL de producción `/webhook/apichat/incoming` en ApiChat. El adaptador mapea el sobre oficial `messages` y no contiene secretos.
 
-```text
-https://n8n.example.com/webhook/reclutamiento/manual-status
+No sustituya marcadores de credenciales por secretos dentro de un JSON versionado. No presente la espera histórica de 30 segundos ni los workflows opcionales como parte del runtime vigente.
+
+## Verificación técnica
+
+```bash
+pnpm release:verify
+pnpm test:black-box
+pnpm test
+pnpm check
+pnpm build
+python3 scripts/validate_workflows.py
 ```
 
-No usar una URL del editor con formato `/workflow/<id>`.
-
-### Paso 4: guardar y desplegar el servicio web
-
-Guardar los cambios en EasyPanel 2.33.2 y ejecutar **Deploy/Redeploy** del servicio web. Si la interfaz presenta una confirmación, comprobar que el despliegue cree un contenedor con la nueva configuración. La configuración del servicio n8n se puede preparar antes, pero la aplicación no debe probarse contra el webhook hasta que ambos servicios hayan sido redeployados.
-
----
-
-## 4. Configurar el servicio n8n
-
-### Paso 1: abrir el servicio n8n en EasyPanel 2.33.2
-
-1. Volver al proyecto de EasyPanel 2.33.2.
-2. Abrir el servicio donde está instalado n8n.
-3. Confirmar que es la instancia que atiende el dominio público de n8n.
-4. Abrir la pestaña **Environment**.
-5. Verificar que se está editando el servicio n8n y no el servicio de la aplicación web.
-
-No colocar estas variables en el servicio de la aplicación web. Los workflows se ejecutan dentro del proceso n8n y resuelven las expresiones `$env.NOMBRE_VARIABLE` desde el entorno de n8n.
-
-### Paso 2: agregar variables del flujo maestro
-
-#### `N8N_AGENT_EVALUATION_URL`
-
-El workflow `01_flujo_maestro_postulaciones.json` utiliza esta variable en el nodo **Disparar agente de plaza**, de tipo `HTTP Request`:
-
-```text
-={{ $env.N8N_AGENT_EVALUATION_URL }}
-```
-
-Debe apuntar a la URL de producción del agente o router de agentes. Ejemplo:
-
-```text
-https://n8n.example.com/webhook/reclutamiento/evaluate
-```
-
-Si se crean agentes independientes por plaza, esta URL puede apuntar a un router que seleccione la plaza o a un endpoint coordinador. Mantener la decisión consistente con la configuración del workflow maestro.
-
-#### `OPENAI_MODEL`
-
-El workflow `02_agente_plaza_template.json` utiliza esta variable en el nodo **OpenAI Chat Model**:
-
-```text
-={{ $env.OPENAI_MODEL || 'gpt-5-mini' }}
-```
-
-Definir un nombre de modelo disponible en la cuenta configurada. Si se deja vacía, el workflow utiliza el valor de respaldo indicado en la expresión. Para operación productiva se recomienda definir explícitamente el modelo aprobado y documentar la fecha de validación.
-
-### Paso 3: configurar ApiChat en el módulo administrativo
-
-No cree variables `APICHAT_*` en EasyPanel ni en n8n. Antes del despliegue ejecute `drizzle/migrations/0013_apichat_credential_vault.sql`. Después ingrese a Administración > Configuración > WhatsApp, guarde los valores públicos y registre el Client ID y el token en sus tarjetas separadas. El backend cifra ambos valores y PostgreSQL conserva el ciphertext.
-
-### Paso 4: ejemplo de bloque de variables n8n
-
-El siguiente bloque es una plantilla de referencia. Sustituir todos los valores de ejemplo:
-
-```dotenv
-N8N_AGENT_EVALUATION_URL=https://n8n.example.com/webhook/reclutamiento/evaluate
-OPENAI_MODEL=gpt-5-mini
-```
-
-El endpoint, la conexión y el webhook de ApiChat se administran en la aplicación y no forman parte de este bloque.
-
----
-
-## 5. Reiniciar o redeployar correctamente
-
-Después de guardar las variables en el servicio web y en n8n:
-
-1. En el servicio web, ejecutar **Deploy/Redeploy**.
-2. En el servicio n8n, ejecutar **Deploy/Redeploy**.
-3. Esperar a que ambos servicios indiquen estado saludable.
-4. Revisar los logs de arranque sin imprimir secretos.
-5. Abrir la interfaz web y la interfaz n8n por HTTPS.
-
-EasyPanel aplica los cambios al reiniciar o redeployar el servicio [1]. En 2.33.2, confirmar visualmente el nuevo deployment o el cambio de fecha/estado del servicio antes de probar. Reiniciar únicamente la aplicación no actualiza el entorno del contenedor n8n, y reiniciar únicamente n8n no actualiza `process.env` de la aplicación web.
-
-Si se modificó `DATABASE_URL` o el certificado SSL, reiniciar ambos servicios y volver a probar la conexión desde la aplicación y desde n8n.
-
----
-
-## 6. Configurar credenciales dentro de n8n
-
-Las variables de entorno no sustituyen las credenciales nativas de n8n que aparecen como `PENDIENTE` en los JSON.
-
-### Credencial PostgreSQL
-
-En n8n:
-
-1. Abrir **Credentials**.
-2. Crear una credencial PostgreSQL.
-3. Introducir host, puerto, base, usuario, contraseña y SSL.
-4. Ejecutar la prueba de conexión.
-5. Asignar la credencial a todos estos nodos:
-   - `01` → **Guardar postulación**.
-   - `02` → **Cargar reglas de la plaza** y **Guardar evaluación**.
-   - `03` → **Guardar ventana de revisión** y **Verificar estado actual**.
-   - `04` → **Actualizar conversación**.
-
-### Credencial OpenAI/ChatGPT
-
-En n8n:
-
-1. Abrir **Credentials**.
-2. Crear la credencial que corresponda al nodo nativo OpenAI/ChatGPT.
-3. Probar la credencial sin enviar información real de candidatos.
-4. Asignarla al nodo **OpenAI Chat Model** del agente.
-5. Confirmar que el nodo **Evaluar respuestas abiertas** conserva las conexiones `ai_languageModel` y `ai_outputParser`.
-
-### Artefacto histórico de WhatsApp
-
-`03_revision_humana_30s.json` y `04_whatsapp_apichat.json` conservan el diseño histórico para trazabilidad, pero no deben activarse como ruta de envío. El backend realiza la operación directa y obtiene la configuración cifrada desde PostgreSQL.
-
----
-
-## 7. Validación desde la interfaz de n8n
-
-La forma segura de validar ApiChat es el botón **Verificar** del módulo administrativo. Consulta el estado del proveedor sin enviar un mensaje ni devolver el código QR.
-
-Ejemplo seguro para un nodo Code de diagnóstico:
-
-```javascript
-return [
-  {
-    json: {
-      hasAgentUrl: Boolean($env.N8N_AGENT_EVALUATION_URL),
-      hasOpenAIModel: Boolean($env.OPENAI_MODEL),
-    },
-  },
-];
-```
-
-El diagnóstico de n8n no debe recibir ni consultar secretos de ApiChat.
-
----
-
-## 8. Validación desde la aplicación web
-
-La aplicación utiliza las siguientes variables de forma directa:
-
-| Archivo                     | Variable                                 | Validación                                                       |
-| --------------------------- | ---------------------------------------- | ---------------------------------------------------------------- |
-| `server/_core/env.ts`       | `DATABASE_URL`                           | El servidor intenta inicializar el pool PostgreSQL.              |
-| `server/_core/env.ts`       | `JWT_SECRET`                             | Se utiliza para sesión y cookies.                                |
-| `server/routers.ts`         | `N8N_MANUAL_STATUS_WEBHOOK_URL`          | Se llama al cambiar estado manualmente.                          |
-| `server/apiChatSettings.ts` | Filas `provider='apichat'` en PostgreSQL | Descifra únicamente en servidor y verifica con `GET /v1/status`. |
-
-La pantalla `client/src/pages/Config.tsx` administra estados enmascarados. Nunca recibe los valores descifrados.
-
----
-
-## 9. Prueba integral recomendada
-
-Realizar las pruebas en este orden para aislar errores:
-
-1. Comprobar que PostgreSQL acepta una conexión desde la aplicación.
-2. Ejecutar las migraciones y verificar que existen las tablas y funciones.
-3. Comprobar que n8n puede conectarse con la credencial PostgreSQL.
-4. Ejecutar el agente con un payload sintético que no contenga datos personales.
-5. Confirmar la salida JSON estructurada de OpenAI/ChatGPT.
-6. Enviar una postulación de prueba a la URL del flujo maestro.
-7. Confirmar que se crea una sola aplicación.
-8. Repetir el mismo teléfono y plaza para validar el HTTP 409 de duplicado.
-9. Seleccionar **Solicitar CV por WhatsApp** para un candidato.
-10. Confirmar que `N8N_MANUAL_STATUS_WEBHOOK_URL` activa la espera de 30 segundos.
-11. Cambiar el estado antes de cumplir la espera y confirmar que la continuación se cancela.
-12. Restaurar **Solicitar CV por WhatsApp**, esperar la ventana completa y probar ApiChat con un número controlado.
-13. Confirmar el mensaje al candidato y la alerta interna.
-14. Revisar que ningún log contenga tokens, contraseñas o payloads personales completos.
-
----
-
-## 10. Diagnóstico de errores frecuentes
-
-| Síntoma                                | Causa probable                                                      | Acción                                                                                         |
-| -------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Error `establishing an SSL connection` | `DATABASE_URL` incorrecta, SSL requerido o certificado no confiable | Revisar host, puerto, usuario, contraseña, `sslmode`, certificado y reiniciar ambos servicios. |
-| `N8N_AGENT_EVALUATION_URL` vacío       | Variable definida en el servicio web, no en n8n                     | Moverla a Environment del servicio n8n y redeployar n8n.                                       |
-| El cambio humano no activa la espera   | `N8N_MANUAL_STATUS_WEBHOOK_URL` vacío o URL de editor               | Configurar URL `/webhook/...` de producción en el servicio web y reiniciar la aplicación.      |
-| ApiChat devuelve 401/403               | Token o Client ID inválido                                          | Rotar la credencial desde Configuración > WhatsApp y volver a verificar.                       |
-| ApiChat devuelve 404                   | Endpoint incorrecto                                                 | Confirmar el endpoint oficial guardado en el módulo.                                           |
-| ApiChat no usa la conexión esperada    | Identificador de conexión incorrecto                                | Confirmar la conexión guardada en el módulo.                                                   |
-| El agente no responde JSON             | Parser no conectado o modelo sin credencial                         | Revisar **OpenAI Chat Model**, **Salida estructurada** y credencial OpenAI.                    |
-| El Wait no continúa                    | Persistencia de ejecuciones o configuración de n8n                  | Verificar almacenamiento de ejecuciones y que n8n pueda reanudar workflows.                    |
-| El mensaje de WhatsApp no se envía     | Integración incompleta o instancia desconectada                     | Ejecutar **Verificar**, revisar los estados enmascarados y el error controlado del envío.      |
-| La variable parece no cambiar          | El contenedor conserva el entorno anterior                          | Guardar, redeployar/reiniciar el servicio y ejecutar una prueba nueva.                         |
-
----
-
-## 11. Seguridad y mantenimiento
-
-Las variables deben gestionarse con el menor alcance posible. `JWT_SECRET`, `AGENT_SETTINGS_ENCRYPTION_KEY` y la contraseña de PostgreSQL son secretos del servidor. El token de ApiChat se administra cifrado desde la interfaz y no debe enviarse al frontend, exponerse en endpoints de diagnóstico ni incluirse en workflows exportados.
-
-Conservar un inventario de variables y registrar quién realizó cada cambio. Cuando se rote un token de ApiChat, utilizar la tarjeta correspondiente, verificar la conexión y revocar el token anterior después de confirmar el nuevo.
-
-La configuración de producción debe utilizar HTTPS. Los webhooks públicos deben ser rutas de producción, no rutas del editor. El acceso a EasyPanel, n8n y PostgreSQL debe restringirse por autenticación, firewall y red privada cuando sea posible.
-
----
-
-## 12. Referencias oficiales
-
-[1] [EasyPanel Docs — App Service](https://easypanel.io/docs/services/app). Describe la configuración de servicios de aplicación, la pestaña Environment y el efecto de las variables en build y ejecución. La guía está adaptada a EasyPanel 2.33.2; los nombres exactos de botones pueden variar según el tipo de servicio o plantilla.
-
-[2] [n8n Docs — Use environment variables](https://docs.n8n.io/deploy/host-n8n/configure-n8n/basic-configuration/use-environment-variables). Describe el uso de variables de entorno en instalaciones self-hosted y la configuración basada en archivos.
-
-[3] [n8n Docs — Export and import workflows](https://docs.n8n.io/build/manage-workflows/export-and-import). Referencia para importar los JSON y reasignar credenciales después de la importación.
-
----
-
-## 13. Criterio de finalización
-
-La configuración se considera lista cuando la aplicación y n8n se han redeployado con sus variables respectivas, PostgreSQL acepta conexiones desde ambos servicios, las credenciales nativas dejaron de estar en estado pendiente, el agente devuelve JSON estructurado, la espera humana se cancela correctamente ante un cambio de estado y una prueba controlada envía WhatsApp al candidato y a los receptores internos.
+Confirme además:
+
+- ninguna respuesta administrativa contiene secretos completos;
+- una credencial copiada entre proveedor o campo falla por AAD;
+- ApiChat verifica estado sin enviar mensajes ni devolver QR;
+- el webhook normalizado rechaza Bearer inválido y JSON no admitido;
+- la rotación principal/respaldo de OpenAI se prueba con contenido sintético;
+- respaldo, restauración y tiempos RPO/RTO se prueban en el ambiente objetivo.
+
+## Diagnóstico
+
+| Síntoma | Acción segura |
+| --- | --- |
+| PostgreSQL no conecta | Revise host interno, usuario, SSL y `DATABASE_URL`; no imprima la cadena completa. |
+| La sesión se invalida al desplegar | Restaure el mismo `JWT_SECRET`. |
+| Una credencial no puede descifrarse | Restaure la clave anterior, rote desde la UI y luego retire el material previo. |
+| ApiChat responde 401/403 | Rote Client ID/token desde Configuración y use Verificar. |
+| El webhook responde 401 | Configure el mismo secreto Bearer en la tarjeta y en el adaptador autorizado. |
+| No llega un evento entrante | Confirme que el workflow 04 está importado y activo, que ApiChat usa la URL de producción y que la credencial Header Auth contiene el mismo Bearer de la UI. |
+| Audio o CV no aparece | La ingesta productiva de medios aún no está implementada; no habilite una ruta improvisada sin MIME real, antivirus, cuota, bucket y retención. |
+
+## Límites
+
+La presencia de pruebas automatizadas y controles ISO/DORA no constituye certificación. La recepción completa de PDF, Word, MP3 u OGG, el almacenamiento de candidatos, la transcripción desde ApiChat, el outbox durable y un log WORM permanecen como brechas declaradas. Consulte `ANALISIS_COGNITIVO_DORA_2.0.130.md` antes de promover el release.

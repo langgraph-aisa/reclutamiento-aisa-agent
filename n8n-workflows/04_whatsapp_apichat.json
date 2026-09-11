@@ -1,179 +1,176 @@
 {
-  "name": "RA · 04 · Continuación y alertas por ApiChat WhatsApp",
+  "name": "RA · 04 · Webhook entrante ApiChat para Talento AISA",
   "nodes": [
     {
       "parameters": {
-        "inputSource": "passthrough"
-      },
-      "id": "continuación-por-whatsapp",
-      "name": "Continuación por WhatsApp",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1.1,
-      "position": [0, 0]
-    },
-    {
-      "parameters": {
-        "jsCode": "const input = $json.body ?? $json;\nconst position = input.positionTitle ?? 'la plaza';\nconst recipientList = input.internalRecipients ?? [];\nreturn [{ json: { ...input, candidateMessage: `Gracias por postularse a la plaza de ${position}. Agradeceremos que nos envíe su currículum vitae para continuar con el proceso de evaluación.`, internalMessages: recipientList.map(phone => ({ phone, message: `Nuevo candidato calificado para entrevista: ${position}. Teléfono: ${input.phoneInternational}` })) } }];"
-      },
-      "id": "preparar-mensajes",
-      "name": "Preparar mensajes",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [260, 0]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.APICHAT_API_ENDPOINT }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.APICHAT_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { accountId: $env.APICHAT_ACCOUNT_ID, connectTo: $env.APICHAT_CONNECT_TO, to: $json.phoneInternational, message: $json.candidateMessage } }}",
-        "options": {
-          "timeout": 30000
-        }
-      },
-      "id": "enviar-mensaje-al-candidato",
-      "name": "Enviar mensaje al candidato",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [560, -100]
-    },
-    {
-      "parameters": {
-        "fieldToSplitOut": "internalMessages"
-      },
-      "id": "enviar-alertas-internas",
-      "name": "Enviar alertas internas",
-      "type": "n8n-nodes-base.splitOut",
-      "typeVersion": 1,
-      "position": [560, 160]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $env.APICHAT_API_ENDPOINT }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.APICHAT_TOKEN }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ { accountId: $env.APICHAT_ACCOUNT_ID, connectTo: $env.APICHAT_CONNECT_TO, to: $json.internalMessages.phone, message: $json.internalMessages.message } }}",
-        "options": {
-          "timeout": 30000
-        }
-      },
-      "id": "http-apichat-alertas",
-      "name": "HTTP ApiChat alertas",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [820, 160]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "UPDATE applications SET whatsapp_status='enviado', updated_at=now() WHERE id={{ $('Preparar mensajes').first().json.applicationId }} RETURNING id AS \"applicationId\",whatsapp_status;",
+        "httpMethod": "POST",
+        "path": "apichat/incoming",
+        "responseMode": "lastNode",
         "options": {}
       },
-      "id": "actualizar-conversación",
-      "name": "Actualizar conversación",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [1080, -100],
-      "credentials": {
-        "postgres": {
-          "id": "PENDIENTE",
-          "name": "PostgreSQL reclutamiento"
+      "id": "webhook-apichat",
+      "name": "Webhook ApiChat",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $json.body ?? {};\nconst messages = Array.isArray(payload.messages) ? payload.messages : [];\nconst events = [];\nfor (const message of messages) {\n  if (!message || message.type !== 'text' || message.from_me !== false || message.is_group === true || message.chat_type === 'group') continue;\n  const providerMessageId = String(message.id ?? '').trim();\n  const rawNumber = String(message.number ?? '').trim();\n  if (rawNumber.includes('-')) continue;\n  const digits = rawNumber.replace(/\\D/g, '');\n  const phoneInternational = digits ? `+${digits}` : '';\n  const text = String(message.text ?? '').trim();\n  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,179}$/.test(providerMessageId) || !/^\\+[1-9]\\d{7,14}$/.test(phoneInternational) || !text || text.length > 10000) continue;\n  events.push({ providerMessageId, phoneInternational, messageType: 'text', text });\n}\nreturn [{ json: { events } }];"
+      },
+      "id": "normalizar-mensajes-apichat",
+      "name": "Normalizar mensajes ApiChat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ Array.isArray($json.events) && $json.events.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
         }
-      }
+      },
+      "id": "¿hay-mensajes-de-texto?",
+      "name": "¿Hay mensajes de texto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        500,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "events",
+        "options": {}
+      },
+      "id": "separar-eventos-de-texto",
+      "name": "Separar eventos de texto",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        760,
+        -100
+      ]
     },
     {
       "parameters": {},
-      "id": "finalizar-whatsapp",
-      "name": "Finalizar WhatsApp",
+      "id": "sin-mensajes-de-texto",
+      "name": "Sin mensajes de texto",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [1340, -100]
+      "position": [
+        760,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://hiring-testing-reclutamiento-aisa-agent.4ugrim.easypanel.host/api/webhooks/apichat/incoming",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "entregar-a-talento-aisa",
+      "name": "Entregar a Talento AISA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1020,
+        -100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PENDIENTE_WEBHOOK_HEADER",
+          "name": "Cabecera interna Talento AISA"
+        }
+      }
     }
   ],
   "pinData": {},
   "connections": {
-    "Continuación por WhatsApp": {
+    "Webhook ApiChat": {
       "main": [
         [
           {
-            "node": "Preparar mensajes",
+            "node": "Normalizar mensajes ApiChat",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Preparar mensajes": {
+    "Normalizar mensajes ApiChat": {
       "main": [
         [
           {
-            "node": "Enviar mensaje al candidato",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Enviar alertas internas",
+            "node": "¿Hay mensajes de texto?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Enviar mensaje al candidato": {
+    "¿Hay mensajes de texto?": {
       "main": [
         [
           {
-            "node": "Actualizar conversación",
+            "node": "Separar eventos de texto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Sin mensajes de texto",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Actualizar conversación": {
+    "Separar eventos de texto": {
       "main": [
         [
           {
-            "node": "Finalizar WhatsApp",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Enviar alertas internas": {
-      "main": [
-        [
-          {
-            "node": "HTTP ApiChat alertas",
+            "node": "Entregar a Talento AISA",
             "type": "main",
             "index": 0
           }
@@ -183,7 +180,12 @@
   },
   "active": false,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "executionTimeout": 30
   },
   "versionId": "reclutamiento-automatizado-v1",
   "meta": {
@@ -197,7 +199,7 @@
       "name": "whatsapp"
     },
     {
-      "name": "apichat"
+      "name": "adaptador-normalizado"
     }
   ]
 }

@@ -4,11 +4,17 @@ import { describe, expect, it } from "vitest";
 
 describe("integration secret governance", () => {
   it("uses the PostgreSQL vault instead of ApiChat environment variables", () => {
-    const runtimeSources = ["server/apichat.ts", "server/cvRequest.ts"].map(
-      file => fs.readFileSync(path.resolve(file), "utf8")
-    );
+    const runtimeSources = [
+      "server/apichat.ts",
+      "server/cvRequest.ts",
+      "n8n-workflows/04_whatsapp_apichat.json",
+    ].map(file => fs.readFileSync(path.resolve(file), "utf8"));
     const settings = fs.readFileSync(
       path.resolve("server/apiChatSettings.ts"),
+      "utf8"
+    );
+    const vault = fs.readFileSync(
+      path.resolve("server/agentSettings.ts"),
       "utf8"
     );
 
@@ -18,6 +24,8 @@ describe("integration secret governance", () => {
     }
     expect(settings).toContain("integration_settings");
     expect(settings).toContain("encryptAgentSecret");
-    expect(settings).toContain("enc:v1:");
+    expect(settings).toContain("integrationSecretContext");
+    expect(vault).toContain('"enc:v2:"');
+    expect(vault).toContain("setAAD");
   });
 });

@@ -30,6 +30,7 @@ import {
   Eye,
   FilterX,
   Loader2,
+  MessageCircle,
   MessageSquareText,
   Phone,
   Search,
@@ -237,6 +238,18 @@ export default function HumanReview() {
                   {selected?.full_name ?? "Revisión Humana"}
                 </h1>
                 {selected ? <StatusBadge status={selected.status} /> : null}
+                {selected ? (
+                  <Link href={`/admin/inbox?application=${selected.id}`}>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      className="h-8 w-8 rounded-full border-emerald-300 text-emerald-800"
+                      aria-label={`Abrir conversación de WhatsApp de ${selected.full_name ?? "la persona seleccionada"}`}
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                ) : null}
               </div>
               <p className="mt-1 truncate text-sm text-muted-foreground">
                 {selected
@@ -488,22 +501,32 @@ export default function HumanReview() {
                       <td
                         className={`sticky left-0 z-20 w-[190px] min-w-[190px] max-w-[190px] border-b border-r px-3 py-2 align-top shadow-[8px_0_18px_-16px_rgba(15,23,42,.9)] sm:w-[210px] sm:min-w-[210px] sm:max-w-[210px] ${isSelected ? "bg-[#c8dfec] dark:bg-[#24384d]" : "bg-[#eaf2f7] group-hover:bg-[#dce8f0] dark:bg-[#162333] dark:group-hover:bg-[#1b2a3a]"}`}
                       >
-                        <button
-                          type="button"
-                          onClick={event => {
-                            event.stopPropagation();
-                            selectCandidate(candidate.id);
-                          }}
-                          aria-pressed={isSelected}
-                          className="block w-full min-w-0 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        >
-                          <span className="block truncate text-sm font-bold text-primary">
-                            {candidate.full_name ?? "Sin nombre"}
-                          </span>
-                          <span className="mt-0.5 block truncate text-[11px] font-medium text-muted-foreground">
-                            {candidate.position_title}
-                          </span>
-                        </button>
+                        <div className="flex min-w-0 items-start gap-2">
+                          <button
+                            type="button"
+                            onClick={event => {
+                              event.stopPropagation();
+                              selectCandidate(candidate.id);
+                            }}
+                            aria-pressed={isSelected}
+                            className="block min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            <span className="block truncate text-sm font-bold text-primary">
+                              {candidate.full_name ?? "Sin nombre"}
+                            </span>
+                            <span className="mt-0.5 block truncate text-[11px] font-medium text-muted-foreground">
+                              {candidate.position_title}
+                            </span>
+                          </button>
+                          <Link
+                            href={`/admin/inbox?application=${candidate.id}`}
+                            onClick={event => event.stopPropagation()}
+                            className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-emerald-300 bg-card text-emerald-800 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label={`Abrir WhatsApp de ${candidate.full_name ?? "la persona"}`}
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
+                          </Link>
+                        </div>
                       </td>
                       <td className="border-b border-r px-3 py-2 align-top">
                         <a

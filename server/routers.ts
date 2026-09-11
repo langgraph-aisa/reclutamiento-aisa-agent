@@ -31,7 +31,12 @@ import {
   ensureCvRequestMessage,
   type CvRequestDelivery,
 } from "./cvRequest";
-import { AGENT_MODELS } from "../shared/agentConfig";
+import {
+  AGENT_MODELS,
+  OPENAI_TRANSCRIPTION_MODELS,
+  OPENAI_TTS_MODELS,
+  OPENAI_TTS_VOICES,
+} from "../shared/agentConfig";
 import {
   evaluateApplicationWithAgent,
   verifyLangfuseConnection,
@@ -63,6 +68,23 @@ import {
   type PublicCopyEditorialInput,
   type PublicCopyEditorialResult,
 } from "./profileEditorial";
+import {
+  assignJarviUser,
+  getActivityOverview,
+  getJarviAssignment,
+  recordAdminActivity,
+} from "./activityAudit";
+import {
+  inboxDetail,
+  listInbox,
+  sendInboxText,
+  setInboxAutomation,
+} from "./inbox";
+import {
+  ASSESSMENT_GOVERNANCE_RULES,
+  ASSESSMENT_LEVELS,
+  missingPsychometricEvidenceTerms,
+} from "../shared/assessmentGovernance";
 
 const statusValues = applicationStatuses;
 const featuredPublicPositionTitle = "Ejecutivo de Negocios (Ventas)";
@@ -70,6 +92,20 @@ const methodologyDocumentKeys = ["siera", "mst_eir"] as const;
 const agentModelValues = AGENT_MODELS.map(model => model.value) as [
   (typeof AGENT_MODELS)[number]["value"],
   ...(typeof AGENT_MODELS)[number]["value"][],
+];
+const transcriptionModelValues = OPENAI_TRANSCRIPTION_MODELS.map(
+  model => model.value
+) as [
+  (typeof OPENAI_TRANSCRIPTION_MODELS)[number]["value"],
+  ...(typeof OPENAI_TRANSCRIPTION_MODELS)[number]["value"][],
+];
+const ttsModelValues = OPENAI_TTS_MODELS.map(model => model.value) as [
+  (typeof OPENAI_TTS_MODELS)[number]["value"],
+  ...(typeof OPENAI_TTS_MODELS)[number]["value"][],
+];
+const assessmentLevelValues = ASSESSMENT_LEVELS.map(level => level.value) as [
+  (typeof ASSESSMENT_LEVELS)[number]["value"],
+  ...(typeof ASSESSMENT_LEVELS)[number]["value"][],
 ];
 const roleProcedure = recruiterProcedure;
 const requiredApplicationConfirmation = z.boolean().refine(Boolean, {
@@ -1674,6 +1710,58 @@ export const appRouter = router({
     }),
   }),
 
+  activity: router({
+    overview: roleProcedure
+      .input(
+        z
+          .object({
+            pagePath: z.string().trim().max(240).optional(),
+            limit: z.number().int().min(1).max(200).optional(),
+            date: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .optional(),
+          })
+          .optional()
+      )
+      .query(async ({ input }) =>
+        getActivityOverview(await requirePool(), input ?? {})
+      ),
+    record: roleProcedure
+      .input(
+        z.object({
+          pagePath: z
+            .string()
+            .trim()
+            .min(6)
+            .max(240)
+            .regex(/^\/admin(?:\/|$)/),
+          eventType: z.enum(["page_opened", "work_started"]),
+          correlationId: z
+            .string()
+            .trim()
+            .min(16)
+            .max(80)
+            .regex(/^[a-zA-Z0-9:_-]+$/),
+        })
+      )
+      .mutation(async ({ input, ctx }) =>
+        recordAdminActivity(await requirePool(), {
+          ...input,
+          actorUserId: ctx.user.id,
+          actorEmail: ctx.user.email ?? null,
+        })
+      ),
+    assignment: adminProcedure.query(async () =>
+      getJarviAssignment(await requirePool())
+    ),
+    assignJarvi: adminProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) =>
+        assignJarviUser(await requirePool(), input.userId, ctx.user.id)
+      ),
+  }),
+
   positions: router({
     list: roleProcedure.query(async () => {
       const pool = await getPool();
@@ -1813,6 +1901,499 @@ export const appRouter = router({
         const pool = await requirePool();
         await pool.query(`DELETE FROM job_positions WHERE id=$1`, [input.id]);
         return { success: true };
+      }),
+  }),
+
+  inbox: router({
+    list: roleProcedure
+      .input(
+        z
+          .object({
+            search: z.string().trim().max(120).optional(),
+            applicationId: z.number().int().positive().optional(),
+            positionId: z.number().int().positive().optional(),
+            automationState: z
+              .enum(["agent", "handoff_pending", "human", "completed", "error"])
+              .optional(),
+            timeRange: z.enum(["hour", "all"]).optional(),
+            limit: z.number().int().min(1).max(30).optional(),
+          })
+          .optional()
+      )
+      .query(async ({ input }) => listInbox(await requirePool(), input ?? {})),
+    detail: roleProcedure
+      .input(z.object({ conversationId: z.number().int().positive() }))
+      .query(async ({ input }) =>
+        inboxDetail(await requirePool(), input.conversationId)
+      ),
+    setAutomation: roleProcedure
+      .input(
+        z.object({
+          conversationId: z.number().int().positive(),
+          nextState: z.enum(["agent", "human"]),
+          override: z.boolean().default(false),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await setInboxAutomation(await requirePool(), {
+            ...input,
+            actorUserId: ctx.user.id,
+            actorRole: ctx.user.role,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible cambiar el control de la conversación."
+            ),
+          });
+        }
+      }),
+    sendText: roleProcedure
+      .input(
+        z.object({
+          conversationId: z.number().int().positive(),
+          text: z.string().trim().min(1).max(3_000),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await sendInboxText(await requirePool(), {
+            ...input,
+            actorUserId: ctx.user.id,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible enviar el mensaje."
+            ),
+          });
+        }
+      }),
+  }),
+
+  assessments: router({
+    governance: roleProcedure.query(() => ({
+      rules: ASSESSMENT_GOVERNANCE_RULES,
+      total: ASSESSMENT_GOVERNANCE_RULES.length,
+    })),
+    list: roleProcedure
+      .input(
+        z
+          .object({
+            positionId: z.number().int().positive().optional(),
+          })
+          .optional()
+      )
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const result = await pool.query(
+          `SELECT protocol.*,position.title AS position_title,
+                  count(item.id)::int AS item_count,
+                  count(item.id) FILTER (WHERE item.active)::int AS active_item_count
+             FROM assessment_protocols protocol
+             JOIN job_positions position ON position.id=protocol.job_position_id
+             LEFT JOIN assessment_items item ON item.protocol_id=protocol.id
+            WHERE ($1::integer IS NULL OR protocol.job_position_id=$1)
+            GROUP BY protocol.id,position.title
+            ORDER BY position.title,protocol.name,protocol.version DESC`,
+          [input?.positionId ?? null]
+        );
+        return result.rows;
+      }),
+    detail: roleProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const protocol = await pool.query(
+          `SELECT protocol.*,position.title AS position_title
+             FROM assessment_protocols protocol
+             JOIN job_positions position ON position.id=protocol.job_position_id
+            WHERE protocol.id=$1 LIMIT 1`,
+          [input.id]
+        );
+        if (!protocol.rows[0])
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "El protocolo de prueba no existe.",
+          });
+        const items = await pool.query(
+          `SELECT * FROM assessment_items WHERE protocol_id=$1
+            ORDER BY order_index,id`,
+          [input.id]
+        );
+        return { protocol: protocol.rows[0], items: items.rows };
+      }),
+    upsertProtocol: adminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive().optional(),
+          jobPositionId: z.number().int().positive(),
+          name: z.string().trim().min(3).max(180),
+          level: z.enum(assessmentLevelValues),
+          assessmentType: z.enum([
+            "competencias",
+            "conocimiento",
+            "psicometrica_validada",
+          ]),
+          executionMode: z.enum(["esperar_respuesta", "evaluacion_inmediata"]),
+          greeting: z.string().trim().max(2_000).optional(),
+          farewell: z.string().trim().max(2_000).optional(),
+          methodology: z.string().trim().max(12_000).optional(),
+          validationEvidence: z.string().trim().max(12_000).optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          await client.query(`SELECT pg_advisory_xact_lock(131,$1)`, [
+            input.jobPositionId,
+          ]);
+          let result;
+          if (input.id) {
+            const current = await client.query(
+              `SELECT * FROM assessment_protocols WHERE id=$1 FOR UPDATE`,
+              [input.id]
+            );
+            if (!current.rows[0])
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "El protocolo de prueba no existe.",
+              });
+            if (current.rows[0].status === "activo") {
+              const version = await client.query(
+                `SELECT COALESCE(max(version),0)::int+1 AS next_version
+                   FROM assessment_protocols
+                  WHERE job_position_id=$1 AND lower(name)=lower($2)`,
+                [input.jobPositionId, input.name]
+              );
+              result = await client.query(
+                `INSERT INTO assessment_protocols
+                   (job_position_id,name,level,assessment_type,version,status,
+                    execution_mode,greeting,farewell,methodology,validation_evidence,
+                    created_by_user_id,updated_by_user_id)
+                 VALUES ($1,$2,$3,$4,$5,'borrador',$6,$7,$8,$9,$10,$11,$11)
+                 RETURNING *`,
+                [
+                  input.jobPositionId,
+                  input.name,
+                  input.level,
+                  input.assessmentType,
+                  version.rows[0].next_version,
+                  input.executionMode,
+                  input.greeting ?? null,
+                  input.farewell ?? null,
+                  input.methodology ?? null,
+                  input.validationEvidence ?? null,
+                  ctx.user.id,
+                ]
+              );
+              await client.query(
+                `INSERT INTO assessment_items
+                   (protocol_id,order_index,prompt,agent_instruction,evaluation_criterion,active)
+                 SELECT $1,order_index,prompt,agent_instruction,evaluation_criterion,active
+                   FROM assessment_items WHERE protocol_id=$2`,
+                [result.rows[0].id, input.id]
+              );
+            } else {
+              result = await client.query(
+                `UPDATE assessment_protocols
+                    SET job_position_id=$1,name=$2,level=$3,assessment_type=$4,
+                        execution_mode=$5,greeting=$6,farewell=$7,methodology=$8,
+                        validation_evidence=$9,updated_by_user_id=$10,updated_at=now()
+                  WHERE id=$11 RETURNING *`,
+                [
+                  input.jobPositionId,
+                  input.name,
+                  input.level,
+                  input.assessmentType,
+                  input.executionMode,
+                  input.greeting ?? null,
+                  input.farewell ?? null,
+                  input.methodology ?? null,
+                  input.validationEvidence ?? null,
+                  ctx.user.id,
+                  input.id,
+                ]
+              );
+            }
+          } else {
+            const version = await client.query(
+              `SELECT COALESCE(max(version),0)::int+1 AS next_version
+                 FROM assessment_protocols
+                WHERE job_position_id=$1 AND lower(name)=lower($2)`,
+              [input.jobPositionId, input.name]
+            );
+            result = await client.query(
+              `INSERT INTO assessment_protocols
+                 (job_position_id,name,level,assessment_type,version,status,
+                  execution_mode,greeting,farewell,methodology,validation_evidence,
+                  created_by_user_id,updated_by_user_id)
+               VALUES ($1,$2,$3,$4,$5,'borrador',$6,$7,$8,$9,$10,$11,$11)
+               RETURNING *`,
+              [
+                input.jobPositionId,
+                input.name,
+                input.level,
+                input.assessmentType,
+                version.rows[0].next_version,
+                input.executionMode,
+                input.greeting ?? null,
+                input.farewell ?? null,
+                input.methodology ?? null,
+                input.validationEvidence ?? null,
+                ctx.user.id,
+              ]
+            );
+          }
+          await client.query(
+            `INSERT INTO audit_log
+               (actor_user_id,entity_type,entity_id,action,after_json)
+             VALUES ($1,'assessment_protocol',$2,'protocol_saved',$3::jsonb)`,
+            [
+              ctx.user.id,
+              result.rows[0].id,
+              asJson({
+                version: result.rows[0].version,
+                status: result.rows[0].status,
+                level: result.rows[0].level,
+              }),
+            ]
+          );
+          await client.query("COMMIT");
+          return result.rows[0];
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+      }),
+    upsertItem: adminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive().optional(),
+          protocolId: z.number().int().positive(),
+          prompt: z.string().trim().min(8).max(2_000),
+          agentInstruction: z.string().trim().min(8).max(4_000),
+          evaluationCriterion: z.string().trim().min(8).max(4_000),
+          active: z.boolean().default(true),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const protocol = await pool.query(
+          `SELECT status FROM assessment_protocols WHERE id=$1`,
+          [input.protocolId]
+        );
+        if (!protocol.rows[0])
+          throw new TRPCError({ code: "NOT_FOUND", message: "El protocolo no existe." });
+        if (protocol.rows[0].status === "activo")
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Una versión activa es inmutable; guarde primero una versión nueva.",
+          });
+        const result = input.id
+          ? await pool.query(
+              `UPDATE assessment_items
+                  SET prompt=$1,agent_instruction=$2,evaluation_criterion=$3,
+                      active=$4,updated_at=now()
+                WHERE id=$5 AND protocol_id=$6 RETURNING *`,
+              [
+                input.prompt,
+                input.agentInstruction,
+                input.evaluationCriterion,
+                input.active,
+                input.id,
+                input.protocolId,
+              ]
+            )
+          : await pool.query(
+              `INSERT INTO assessment_items
+                 (protocol_id,order_index,prompt,agent_instruction,evaluation_criterion,active)
+               SELECT $1,COALESCE(max(order_index),-1)+1,$2,$3,$4,$5
+                 FROM assessment_items WHERE protocol_id=$1 RETURNING *`,
+              [
+                input.protocolId,
+                input.prompt,
+                input.agentInstruction,
+                input.evaluationCriterion,
+                input.active,
+              ]
+            );
+        if (!result.rows[0])
+          throw new TRPCError({ code: "NOT_FOUND", message: "La pregunta no existe." });
+        await pool.query(
+          `INSERT INTO audit_log
+             (actor_user_id,entity_type,entity_id,action,after_json)
+           VALUES ($1,'assessment_protocol',$2,'assessment_item_saved',$3::jsonb)`,
+          [
+            ctx.user.id,
+            input.protocolId,
+            asJson({ itemId: result.rows[0].id, active: result.rows[0].active }),
+          ]
+        );
+        return result.rows[0];
+      }),
+    reorderItems: adminProcedure
+      .input(
+        z.object({
+          protocolId: z.number().int().positive(),
+          orderedIds: z.array(z.number().int().positive()).min(1).max(200),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        if (new Set(input.orderedIds).size !== input.orderedIds.length)
+          throw new TRPCError({ code: "BAD_REQUEST", message: "El orden contiene identificadores duplicados." });
+        const pool = await requirePool();
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          const protocol = await client.query(
+            `SELECT status FROM assessment_protocols WHERE id=$1 FOR UPDATE`,
+            [input.protocolId]
+          );
+          if (protocol.rows[0]?.status === "activo")
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Una versión activa es inmutable." });
+          const current = await client.query(
+            `SELECT id FROM assessment_items WHERE protocol_id=$1 ORDER BY order_index,id`,
+            [input.protocolId]
+          );
+          const currentIds = current.rows.map(row => row.id).sort((a, b) => a - b);
+          const requestedIds = [...input.orderedIds].sort((a, b) => a - b);
+          if (JSON.stringify(currentIds) !== JSON.stringify(requestedIds))
+            throw new TRPCError({ code: "BAD_REQUEST", message: "El orden debe incluir todas las preguntas una sola vez." });
+          await client.query(
+            `UPDATE assessment_items
+                SET order_index=order_index+1000000,updated_at=now()
+              WHERE protocol_id=$1`,
+            [input.protocolId]
+          );
+          for (let orderIndex = 0; orderIndex < input.orderedIds.length; orderIndex += 1) {
+            const id = input.orderedIds[orderIndex];
+            await client.query(
+              `UPDATE assessment_items SET order_index=$1,updated_at=now()
+                WHERE id=$2 AND protocol_id=$3`,
+              [orderIndex, id, input.protocolId]
+            );
+          }
+          await client.query(
+            `INSERT INTO audit_log
+               (actor_user_id,entity_type,entity_id,action,after_json)
+             VALUES ($1,'assessment_protocol',$2,'assessment_items_reordered',$3::jsonb)`,
+            [ctx.user.id, input.protocolId, asJson({ itemCount: input.orderedIds.length })]
+          );
+          await client.query("COMMIT");
+          return { success: true as const };
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+      }),
+    activate: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const readiness = await pool.query(
+          `SELECT protocol.*,
+                  count(item.id) FILTER (WHERE item.active)::int AS active_items
+             FROM assessment_protocols protocol
+             LEFT JOIN assessment_items item ON item.protocol_id=protocol.id
+            WHERE protocol.id=$1 GROUP BY protocol.id`,
+          [input.id]
+        );
+        const protocol = readiness.rows[0];
+        if (!protocol)
+          throw new TRPCError({ code: "NOT_FOUND", message: "El protocolo no existe." });
+        if (
+          Number(protocol.active_items) < 1 ||
+          String(protocol.methodology ?? "").trim().length < 100 ||
+          String(protocol.validation_evidence ?? "").trim().length < 100
+        ) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "La activación exige preguntas habilitadas y evidencia metodológica y de validación de al menos 100 caracteres cada una.",
+          });
+        }
+        if (protocol.assessment_type === "psicometrica_validada") {
+          const missingTerms = missingPsychometricEvidenceTerms(
+            String(protocol.validation_evidence ?? "")
+          );
+          if (
+            String(protocol.validation_evidence ?? "").trim().length < 500 ||
+            missingTerms.length
+          ) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: `La denominación psicométrica exige evidencia de al menos 500 caracteres que documente: ${missingTerms.length ? missingTerms.join(", ") : "constructo, validez, confiabilidad, población, equidad, estandarización y aprobación"}.`,
+            });
+          }
+        }
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          await client.query(`SELECT pg_advisory_xact_lock(132,$1)`, [
+            protocol.job_position_id,
+          ]);
+          const locked = await client.query(
+            `SELECT id,job_position_id,name,version,status
+               FROM assessment_protocols WHERE id=$1 FOR UPDATE`,
+            [input.id]
+          );
+          if (!locked.rows[0]) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "El protocolo no existe.",
+            });
+          }
+          await client.query(
+            `UPDATE assessment_protocols
+                SET status='retirado',updated_by_user_id=$1,updated_at=now()
+              WHERE job_position_id=$2 AND lower(name)=lower($3)
+                AND status='activo' AND id<>$4`,
+            [
+              ctx.user.id,
+              locked.rows[0].job_position_id,
+              locked.rows[0].name,
+              input.id,
+            ]
+          );
+          const result = await client.query(
+            `UPDATE assessment_protocols
+                SET status='activo',updated_by_user_id=$1,updated_at=now()
+              WHERE id=$2 RETURNING *`,
+            [ctx.user.id, input.id]
+          );
+          await client.query(
+            `INSERT INTO audit_log
+               (actor_user_id,entity_type,entity_id,action,after_json)
+             VALUES ($1,'assessment_protocol',$2,'protocol_activated',$3::jsonb)`,
+            [
+              ctx.user.id,
+              input.id,
+              asJson({
+                version: protocol.version,
+                activeItems: protocol.active_items,
+                previousActiveRetired: true,
+              }),
+            ]
+          );
+          await client.query("COMMIT");
+          return result.rows[0];
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
       }),
   }),
 
@@ -2879,6 +3460,13 @@ export const appRouter = router({
       .input(
         z.object({
           model: z.enum(agentModelValues),
+          psychometricModel: z.enum(agentModelValues),
+          activitySummaryModel: z.enum(agentModelValues),
+          transcriptionModel: z.enum(transcriptionModelValues),
+          ttsModel: z.enum(ttsModelValues),
+          ttsVoice: z.enum(OPENAI_TTS_VOICES),
+          audioMaxMb: z.number().int().min(1).max(25),
+          documentMaxMb: z.number().int().min(1).max(25),
           instructions: z.string().trim().min(100).max(20_000),
           summaryWordLimit: z.number().int().min(50).max(1_000),
           useMethodologies: z.boolean(),
@@ -3060,6 +3648,17 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input, ctx }) => {
+        if (
+          input.key === "webhook_secret" &&
+          input.value &&
+          input.value.length < 32
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "El secreto del webhook debe contener al menos 32 caracteres aleatorios.",
+          });
+        }
         try {
           return await saveApiChatSecret(
             await requirePool(),

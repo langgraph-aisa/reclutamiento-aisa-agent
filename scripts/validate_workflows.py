@@ -35,10 +35,39 @@ for path in files:
         '01_flujo_maestro_postulaciones.json': ['process_public_application', 'alreadyApplied', 'N8N_AGENT_EVALUATION_URL'],
         '02_agente_plaza_template.json': ['lmChatOpenAi', 'outputParserStructured', 'jsonSchemaExample', 'application_id', 'finalize_application_evaluation'],
         '03_revision_humana_30s.json': ['30 seconds', 'holdSeconds: 30', 'timeInterval', 'Verificar estado actual', 'Cancelar continuación', 'Sigue calificado'],
-        '04_whatsapp_apichat.json': ['APICHAT_API_ENDPOINT', 'APICHAT_TOKEN', 'APICHAT_ACCOUNT_ID', 'APICHAT_CONNECT_TO', 'internalMessages', 'whatsapp_status'],
+        '04_whatsapp_apichat.json': ['n8n-nodes-base.webhook', 'n8n-nodes-base.if', 'n8n-nodes-base.splitOut', 'n8n-nodes-base.noOp', 'apichat/incoming', 'payload.messages', 'events', 'providerMessageId', 'phoneInternational', 'messageType', 'lastNode', 'PENDIENTE_WEBHOOK_HEADER', '/api/webhooks/apichat/incoming'],
     }
     for marker in required.get(path.name, []):
         if marker not in text:
             raise SystemExit(f'{path.name}: missing semantic marker {marker}')
+    if path.name == '04_whatsapp_apichat.json' and 'APICHAT_' in text:
+        raise SystemExit(f'{path.name}: ApiChat credentials must not be read from environment variables')
+    if path.name == '04_whatsapp_apichat.json':
+        nodes_by_name = {node['name']: node for node in data['nodes']}
+        webhook = nodes_by_name.get('Webhook ApiChat', {})
+        if webhook.get('parameters', {}).get('responseMode') != 'lastNode':
+            raise SystemExit(f'{path.name}: webhook must acknowledge only after the last node')
+        expected_types = {
+            '¿Hay mensajes de texto?': 'n8n-nodes-base.if',
+            'Separar eventos de texto': 'n8n-nodes-base.splitOut',
+            'Sin mensajes de texto': 'n8n-nodes-base.noOp',
+        }
+        for node_name, node_type in expected_types.items():
+            if nodes_by_name.get(node_name, {}).get('type') != node_type:
+                raise SystemExit(f'{path.name}: missing hardened node {node_name}')
+        expected_settings = {
+            'saveDataErrorExecution': 'none',
+            'saveDataSuccessExecution': 'none',
+            'saveManualExecutions': False,
+            'saveExecutionProgress': False,
+            'executionTimeout': 30,
+        }
+        for key, expected in expected_settings.items():
+            if data.get('settings', {}).get(key) != expected:
+                raise SystemExit(f'{path.name}: unsafe or missing setting {key}')
+        branches = data.get('connections', {}).get('¿Hay mensajes de texto?', {}).get('main', [])
+        branch_targets = [branch[0].get('node') if branch else None for branch in branches]
+        if branch_targets != ['Separar eventos de texto', 'Sin mensajes de texto']:
+            raise SystemExit(f'{path.name}: text and no-op branches are not explicit')
     print(f'OK {path.name}: {len(data["nodes"])} nodes; semantic markers present')
 print(f'Validated {len(files)} n8n workflow files')

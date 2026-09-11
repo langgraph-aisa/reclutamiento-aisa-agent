@@ -17,6 +17,14 @@ import {
   AGENT_MODELS,
   DEFAULT_AGENT_SETTINGS,
   EVALUATION_BLOCKS,
+  JARVI_HR_IDENTITY_EMAIL,
+  OPENAI_API_ENDPOINTS,
+  OPENAI_SPEECH_FORMATS,
+  OPENAI_TRANSCRIPTION_EXTENSIONS,
+  OPENAI_TRANSCRIPTION_MODELS,
+  OPENAI_TTS_MODELS,
+  OPENAI_TTS_VOICES,
+  SALARY_GOVERNANCE_POLICY,
   SCORE_BANDS,
   type AgentPreferences,
 } from "@shared/agentConfig";
@@ -29,6 +37,7 @@ import {
   KeyRound,
   RotateCcw,
   Save,
+  ServerCog,
   ShieldCheck,
   Telescope,
   Trash2,
@@ -45,6 +54,8 @@ type SecretKey =
 
 export default function AgentEvaluator() {
   const configuration = trpc.agent.configuration.useQuery();
+  const assignment = trpc.activity.assignment.useQuery();
+  const users = trpc.users.list.useQuery();
   const [preferences, setPreferences] = useState<AgentPreferences>(
     DEFAULT_AGENT_SETTINGS
   );
@@ -73,11 +84,25 @@ export default function AgentEvaluator() {
       ),
     onError: error => toast.error(error.message),
   });
+  const assignJarvi = trpc.activity.assignJarvi.useMutation({
+    onSuccess: async () => {
+      await assignment.refetch();
+      toast.success("Responsable de JARVI HR actualizado");
+    },
+    onError: error => toast.error(error.message),
+  });
 
   useEffect(() => {
     if (!configuration.data) return;
     setPreferences({
       model: configuration.data.model,
+      psychometricModel: configuration.data.psychometricModel,
+      activitySummaryModel: configuration.data.activitySummaryModel,
+      transcriptionModel: configuration.data.transcriptionModel,
+      ttsModel: configuration.data.ttsModel,
+      ttsVoice: configuration.data.ttsVoice,
+      audioMaxMb: configuration.data.audioMaxMb,
+      documentMaxMb: configuration.data.documentMaxMb,
       instructions: configuration.data.instructions,
       summaryWordLimit: configuration.data.summaryWordLimit,
       useMethodologies: configuration.data.useMethodologies,
@@ -265,6 +290,175 @@ export default function AgentEvaluator() {
           </CardContent>
         </Card>
       </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Card className="rounded-3xl border-0 shadow-soft">
+          <CardHeader>
+            <SectionTitle
+              icon={ServerCog}
+              title="Modelos especializados por función"
+              description="Cada tarea conserva un modelo explícito, auditable y sustituible sin mezclar responsabilidades."
+            />
+          </CardHeader>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="font-semibold text-primary">
+                Responses API para pruebas
+              </Label>
+              <Select
+                value={preferences.psychometricModel}
+                onValueChange={psychometricModel =>
+                  setPreferences(current => ({
+                    ...current,
+                    psychometricModel:
+                      psychometricModel as AgentPreferences["psychometricModel"],
+                  }))
+                }
+              >
+                <SelectTrigger className="rounded-2xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {AGENT_MODELS.map(model => <SelectItem key={model.value} value={model.value}>{model.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Una prueba no obtiene validez psicométrica por usar IA; requiere evidencia metodológica y revisión humana.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label className="font-semibold text-primary">
+                Resumen de actividad de 35 palabras
+              </Label>
+              <Select
+                value={preferences.activitySummaryModel}
+                onValueChange={activitySummaryModel =>
+                  setPreferences(current => ({
+                    ...current,
+                    activitySummaryModel:
+                      activitySummaryModel as AgentPreferences["activitySummaryModel"],
+                  }))
+                }
+              >
+                <SelectTrigger className="rounded-2xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {AGENT_MODELS.map(model => <SelectItem key={model.value} value={model.value}>{model.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-xs leading-5 text-muted-foreground">
+                La bitácora estructurada es la evidencia canónica; el resumen es únicamente una proyección legible.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-3xl border-0 shadow-soft">
+          <CardHeader>
+            <SectionTitle
+              icon={ShieldCheck}
+              title="Identidad y regla salarial inalterable"
+              description="Separación explícita entre ejecutor automático y responsable humano, con bloqueo de ofertas económicas de IA."
+            />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label className="font-semibold text-primary">Responsable asignado a JARVI HR</Label>
+              <Select
+                value={assignment.data?.user_id ? String(assignment.data.user_id) : undefined}
+                onValueChange={value => assignJarvi.mutate({ userId: Number(value) })}
+              >
+                <SelectTrigger className="rounded-2xl"><SelectValue placeholder="Seleccione un usuario activo" /></SelectTrigger>
+                <SelectContent>
+                  {(users.data ?? []).filter(user => user.active).map(user => (
+                    <SelectItem key={user.id} value={String(user.id)}>
+                      {user.name ?? "Usuario"} · {user.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Identidad técnica: {JARVI_HR_IDENTITY_EMAIL}. La asignación no atribuye al responsable las acciones ejecutadas por IA.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs leading-5 text-red-950">
+              {SALARY_GOVERNANCE_POLICY}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="rounded-3xl border-0 shadow-soft">
+        <CardHeader>
+          <SectionTitle
+            icon={Activity}
+            title="Audio, voz y documentos"
+            description="Modelos, formatos y cuotas se leen desde PostgreSQL; los endpoints oficiales permanecen cerrados contra SSRF."
+          />
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="space-y-2">
+              <Label className="font-semibold text-primary">Modelo de transcripción</Label>
+              <Select
+                value={preferences.transcriptionModel}
+                onValueChange={transcriptionModel => setPreferences(current => ({ ...current, transcriptionModel: transcriptionModel as AgentPreferences["transcriptionModel"] }))}
+              >
+                <SelectTrigger className="rounded-2xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {OPENAI_TRANSCRIPTION_MODELS.map(model => <SelectItem key={model.value} value={model.value}>{model.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="font-semibold text-primary">Modelo de texto a voz</Label>
+              <Select
+                value={preferences.ttsModel}
+                onValueChange={ttsModel => setPreferences(current => ({ ...current, ttsModel: ttsModel as AgentPreferences["ttsModel"] }))}
+              >
+                <SelectTrigger className="rounded-2xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {OPENAI_TTS_MODELS.map(model => <SelectItem key={model.value} value={model.value}>{model.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="font-semibold text-primary">Voz</Label>
+              <Select
+                value={preferences.ttsVoice}
+                onValueChange={ttsVoice => setPreferences(current => ({ ...current, ttsVoice: ttsVoice as AgentPreferences["ttsVoice"] }))}
+              >
+                <SelectTrigger className="rounded-2xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {OPENAI_TTS_VOICES.map(voice => <SelectItem key={voice} value={voice}>{voice}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="font-semibold text-primary">Audio MB</Label>
+                <Input type="number" min={1} max={25} value={preferences.audioMaxMb} onChange={event => setPreferences(current => ({ ...current, audioMaxMb: Number(event.target.value) }))} className="rounded-2xl" />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-semibold text-primary">CV MB</Label>
+                <Input type="number" min={1} max={25} value={preferences.documentMaxMb} onChange={event => setPreferences(current => ({ ...current, documentMaxMb: Number(event.target.value) }))} className="rounded-2xl" />
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {Object.entries(OPENAI_API_ENDPOINTS).map(([key, endpoint]) => (
+              <div key={key} className="rounded-2xl bg-muted/55 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{key}</p>
+                <p className="mt-2 break-all font-mono text-xs text-primary">{endpoint}</p>
+              </div>
+            ))}
+          </div>
+          <div className="grid gap-3 text-xs text-muted-foreground sm:grid-cols-2">
+            <p><strong className="text-primary">Entrada de transcripción:</strong> {OPENAI_TRANSCRIPTION_EXTENSIONS.join(", ")}.</p>
+            <p><strong className="text-primary">Salida de voz:</strong> {OPENAI_SPEECH_FORMATS.join(", ")}.</p>
+          </div>
+          <Button className="rounded-full" disabled={savePreferences.isPending} onClick={() => savePreferences.mutate(preferences)}>
+            <Save className="mr-2 h-4 w-4" /> Guardar modelos, voz y cuotas
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card className="rounded-3xl border-0 shadow-soft">
         <CardHeader>

@@ -99,6 +99,13 @@
       "when": 1789084282330,
       "tag": "0013_apichat_credential_vault",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789143349594,
+      "tag": "0014_cognitive_governance",
+      "breakpoints": true
     }
   ]
 }

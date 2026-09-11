@@ -1,7 +1,9 @@
 import {
   boolean,
+  check,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   serial,
@@ -11,6 +13,7 @@ import {
   index,
   varchar,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const userRoleEnum = pgEnum("user_role", [
   "user",
@@ -335,6 +338,20 @@ export const applications = pgTable(
     evaluationAt: timestamp("evaluation_at", { withTimezone: true }),
     evaluationReason: text("evaluation_reason"),
     profileSummary: text("profile_summary"),
+    salaryExpectationGtq: numeric("salary_expectation_gtq", {
+      precision: 12,
+      scale: 2,
+    })
+      .default("0")
+      .notNull(),
+    salaryExpectationSource: varchar("salary_expectation_source", {
+      length: 32,
+    })
+      .default("no_declarada")
+      .notNull(),
+    salaryExpectationCapturedAt: timestamp("salary_expectation_captured_at", {
+      withTimezone: true,
+    }),
     reviewHoldUntil: timestamp("review_hold_until", { withTimezone: true }),
     reviewToken: varchar("review_token", { length: 80 }),
     whatsappStatus: varchar("whatsapp_status", { length: 48 })
@@ -359,6 +376,19 @@ export const applications = pgTable(
       table.locationDepartmentId,
       table.locationMunicipalityId,
       table.locationZoneId
+    ),
+    salaryNonnegativeCheck: check(
+      "applications_salary_expectation_nonnegative_ck",
+      sql`${table.salaryExpectationGtq} >= 0`
+    ),
+    salarySourceCheck: check(
+      "applications_salary_expectation_source_ck",
+      sql`${table.salaryExpectationSource} IN ('no_declarada','message','cv','human')`
+    ),
+    salaryEvidenceCheck: check(
+      "applications_salary_expectation_evidence_ck",
+      sql`(${table.salaryExpectationSource} = 'no_declarada' AND ${table.salaryExpectationGtq} = 0 AND ${table.salaryExpectationCapturedAt} IS NULL)
+          OR (${table.salaryExpectationSource} <> 'no_declarada' AND ${table.salaryExpectationGtq} > 0 AND ${table.salaryExpectationCapturedAt} IS NOT NULL)`
     ),
   })
 );
@@ -411,22 +441,52 @@ export const evaluations = pgTable(
   })
 );
 
-export const conversations = pgTable("conversations", {
-  id: serial("id").primaryKey(),
-  applicationId: integer("application_id")
-    .references(() => applications.id, { onDelete: "cascade" })
-    .notNull(),
-  provider: varchar("provider", { length: 48 }).default("apichat").notNull(),
-  externalConversationId: varchar("external_conversation_id", { length: 180 }),
-  status: varchar("status", { length: 48 }).default("pendiente").notNull(),
-  lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: serial("id").primaryKey(),
+    applicationId: integer("application_id")
+      .references(() => applications.id, { onDelete: "cascade" })
+      .notNull(),
+    provider: varchar("provider", { length: 48 }).default("apichat").notNull(),
+    externalConversationId: varchar("external_conversation_id", { length: 180 }),
+    status: varchar("status", { length: 48 }).default("pendiente").notNull(),
+    automationState: varchar("automation_state", { length: 32 })
+      .default("agent")
+      .notNull(),
+    agentEnabled: boolean("agent_enabled").default(true).notNull(),
+    humanTakeover: boolean("human_takeover").default(false).notNull(),
+    assignedUserId: integer("assigned_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+    lastInboundAt: timestamp("last_inbound_at", { withTimezone: true }),
+    lastOutboundAt: timestamp("last_outbound_at", { withTimezone: true }),
+    automationCompletedAt: timestamp("automation_completed_at", {
+      withTimezone: true,
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    lastMessageIdx: index("conversations_last_message_idx").on(
+      table.lastMessageAt.desc().nullsLast(),
+      table.id.desc()
+    ),
+    automationStateCheck: check(
+      "conversations_automation_state_ck",
+      sql`${table.automationState} IN ('agent','handoff_pending','human','completed','error')`
+    ),
+    exclusiveControlCheck: check(
+      "conversations_exclusive_control_ck",
+      sql`NOT (${table.agentEnabled} AND ${table.humanTakeover})`
+    ),
+  })
+);
 
 export const conversationMessages = pgTable(
   "conversation_messages",
@@ -449,6 +509,11 @@ export const conversationMessages = pgTable(
     lastError: text("last_error"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     metadata: jsonb("metadata"),
+    storageKey: text("storage_key"),
+    originalFileName: varchar("original_file_name", { length: 260 }),
+    mimeType: varchar("mime_type", { length: 160 }),
+    sizeBytes: integer("size_bytes"),
+    transcript: text("transcript"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -459,6 +524,313 @@ export const conversationMessages = pgTable(
   table => ({
     messageKeyUq: uniqueIndex("conversation_messages_message_key_uq").on(
       table.messageKey
+    ),
+    timelineIdx: index("conversation_messages_timeline_idx").on(
+      table.conversationId,
+      table.createdAt,
+      table.id
+    ),
+    providerMessageIdx: index("conversation_messages_provider_idx")
+      .on(table.providerMessageId)
+      .where(sql`${table.providerMessageId} IS NOT NULL`),
+    directionCheck: check(
+      "conversation_messages_direction_ck",
+      sql`${table.direction} IN ('inbound','outbound')`
+    ),
+    sizeCheck: check(
+      "conversation_messages_size_ck",
+      sql`${table.sizeBytes} IS NULL OR ${table.sizeBytes} >= 0`
+    ),
+  })
+);
+
+export const inboundMessageQuarantine = pgTable(
+  "inbound_message_quarantine",
+  {
+    id: serial("id").primaryKey(),
+    provider: varchar("provider", { length: 48 }).notNull(),
+    providerMessageHash: varchar("provider_message_hash", {
+      length: 64,
+    }).notNull(),
+    phoneFingerprint: varchar("phone_fingerprint", { length: 64 }).notNull(),
+    reason: varchar("reason", { length: 64 }).notNull(),
+    occurrenceCount: integer("occurrence_count").default(1).notNull(),
+    firstReceivedAt: timestamp("first_received_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastReceivedAt: timestamp("last_received_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    providerMessageUq: uniqueIndex(
+      "inbound_message_quarantine_provider_message_uq"
+    ).on(table.provider, table.providerMessageHash),
+    receivedIdx: index("inbound_message_quarantine_received_idx").on(
+      table.lastReceivedAt.desc()
+    ),
+    occurrenceCheck: check(
+      "inbound_message_quarantine_occurrence_ck",
+      sql`${table.occurrenceCount} > 0`
+    ),
+  })
+);
+
+export const candidateAttachments = pgTable(
+  "candidate_attachments",
+  {
+    id: serial("id").primaryKey(),
+    applicationId: integer("application_id")
+      .references(() => applications.id, { onDelete: "cascade" })
+      .notNull(),
+    conversationMessageId: integer("conversation_message_id").references(
+      () => conversationMessages.id,
+      { onDelete: "set null" }
+    ),
+    category: varchar("category", { length: 32 }).notNull(),
+    objectKey: text("object_key").notNull(),
+    originalName: varchar("original_name", { length: 260 }).notNull(),
+    declaredMimeType: varchar("declared_mime_type", { length: 160 }),
+    detectedMimeType: varchar("detected_mime_type", { length: 160 }).notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: varchar("sha256", { length: 64 }).notNull(),
+    providerMediaId: varchar("provider_media_id", { length: 180 }),
+    status: varchar("status", { length: 32 }).default("almacenado").notNull(),
+    transcription: text("transcription"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    applicationCreatedIdx: index(
+      "candidate_attachments_application_created_idx"
+    ).on(table.applicationId, table.createdAt.desc()),
+    sha256Idx: index("candidate_attachments_sha256_idx").on(table.sha256),
+    sizeCheck: check(
+      "candidate_attachments_size_ck",
+      sql`${table.sizeBytes} >= 0`
+    ),
+    sha256Check: check(
+      "candidate_attachments_sha256_ck",
+      sql`${table.sha256} ~ '^[a-f0-9]{64}$'`
+    ),
+  })
+);
+
+export const agentUserAssignments = pgTable(
+  "agent_user_assignments",
+  {
+    id: serial("id").primaryKey(),
+    agentKey: varchar("agent_key", { length: 80 }).notNull(),
+    userId: integer("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    identityEmail: varchar("identity_email", { length: 320 }).notNull(),
+    active: boolean("active").default(true).notNull(),
+    assignedByUserId: integer("assigned_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" }
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    agentKeyUq: uniqueIndex("agent_user_assignments_agent_key_uq").on(
+      table.agentKey
+    ),
+  })
+);
+
+export const adminActivityEvents = pgTable(
+  "admin_activity_events",
+  {
+    id: serial("id").primaryKey(),
+    actorType: varchar("actor_type", { length: 16 }).notNull(),
+    actorUserId: integer("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    actorEmail: varchar("actor_email", { length: 320 }),
+    pagePath: varchar("page_path", { length: 240 }).notNull(),
+    eventType: varchar("event_type", { length: 48 }).notNull(),
+    outcome: varchar("outcome", { length: 24 }).notNull(),
+    expectedAction: varchar("expected_action", { length: 160 }),
+    actualAction: varchar("actual_action", { length: 160 }),
+    entityType: varchar("entity_type", { length: 80 }),
+    entityId: integer("entity_id"),
+    correlationId: varchar("correlation_id", { length: 80 }).notNull(),
+    controlStartedAt: timestamp("control_started_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    metadata: jsonb("metadata").default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    pageCreatedIdx: index("admin_activity_events_page_created_idx").on(
+      table.pagePath,
+      table.createdAt.desc()
+    ),
+    actorCreatedIdx: index("admin_activity_events_actor_created_idx").on(
+      table.actorUserId,
+      table.createdAt.desc()
+    ),
+    correlationUq: uniqueIndex("admin_activity_events_correlation_uq").on(
+      table.correlationId
+    ),
+    actorTypeCheck: check(
+      "admin_activity_events_actor_type_ck",
+      sql`${table.actorType} IN ('human','ai','system')`
+    ),
+    outcomeCheck: check(
+      "admin_activity_events_outcome_ck",
+      sql`${table.outcome} IN ('guardado','configuracion','trabajando','error')`
+    ),
+  })
+);
+
+export const assessmentProtocols = pgTable(
+  "assessment_protocols",
+  {
+    id: serial("id").primaryKey(),
+    jobPositionId: integer("job_position_id")
+      .references(() => jobPositions.id, { onDelete: "cascade" })
+      .notNull(),
+    name: varchar("name", { length: 180 }).notNull(),
+    level: varchar("level", { length: 32 }).notNull(),
+    assessmentType: varchar("assessment_type", { length: 48 }).notNull(),
+    version: integer("version").default(1).notNull(),
+    status: varchar("status", { length: 24 }).default("borrador").notNull(),
+    executionMode: varchar("execution_mode", { length: 32 })
+      .default("esperar_respuesta")
+      .notNull(),
+    greeting: text("greeting"),
+    farewell: text("farewell"),
+    methodology: text("methodology"),
+    validationEvidence: text("validation_evidence"),
+    createdByUserId: integer("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    updatedByUserId: integer("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    positionIdx: index("assessment_protocols_position_idx").on(
+      table.jobPositionId,
+      table.status
+    ),
+    versionUq: uniqueIndex("assessment_protocols_version_uq").on(
+      table.jobPositionId,
+      table.name,
+      table.version
+    ),
+    versionCheck: check(
+      "assessment_protocols_version_ck",
+      sql`${table.version} > 0`
+    ),
+    levelCheck: check(
+      "assessment_protocols_level_ck",
+      sql`${table.level} IN ('nivel','basica','tecnica','avanzada')`
+    ),
+    typeCheck: check(
+      "assessment_protocols_type_ck",
+      sql`${table.assessmentType} IN ('competencias','conocimiento','psicometrica_validada')`
+    ),
+    statusCheck: check(
+      "assessment_protocols_status_ck",
+      sql`${table.status} IN ('borrador','activo','retirado')`
+    ),
+    executionCheck: check(
+      "assessment_protocols_execution_ck",
+      sql`${table.executionMode} IN ('esperar_respuesta','evaluacion_inmediata')`
+    ),
+  })
+);
+
+export const assessmentItems = pgTable(
+  "assessment_items",
+  {
+    id: serial("id").primaryKey(),
+    protocolId: integer("protocol_id")
+      .references(() => assessmentProtocols.id, { onDelete: "cascade" })
+      .notNull(),
+    orderIndex: integer("order_index").default(0).notNull(),
+    prompt: text("prompt").notNull(),
+    agentInstruction: text("agent_instruction").notNull(),
+    evaluationCriterion: text("evaluation_criterion").notNull(),
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    protocolOrderUq: uniqueIndex("assessment_items_protocol_order_uq").on(
+      table.protocolId,
+      table.orderIndex
+    ),
+    orderCheck: check(
+      "assessment_items_order_ck",
+      sql`${table.orderIndex} >= 0`
+    ),
+  })
+);
+
+export const assessmentSessions = pgTable(
+  "assessment_sessions",
+  {
+    id: serial("id").primaryKey(),
+    applicationId: integer("application_id")
+      .references(() => applications.id, { onDelete: "cascade" })
+      .notNull(),
+    protocolId: integer("protocol_id")
+      .references(() => assessmentProtocols.id, { onDelete: "restrict" })
+      .notNull(),
+    status: varchar("status", { length: 32 }).default("pendiente").notNull(),
+    currentItemIndex: integer("current_item_index").default(0).notNull(),
+    score: numeric("score", { precision: 5, scale: 2 }),
+    agentEnabled: boolean("agent_enabled").default(true).notNull(),
+    humanTakeover: boolean("human_takeover").default(false).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    applicationProtocolUq: uniqueIndex(
+      "assessment_sessions_application_protocol_uq"
+    ).on(table.applicationId, table.protocolId),
+    currentItemCheck: check(
+      "assessment_sessions_current_item_ck",
+      sql`${table.currentItemIndex} >= 0`
+    ),
+    scoreCheck: check(
+      "assessment_sessions_score_ck",
+      sql`${table.score} IS NULL OR (${table.score} >= 0 AND ${table.score} <= 100)`
+    ),
+    statusCheck: check(
+      "assessment_sessions_status_ck",
+      sql`${table.status} IN ('pendiente','en_curso','finalizada','error')`
     ),
   })
 );
@@ -482,6 +854,14 @@ export const auditLog = pgTable(
     entityIdx: index("audit_log_entity_idx").on(
       table.entityType,
       table.entityId
+    ),
+    createdIdx: index("audit_log_created_idx").on(
+      table.createdAt.desc(),
+      table.id.desc()
+    ),
+    actorCreatedIdx: index("audit_log_actor_created_idx").on(
+      table.actorUserId,
+      table.createdAt.desc()
     ),
   })
 );
@@ -585,6 +965,11 @@ export type Application = typeof applications.$inferSelect;
 export type ApplicationAnswer = typeof applicationAnswers.$inferSelect;
 export type Evaluation = typeof evaluations.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
+export type InboundMessageQuarantine =
+  typeof inboundMessageQuarantine.$inferSelect;
+export type AdminActivityEvent = typeof adminActivityEvents.$inferSelect;
+export type AssessmentProtocol = typeof assessmentProtocols.$inferSelect;
+export type AssessmentItem = typeof assessmentItems.$inferSelect;
 export type MethodologyDocument = typeof methodologyDocuments.$inferSelect;
 export type MethodologyDocumentRevision =
   typeof methodologyDocumentRevisions.$inferSelect;

@@ -6,6 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 // Nota: registerOAuthRoutes fue removido, ya que el sistema nuevo usa códigos por correo.
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter, auditPublishedPublicCopy } from "../routers";
+import { registerApiChatInboundWebhook } from "../apiChatWebhook";
 import { getPool } from "../db";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
@@ -32,6 +33,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  // Contrato controlado para n8n. Se registra antes del parser global para
+  // imponer un límite pequeño y no aceptar cargas multimedia por esta ruta.
+  registerApiChatInboundWebhook(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

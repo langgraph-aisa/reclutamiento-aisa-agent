@@ -19,7 +19,7 @@ function safePercentage(value: string | undefined) {
   const parsed = Number(value);
   return Number.isFinite(parsed)
     ? Math.max(0, Math.min(100, Math.round(parsed)))
-    : 100;
+    : 0;
 }
 
 function repositoryLanguages(): RepositoryLanguage[] {

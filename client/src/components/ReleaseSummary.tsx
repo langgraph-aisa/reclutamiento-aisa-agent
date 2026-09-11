@@ -11,12 +11,30 @@ const LANGUAGE_COLORS: Record<string, string> = {
   Other: "#d1d5db",
 };
 
-export function ReleaseSummary() {
+export function ReleaseSummary({ compact = false }: { compact?: boolean }) {
   const metadata = REPOSITORY_METADATA;
+
+  if (compact) {
+    return (
+      <section
+        aria-label={`Instantánea de compilación: GitHub ${metadata.githubSyncPercentage} por ciento sincronizado`}
+        title={`${metadata.branch} · ${metadata.commit} · ${metadata.githubSyncPercentage} % al construir`}
+        className="mt-2 grid place-items-center rounded-xl border border-sidebar-border/80 bg-sidebar-accent/35 py-2"
+      >
+        <span className="relative">
+          <Github className="size-4 text-sidebar-foreground" aria-hidden="true" />
+          <span className="absolute -right-1 -top-1 size-2 rounded-full border border-sidebar bg-emerald-500" />
+        </span>
+        <span className="mt-1 font-mono text-[8px] text-sidebar-foreground/70">
+          {metadata.githubSyncPercentage}%
+        </span>
+      </section>
+    );
+  }
 
   return (
     <section
-      aria-label="Estado de la versión y sincronización del repositorio"
+      aria-label="Instantánea de compilación y sincronización del repositorio"
       className="release-summary mt-2 space-y-2 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/35 p-2.5"
     >
       <div className="flex items-center justify-between gap-2 text-[11px] text-sidebar-foreground/70">
@@ -32,12 +50,12 @@ export function ReleaseSummary() {
           <span className="inline-flex items-center gap-1">
             <Github className="size-3" aria-hidden="true" /> GitHub
           </span>
-          <span>{metadata.githubSyncPercentage}% sincronizado</span>
+          <span>{metadata.githubSyncPercentage}% al construir</span>
         </div>
         <div
           className="h-1.5 overflow-hidden rounded-full bg-sidebar-border/65"
           role="progressbar"
-          aria-label="Sincronización con la rama remota"
+          aria-label="Sincronización con la rama remota al construir"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={metadata.githubSyncPercentage}

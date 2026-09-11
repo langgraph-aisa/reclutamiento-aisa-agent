@@ -12,19 +12,18 @@ Este proyecto contiene una aplicación web responsive para postulaciones y opera
 | --------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Aplicación React + Express + tRPC | Formulario público, panel, configuración e informes                                   | `DATABASE_URL`, autenticación del proveedor elegido  |
 | PostgreSQL                        | Plazas, formularios, respuestas, candidatos, evaluaciones, conversaciones y auditoría | Usuario, contraseña, host, puerto, SSL               |
-| n8n on-premise                    | Orquestación opcional y agentes por plaza                                             | Credenciales Postgres y OpenAI/ChatGPT               |
+| n8n on-premise                    | Adaptador entrante ApiChat; los demás flujos son referencias importables              | Header Auth interno para el workflow 04               |
 | ApiChat                           | Solicitud directa de CV por WhatsApp                                                  | Credenciales cifradas desde Configuración > WhatsApp |
-| OpenAI/ChatGPT                    | Razonamiento de respuestas abiertas                                                   | Credencial del nodo nativo de n8n                    |
+| OpenAI                            | Razonamiento y servicios aislados de transcripción/TTS; no hay endpoint productivo de medios | Claves cifradas desde Agente de IA LangGraph |
 
 ## PostgreSQL
 
 1. Crear una base PostgreSQL en EasyPanel y activar SSL si la red lo requiere.
-2. Definir `DATABASE_URL` en la aplicación y crear una credencial PostgreSQL con el mismo acceso dentro de n8n.
-3. Ejecutar, en este orden, `drizzle/migrations/0000_smooth_jasper_sitwell.sql`, `drizzle/migrations/0001_daffy_wendigo.sql`, `drizzle/migrations/0002_same_bromley.sql` y `database/001_functions.sql`.
-4. Ejecutar `database/002_ine_catalog_seed.sql` para cargar los 22 departamentos y 338 municipios identificados en el archivo oficial del INE. Las zonas se mantienen administrables porque su fuente y granularidad operativa pueden variar.
-5. Promover el primer usuario administrador por medio de SQL controlado, por ejemplo: `UPDATE users SET role='admin' WHERE email='correo-del-administrador';`.
+2. Definir `DATABASE_URL` en la aplicación y ejecutar `pnpm db:push`; Drizzle aplica el journal hasta `0014_cognitive_governance.sql`.
+3. Ejecutar `database/002_ine_catalog_seed.sql` si el catálogo geográfico aún no está cargado. Las zonas se mantienen administrables porque su fuente y granularidad operativa pueden variar.
+4. Promover el primer usuario administrador por medio de SQL controlado, por ejemplo: `UPDATE users SET role='admin' WHERE email='correo-del-administrador';`.
 
-Las funciones `process_public_application` y `finalize_application_evaluation` son usadas por el flujo maestro y el agente. La primera normaliza la recepción, resuelve la plaza por `public_slug`, crea o actualiza el candidato y devuelve `alreadyApplied` cuando la combinación candidato + plaza ya existe. La segunda persiste evaluación y estado.
+Las funciones `process_public_application` y `finalize_application_evaluation` permanecen como soporte de los workflows históricos 01 y 02. No forman parte de la ruta vigente de postulación y evaluación del backend; no deben presentarse como dependencias del runtime actual.
 
 ## Variables de entorno
 
@@ -34,30 +33,26 @@ Las funciones `process_public_application` y `finalize_application_evaluation` s
 
 ### n8n y evaluación
 
-| Variable                        | Uso                                                                             |
-| ------------------------------- | ------------------------------------------------------------------------------- |
-| `N8N_AGENT_EVALUATION_URL`      | Webhook público del agente que evalúa una postulación nueva.                    |
-| `N8N_MANUAL_STATUS_WEBHOOK_URL` | Webhook público que recibe cambios humanos y programa la espera de 30 segundos. |
-| `OPENAI_MODEL`                  | Modelo opcional del nodo OpenAI Chat Model.                                     |
+El runtime de evaluación no consulta `N8N_AGENT_EVALUATION_URL`, `N8N_MANUAL_STATUS_WEBHOOK_URL` ni `OPENAI_MODEL`. La evaluación se ejecuta en el backend y el envío ApiChat ocurre después de confirmar la operación local. El workflow 04 es la única excepción funcional: adapta mensajes entrantes desde la URL de n8n hacia el receptor autenticado del backend.
 
 ### ApiChat
 
-ApiChat no utiliza variables de entorno en JARVI RH 2.0.129. Ejecute `drizzle/migrations/0013_apichat_credential_vault.sql` y configure endpoint, conexión, webhook, Client ID y token desde Administración > Configuración > WhatsApp. Los secretos se cifran en el servidor antes de almacenarse en `integration_settings`; no se devuelven al navegador.
+ApiChat no utiliza variables de entorno en JARVI RH 2.0.130. Ejecute las migraciones y configure endpoint, conexión, webhook, Client ID, token y secreto del receptor desde Administración > Configuración > WhatsApp. Los secretos se cifran en el servidor antes de almacenarse en `integration_settings`; no se devuelven al navegador.
 
-No copiar la URL del editor de n8n (`/workflow/...`) como webhook. Cada nodo Webhook muestra su URL de producción después de activar el workflow; esas URLs son las que se deben colocar en las variables.
+No copie la URL del editor de n8n (`/workflow/...`) como webhook. El nodo Webhook muestra su URL de producción después de activar el workflow 04; esa URL es la que debe guardar en Configuración > WhatsApp y registrar en ApiChat.
 
 ## Importación de n8n
 
-Importar los archivos en este orden:
+Solo el workflow 04 interviene opcionalmente en el runtime vigente y lo hace como adaptador entrante. Los workflows 01 a 03 son referencias históricas para experimentación aislada:
 
-1. `01_flujo_maestro_postulaciones.json` recibe el POST de la aplicación, guarda la postulación, bloquea duplicados y llama al agente.
-2. `02_agente_plaza_template.json` es una plantilla. Duplicarla una vez por plaza, cambiar el nombre, `path`, criterios o referencias de plaza y conservar la conexión al nodo OpenAI Chat Model y al Structured Output Parser.
-3. `03_revision_humana_30s.json` se conserva como referencia de la ventana histórica de revisión.
-4. `04_whatsapp_apichat.json` es un artefacto heredado inactivo y no debe activarse: el backend actual realiza el envío directo con la configuración cifrada de PostgreSQL.
+1. `01_flujo_maestro_postulaciones.json` documenta el flujo maestro anterior; no recibe las postulaciones del runtime actual.
+2. `02_agente_plaza_template.json` documenta una plantilla anterior; no sustituye al evaluador del backend.
+3. `03_revision_humana_30s.json` conserva la referencia histórica de una espera que no existe en la operación vigente.
+4. `04_whatsapp_apichat.json` recibe el sobre oficial `messages`, conserva únicamente texto entrante individual y lo normaliza para el backend. Configure «Cabecera interna Talento AISA» con `Authorization: Bearer <secreto>`, actívelo y confirme `/webhook/apichat/incoming`.
 
-Después de importar, asignar una credencial PostgreSQL a cada nodo Postgres y una credencial OpenAI/ChatGPT al nodo `OpenAI Chat Model`. Los IDs `PENDIENTE` y `PENDIENTE_WORKFLOW_WHATSAPP` son marcadores intencionales: deben reemplazarse por la credencial o workflow correspondiente dentro de la instancia n8n, sin guardar secretos en los JSON.
+Para el único adaptador operativo, asigne solamente la credencial Header Auth interna al nodo «Entregar a Talento AISA». El marcador `PENDIENTE_WEBHOOK_HEADER` debe reemplazarse dentro de n8n sin guardar el secreto en el JSON. Las credenciales PostgreSQL/OpenAI y los demás marcadores pertenecen exclusivamente a los workflows históricos y no son requisitos del runtime.
 
-El flujo runtime de solicitud de CV no depende de las credenciales de n8n ni del artefacto heredado de WhatsApp.
+El envío runtime de solicitud de CV no depende de credenciales n8n y se ejecuta directamente desde el backend después del commit, sin espera de 30 segundos. La recepción sí requiere el adaptador 04 activado cuando ApiChat está configurado con la URL de n8n. El receptor revalida cada texto mediante `GET /v1/messages` antes de resolver y persistir; una discordancia responde `422` y un fallo de verificación responde `500`. El workflow responde después del último nodo y desactiva la retención de ejecuciones en n8n.
 
 ## Publicación de la aplicación
 
@@ -65,16 +60,16 @@ La aplicación puede montarse en EasyPanel como servicio Node con el comando `pn
 
 ## Pruebas de aceptación
 
-Enviar una postulación completa y comprobar que solo se crea al pulsar `Enviar formulario`. Repetir el envío con el mismo teléfono y plaza para verificar el aviso de duplicado. Crear una regla `hardFail`, probar una respuesta incorrecta y confirmar `no_calificado`. Probar una respuesta abierta con experiencia expresada en meses y verificar que la IA devuelve JSON estructurado. Seleccionar **Solicitar CV por WhatsApp** (estado interno `calificado`), comprobar la marca de espera y cambiar el estado antes de 30 segundos para confirmar cancelación. Luego repetir sin cambiarlo y comprobar mensaje al candidato y alerta a la lista interna.
+Enviar una postulación completa y comprobar que solo se crea al pulsar `Enviar formulario`. Repetir el envío con el mismo teléfono y plaza para verificar el aviso de duplicado. Crear una regla `hardFail`, probar una respuesta incorrecta y confirmar `no_calificado`. Probar una respuesta abierta con experiencia expresada en meses y verificar que la IA devuelve JSON estructurado. Seleccionar **Solicitar CV por WhatsApp** (estado interno `calificado`) y comprobar el envío directo posterior al commit y el estado local de entrega; un resultado desconocido exige conciliación manual antes del reintento. En una recepción ficticia separada, verificar la deduplicación entrante por `providerMessageId`, la consulta al proveedor, el acuse posterior y la no retención en n8n.
 
 ## Validación de workflows y límites de la plantilla
 
-Los cuatro archivos JSON se conservan como artefactos históricos importables. La integración activa de ApiChat está implementada en `server/cvRequest.ts`, `server/apiChatSettings.ts` y `server/apichat.ts`, y se valida con Vitest sin realizar envíos reales.
+Los workflows 01 a 03 se conservan como referencias importables. El workflow 04 es exclusivamente el adaptador entrante; el envío activo permanece en `server/cvRequest.ts`, `server/apiChatSettings.ts` y `server/apichat.ts`. Las pruebas automatizadas usan transportes simulados y no prueban el proveedor ni un endpoint productivo de medios.
 
-Los valores `PENDIENTE` se mantienen deliberadamente en credenciales de PostgreSQL, OpenAI/ChatGPT y el ID del subworkflow de WhatsApp. No son secretos ni deben sustituirse por valores inventados: deben mapearse a credenciales y workflow IDs reales después de importar los JSON en la instancia on-premise.
+Los valores `PENDIENTE` se mantienen deliberadamente en los artefactos históricos; `PENDIENTE_WEBHOOK_HEADER` permanece en el adaptador 04. No son secretos ni deben sustituirse por valores inventados: solo deben mapearse cuando se importe el workflow correspondiente en una instancia controlada.
 
-El archivo `02_agente_plaza_template.json` funciona como plantilla versionada para clonar un agente por plaza. Después de crear una plaza en la aplicación, se debe duplicar este workflow, asignarle el identificador de la plaza mediante el payload y actualizar la URL `N8N_AGENT_EVALUATION_URL` del flujo maestro para apuntar al agente correspondiente o a un router de agentes.
+El archivo `02_agente_plaza_template.json` funciona como plantilla histórica para experimentación aislada. No debe conectarse al runtime activo ni sustituir el evaluador del backend sin un diseño, autorización y prueba de integración independientes.
 
 La fuente inicial del catálogo contiene 22 departamentos y 338 municipios. Las zonas no se tratan como nomenclatura nacional única dentro de la fuente inicial; por ello se dejaron como catálogo configurable, con importación JSON y mantenimiento administrativo de nombre y estado activo.
 
-La aplicación se verificó con TypeScript, pruebas Vitest y build de producción. La prueba real de ApiChat debe ejecutarse desde el botón **Verificar** después de configurar las credenciales cifradas; esta acción consulta el estado y no envía mensajes.
+La aplicación se verificó con TypeScript, pruebas Vitest y build de producción. La prueba real de ApiChat debe ejecutarse desde el botón **Verificar** después de configurar las credenciales cifradas; esta acción consulta el estado y no envía mensajes. La alineación con ISO y DORA es metodológica: esta instalación no constituye certificación ISO, medición DORA completa ni validación psicométrica.

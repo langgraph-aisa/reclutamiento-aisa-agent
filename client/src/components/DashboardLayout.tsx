@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AppBrand } from "@/components/AppBrand";
+import { ActivityAuditBar } from "@/components/ActivityAuditBar";
 import { ReleaseSummary } from "@/components/ReleaseSummary";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -27,12 +28,15 @@ import { RELEASE_LABEL } from "@shared/release";
 import {
   BarChart3,
   Bot,
+  BrainCircuit,
   BriefcaseBusiness,
+  ClipboardList,
   Globe2,
   KeyRound,
   LayoutDashboard,
   LogOut,
   MessageCircle,
+  MessagesSquare,
   PanelLeft,
   Search,
   Users,
@@ -46,6 +50,13 @@ import { Button } from "./ui/button";
 const menuItems = [
   { icon: LayoutDashboard, label: "Resumen", path: "/admin" },
   {
+    icon: MessagesSquare,
+    label: "Bandeja de entrada",
+    path: "/admin/inbox",
+  },
+  { icon: Search, label: "Revisión Humana", path: "/admin/human-review" },
+  { icon: Users, label: "Candidatos", path: "/admin/candidates" },
+  {
     icon: BriefcaseBusiness,
     label: "Plazas y formularios",
     path: "/admin/jobs",
@@ -56,10 +67,19 @@ const menuItems = [
     path: "/admin/profiles",
     adminOnly: true,
   },
-  { icon: Users, label: "Candidatos", path: "/admin/candidates" },
-  { icon: Search, label: "Revisión Humana", path: "/admin/human-review" },
+  {
+    icon: BrainCircuit,
+    label: "Pruebas psicométricas",
+    path: "/admin/assessments",
+    adminOnly: true,
+  },
   { icon: BarChart3, label: "Informes", path: "/admin/reports" },
   { icon: Globe2, label: "MST-EIR", path: "/admin/mst-eir", adminOnly: true },
+  {
+    icon: ClipboardList,
+    label: "Actividad y control ISO",
+    path: "/admin/activity",
+  },
   {
     icon: Bot,
     label: "Agente de IA LangGraph",
@@ -82,6 +102,7 @@ const menuItems = [
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
+const SIDEBAR_OPEN_KEY = "sidebar-open";
 const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
@@ -95,12 +116,19 @@ export default function DashboardLayout({
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => localStorage.getItem(SIDEBAR_OPEN_KEY) !== "false"
+  );
   const { loading, user } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_OPEN_KEY, String(sidebarOpen));
+  }, [sidebarOpen]);
 
   if (loading) {
     return <DashboardLayoutSkeleton />;
@@ -133,6 +161,8 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider
+      open={sidebarOpen}
+      onOpenChange={setSidebarOpen}
       style={
         {
           "--sidebar-width": `${sidebarWidth}px`,
@@ -164,7 +194,11 @@ function DashboardLayoutContent({
   const visibleMenuItems = menuItems.filter(
     item => !item.adminOnly || user?.role === "admin"
   );
-  const activeMenuItem = visibleMenuItems.find(item => item.path === location);
+  const activeMenuItem = visibleMenuItems.find(item =>
+    item.path === "/admin"
+      ? location === item.path
+      : location === item.path || location.startsWith(`${item.path}/`)
+  );
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -221,9 +255,14 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLocation("/admin")}
+                  className="flex min-w-0 items-center gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="Abrir el resumen administrativo"
+                >
                   <AppBrand className="h-8 max-w-full dark:brightness-0 dark:invert" />
-                </div>
+                </button>
               ) : null}
             </div>
           </SidebarHeader>
@@ -231,7 +270,11 @@ function DashboardLayoutContent({
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
               {visibleMenuItems.map(item => {
-                const isActive = location === item.path;
+                const isActive =
+                  item.path === "/admin"
+                    ? location === item.path
+                    : location === item.path ||
+                      location.startsWith(`${item.path}/`);
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
@@ -301,7 +344,7 @@ function DashboardLayoutContent({
               </DropdownMenu>
               <ThemeToggle compact={isCollapsed} />
             </div>
-            {!isCollapsed && <ReleaseSummary />}
+            <ReleaseSummary compact={isCollapsed} />
           </SidebarFooter>
         </Sidebar>
         <div
@@ -329,7 +372,10 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="min-w-0 flex-1 overflow-x-clip p-4">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-clip p-4">
+          <ActivityAuditBar />
+          {children}
+        </main>
       </SidebarInset>
     </>
   );

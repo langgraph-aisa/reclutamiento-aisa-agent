@@ -8,6 +8,73 @@ export const AGENT_MODELS = [
   { value: "gpt-4o-mini", label: "GPT-4o mini · opción económica" },
 ] as const;
 
+export const OPENAI_TRANSCRIPTION_MODELS = [
+  {
+    value: "gpt-4o-mini-transcribe",
+    label: "GPT-4o mini Transcribe · opción económica",
+  },
+  {
+    value: "gpt-4o-transcribe",
+    label: "GPT-4o Transcribe · mayor precisión",
+  },
+  { value: "whisper-1", label: "Whisper 1 · compatibilidad heredada" },
+] as const;
+
+export const OPENAI_TTS_MODELS = [
+  { value: "gpt-4o-mini-tts", label: "GPT-4o mini TTS · recomendado" },
+  { value: "tts-1", label: "TTS 1 · baja latencia" },
+  { value: "tts-1-hd", label: "TTS 1 HD · mayor calidad" },
+] as const;
+
+export const OPENAI_TTS_VOICES = [
+  "alloy",
+  "ash",
+  "ballad",
+  "coral",
+  "echo",
+  "fable",
+  "onyx",
+  "nova",
+  "sage",
+  "shimmer",
+  "verse",
+  "marin",
+  "cedar",
+] as const;
+
+export const OPENAI_API_ENDPOINTS = {
+  responses: "https://api.openai.com/v1/responses",
+  transcriptions: "https://api.openai.com/v1/audio/transcriptions",
+  speech: "https://api.openai.com/v1/audio/speech",
+} as const;
+
+export const OPENAI_TRANSCRIPTION_EXTENSIONS = [
+  "flac",
+  "mp3",
+  "mp4",
+  "mpeg",
+  "mpga",
+  "m4a",
+  "ogg",
+  "wav",
+  "webm",
+] as const;
+
+export const OPENAI_SPEECH_FORMATS = [
+  "mp3",
+  "opus",
+  "aac",
+  "flac",
+  "wav",
+  "pcm",
+] as const;
+
+export const ACTIVITY_SUMMARY_WORD_LIMIT = 35;
+export const ACTIVITY_TITLE_WORD_LIMIT = 11;
+export const JARVI_HR_IDENTITY_EMAIL = "adminit@aisa.com.gt";
+
+export const SALARY_GOVERNANCE_POLICY = `REGLA INALTERABLE DE REMUNERACIÓN: el agente de IA no debe ofrecer, prometer, negociar, sugerir ni inventar salarios, rangos, prestaciones o propuestas económicas. La Gerencia comunica cualquier oferta únicamente durante una entrevista personal. La expectativa salarial del candidato solo puede registrarse cuando aparece de manera explícita en su CV o en un mensaje emitido por la persona; si no existe evidencia literal, debe permanecer en cero y marcarse como no declarada.`;
+
 export const EVALUATION_BLOCKS = [
   {
     id: "identificacion_ajuste",
@@ -104,8 +171,19 @@ Para auditoría humana, la IA entrega una puntuación de 0 a 100 y una explicaci
 El esquema toma MST-EIR/ITEI como referencia para valorar conocimiento, práctica, resolución de problemas, seguridad, competencias digitales y contexto profesional. La recomendación automatizada es apoyo a la preselección y conserva revisión humana.`;
 
 export type AgentModel = (typeof AGENT_MODELS)[number]["value"];
+export type OpenAiTranscriptionModel =
+  (typeof OPENAI_TRANSCRIPTION_MODELS)[number]["value"];
+export type OpenAiTtsModel = (typeof OPENAI_TTS_MODELS)[number]["value"];
+export type OpenAiTtsVoice = (typeof OPENAI_TTS_VOICES)[number];
 export type AgentPreferences = {
   model: AgentModel;
+  psychometricModel: AgentModel;
+  activitySummaryModel: AgentModel;
+  transcriptionModel: OpenAiTranscriptionModel;
+  ttsModel: OpenAiTtsModel;
+  ttsVoice: OpenAiTtsVoice;
+  audioMaxMb: number;
+  documentMaxMb: number;
   instructions: string;
   summaryWordLimit: number;
   useMethodologies: boolean;
@@ -117,6 +195,13 @@ export type AgentPreferences = {
 
 export const DEFAULT_AGENT_SETTINGS: AgentPreferences = {
   model: "gpt-5.2",
+  psychometricModel: "gpt-4.1-mini",
+  activitySummaryModel: "gpt-4o-mini",
+  transcriptionModel: "gpt-4o-mini-transcribe",
+  ttsModel: "gpt-4o-mini-tts",
+  ttsVoice: "coral",
+  audioMaxMb: 5,
+  documentMaxMb: 5,
   instructions: DEFAULT_AGENT_INSTRUCTIONS,
   summaryWordLimit: 180,
   useMethodologies: true,

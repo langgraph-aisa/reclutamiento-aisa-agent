@@ -1,3 +1,4 @@
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_AGENT_SETTINGS } from "../shared/agentConfig";
 import {
@@ -5,12 +6,26 @@ import {
   encryptAgentSecret,
   getAgentConfiguration,
   getAgentRuntimeSettings,
+  integrationSecretContext,
   maskAgentSecret,
   saveAgentPreferences,
   saveAgentSecret,
 } from "./agentSettings";
 
 afterEach(() => vi.unstubAllEnvs());
+
+function encryptLegacyV1(value: string, material: string) {
+  const iv = randomBytes(12);
+  const key = createHash("sha256").update(material).digest();
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const encrypted = Buffer.concat([
+    cipher.update(value, "utf8"),
+    cipher.final(),
+  ]);
+  return `enc:v1:${iv.toString("base64url")}:${cipher
+    .getAuthTag()
+    .toString("base64url")}:${encrypted.toString("base64url")}`;
+}
 
 describe("agent settings security", () => {
   it("encrypts credentials at rest and decrypts them only on the server", () => {
@@ -21,9 +36,13 @@ describe("agent settings security", () => {
     const source = "sk-proj-secret-value-123456789";
     const encrypted = encryptAgentSecret(source);
 
-    expect(encrypted).toMatch(/^enc:v1:/);
+    expect(encrypted).toMatch(/^enc:v2:/);
     expect(encrypted).not.toContain(source);
     expect(decryptAgentSecret(encrypted)).toBe(source);
+    expect(() =>
+      decryptAgentSecret(encrypted, "apichat:token")
+    ).toThrow(/descifrar/);
+    expect(() => decryptAgentSecret(source)).toThrow(/formato cifrado/);
     expect(maskAgentSecret(source)).toBe("••••••••6789");
   });
 
@@ -32,7 +51,10 @@ describe("agent settings security", () => {
       "AGENT_SETTINGS_ENCRYPTION_KEY",
       "test-key-material-with-more-than-thirty-two-characters"
     );
-    const encrypted = encryptAgentSecret("sk-proj-do-not-expose-4321");
+    const encrypted = encryptAgentSecret(
+      "sk-proj-do-not-expose-4321",
+      integrationSecretContext("ai_agent", "openai_api_key")
+    );
     const pool = {
       query: vi.fn().mockResolvedValue({
         rows: [
@@ -55,25 +77,91 @@ describe("agent settings security", () => {
     expect(JSON.stringify(result)).not.toContain("do-not-expose");
   });
 
-  it("uses stable server configuration when a dedicated encryption key is absent", () => {
-    vi.stubEnv("AGENT_SETTINGS_ENCRYPTION_KEY", "");
-    vi.stubEnv("JWT_SECRET", "stable-jwt-secret");
-    vi.stubEnv("DATABASE_URL", "postgresql://stable-database-url");
-    const source = "sk-proj-persisted-with-fallback-9876";
-    const encrypted = encryptAgentSecret(source);
+  it("fails closed when a runtime credential is stored as plaintext", async () => {
+    const pool = {
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            setting_key: "openai_api_key",
+            setting_value: "sk-plaintext-rejected",
+            is_secret: true,
+          },
+        ],
+      }),
+    };
 
+    const configuration = await getAgentConfiguration(pool as never);
+    expect(configuration.secrets.openai_api_key.configured).toBe(false);
+    await expect(getAgentRuntimeSettings(pool as never)).rejects.toThrow(
+      /debe rotarse desde el módulo seguro/
+    );
+  });
+
+  it("fails closed in production without a dedicated key of at least 32 UTF-8 bytes", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AGENT_SETTINGS_ENCRYPTION_KEY", "");
+    vi.stubEnv(
+      "JWT_SECRET",
+      "legacy-jwt-material-that-must-never-encrypt-new-secrets"
+    );
+    vi.stubEnv("DATABASE_URL", "postgresql://stable-database-url");
+
+    expect(() => encryptAgentSecret("sk-proj-new-secret")).toThrow(
+      /AGENT_SETTINGS_ENCRYPTION_KEY/
+    );
     vi.stubEnv(
       "AGENT_SETTINGS_ENCRYPTION_KEY",
-      "new-dedicated-key-added-after-the-first-deployment"
+      "fewer-than-thirty-two-bytes"
+    );
+    expect(() => encryptAgentSecret("sk-proj-new-secret")).toThrow(
+      /al menos 32 bytes UTF-8/
+    );
+  });
+
+  it("uses JWT only to decrypt transitional ciphertext after adding a production key", () => {
+    const legacyMaterial =
+      "legacy-jwt-material-that-must-never-encrypt-new-secrets";
+    const source = "sk-proj-persisted-with-fallback-9876";
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("AGENT_SETTINGS_ENCRYPTION_KEY", legacyMaterial);
+    vi.stubEnv("JWT_SECRET", legacyMaterial);
+    const encrypted = encryptAgentSecret(source);
+
+    vi.stubEnv("AGENT_SETTINGS_ENCRYPTION_KEY", "");
+    expect(() => encryptAgentSecret("sk-proj-must-not-use-jwt")).toThrow(
+      /AGENT_SETTINGS_ENCRYPTION_KEY/
+    );
+
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "new-dedicated-production-key-with-at-least-32-bytes"
     );
 
     expect(decryptAgentSecret(encrypted)).toBe(source);
   });
 
+  it("preserves enc:v1 decryption with a transitional read-only fallback", () => {
+    const legacyMaterial =
+      "legacy-database-material-kept-only-for-transitional-reading";
+    const source = "sk-proj-legacy-v1-secret-2468";
+    const encrypted = encryptLegacyV1(source, legacyMaterial);
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "new-dedicated-production-key-with-at-least-32-bytes"
+    );
+    vi.stubEnv("JWT_SECRET", "");
+    vi.stubEnv("DATABASE_URL", legacyMaterial);
+
+    expect(decryptAgentSecret(encrypted)).toBe(source);
+  });
+
   it("persists and reloads every field and credential", async () => {
-    vi.stubEnv("AGENT_SETTINGS_ENCRYPTION_KEY", "");
-    vi.stubEnv("JWT_SECRET", "stable-jwt-secret");
-    vi.stubEnv("DATABASE_URL", "postgresql://stable-database-url");
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "test-key-material-with-more-than-thirty-two-characters"
+    );
     const stored = new Map<
       string,
       {

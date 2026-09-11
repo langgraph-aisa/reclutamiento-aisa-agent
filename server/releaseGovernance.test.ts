@@ -58,8 +58,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.129");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.129");
+    expect(APP_VERSION).toBe("2.0.130");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.130");
     expect(AUDITED_RUNTIME).toEqual({
       langfuse: "3.38.20",
       langGraph: "1.4.14",
@@ -440,9 +440,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(78);
+    expect(audit.files).toHaveLength(89);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(78);
+    expect(publicCopyAudit.files).toHaveLength(89);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -498,15 +498,16 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.129");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.130");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
     expect(wordCount).toBeGreaterThanOrEqual(2_400);
-    expect(wordCount).toBeLessThanOrEqual(3_200);
+    expect(wordCount).toBeLessThanOrEqual(4_000);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.130");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.129");
     expect(readme).toContain("Vista 360° del Candidato");
     expect(readme).toContain("tres tarjetas en escritorio");

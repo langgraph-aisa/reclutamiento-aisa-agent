@@ -33,7 +33,11 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-type ApiChatSecretKey = "client_id" | "token" | "account_id";
+type ApiChatSecretKey =
+  | "client_id"
+  | "token"
+  | "account_id"
+  | "webhook_secret";
 
 const defaultMessage = `Hola {{nombre}}, muchas gracias por su solicitud de empleo.
 
@@ -293,7 +297,7 @@ export default function Config() {
                 )}{" "}
                 Guardar conexión
               </Button>
-              <div className="grid gap-4 lg:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
                 <CredentialField
                   label="Client ID"
                   description="Identificador de la API nativa"
@@ -328,6 +332,21 @@ export default function Config() {
                   }
                   onSave={value => persistApiChatSecret("account_id", value)}
                   onRemove={() => persistApiChatSecret("account_id", null)}
+                />
+                <CredentialField
+                  label="Secreto del webhook"
+                  description="Mínimo 32 caracteres; compartido únicamente con el adaptador n8n"
+                  placeholder="Ingrese un secreto aleatorio"
+                  state={apiChatConfiguration.data?.secrets.webhook_secret}
+                  pending={
+                    saveApiChatSecret.isPending || verifyApiChat.isPending
+                  }
+                  onSave={value =>
+                    persistApiChatSecret("webhook_secret", value)
+                  }
+                  onRemove={() =>
+                    persistApiChatSecret("webhook_secret", null)
+                  }
                 />
               </div>
               <div className="rounded-2xl border border-emerald-400/20 bg-secondary p-4 text-sm leading-6 text-secondary-foreground">

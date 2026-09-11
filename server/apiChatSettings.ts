@@ -7,6 +7,8 @@ import {
 import {
   decryptAgentSecret,
   encryptAgentSecret,
+  integrationSecretContext,
+  isEncryptedAgentSecret,
   maskAgentSecret,
 } from "./agentSettings";
 
@@ -15,6 +17,7 @@ export const APICHAT_SECRET_KEYS = [
   "client_id",
   "token",
   "account_id",
+  "webhook_secret",
 ] as const;
 export type ApiChatSecretKey = (typeof APICHAT_SECRET_KEYS)[number];
 
@@ -81,12 +84,15 @@ function preferencesFromRows(rows: SettingRow[]): ApiChatPreferences {
 function encryptedSecret(rows: SettingRow[], key: ApiChatSecretKey) {
   const row = rows.find(candidate => candidate.setting_key === key);
   if (!row?.setting_value) return null;
-  if (!row.is_secret || !row.setting_value.startsWith("enc:v1:")) {
+  if (!row.is_secret || !isEncryptedAgentSecret(row.setting_value)) {
     throw new Error(
       `ApiChat no está configurado: la credencial ${key} debe guardarse nuevamente desde el módulo seguro.`
     );
   }
-  return decryptAgentSecret(row.setting_value);
+  return decryptAgentSecret(
+    row.setting_value,
+    integrationSecretContext(APICHAT_PROVIDER, key)
+  );
 }
 
 function secretState(rows: SettingRow[], key: ApiChatSecretKey) {
@@ -156,6 +162,11 @@ export async function getApiChatRuntimeSettings(
         ? (encryptedSecret(rows, "account_id") ?? undefined)
         : undefined,
   });
+}
+
+export async function getApiChatWebhookSecret(pool: Pool) {
+  const rows = await settingRows(pool);
+  return encryptedSecret(rows, "webhook_secret");
 }
 
 async function upsertSetting(
@@ -228,7 +239,15 @@ export async function saveApiChatSecret(
   try {
     await client.query("BEGIN");
     if (value) {
-      await upsertSetting(client, key, encryptAgentSecret(value.trim()), true);
+      await upsertSetting(
+        client,
+        key,
+        encryptAgentSecret(
+          value.trim(),
+          integrationSecretContext(APICHAT_PROVIDER, key)
+        ),
+        true
+      );
     } else {
       await client.query(
         `DELETE FROM integration_settings WHERE provider=$1 AND setting_key=$2`,

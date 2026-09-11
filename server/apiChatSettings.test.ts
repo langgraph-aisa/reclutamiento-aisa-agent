@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getApiChatConfiguration,
   getApiChatRuntimeSettings,
+  getApiChatWebhookSecret,
   saveApiChatPreferences,
   saveApiChatSecret,
   verifyApiChatConnection,
@@ -63,9 +64,16 @@ describe("ApiChat credential vault", () => {
     );
     await saveApiChatSecret(pool as never, "client_id", "client-safe-3210", 7);
     await saveApiChatSecret(pool as never, "token", "token-safe-9876", 7);
+    await saveApiChatSecret(
+      pool as never,
+      "webhook_secret",
+      "webhook-safe-2468",
+      7
+    );
 
-    expect(stored.get("client_id")?.setting_value).toMatch(/^enc:v1:/);
-    expect(stored.get("token")?.setting_value).toMatch(/^enc:v1:/);
+    expect(stored.get("client_id")?.setting_value).toMatch(/^enc:v2:/);
+    expect(stored.get("token")?.setting_value).toMatch(/^enc:v2:/);
+    expect(stored.get("webhook_secret")?.setting_value).toMatch(/^enc:v2:/);
     expect(JSON.stringify([...stored.values()])).not.toContain(
       "token-safe-9876"
     );
@@ -80,6 +88,10 @@ describe("ApiChat credential vault", () => {
       masked: "••••••••9876",
     });
     expect(JSON.stringify(configuration)).not.toContain("token-safe-9876");
+    expect(JSON.stringify(configuration)).not.toContain("webhook-safe-2468");
+    await expect(getApiChatWebhookSecret(pool as never)).resolves.toBe(
+      "webhook-safe-2468"
+    );
 
     const runtime = await getApiChatRuntimeSettings(pool as never);
     expect(runtime).toMatchObject({
@@ -109,6 +121,22 @@ describe("ApiChat credential vault", () => {
     expect(configuration.secrets.token.configured).toBe(false);
     await expect(getApiChatRuntimeSettings(pool as never)).rejects.toThrow(
       "debe guardarse nuevamente"
+    );
+  });
+
+  it("rejects ciphertext copied between ApiChat credential fields", async () => {
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "test-key-material-with-more-than-thirty-two-characters"
+    );
+    const { pool, stored } = memoryPool();
+    await saveApiChatSecret(pool as never, "client_id", "client-safe-3210", 7);
+    await saveApiChatSecret(pool as never, "token", "token-safe-9876", 7);
+    const tokenCiphertext = stored.get("token")!.setting_value;
+    stored.get("client_id")!.setting_value = tokenCiphertext;
+
+    await expect(getApiChatRuntimeSettings(pool as never)).rejects.toThrow(
+      /descifrar/
     );
   });
 

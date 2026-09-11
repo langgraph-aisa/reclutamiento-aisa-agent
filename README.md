@@ -1,15 +1,15 @@
-<!-- Documento académico-comercial auditado el 10 de septiembre de 2026. -->
+<!-- Documento académico-comercial auditado el 11 de septiembre de 2026. -->
 
 <p align="justify">
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.129</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.130</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.129-0b2d4b" alt="JARVI RH 2.0.129" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.130-0b2d4b" alt="JARVI RH 2.0.130" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse-3.38.20-orange" alt="Langfuse 3.38.20" />
@@ -23,16 +23,26 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.129 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.130 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
-Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH 2.0.129 integra plazas, formularios versionados, evaluación asistida por IA, revisión humana, solicitud controlada de currículum por WhatsApp y auditoría. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar: el personal autorizado conserva la decisión.
+Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH integra plazas, formularios y protocolos versionados, evaluación asistida por IA, revisión humana, conversaciones ApiChat, solicitud controlada de currículum y auditoría administrativa. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar, fijar remuneración o atribuir rasgos psicológicos: el personal autorizado conserva la decisión.
 
 ## 1. Reglas configuradas, salida estructurada, cambios humanos, mensajes y eventos de bitácora
 
 ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
+
+### 11SEP2026 · JARVI RH 2.0.130
+
+- La actividad administrativa incorpora un resumen transversal por hoja, títulos deterministas de 11 palabras, resúmenes de 35 palabras, mapa anual con drilldown y actualización por sondeo; JARVI HR se identifica con `adminit@aisa.com.gt` y puede asignarse a un usuario activo.
+- La bandeja de entrada reúne diez conversaciones de la última hora, consulta histórica de hasta 30 resultados, filtros, semáforo textual, ficha de candidato, acceso desde Revisión Humana, traspaso auditado y teclado humano sujeto a precondiciones. El receptor normalizado deduplica únicamente texto entrante por identificador del proveedor; la cuarentena conserva huellas HMAC y no el mensaje ni el teléfono.
+- El módulo Pruebas psicométricas incorpora protocolos e ítems versionados, cuatro niveles y un catálogo de 64 criterios de gobierno no verificados automáticamente. La activación comprueba longitud y vocabulario declarativo; no verifica validez psicométrica ni aprobación externa.
+- Agente de IA permite seleccionar modelos especializados, voz y cuotas para Responses, transcripción y TTS con endpoints cerrados; una instrucción fija y filtros léxicos bloquean patrones conocidos de oferta económica. En mensajes entrantes normalizados, la expectativa permanece en cero sin declaración explícita y solo se conserva un monto nuevo cuando es menor que el registrado.
+- La migración `0014` amplía conversaciones, adjuntos, actividad, asignación y evaluación sin eliminar estructuras anteriores; el protocolo DORA/ISO documenta rollback, brechas operativas, privacidad y caja negra sin afirmar certificación.
+
+Descripción: gobierno cognitivo trazable, comunicación humana controlada y base preparatoria para resiliencia, sujeta a validación operativa, telemetría de despliegues e incidentes y ejercicios de recuperación.
 
 ### 10SEP2026 · JARVI RH 2.0.129
 
@@ -142,21 +152,26 @@ flowchart LR
     G --> Z[Zod: salida estructurada]
     Z --> DB
     DB --> H[Revisión humana 360°]
-    H -->|calificado| W[ApiChat / WhatsApp]
+    H -->|calificado; envío directo| W[ApiChat / WhatsApp]
     G -.telemetría sin identidad.- L[Langfuse]
-    N[n8n: flujos importables] -.integración opcional.- DB
+    W -->|webhook entrante| N[n8n: workflow 04]
+    N -->|Bearer + texto normalizado| E
 ```
 
-| Módulo         | Función especializada                                                                | Evidencia principal                                    |
-| -------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| Portal público | Expone plazas con perfil completo, normaliza teléfono y exige ubicación catalogada.  | `Home.tsx`, `Apply.tsx`, `publicJobs.*`, `geo.*`       |
-| Administración | Usuarios y roles, plazas, perfiles, geografía INE, formularios y configuración.      | `App.tsx`, `routers.ts`                                |
-| Evaluación IA  | Reglas críticas, seis bloques, salida tipada, respaldo de credencial y persistencia. | `agentEvaluator.ts`, `evaluation.ts`                   |
-| Revisión 360°  | Matriz dinámica, filtros, última evaluación, respuestas y decisión humana.           | `HumanReview.tsx`, `candidates.reviewWorkspace`        |
-| Comunicación   | Plantilla de CV, entrega idempotente, estados `pending/sending/sent/failed/unknown`. | `cvRequest.ts`, `apichat.ts`                           |
-| Gobierno       | Release único, bitácora, Vitest, TypeScript, build y puerta CI.                      | `shared/release.ts`, `.github/workflows/black-box.yml` |
+| Módulo | Función especializada | Evidencia principal |
+| --- | --- | --- |
+| Portal público | Expone plazas con perfil completo, normaliza teléfono y exige ubicación catalogada. | `Home.tsx`, `Apply.tsx`, `publicJobs.*`, `geo.*` |
+| Administración | Usuarios y roles, plazas, perfiles, geografía INE, formularios y configuración. | `App.tsx`, `routers.ts` |
+| Evaluación IA | Reglas críticas, política salarial, seis bloques, salida tipada, respaldo de credencial y persistencia. | `agentEvaluator.ts`, `salaryPolicy.ts`, `evaluation.ts` |
+| Revisión 360° | Matriz dinámica, filtros, última evaluación, respuestas, acceso a WhatsApp y decisión humana. | `HumanReview.tsx`, `candidates.reviewWorkspace` |
+| Comunicación | Bandeja, receptor de texto normalizado, traspaso humano, deduplicación de entrada y envío ApiChat directo con estado local. | `Inbox.tsx`, `inbox.ts`, `apiChatWebhook.ts` |
+| Protocolos | Administra versiones, preguntas ordenadas, evidencia metodológica y 64 criterios de gobierno sin estado automático de cumplimiento. | `Assessments.tsx`, `assessmentGovernance.ts` |
+| Audio | Ofrece helpers aislados de cuota, formato, transcripción y TTS con rotación; no existe aún ingesta productiva de medios de candidatos. | `voiceTranscription.ts`, `agentSettings.ts` |
+| Gobierno | Proyecta actividad por hoja, drilldown anual, release, bitácora y puerta CI. | `activityAudit.ts`, `shared/release.ts`, `.github/workflows/black-box.yml` |
 
-Las dependencias no equivalen a capacidades automáticamente logradas. LangGraph contiene hoy un grafo lineal `START → evaluate → END`; ofrece una frontera explícita de orquestación, pero no un agente autónomo con múltiples herramientas. Drizzle tipa entidades, mientras varias consultas operativas usan SQL parametrizado directo. n8n conserva flujos importables; el de WhatsApp es histórico e inactivo porque el backend ejecuta el envío actual.
+Las dependencias no equivalen a capacidades automáticamente logradas. LangGraph contiene hoy un grafo lineal `START → evaluate → END`; ofrece una frontera explícita de orquestación, pero no un agente autónomo con múltiples herramientas. Drizzle tipa entidades, mientras varias consultas operativas usan SQL parametrizado directo. El envío ApiChat se ejecuta en el backend; el workflow 04 de n8n es exclusivamente un adaptador entrante importable que normaliza el sobre oficial `messages` y requiere credencial interna, activación y prueba extremo a extremo.
+
+El workflow 04 no evalúa postulaciones ni envía solicitudes de CV. Su artefacto responde después del último nodo y desactiva la retención de ejecuciones correctas, erróneas, manuales y de progreso en n8n. El receptor exige el Bearer interno y revalida identificador, teléfono, dirección y texto mediante `GET /v1/messages` antes de resolver y persistir: una discordancia responde `422` y un fallo de comunicación o rechazo del proveedor responde `500`. El acuse queda así posterior a la respuesta del backend. Estos controles todavía requieren prueba extremo a extremo en el ambiente objetivo.
 
 ## 3. Proceso funcional y evaluación especializada de IA
 
@@ -199,7 +214,14 @@ erDiagram
     APPLICATIONS ||--o{ EVALUATIONS : evalua
     APPLICATIONS ||--o{ CONVERSATIONS : comunica
     CONVERSATIONS ||--o{ CONVERSATION_MESSAGES : registra
+    APPLICATIONS ||--o{ CANDIDATE_ATTACHMENTS : conserva
+    JOB_POSITIONS ||--o{ ASSESSMENT_PROTOCOLS : define
+    ASSESSMENT_PROTOCOLS ||--o{ ASSESSMENT_ITEMS : contiene
+    ASSESSMENT_PROTOCOLS ||--o{ ASSESSMENT_SESSIONS : administra
+    APPLICATIONS ||--o{ ASSESSMENT_SESSIONS : participa
     USERS ||--o{ AUDIT_LOG : actua
+    USERS ||--o{ ADMIN_ACTIVITY_EVENTS : registra
+    USERS ||--o{ AGENT_USER_ASSIGNMENTS : recibe
     METHODOLOGY_DOCUMENTS ||--o{ METHODOLOGY_DOCUMENT_REVISIONS : conserva
     COUNTRIES ||--o{ GEO_DEPARTMENTS : agrupa
     GEO_DEPARTMENTS ||--o{ GEO_MUNICIPALITIES : agrupa
@@ -209,18 +231,20 @@ erDiagram
     GEO_ZONES ||--o{ APPLICATIONS : localiza
 ```
 
-La auditoría primaria reside en `audit_log`: actor, tipo e identificador de entidad, acción, estado anterior/posterior, comentario y tiempo. `evaluations` conserva ejecuciones múltiples en lugar de sobrescribir; `conversation_messages` añade clave idempotente, intentos, proveedor, error y estado; las revisiones metodológicas preservan cada versión. Índices por aplicación, estado, plaza y entidad soportan reconstrucción. Las restricciones únicas protegen teléfono, slug, código, versión de formulario, pregunta por formulario y mensaje lógico.
+La auditoría primaria reside en `audit_log`: actor, tipo e identificador de entidad, acción, estado anterior/posterior, comentario y tiempo. `admin_activity_events` agrega ruta, resultado, acción esperada/real y correlación; su representación transversal usa exactamente 11 palabras de título y 35 de resumen. `evaluations` conserva ejecuciones múltiples; `conversation_messages` añade una clave local de deduplicación, intentos, proveedor, error y estado. Esa clave no garantiza entrega exactamente una vez en el proveedor. Protocolos e ítems preservan versión y orden. Índices por aplicación, estado, plaza y entidad soportan reconstrucción.
 
-Persisten riesgos de procedencia. Las respuestas apuntan a preguntas mutables y no guardan una instantánea completa de etiqueta, criterio y prompt; un cambio posterior podría alterar la lectura histórica. `audit_log` es append-oriented por convención, no criptográficamente inmutable. Fechas usan reloj de base sin firma, no hay política de retención documentada y `integration_settings` mezcla configuración general con secretos. La evolución recomendada es crear snapshots de instrumento y perfil por aplicación, hash encadenado o almacenamiento WORM para eventos críticos, `correlation_id`, catálogo de base legal/consentimiento, borrado programado y evidencia de restauración.
+Persisten riesgos de procedencia. Las respuestas apuntan a preguntas mutables y no guardan una instantánea completa de etiqueta, criterio y prompt; un cambio posterior podría alterar la lectura histórica. `audit_log` y `admin_activity_events` son append-oriented por convención, no criptográficamente inmutables. Fechas usan reloj de base sin firma y no hay una política de retención ejecutable. La evolución recomendada es crear snapshots de instrumento y perfil, hash encadenado o almacenamiento WORM para eventos críticos, catálogo de base legal/consentimiento, borrado programado y evidencia de restauración.
 
 ## 6. Matriz de alineación ISO y seguridad
 
-| Marco                                      | Evidencia existente                                                                                                 | Brecha o prueba requerida                                                                                                                                                                            |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ISO/IEC 25010:2023                         | Separación modular, contratos tipados, manejo transaccional, interfaz adaptable, build reproducible.                | Definir métricas para las nueve características, SLO, accesibilidad, carga, recuperación y mantenibilidad.                                                                                           |
-| ISO/IEC 27001:2022 / 27002:2022            | Roles `admin/reclutador`, SQL parametrizado, OTP scrypt, JWT en cookie `httpOnly`, claves IA AES-256-GCM, bitácora. | ISMS formal, inventario, evaluación de riesgos, retención, respaldo, respuesta a incidentes y revisión de proveedores. Exigir `JWT_SECRET`; el fallback de desarrollo no es aceptable en producción. |
-| ISO/IEC/IEEE 29119-1:2022                  | Casos Vitest, caja negra versionada y CI con release, regresión, tipos y build.                                     | Plan/niveles de prueba, trazabilidad requisito–riesgo–caso, cobertura, seguridad dinámica, pruebas E2E y evidencia firmada.                                                                          |
-| ISO/IEC 42001, 25059 y 23894 / NIST AI RMF | Intervención humana, configuración, evidencia, brechas, modelo registrado y telemetría minimizada.                  | Inventario de impactos, benchmark por plaza, sesgo desagregado, umbrales aprobados, deriva, apelación y retiro seguro del modelo.                                                                    |
+| Marco | Evidencia existente | Brecha o prueba requerida |
+| --- | --- | --- |
+| ISO/IEC 25010:2023 | Separación modular, contratos tipados, cuotas, transacciones, interfaz adaptable y build reproducible. | Definir medidas para las nueve características, SLO, accesibilidad completa, carga, recuperación y mantenibilidad. |
+| ISO/IEC 27001:2022 / 27002:2022 | Roles, SQL parametrizado, OTP scrypt, JWT `httpOnly`, secretos AES-256-GCM, webhook autenticado y minimización. | SGSI formal, inventario, evaluación de riesgos, retención, respaldo, incidentes, proveedores y revisión de accesos. |
+| ISO 22301:2019 | Rotación de credenciales, timeouts, deduplicación de mensajes entrantes, fallo cerrado y migración expansiva compatible con rollback de aplicación. | BIA, RTO/RPO aprobados, plan de continuidad, restauración probada, simulacros, reconciliación de envíos salientes y modos degradados de dependencias. |
+| ISO/IEC/IEEE 29119-1:2022 | Casos Vitest, caja negra versionada y CI con release, regresión, tipos y build. | Trazabilidad requisito–riesgo–caso, cobertura, seguridad dinámica, E2E y evidencia firmada. |
+| ISO/IEC 42001, 25059 y 23894 / NIST AI RMF | Autoridad humana, modelo y reglas configurables, política salarial, evidencia, límites psicométricos y telemetría minimizada. | AIMS formal, inventario de impactos, benchmark por plaza, sesgo, deriva, apelación, incidentes y retiro seguro del modelo. |
+| DORA | Versionado, migraciones, pruebas y build como capacidades preparatorias. | Integrar despliegues e incidentes para calcular las cinco métricas; el mapa de contribuciones no las sustituye. |
 
 Esta matriz documenta referencias metodológicas y no constituye certificación, conformidad acreditada ni dictamen independiente de cumplimiento.
 
@@ -237,9 +261,17 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP y una fuente estable `AGENT_SETTINGS_ENCRYPTION_KEY`. Las credenciales de ApiChat y del agente se administran cifradas desde la interfaz, no mediante variables de entorno de la integración. `pnpm db:push` genera y aplica migraciones; debe ejecutarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.129](docs/PRUEBAS_CAJA_NEGRA_2.0.129.md).
+`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción debe configurar `JWT_SECRET`, SMTP y una fuente estable `AGENT_SETTINGS_ENCRYPTION_KEY`. Las credenciales de ApiChat y del agente se administran cifradas desde la interfaz, no mediante variables de entorno de la integración. La migración `0014_cognitive_governance.sql` debe aplicarse con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.130](docs/PRUEBAS_CAJA_NEGRA_2.0.130.md).
 
-## 8. Protocolo de Ingenierìa de Software
+## 8. Capa cognitiva, resiliencia y alcance verificable
+
+La migración `0014` incorpora actividad transversal, asignación de JARVI HR, bandeja de entrada, protocolos versionados, expectativa salarial con valor cero por defecto, metadata de adjuntos y preferencias para transcripción/TTS. Los helpers de audio aceptan una extensión declarada permitida o un MIME mapeado, aplican cuota administrativa y rotación principal/respaldo; no detectan el tipo por contenido. La recepción productiva de medios y documentos sigue pendiente de integrar con descarga, detección real de tipo, antivirus, bucket, previsualización y retención.
+
+La guía DORA de DevOps Research and Assessment utiliza cinco métricas: tiempo de entrega, frecuencia de despliegue, recuperación de despliegue fallido, tasa de fallos y tasa de retrabajo. El repositorio aporta capacidades habilitadoras, pero todavía no ingiere despliegues e incidentes suficientes para calcularlas. El mapa «Contribuciones a Talento AISA este año» es auditoría de actividad, no una métrica DORA. Este análisis no evalúa el reglamento financiero de la Unión Europea que comparte el acrónimo.
+
+Los protocolos de evaluación son infraestructura de gobierno y autoría; no son instrumentos psicométricos validados. La activación técnica exige evidencia documental, pero únicamente un estudio para la población y uso previstos puede sostener validez y confiabilidad. El análisis completo, query de ApiChat sin secretos, checklist de despliegue, rollback y brechas está en [ANALISIS_COGNITIVO_DORA_2.0.130.md](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md).
+
+## 9. Protocolo de Ingeniería de Software
 
 La contribución de JARVI RH no debe medirse por incorporar un modelo de lenguaje, sino por la calidad del artefacto sociotécnico completo. Desde la ciencia del diseño, su utilidad inicial reside en convertir criterios dispersos en un proceso explícito, repetible y susceptible de inspección. El conocimiento producido es prescriptivo: propone que una preclasificación laboral puede combinar reglas, interpretación generativa, cálculo controlado, persistencia y revisión humana. Sin embargo, la eficacia técnica observada en pruebas unitarias no prueba eficacia organizacional. Tampoco permite concluir que el sistema seleccione mejor, más justamente o con menor costo que el procedimiento anterior. Esas afirmaciones requieren investigación empírica independiente.
 
@@ -251,7 +283,7 @@ Las amenazas incluyen sesgo del corpus, criterios históricos discriminatorios, 
 
 ## Referencias
 
-Las páginas técnicas evolutivas se consultaron el 10 de septiembre de 2026. La presentación se adapta a Markdown y conserva los elementos autor, fecha, título y fuente de APA 7.
+Las páginas técnicas evolutivas se consultaron el 11 de septiembre de 2026. La presentación se adapta a Markdown y conserva los elementos autor, fecha, título y fuente de APA 7.
 
 ### API, infraestructura y modelos
 
@@ -300,6 +332,16 @@ Las páginas técnicas evolutivas se consultaron el 10 de septiembre de 2026. La
 40. Real Academia Española & Asociación de Academias de la Lengua Española. (s. f.-a). _Las formas de tratamiento (II). Sustantivos y grupos nominales_. https://www.rae.es/gram%C3%A1tica/sintaxis/las-formas-de-tratamiento-ii-sustantivos-y-grupos-nominales
 41. Real Academia Española & Asociación de Academias de la Lengua Española. (s. f.-b). _Tutear_. En _Diccionario de la lengua española_. https://dle.rae.es/tutear
 
+### Fuentes primarias incorporadas en 2.0.130
+
+- DORA. (2026). _Software delivery performance metrics_. https://dora.dev/guides/dora-metrics/
+- International Organization for Standardization. (2019). _ISO 22301:2019 Security and resilience: Business continuity management systems: Requirements_. https://www.iso.org/standard/75106.html
+- AERA, APA, & NCME. (2014). _Standards for Educational and Psychological Testing_. https://www.testingstandards.net/
+- American Psychological Association. (2017). _Professional practice guidelines for occupationally mandated psychological evaluations_. https://www.apa.org/practice/guidelines/psychological-evaluations.html
+- U.S. Equal Employment Opportunity Commission. (2007). _Employment tests and selection procedures_. https://www.eeoc.gov/laws/guidance/employment-tests-and-selection-procedures
+- OpenAI. (s. f.). _Create transcription_. https://developers.openai.com/api/reference/cli/resources/audio/subresources/transcriptions/methods/create
+- OpenAI. (s. f.). _Create speech_. https://developers.openai.com/api/reference/cli/resources/audio/subresources/speech/methods/create
+
 ## Licencia y alcance
 
-Código distribuido bajo [licencia MIT](LICENSE). La documentación académica orienta evaluación y mejora continua; cualquier uso real debe observar legislación laboral, privacidad, no discriminación y políticas aplicables en Guatemala. Última revisión documental: **10 de septiembre de 2026**. Todos los derechos reservados por Alternativas Inteligentes, S.A.
+Código distribuido bajo [licencia MIT](LICENSE). La documentación académica orienta evaluación y mejora continua; cualquier uso real debe observar legislación laboral, privacidad, no discriminación y políticas aplicables en Guatemala. Última revisión documental: **11 de septiembre de 2026**. Todos los derechos reservados por Alternativas Inteligentes, S.A.

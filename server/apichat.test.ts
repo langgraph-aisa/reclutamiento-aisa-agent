@@ -4,6 +4,7 @@ import {
   renderCvRequestMessage,
   sendApiChatText,
   validateApiChatConfig,
+  verifyApiChatInboundText,
 } from "./apichat";
 
 afterEach(() => vi.restoreAllMocks());
@@ -62,6 +63,18 @@ describe("ApiChat configuration", () => {
       })
     ).toThrow("dominio oficial");
   });
+
+  it("does not send a legacy bearer to a third-party destination", () => {
+    expect(() =>
+      validateApiChatConfig({
+        mode: "legacy",
+        endpoint: "https://collector.example.test/messages",
+        accountId: "account-1",
+        connectTo: "whatsapp-1",
+        token: "secret",
+      })
+    ).toThrow("dominio oficial");
+  });
 });
 
 describe("sendApiChatText", () => {
@@ -111,7 +124,7 @@ describe("sendApiChatText", () => {
       { phoneInternational: "+50255555555", message: "Mensaje" },
       {
         mode: "legacy",
-        endpoint: "https://api.example.test/messages",
+        endpoint: "https://api.apichat.io/legacy/messages",
         accountId: "account-1",
         connectTo: "whatsapp-1",
         token: "secret",
@@ -123,7 +136,7 @@ describe("sendApiChatText", () => {
 
     expect(result.providerMessageId).toBe("legacy-1");
     expect(fetchImpl).toHaveBeenCalledWith(
-      "https://api.example.test/messages",
+      "https://api.apichat.io/legacy/messages",
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer secret" }),
         body: JSON.stringify({
@@ -156,5 +169,81 @@ describe("sendApiChatText", () => {
         }
       )
     ).rejects.toThrow("Credenciales inválidas");
+  });
+});
+
+describe("verifyApiChatInboundText", () => {
+  const config = {
+    mode: "native" as const,
+    endpoint: "https://api.apichat.io/v1/sendText",
+    clientId: "client-1",
+    token: "secret",
+  };
+
+  it("confirms an exact inbound text against the provider database", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            from_me: false,
+            message: {
+              id: "provider-2",
+              number: "50255555555",
+              type: "text",
+              text: "Mensaje entrante",
+            },
+          },
+        ]),
+        { status: 200 }
+      )
+    );
+
+    await expect(
+      verifyApiChatInboundText(
+        {
+          providerMessageId: "provider-2",
+          phoneInternational: "+50255555555",
+          text: "Mensaje entrante",
+        },
+        config,
+        { fetchImpl }
+      )
+    ).resolves.toBe(true);
+
+    const requestUrl = new URL(String(fetchImpl.mock.calls[0]?.[0]));
+    expect(requestUrl.pathname).toBe("/v1/messages");
+    expect(requestUrl.searchParams.get("messageId")).toBe("provider-2");
+    expect(requestUrl.searchParams.get("fromMe")).toBe("false");
+  });
+
+  it("rejects a forged or altered inbound text", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            message: {
+              id: "provider-2",
+              number: "50255555555",
+              type: "text",
+              from_me: false,
+              text: "Contenido diferente",
+            },
+          },
+        ]),
+        { status: 200 }
+      )
+    );
+
+    await expect(
+      verifyApiChatInboundText(
+        {
+          providerMessageId: "provider-2",
+          phoneInternational: "+50255555555",
+          text: "Mensaje alterado",
+        },
+        config,
+        { fetchImpl }
+      )
+    ).resolves.toBe(false);
   });
 });

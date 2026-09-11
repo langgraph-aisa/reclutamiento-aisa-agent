@@ -8,6 +8,10 @@ import { z } from "zod";
 import { EVALUATION_BLOCKS, SCORE_BANDS } from "../shared/agentConfig";
 import { evaluateDeterministic, type ConfiguredQuestion } from "./evaluation";
 import { getAgentRuntimeSettings, type AgentSecretKey } from "./agentSettings";
+import {
+  assertNoAutomatedSalaryOffer,
+  immutableSalaryInstructions,
+} from "./salaryPolicy";
 
 const blockIds = EVALUATION_BLOCKS.map(block => block.id) as [
   (typeof EVALUATION_BLOCKS)[number]["id"],
@@ -134,6 +138,8 @@ function buildSystemInstructions(
     : "Referencias SIERA/MST-EIR deshabilitadas por administración.";
 
   return `${settings.instructions}
+
+${immutableSalaryInstructions()}
 
 REGLAS DE SALIDA Y CONTROL
 - Evalúe los seis bloques una sola vez y use exactamente sus identificadores.
@@ -451,6 +457,8 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
   }
   if (!output)
     throw lastError ?? new Error("No fue posible ejecutar el agente.");
+
+  assertNoAutomatedSalaryOffer(JSON.stringify(output));
 
   const score = scoreEvaluation(output);
   const result: AgentEvaluationResult = {
