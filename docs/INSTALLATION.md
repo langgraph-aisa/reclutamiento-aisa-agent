@@ -15,6 +15,7 @@ Este proyecto contiene una aplicación web responsive para postulaciones y opera
 | n8n on-premise                    | Adaptador entrante ApiChat; los demás flujos son referencias importables              | Header Auth interno para el workflow 04               |
 | ApiChat                           | Solicitud directa de CV por WhatsApp                                                  | Credenciales cifradas desde Configuración > WhatsApp |
 | OpenAI                            | Razonamiento y servicios aislados de transcripción/TTS; no hay endpoint productivo de medios | Claves cifradas desde Agente de IA LangGraph |
+| Langfuse + OpenTelemetry          | Trazas jerárquicas, consumo, latencia y calidad operacional                          | Claves cifradas desde Agente de IA LangGraph |
 
 ## PostgreSQL
 
@@ -37,7 +38,11 @@ El runtime de evaluación no consulta `N8N_AGENT_EVALUATION_URL`, `N8N_MANUAL_ST
 
 ### ApiChat
 
-ApiChat no utiliza variables de entorno en JARVI RH 2.0.130. Ejecute las migraciones y configure endpoint, conexión, webhook, Client ID, token y secreto del receptor desde Administración > Configuración > WhatsApp. Los secretos se cifran en el servidor antes de almacenarse en `integration_settings`; no se devuelven al navegador.
+ApiChat no utiliza variables de entorno en JARVI RH 2.0.131. Ejecute las migraciones y configure endpoint, conexión, webhook, Client ID, token y secreto del receptor desde Administración > Configuración > WhatsApp. Los secretos se cifran en el servidor antes de almacenarse en `integration_settings`; no se devuelven al navegador.
+
+### Langfuse
+
+Langfuse tampoco requiere claves en EasyPanel. Conserve únicamente la raíz estable `AGENT_SETTINGS_ENCRYPTION_KEY`; ingrese las claves del proyecto desde Administración > Agente de IA LangGraph. Guarde cada credencial hasta ver **Configurada**, seleccione la misma región del proyecto, active la telemetría y verifique. La primera validación fuerza una traza diagnóstica. Consulte [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md) antes del despliegue.
 
 No copie la URL del editor de n8n (`/workflow/...`) como webhook. El nodo Webhook muestra su URL de producción después de activar el workflow 04; esa URL es la que debe guardar en Configuración > WhatsApp y registrar en ApiChat.
 

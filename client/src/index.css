@@ -214,6 +214,18 @@
   border-color: var(--color-border);
 }
 
+.dark [data-sonner-toast][data-styled="true"],
+.high-contrast [data-sonner-toast][data-styled="true"] {
+  background-color: var(--color-popover);
+  border-color: var(--color-border);
+  color: var(--color-popover-foreground);
+}
+
+.dark [data-sonner-toast][data-styled="true"] [data-description],
+.high-contrast [data-sonner-toast][data-styled="true"] [data-description] {
+  color: var(--color-muted-foreground);
+}
+
 .high-contrast :where(button, a, input, textarea, select):focus-visible {
   outline-width: 3px;
 }

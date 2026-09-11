@@ -8,6 +8,11 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter, auditPublishedPublicCopy } from "../routers";
 import { registerApiChatInboundWebhook } from "../apiChatWebhook";
 import { getPool } from "../db";
+import { APP_VERSION } from "../../shared/release";
+import {
+  initializeLangfuseFromDatabase,
+  shutdownLangfuse,
+} from "../observability/langfuse";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -31,6 +36,18 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  const pool = await getPool();
+  if (pool) {
+    const observability = await initializeLangfuseFromDatabase(pool, {
+      release: APP_VERSION,
+    });
+    console.log(
+      `[Observability] Langfuse state=${observability.state}${observability.reasonCode ? ` reason=${observability.reasonCode}` : ""}.`
+    );
+  } else {
+    console.warn("[Observability] Langfuse state=disabled reason=DATABASE_UNAVAILABLE.");
+  }
+
   const app = express();
   const server = createServer(app);
   // Contrato controlado para n8n. Se registra antes del parser global para
@@ -66,8 +83,7 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
-    void getPool()
-      .then(pool => (pool ? auditPublishedPublicCopy(pool) : null))
+    void Promise.resolve(pool ? auditPublishedPublicCopy(pool) : null)
       .then(result => {
         if (result && !result.skipped) {
           console.log(
@@ -81,6 +97,32 @@ async function startServer() {
         );
       });
   });
+
+  let shuttingDown = false;
+  const gracefulShutdown = async (signal: NodeJS.Signals) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[Lifecycle] ${signal}: cierre ordenado iniciado.`);
+    const forcedClose = setTimeout(() => server.closeAllConnections(), 10_000);
+    forcedClose.unref();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.close(error => (error ? reject(error) : resolve()));
+      });
+      await shutdownLangfuse();
+      if (pool) await pool.end();
+      console.log("[Lifecycle] Cierre ordenado completado.");
+    } catch (error) {
+      process.exitCode = 1;
+      console.error(
+        `[Lifecycle] Cierre incompleto (${error instanceof Error ? error.name : "unknown"}).`
+      );
+    } finally {
+      clearTimeout(forcedClose);
+    }
+  };
+  process.once("SIGTERM", () => void gracefulShutdown("SIGTERM"));
+  process.once("SIGINT", () => void gracefulShutdown("SIGINT"));
 }
 
 startServer().catch(console.error);

@@ -1,13 +1,18 @@
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import { ChatOpenAI } from "@langchain/openai";
-import { Langfuse } from "langfuse";
 import OpenAI from "openai";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { EVALUATION_BLOCKS, SCORE_BANDS } from "../shared/agentConfig";
+import { APP_VERSION } from "../shared/release";
 import { evaluateDeterministic, type ConfiguredQuestion } from "./evaluation";
 import { getAgentRuntimeSettings, type AgentSecretKey } from "./agentSettings";
+import {
+  createLangfuseCallbackHandler,
+  verifyLangfuseConnectionFromDatabase,
+  withLangfuseObservation,
+} from "./observability/langfuse";
 import {
   assertNoAutomatedSalaryOffer,
   immutableSalaryInstructions,
@@ -180,6 +185,8 @@ async function invokeGraph(input: {
   model: string;
   instructions: string;
   source: EvaluationSource;
+  keySlot: "primary" | "backup";
+  attempt: number;
 }) {
   const EvaluationState = Annotation.Root({
     result: Annotation<AgentModelOutput | null>,
@@ -207,51 +214,35 @@ async function invokeGraph(input: {
     .addEdge(START, "evaluate")
     .addEdge("evaluate", END)
     .compile();
-  const state = await graph.invoke({ result: null });
+  const callback = createLangfuseCallbackHandler({
+    sessionId: `application:${input.source.applicationId}`,
+    tags: ["candidate-evaluation", "langgraph", "responses-api"],
+    version: APP_VERSION,
+    traceMetadata: {
+      feature: "candidate-evaluation",
+      provider: "openai",
+      method: "responses-api",
+      keySlot: input.keySlot,
+      attempt: input.attempt,
+      classification: "restricted-redacted",
+    },
+  });
+  const state = await graph.invoke(
+    { result: null },
+    {
+      callbacks: callback ? [callback] : [],
+      runName: "candidate-evaluation-graph",
+      tags: ["candidate-evaluation", "langgraph", "responses-api"],
+      metadata: {
+        feature: "candidate-evaluation",
+        keySlot: input.keySlot,
+        attempt: input.attempt,
+        classification: "restricted-redacted",
+      },
+    }
+  );
   if (!state.result) throw new Error("El agente no devolvió una evaluación.");
   return AgentModelOutputSchema.parse(state.result);
-}
-
-async function traceEvaluation(
-  settings: Awaited<ReturnType<typeof getAgentRuntimeSettings>>,
-  result: AgentEvaluationResult,
-  applicationId: number
-) {
-  const publicKey = settings.secrets.langfuse_public_key;
-  const secretKey = settings.secrets.langfuse_secret_key;
-  if (!publicKey || !secretKey || !settings.langfuseBaseUrl) return;
-  const langfuse = new Langfuse({
-    publicKey,
-    secretKey,
-    baseUrl: settings.langfuseBaseUrl,
-    environment: settings.langfuseEnvironment,
-    flushAt: 1,
-    requestTimeout: 10_000,
-  });
-  try {
-    const trace = langfuse.trace({
-      name: "evaluacion-candidato",
-      sessionId: `application-${applicationId}`,
-      metadata: { applicationId, framework: "LangGraph", api: "Responses" },
-    });
-    trace.generation({
-      name: "dictamen-estructurado",
-      model: settings.model,
-      input: { applicationId },
-      output: {
-        score: result.score,
-        classification: result.classification,
-        criticalDisqualification: result.criticalDisqualification,
-      },
-    });
-    await langfuse.flushAsync();
-  } catch (error) {
-    console.warn(
-      `[Agent] Langfuse trace failed (${error instanceof Error ? error.name : "unknown"}).`
-    );
-  } finally {
-    await langfuse.shutdownAsync();
-  }
 }
 
 async function evaluationSource(pool: Pool, applicationId: number) {
@@ -410,120 +401,292 @@ async function saveHardFail(
 }
 
 async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
-  const source = await evaluationSource(pool, applicationId);
-  const deterministic = evaluateDeterministic(source.questions, source.answers);
-  if (!deterministic.passed) return saveHardFail(pool, source, deterministic);
+  return withLangfuseObservation(
+    {
+      name: "candidate-evaluation",
+      asType: "agent",
+      traceName: "candidate-evaluation",
+      sessionId: `application:${applicationId}`,
+      tags: ["candidate-evaluation", "hybrid-decision"],
+      version: APP_VERSION,
+      metadata: {
+        feature: "candidate-evaluation",
+        provider: "openai",
+        method: "responses-api",
+        classification: "restricted-redacted",
+      },
+      input: { operation: "evaluate_application" },
+    },
+    async evaluationObservation => {
+      const source = await withLangfuseObservation(
+        {
+          name: "load-evaluation-context",
+          metadata: { classification: "restricted-redacted" },
+          input: { operation: "load_context" },
+        },
+        async contextObservation => {
+          const loaded = await evaluationSource(pool, applicationId);
+          contextObservation.update({
+            output: {
+              contextLoaded: true,
+              questionCount: loaded.questions.length,
+              profileConfigured: Boolean(loaded.profile),
+            },
+          });
+          return loaded;
+        }
+      );
+      const deterministic = await withLangfuseObservation(
+        {
+          name: "deterministic-eligibility-gate",
+          asType: "guardrail",
+          metadata: {
+            feature: "configured-hard-fail",
+            classification: "non-content",
+          },
+          input: { ruleCount: source.questions.length },
+        },
+        async guardrailObservation => {
+          const outcome = evaluateDeterministic(
+            source.questions,
+            source.answers
+          );
+          guardrailObservation.update({
+            output: {
+              passed: outcome.passed,
+              evaluatedRuleCount: outcome.results.length,
+              failedRuleCount: outcome.results.filter(rule => !rule.passed)
+                .length,
+              criticalFailure: !outcome.passed,
+            },
+            level: outcome.passed ? "DEFAULT" : "WARNING",
+          });
+          return outcome;
+        }
+      );
+      if (!deterministic.passed) {
+        const hardFailResult = await withLangfuseObservation(
+          {
+            name: "persist-deterministic-hard-fail",
+            metadata: { outcome: "no_calificado", source: "deterministic" },
+            input: { operation: "persist_hard_fail" },
+          },
+          async persistenceObservation => {
+            const persisted = await saveHardFail(pool, source, deterministic);
+            persistenceObservation.update({
+              output: { persisted: true, status: persisted.status },
+              level: "WARNING",
+            });
+            return persisted;
+          }
+        );
+        evaluationObservation.update({
+          output: {
+            completed: true,
+            decisionPath: "deterministic",
+            status: hardFailResult.status,
+            score: hardFailResult.score,
+          },
+          level: "WARNING",
+        });
+        return hardFailResult;
+      }
 
-  const settings = await getAgentRuntimeSettings(pool);
-  if (!settings.useResponsesApi) {
-    throw new Error("La OpenAI Responses API no está habilitada.");
-  }
-  const keyOptions = [
-    ["primary", settings.secrets.openai_api_key],
-    ["backup", settings.secrets.openai_api_key_backup],
-  ] as const;
-  const configuredKeys = keyOptions.filter(option => Boolean(option[1]));
-  if (!configuredKeys.length)
-    throw new Error("No hay una API key de OpenAI configurada.");
+      const settings = await getAgentRuntimeSettings(pool);
+      if (!settings.useResponsesApi) {
+        throw new Error("La OpenAI Responses API no está habilitada.");
+      }
+      const keyOptions = [
+        ["primary", settings.secrets.openai_api_key],
+        ["backup", settings.secrets.openai_api_key_backup],
+      ] as const;
+      const configuredKeys = keyOptions.filter(option => Boolean(option[1]));
+      if (!configuredKeys.length) {
+        throw new Error("No hay una API key de OpenAI configurada.");
+      }
 
-  const methodologies = settings.useMethodologies
-    ? (
-        await pool.query<{ display_name: string; content_markdown: string }>(
-          `SELECT display_name,content_markdown FROM methodology_documents
-            WHERE document_key IN ('siera','mst_eir') ORDER BY document_key`
-        )
-      ).rows
-    : [];
-  const instructions = buildSystemInstructions(settings, methodologies);
-  let output: AgentModelOutput | null = null;
-  let keySlot: "primary" | "backup" = "primary";
-  let lastError: unknown;
-  for (const [slot, apiKey] of configuredKeys) {
-    try {
-      output = await invokeGraph({
-        apiKey: apiKey!,
-        model: settings.model,
-        instructions,
-        source,
+      const methodologies = settings.useMethodologies
+        ? (
+            await pool.query<{
+              display_name: string;
+              content_markdown: string;
+            }>(
+              `SELECT display_name,content_markdown FROM methodology_documents
+                WHERE document_key IN ('siera','mst_eir') ORDER BY document_key`
+            )
+          ).rows
+        : [];
+      const instructions = buildSystemInstructions(settings, methodologies);
+      let output: AgentModelOutput | null = null;
+      let keySlot: "primary" | "backup" = "primary";
+      let lastError: unknown;
+      for (
+        let attemptIndex = 0;
+        attemptIndex < configuredKeys.length;
+        attemptIndex += 1
+      ) {
+        const [slot, apiKey] = configuredKeys[attemptIndex]!;
+        try {
+          output = await withLangfuseObservation(
+            {
+              name: `openai-evaluation-attempt-${slot}`,
+              metadata: {
+                keySlot: slot,
+                attempt: attemptIndex + 1,
+                model: settings.model,
+                method: "responses-api",
+              },
+              input: { operation: "invoke_evaluation_graph" },
+            },
+            async attemptObservation => {
+              const graphOutput = await invokeGraph({
+                apiKey: apiKey!,
+                model: settings.model,
+                instructions,
+                source,
+                keySlot: slot,
+                attempt: attemptIndex + 1,
+              });
+              attemptObservation.update({
+                output: {
+                  completed: true,
+                  structuredOutputValid: true,
+                  blockCount: graphOutput.blocks.length,
+                },
+                metadata: { keySlot: slot, attempt: attemptIndex + 1 },
+              });
+              return graphOutput;
+            }
+          );
+          keySlot = slot;
+          break;
+        } catch (error) {
+          lastError = error;
+          console.warn(
+            `[Agent] OpenAI ${slot} request failed (${error instanceof Error ? error.name : "unknown"}).`
+          );
+        }
+      }
+      if (!output) {
+        throw lastError ?? new Error("No fue posible ejecutar el agente.");
+      }
+
+      await withLangfuseObservation(
+        {
+          name: "salary-offer-policy",
+          asType: "guardrail",
+          metadata: {
+            feature: "no-automated-salary-offer",
+            classification: "non-content",
+          },
+          input: { operation: "validate_model_output" },
+        },
+        async policyObservation => {
+          assertNoAutomatedSalaryOffer(JSON.stringify(output));
+          policyObservation.update({ output: { passed: true } });
+        }
+      );
+
+      const score = scoreEvaluation(output);
+      const result: AgentEvaluationResult = {
+        ...output,
+        summary: limitWords(output.summary, settings.summaryWordLimit),
+        score,
+        classification: classificationForScore(score),
+        keySlot,
+      };
+      const status = applicationStatusForEvaluation(
+        score,
+        result.criticalDisqualification
+      );
+      const evaluationStatus = status;
+      await withLangfuseObservation(
+        {
+          name: "persist-candidate-evaluation",
+          metadata: { outcome: status, decisionPath: "llm_assisted" },
+          input: { operation: "persist_evaluation" },
+        },
+        async persistenceObservation => {
+          const client = await pool.connect();
+          try {
+            await client.query("BEGIN");
+            for (const rule of deterministic.results) {
+              await client.query(
+                `UPDATE application_answers aa SET deterministic_result=$1
+                  FROM form_questions q
+                 WHERE aa.application_id=$2 AND aa.question_id=q.id AND q.field_key=$3`,
+                [
+                  rule.passed ? "passed" : "failed",
+                  applicationId,
+                  rule.fieldKey,
+                ]
+              );
+            }
+            await client.query(
+              `INSERT INTO evaluations
+                 (application_id,status,reason,profile_summary,rule_results,ai_payload,ai_model)
+               VALUES ($1,$2::evaluation_status,$3,$4,$5::jsonb,$6::jsonb,$7)`,
+              [
+                applicationId,
+                evaluationStatus,
+                result.decisionReason,
+                result.summary,
+                safeJson(deterministic.results),
+                safeJson({
+                  ...result,
+                  framework: "LangGraph",
+                  api: "Responses",
+                }),
+                settings.model,
+              ]
+            );
+            await client.query(
+              `UPDATE applications
+                  SET status=$1::application_status,evaluation_at=now(),evaluation_reason=$2,
+                      profile_summary=$3,updated_at=now()
+                WHERE id=$4`,
+              [status, result.decisionReason, result.summary, applicationId]
+            );
+            await client.query(
+              `INSERT INTO audit_log
+                 (entity_type,entity_id,action,after_json,comment)
+               VALUES ('application',$1,'agent_evaluated',$2::jsonb,$3)`,
+              [
+                applicationId,
+                safeJson({
+                  score,
+                  classification: result.classification,
+                  status,
+                }),
+                `Evaluación automática con ${settings.model}`,
+              ]
+            );
+            await client.query("COMMIT");
+            persistenceObservation.update({
+              output: { persisted: true, status },
+            });
+          } catch (error) {
+            await client.query("ROLLBACK");
+            throw error;
+          } finally {
+            client.release();
+          }
+        }
+      );
+      evaluationObservation.update({
+        output: {
+          completed: true,
+          decisionPath: "llm_assisted",
+          status,
+          score,
+          classification: result.classification,
+          keySlot,
+          criticalDisqualification: result.criticalDisqualification,
+        },
       });
-      keySlot = slot;
-      break;
-    } catch (error) {
-      lastError = error;
-      console.warn(
-        `[Agent] OpenAI ${slot} request failed (${error instanceof Error ? error.name : "unknown"}).`
-      );
+      return { ...result, status, deterministic: false as const };
     }
-  }
-  if (!output)
-    throw lastError ?? new Error("No fue posible ejecutar el agente.");
-
-  assertNoAutomatedSalaryOffer(JSON.stringify(output));
-
-  const score = scoreEvaluation(output);
-  const result: AgentEvaluationResult = {
-    ...output,
-    summary: limitWords(output.summary, settings.summaryWordLimit),
-    score,
-    classification: classificationForScore(score),
-    keySlot,
-  };
-  const status = applicationStatusForEvaluation(
-    score,
-    result.criticalDisqualification
   );
-  const evaluationStatus = status;
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    for (const rule of deterministic.results) {
-      await client.query(
-        `UPDATE application_answers aa SET deterministic_result=$1
-          FROM form_questions q
-         WHERE aa.application_id=$2 AND aa.question_id=q.id AND q.field_key=$3`,
-        [rule.passed ? "passed" : "failed", applicationId, rule.fieldKey]
-      );
-    }
-    await client.query(
-      `INSERT INTO evaluations
-         (application_id,status,reason,profile_summary,rule_results,ai_payload,ai_model)
-       VALUES ($1,$2::evaluation_status,$3,$4,$5::jsonb,$6::jsonb,$7)`,
-      [
-        applicationId,
-        evaluationStatus,
-        result.decisionReason,
-        result.summary,
-        safeJson(deterministic.results),
-        safeJson({ ...result, framework: "LangGraph", api: "Responses" }),
-        settings.model,
-      ]
-    );
-    await client.query(
-      `UPDATE applications
-          SET status=$1::application_status,evaluation_at=now(),evaluation_reason=$2,
-              profile_summary=$3,updated_at=now()
-        WHERE id=$4`,
-      [status, result.decisionReason, result.summary, applicationId]
-    );
-    await client.query(
-      `INSERT INTO audit_log
-         (entity_type,entity_id,action,after_json,comment)
-       VALUES ('application',$1,'agent_evaluated',$2::jsonb,$3)`,
-      [
-        applicationId,
-        safeJson({ score, classification: result.classification, status }),
-        `Evaluación automática con ${settings.model}`,
-      ]
-    );
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-  await traceEvaluation(settings, result, applicationId);
-  return { ...result, status, deterministic: false as const };
 }
 
 export async function evaluateApplicationWithAgent(
@@ -570,28 +733,39 @@ export async function verifyOpenAIConnection(
 }
 
 export async function verifyLangfuseConnection(pool: Pool) {
-  const settings = await getAgentRuntimeSettings(pool);
-  const publicKey = settings.secrets.langfuse_public_key;
-  const secretKey = settings.secrets.langfuse_secret_key;
-  if (!publicKey || !secretKey) {
-    throw new Error("Configure las claves pública y secreta de Langfuse.");
-  }
-  const langfuse = new Langfuse({
-    publicKey,
-    secretKey,
-    baseUrl: settings.langfuseBaseUrl,
-    environment: settings.langfuseEnvironment,
-    requestTimeout: 15_000,
+  const result = await verifyLangfuseConnectionFromDatabase(pool, {
+    release: APP_VERSION,
   });
-  try {
-    const projects = await langfuse.api.projectsGet();
-    return {
-      success: true as const,
-      baseUrl: settings.langfuseBaseUrl,
-      environment: settings.langfuseEnvironment,
-      projects: projects.data.length,
-    };
-  } finally {
-    await langfuse.shutdownAsync();
+  if (!result.ok) {
+    const messageByReason = {
+      DISABLED: "Active el envío de trazas Langfuse y guarde la configuración.",
+      MISSING_CREDENTIALS:
+        "Configure y guarde las claves pública y secreta de Langfuse.",
+      MISSING_PSEUDONYMIZATION_KEY:
+        "Configure una clave estable de seudonimización para Langfuse.",
+      INVALID_BASE_URL:
+        "La región de Langfuse seleccionada no es válida.",
+      INVALID_ENVIRONMENT:
+        "El ambiente de Langfuse configurado no es válido.",
+      INVALID_SAMPLE_RATE:
+        "El porcentaje de muestreo de Langfuse no es válido.",
+      AUTHENTICATION_FAILED:
+        "Langfuse rechazó las credenciales para la región seleccionada.",
+      CONNECTION_FAILED:
+        "No fue posible establecer conexión con la región de Langfuse.",
+      INITIALIZATION_FAILED:
+        "No fue posible iniciar el procesador de trazas de Langfuse.",
+      ROTATION_REJECTED:
+        "Langfuse rechazó la rotación; la conexión anterior permanece activa.",
+      STOPPED: "El procesador de Langfuse está detenido.",
+    } as const;
+    throw new Error(messageByReason[result.reasonCode]);
   }
+  return {
+    success: true as const,
+    baseUrl: result.baseUrl,
+    environment: result.environment,
+    projects: result.projects,
+    traceId: result.traceId,
+  };
 }

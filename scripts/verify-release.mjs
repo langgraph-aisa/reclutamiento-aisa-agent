@@ -78,7 +78,12 @@ if (
 }
 
 for (const [dependency, expected] of [
-  ["langfuse", "3.38.20"],
+  ["@langfuse/client", "5.11.1"],
+  ["@langfuse/langchain", "5.11.1"],
+  ["@langfuse/openai", "5.11.1"],
+  ["@langfuse/otel", "5.11.1"],
+  ["@langfuse/tracing", "5.11.1"],
+  ["@opentelemetry/sdk-node", "0.222.0"],
   ["@langchain/langgraph", "1.4.14"],
   ["@langchain/openai", "1.5.11"],
   ["openai", "7.13.0"],

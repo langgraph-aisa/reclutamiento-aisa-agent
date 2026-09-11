@@ -1,8 +1,8 @@
-# Pruebas de caja negra · JARVI RH 2.0.130
+# Pruebas de caja negra · JARVI RH 2.0.131
 
 ## Alcance del cambio
 
-La especificación candidata de 2.0.130 cubre actividad transversal y drilldown, navegación administrativa, bandeja ApiChat, asignación de JARVI HR, protocolos versionados, política salarial, contratos de audio y migración `0014`. El almacén cifrado de ApiChat, coherencia editorial, Revisión Humana 360°, tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general. Los casos describen resultados observables; no certifican ISO/DORA ni validez psicométrica.
+La especificación candidata de 2.0.131 cubre observabilidad Langfuse en vivo sobre OpenTelemetry, instrumentación de LangGraph/OpenAI y servicios, redacción, seudonimización, rotación, verificación diagnóstica y cierre ordenado. Actividad, bandeja ApiChat, gobierno cognitivo, coherencia editorial, Revisión Humana 360°, tratamiento formal, privacidad, temas, ubicación, evaluación, estados y decisión humana permanecen bajo regresión general. Los casos describen resultados observables; no certifican ISO/DORA ni validez psicométrica.
 
 ## Matriz funcional observable
 
@@ -135,9 +135,19 @@ La especificación candidata de 2.0.130 cubre actividad transversal y drilldown,
 | BN-AUD-03   | Audio de 5 MB más un byte                              | Solicitar transcripción                            | Se rechaza antes de enviar contenido a OpenAI con mensaje de cuota                                                  | ISO/IEC 25010:2023 · prevención de errores   |
 | BN-AUD-04   | Texto institucional y formato Opus                     | Solicitar TTS                                      | Se utiliza modelo/voz configurados, la salida no está vacía y se etiqueta `audio/ogg`                              | ISO/IEC 25010:2023 · corrección funcional    |
 | BN-AUD-05   | Texto vacío o superior a 4,096 caracteres              | Solicitar TTS                                      | El servicio rechaza la entrada localmente                                                                            | OpenAI Audio API · contrato                  |
+| BN-LF-01    | Clave pública o secreta todavía pendiente              | Pulsar Verificar conexión Langfuse                 | La acción permanece inhabilitada y la vista explica que ambas credenciales deben guardarse individualmente          | ISO/IEC 25010:2023 · prevención de errores   |
+| BN-LF-02    | Ambas claves válidas y región coincidente               | Guardar, activar y verificar                       | El backend autentica el proyecto, crea una traza diagnóstica, fuerza su envío y devuelve un identificador localizable | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
+| BN-LF-03    | Clave o región incorrecta                               | Verificar conexión                                 | Se rechaza la confirmación mediante código seguro, sin revelar clave, cabecera, cuerpo remoto ni traza falsa          | ISO/IEC 27001:2022 · confidencialidad        |
+| BN-LF-04    | Proveedor activo y nuevas credenciales válidas          | Rotar desde la interfaz                            | Se valida el destino nuevo, se vacía y cierra el anterior, y se activa el nuevo sin reiniciar ni mezclar proyectos   | ISO 22301:2019 · continuidad                 |
+| BN-LF-05    | Política `metadata_only` activa                         | Ejecutar evaluación y mensajería                   | Se observan árbol, modelo, uso, latencia, estado y entidades HMAC; no se transmiten nombre, teléfono, correo o texto | ISO/IEC 27001:2022 · minimización            |
+| BN-LF-06    | Objeto anidado con correo, teléfono, bearer y API key   | Aplicar filtro previo a exportación                | Todos los patrones sensibles se reemplazan y el objeto de entrada permanece inmutable                               | ISO/IEC 27001:2022 · protección de datos     |
+| BN-LF-07    | Langfuse ausente, desactivado o temporalmente caído     | Ejecutar una operación de negocio                  | La telemetría se degrada a no-op y la operación conserva su resultado funcional                                     | ISO/IEC 25010:2023 · tolerancia a fallos     |
+| BN-LF-08    | Evaluación rechazada antes de invocar OpenAI            | Ejecutar guardrail determinista                    | La traza registra el fallo y consumo nulo; no inventa una generación ni costo                                       | ISO/IEC 42001:2023 · transparencia           |
+| BN-LF-09    | Servicio recibe SIGTERM o SIGINT                        | Iniciar cierre ordenado                            | Deja de aceptar tráfico, intenta vaciar spans y cierra el procesador dentro del tiempo acotado                       | ISO 22301:2019 · continuidad                 |
+| BN-LF-10    | Árbol instrumentado con evaluación y generación        | Inspeccionar relaciones padre-hijo                 | La llamada de modelo permanece bajo la ejecución y nodo correspondientes, sin doble contabilización                 | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
 | BN-MIG-14   | Esquema anterior y migración `0014` pendiente           | Ejecutar una o más veces                           | Columnas, tablas, restricciones, índices y filas iniciales quedan disponibles sin insertar secretos ni eliminar datos | ISO 22301:2019 · recuperabilidad           |
 | BN-ROLL-01  | `0014` aplicada y fallo del nuevo artefacto             | Replegar versión anterior                          | La aplicación anterior puede operar ignorando la expansión; las tablas nuevas se conservan para análisis y rollback | ISO 22301:2019 · continuidad              |
-| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.130`                                  | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
+| BN-DOC-01   | Repositorio en versión vigente                         | Ejecutar puerta de release                         | README, pie, gobierno, hoja de validación y caja negra indican `JARVI RH 2.0.131`                                  | ISO/IEC/IEEE 29119-1:2022 · trazabilidad     |
 
 ## Pruebas automatizadas
 
@@ -145,7 +155,7 @@ La especificación candidata de 2.0.130 cubre actividad transversal y drilldown,
 | -------------------------------- | ----------------------------------------------------------------------------- |
 | `pnpm release:verify`            | Versión, historial, documentos y dependencias auditadas están sincronizados   |
 | `pnpm text:verify`               | El tratamiento formal y la cobertura de rutas editoriales permanecen íntegros |
-| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.131`                                    |
+| `pnpm release:bump -- --dry-run` | El siguiente parche calculado es `2.0.132`                                    |
 | `pnpm test:black-box`            | Modelo editorial, textos públicos, artefacto, versión y README son exactos    |
 | `pnpm test`                      | Actividad, mensajería, protocolos, salario, audio, formularios y geografía conservan la regresión |
 | `pnpm check`                     | Cliente, tRPC, servidor y esquema mantienen contratos TypeScript consistentes |
@@ -160,8 +170,9 @@ La suite automatizada usa dobles y contratos estáticos en varias fronteras. Ant
 - dos entregas concurrentes con el mismo ID y dos conversaciones activas para un teléfono, distinguiendo duplicado, ausencia y ambigüedad sin asignación arbitraria;
 - expectativa salarial con decimales, varios montos y concurrencia; el control de negación y conservación del menor valor necesita además un ledger completo de procedencia;
 - bloqueo y duración de `0014` sobre un volumen representativo, restauración desde respaldo y cumplimiento de RPO/RTO aprobados;
-- ingestión de medios, antivirus, bucket, reproducción y retención cuando ese pipeline exista; los servicios aislados de audio no lo acreditan.
+- ingestión de medios, antivirus, bucket, reproducción y retención cuando ese pipeline exista; los servicios aislados de audio no lo acreditan;
+- ensayo de caída de red hacia la región Langfuse, acumulación máxima de cola, recuperación, pérdida aceptada, residencia, retención, presupuesto y alertas en el plan contratado.
 
 ## Criterio de aprobación
 
-El release se aprueba únicamente cuando todos los comandos terminan con código cero. Después del despliegue deben ejecutarse BN-MIG-14, BN-ACT-01, BN-INBOX-01, BN-WEB-01, BN-WEB-06, BN-PSY-04 y BN-SAL-01 con datos ficticios, además de BN-API-01 a BN-API-05 antes de un envío controlado. BN-AUD-02 a BN-AUD-05 permanecen como pruebas de servicio con transporte simulado hasta disponer de un endpoint productivo de medios. Los casos editoriales, temáticos y BN-360-01 a BN-360-08 continúan como regresión. WCAG, DORA e ISO se utilizan como referencias metodológicas y no constituyen certificación; la puerta técnica de un protocolo no acredita validez psicométrica.
+El release se aprueba únicamente cuando todos los comandos terminan con código cero. Después del despliegue deben ejecutarse BN-LF-02, BN-LF-03, BN-LF-05 y BN-LF-09 con datos ficticios y credenciales recién rotadas, además de los controles operativos de 2.0.130. BN-AUD-02 a BN-AUD-05 permanecen como pruebas de servicio con transporte simulado hasta disponer de un endpoint productivo de medios. Los casos editoriales, temáticos y BN-360-01 a BN-360-08 continúan como regresión. WCAG, DORA e ISO se utilizan como referencias metodológicas y no constituyen certificación; la puerta técnica de un protocolo no acredita validez psicométrica.

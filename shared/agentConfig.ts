@@ -48,6 +48,15 @@ export const OPENAI_API_ENDPOINTS = {
   speech: "https://api.openai.com/v1/audio/speech",
 } as const;
 
+export const LANGFUSE_CLOUD_BASE_URLS = [
+  "https://us.cloud.langfuse.com",
+  "https://cloud.langfuse.com",
+  "https://jp.cloud.langfuse.com",
+  "https://hipaa.cloud.langfuse.com",
+] as const;
+
+export const LANGFUSE_CAPTURE_MODES = ["metadata_only", "redacted"] as const;
+
 export const OPENAI_TRANSCRIPTION_EXTENSIONS = [
   "flac",
   "mp3",
@@ -175,6 +184,8 @@ export type OpenAiTranscriptionModel =
   (typeof OPENAI_TRANSCRIPTION_MODELS)[number]["value"];
 export type OpenAiTtsModel = (typeof OPENAI_TTS_MODELS)[number]["value"];
 export type OpenAiTtsVoice = (typeof OPENAI_TTS_VOICES)[number];
+export type LangfuseCloudBaseUrl = (typeof LANGFUSE_CLOUD_BASE_URLS)[number];
+export type LangfuseCaptureMode = (typeof LANGFUSE_CAPTURE_MODES)[number];
 export type AgentPreferences = {
   model: AgentModel;
   psychometricModel: AgentModel;
@@ -189,8 +200,11 @@ export type AgentPreferences = {
   useMethodologies: boolean;
   useResponsesApi: boolean;
   methodologyInterpretation: string;
-  langfuseBaseUrl: string;
+  langfuseEnabled: boolean;
+  langfuseBaseUrl: LangfuseCloudBaseUrl;
   langfuseEnvironment: string;
+  langfuseCaptureMode: LangfuseCaptureMode;
+  langfuseSampleRate: number;
 };
 
 export const DEFAULT_AGENT_SETTINGS: AgentPreferences = {
@@ -207,6 +221,9 @@ export const DEFAULT_AGENT_SETTINGS: AgentPreferences = {
   useMethodologies: true,
   useResponsesApi: false,
   methodologyInterpretation: DEFAULT_METHODOLOGY_INTERPRETATION,
-  langfuseBaseUrl: "https://cloud.langfuse.com",
+  langfuseEnabled: true,
+  langfuseBaseUrl: "https://us.cloud.langfuse.com",
   langfuseEnvironment: "production",
+  langfuseCaptureMode: "metadata_only",
+  langfuseSampleRate: 1,
 };

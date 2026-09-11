@@ -200,8 +200,11 @@ describe("agent settings security", () => {
       useResponsesApi: true,
       methodologyInterpretation:
         "Interpretación metodológica persistida para la auditoría humana.",
-      langfuseBaseUrl: "https://langfuse.example.com",
+      langfuseEnabled: false,
+      langfuseBaseUrl: "https://cloud.langfuse.com" as const,
       langfuseEnvironment: "staging-guatemala",
+      langfuseCaptureMode: "redacted" as const,
+      langfuseSampleRate: 0.5,
     };
 
     await saveAgentPreferences(pool as never, preferences, 7);

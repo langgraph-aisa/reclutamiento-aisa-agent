@@ -6,6 +6,7 @@ import {
   type OpenAiTtsVoice,
 } from "../../shared/agentConfig";
 import { getAgentRuntimeSettings } from "../agentSettings";
+import { withLangfuseObservation } from "../observability/langfuse";
 
 export type TranscribeOptions = {
   data: Buffer | Uint8Array;
@@ -77,9 +78,7 @@ function normalizedExtension(fileName: string, mimeType: string) {
     !extension ||
     !OPENAI_TRANSCRIPTION_EXTENSIONS.includes(extension as never)
   ) {
-    throw new Error(
-      "El formato de audio no está admitido para transcripción."
-    );
+    throw new Error("El formato de audio no está admitido para transcripción.");
   }
   return extension;
 }
@@ -126,38 +125,91 @@ export async function transcribeAudio(
   options: TranscribeOptions,
   factory: AudioClientFactory = clientFactory
 ): Promise<TranscriptionResponse> {
-  return withKeyRotation(
-    pool,
-    async (client, keySlot, settings) => {
-      assertSize(options.data, settings.audioMaxMb);
-      const extension = normalizedExtension(options.fileName, options.mimeType);
-      const file = await toFile(
-        Buffer.from(options.data),
-        `audio.${extension}`,
-        { type: options.mimeType }
-      );
-      const result = await client.audio.transcriptions.create({
-        file,
-        model: settings.transcriptionModel,
-        language: options.language?.trim().slice(0, 8) || "es",
-        prompt: options.prompt?.trim().slice(0, 500),
-        temperature: 0,
-      });
-      if (!result.text?.trim()) {
-        throw new Error("OpenAI devolvió una transcripción vacía.");
-      }
-      const language =
-        "language" in result && typeof result.language === "string"
-          ? result.language
-          : null;
-      return {
-        text: result.text.trim(),
-        model: settings.transcriptionModel,
-        keySlot,
-        language,
-      };
+  return withLangfuseObservation(
+    {
+      name: "voice.transcription.workflow",
+      asType: "chain",
+      traceName: "voice-transcription",
+      tags: ["voice", "openai"],
+      metadata: {
+        operation: "transcribe",
+        inputBytes: options.data.byteLength,
+        languageSupplied: Boolean(options.language?.trim()),
+        contextHintSupplied: Boolean(options.prompt?.trim()),
+      },
     },
-    factory
+    async workflow => {
+      const response = await withKeyRotation(
+        pool,
+        async (client, keySlot, settings) => {
+          assertSize(options.data, settings.audioMaxMb);
+          const extension = normalizedExtension(
+            options.fileName,
+            options.mimeType
+          );
+          return withLangfuseObservation(
+            {
+              name: "openai.audio.transcription",
+              asType: "generation",
+              metadata: {
+                provider: "openai",
+                operation: "transcribe",
+                model: settings.transcriptionModel,
+                keySlot,
+                format: extension,
+                inputBytes: options.data.byteLength,
+              },
+            },
+            async generation => {
+              const file = await toFile(
+                Buffer.from(options.data),
+                `audio.${extension}`,
+                { type: options.mimeType }
+              );
+              const result = await client.audio.transcriptions.create({
+                file,
+                model: settings.transcriptionModel,
+                language: options.language?.trim().slice(0, 8) || "es",
+                prompt: options.prompt?.trim().slice(0, 500),
+                temperature: 0,
+              });
+              if (!result.text?.trim()) {
+                throw new Error("OpenAI devolvió una transcripción vacía.");
+              }
+              const language =
+                "language" in result && typeof result.language === "string"
+                  ? result.language
+                  : null;
+              generation.update({
+                model: settings.transcriptionModel,
+                output: { status: "completed" },
+                metadata: {
+                  outcome: "success",
+                  keySlot,
+                  locale: language ?? "unknown",
+                },
+              });
+              return {
+                text: result.text.trim(),
+                model: settings.transcriptionModel,
+                keySlot,
+                language,
+              };
+            }
+          );
+        },
+        factory
+      );
+      workflow.update({
+        output: { status: "completed" },
+        metadata: {
+          outcome: "success",
+          model: response.model,
+          keySlot: response.keySlot,
+        },
+      });
+      return response;
+    }
   );
 }
 
@@ -175,26 +227,78 @@ export async function synthesizeSpeech(
   if (!OPENAI_SPEECH_FORMATS.includes(format)) {
     throw new Error("El formato de salida de voz no está admitido.");
   }
-  return withKeyRotation(
-    pool,
-    async (client, keySlot, settings) => {
-      const response = await client.audio.speech.create({
-        input: text,
-        model: settings.ttsModel,
-        voice: options.voice ?? settings.ttsVoice,
-        response_format: format,
-        instructions: options.instructions?.trim().slice(0, 500),
-      });
-      const data = Buffer.from(await response.arrayBuffer());
-      if (!data.byteLength) throw new Error("OpenAI devolvió un audio vacío.");
-      return {
-        data,
-        mimeType: outputMime[format],
+  return withLangfuseObservation(
+    {
+      name: "voice.synthesis.workflow",
+      asType: "chain",
+      traceName: "voice-synthesis",
+      tags: ["voice", "openai"],
+      metadata: {
+        operation: "synthesize",
+        textCharacters: text.length,
         format,
-        model: settings.ttsModel,
-        keySlot,
-      };
+        styleDirectiveSupplied: Boolean(options.instructions?.trim()),
+      },
     },
-    factory
+    async workflow => {
+      const result = await withKeyRotation(
+        pool,
+        async (client, keySlot, settings) =>
+          withLangfuseObservation(
+            {
+              name: "openai.audio.speech",
+              asType: "generation",
+              metadata: {
+                provider: "openai",
+                operation: "synthesize",
+                model: settings.ttsModel,
+                keySlot,
+                format,
+                textCharacters: text.length,
+              },
+            },
+            async generation => {
+              const response = await client.audio.speech.create({
+                input: text,
+                model: settings.ttsModel,
+                voice: options.voice ?? settings.ttsVoice,
+                response_format: format,
+                instructions: options.instructions?.trim().slice(0, 500),
+              });
+              const data = Buffer.from(await response.arrayBuffer());
+              if (!data.byteLength)
+                throw new Error("OpenAI devolvió un audio vacío.");
+              generation.update({
+                model: settings.ttsModel,
+                output: { status: "completed" },
+                metadata: {
+                  outcome: "success",
+                  outputBytes: data.byteLength,
+                  format,
+                  keySlot,
+                },
+              });
+              return {
+                data,
+                mimeType: outputMime[format],
+                format,
+                model: settings.ttsModel,
+                keySlot,
+              };
+            }
+          ),
+        factory
+      );
+      workflow.update({
+        output: { status: "completed" },
+        metadata: {
+          outcome: "success",
+          model: result.model,
+          keySlot: result.keySlot,
+          outputBytes: result.data.byteLength,
+        },
+      });
+      return result;
+    }
   );
 }

@@ -22,8 +22,8 @@ El flujo aplicado es:
 6. Se persisten puntuación, bloque, motivo, resumen, brechas, evidencia, modelo y
    bitácora.
 7. Si la clave principal falla, se intenta una vez con `API Key Back Up`.
-8. Si Langfuse está configurado, se registra una traza técnica sin nombre,
-   teléfono, correo ni respuestas del candidato.
+8. Si Langfuse está configurado, el callback de LangGraph y el wrapper de OpenAI
+   registran el árbol, generación, latencia y consumo bajo la misma traza.
 9. Una poscondición léxica bloquea patrones conocidos de oferta o propuesta
    económica; la revisión humana cubre formulaciones no contempladas.
 
@@ -40,7 +40,12 @@ la evaluación manualmente desde el detalle del candidato.
 | `@langchain/openai`    | Adaptador LangChain para Responses API                     |
 | `@langchain/core`      | Mensajes y contratos base                                  |
 | `@langchain/langgraph` | Grafo controlado de evaluación                             |
-| `langfuse`             | Trazas técnicas y verificación de proyecto                 |
+| `@langfuse/client`     | Verificación tipada de proyecto                             |
+| `@langfuse/tracing`    | Observaciones manuales y propagación de contexto            |
+| `@langfuse/langchain`  | Callback jerárquico para LangGraph y LangChain              |
+| `@langfuse/openai`     | Instrumentación de OpenAI Responses API                    |
+| `@langfuse/otel`       | Exportador y filtro de privacidad                           |
+| `@opentelemetry/sdk-node` | Proveedor, muestreo y ciclo de vida                      |
 | `zod`                  | Validación estricta de configuración y salida estructurada |
 
 La implementación usa Responses API cuando la preferencia administrativa está
@@ -56,7 +61,7 @@ prueba, resumen de actividad y transcripción/TTS. Los endpoints de OpenAI son
 constantes informativas y no campos editables, para evitar que una URL arbitraria
 se convierta en un destino SSRF:
 
-| Uso | Endpoint | Estado en 2.0.130 |
+| Uso | Endpoint | Estado en 2.0.131 |
 | --- | --- | --- |
 | Evaluación | `https://api.openai.com/v1/responses` | Integrado en el evaluador cuando Responses API está habilitada. |
 | Transcripción | `https://api.openai.com/v1/audio/transcriptions` | Servicio aislado implementado y probado; no conectado a medios entrantes de ApiChat. |
@@ -92,12 +97,12 @@ Puede generarse fuera del servidor con:
 openssl rand -base64 48
 ```
 
-Para evitar que un despliegue sin esa variable bloquee al administrador, el
-servidor usa en orden `AGENT_SETTINGS_ENCRYPTION_KEY`, `JWT_SECRET` y
-`DATABASE_URL`, y deriva de la primera disponible una clave AES de 256 bits. Al
-descifrar también prueba las fuentes restantes, lo que conserva las credenciales
-si después se agrega una clave dedicada. No deben cambiarse o eliminarse todas
-las fuentes con las que se hayan cifrado credenciales existentes.
+En producción, el servidor exige `AGENT_SETTINGS_ENCRYPTION_KEY` y un mínimo de
+32 bytes; falla de forma cerrada si falta. Durante una rotación controlada, la
+lectura puede reconocer materiales históricos para migrar credenciales, pero
+las escrituras nuevas siempre usan la raíz dedicada. Esa raíz debe respaldarse
+y rotarse mediante un procedimiento que conserve temporalmente el material
+anterior necesario para descifrar.
 
 Las claves de OpenAI y Langfuse se ingresan únicamente en **Agente de IA
 LangGraph**.
@@ -118,8 +123,10 @@ AES-256-GCM y la API devuelve solo una máscara con los últimos cuatro caracter
 6. Revisar instrucciones, máximo de palabras e interpretación metodológica.
 7. Activar **Usar SIERA y MST-EIR**.
 8. Activar **Habilitar OpenAI Responses API** y guardar la configuración.
-9. Configurar Langfuse de forma opcional, indicar
-   `LANGFUSE_TRACING_ENVIRONMENT`, guardar y verificar la conexión.
+9. En Langfuse, guardar por separado ambas credenciales hasta que las tarjetas
+   indiquen **Configurada**; elegir la región exacta, ambiente, política de
+   contenido y muestreo, activar, guardar y verificar. El identificador devuelto
+   debe localizar la traza diagnóstica en el proyecto.
 10. Evaluar una postulación de prueba sin datos personales reales.
 11. Probar transcripción y TTS con archivos sintéticos dentro de cuota; no
     habilitar medios entrantes hasta disponer de bucket, detección de MIME,
@@ -141,6 +148,10 @@ AES-256-GCM y la API devuelve solo una máscara con los últimos cuatro caracter
   reservada al cambio humano a `calificado`.
 - La verificación OpenAI consulta el acceso al modelo y no envía datos de un
   candidato.
+- Langfuse opera como proyección analítica y no como fuente de verdad. Su caída
+  no bloquea el negocio; `metadata_only` omite los textos y deriva los
+  identificadores mediante HMAC. La guía completa está en
+  [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md).
 - Una instrucción fija y una poscondición bloquean patrones conocidos de ofertas
   económicas en evaluación y solicitud automática de CV. No constituyen una
   garantía semántica formal. La expectativa salarial inicia en cero y solo cambia

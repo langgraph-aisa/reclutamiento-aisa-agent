@@ -2,7 +2,12 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { Pool } from "pg";
 import { z } from "zod";
+import { APP_VERSION } from "../shared/release";
 import { getAgentRuntimeSettings } from "./agentSettings";
+import {
+  observeOpenAIClient,
+  withLangfuseObservation,
+} from "./observability/langfuse";
 
 export const PROFILE_EDITORIAL_MODEL = "gpt-4.1-mini-2025-04-14";
 export const PUBLIC_COPY_EDITORIAL_MODEL = PROFILE_EDITORIAL_MODEL;
@@ -159,9 +164,8 @@ function beginsWithUppercaseOrNumber(text: string) {
 
 function beginsWithSpanishInfinitive(text: string) {
   const firstWord =
-    text
-      .match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/)?.[0]
-      ?.toLocaleLowerCase("es-GT") ?? "";
+    text.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/)?.[0]?.toLocaleLowerCase("es-GT") ??
+    "";
   return /(?:ar|er|ir)(?:se)?$/.test(firstWord);
 }
 
@@ -230,64 +234,124 @@ export async function normalizePublicCopy(
   pool: Pool,
   input: PublicCopyEditorialInput
 ): Promise<PublicCopyEditorialResult> {
-  if (!input.fields.length && !input.lists.length) {
-    throw new Error("No hay contenido público para validar editorialmente.");
-  }
-  const settings = await getAgentRuntimeSettings(pool);
-  if (!settings.useResponsesApi) {
-    throw new Error(
-      "La OpenAI Responses API debe estar habilitada para validar los textos públicos."
-    );
-  }
-
-  const keyOptions = [
-    ["primary", settings.secrets.openai_api_key],
-    ["backup", settings.secrets.openai_api_key_backup],
-  ] as const;
-  const configuredKeys = keyOptions.filter(option => Boolean(option[1]));
-  if (!configuredKeys.length) {
-    throw new Error(
-      "Configure y verifique una API Key de OpenAI antes de guardar o publicar textos públicos."
-    );
-  }
-
-  for (const [keySlot, apiKey] of configuredKeys) {
-    try {
-      const client = new OpenAI({
-        apiKey: apiKey!,
-        timeout: 45_000,
-        maxRetries: 0,
-      });
-      const response = await client.responses.parse({
-        model: PUBLIC_COPY_EDITORIAL_MODEL,
-        instructions: EDITORIAL_INSTRUCTIONS,
-        input: JSON.stringify(input),
-        text: {
-          format: zodTextFormat(
-            EditorialDocumentSchema,
-            "textos_publicos_corregidos"
-          ),
-        },
-        max_output_tokens: 24_000,
-        store: false,
-      });
-      if (!response.output_parsed) {
-        throw new Error("La respuesta editorial está vacía.");
+  return withLangfuseObservation(
+    {
+      name: "public-copy-editorial",
+      asType: "chain",
+      traceName: "public-copy-editorial",
+      tags: ["public-copy", "editorial-control", "responses-api"],
+      version: APP_VERSION,
+      metadata: {
+        feature: "public-copy-editorial",
+        version: PUBLIC_COPY_EDITORIAL_POLICY_VERSION,
+        fieldCount: input.fields.length,
+        listCount: input.lists.length,
+        classification: "restricted-redacted",
+      },
+      input: {
+        operation: "normalize_public_copy",
+        fieldCount: input.fields.length,
+        listCount: input.lists.length,
+      },
+    },
+    async editorialObservation => {
+      if (!input.fields.length && !input.lists.length) {
+        throw new Error(
+          "No hay contenido público para validar editorialmente."
+        );
       }
-      return {
-        ...validateEditorialOutput(input, response.output_parsed),
-        model: PUBLIC_COPY_EDITORIAL_MODEL,
-        keySlot,
-      };
-    } catch (error) {
-      console.warn(
-        `[PublicCopyEditorial] OpenAI ${keySlot} request failed (${error instanceof Error ? error.name : "unknown"}).`
+      const settings = await getAgentRuntimeSettings(pool);
+      if (!settings.useResponsesApi) {
+        throw new Error(
+          "La OpenAI Responses API debe estar habilitada para validar los textos públicos."
+        );
+      }
+
+      const keyOptions = [
+        ["primary", settings.secrets.openai_api_key],
+        ["backup", settings.secrets.openai_api_key_backup],
+      ] as const;
+      const configuredKeys = keyOptions.filter(option => Boolean(option[1]));
+      if (!configuredKeys.length) {
+        throw new Error(
+          "Configure y verifique una API Key de OpenAI antes de guardar o publicar textos públicos."
+        );
+      }
+
+      for (
+        let attemptIndex = 0;
+        attemptIndex < configuredKeys.length;
+        attemptIndex += 1
+      ) {
+        const [keySlot, apiKey] = configuredKeys[attemptIndex]!;
+        try {
+          const client = observeOpenAIClient(
+            new OpenAI({
+              apiKey: apiKey!,
+              timeout: 45_000,
+              maxRetries: 0,
+            }),
+            {
+              traceName: "public-copy-editorial",
+              tags: ["public-copy", "editorial-control", "responses-api"],
+              generationName: `public-copy-editorial-${keySlot}`,
+              generationMetadata: {
+                feature: "public-copy-editorial",
+                keySlot,
+                attempt: attemptIndex + 1,
+                version: PUBLIC_COPY_EDITORIAL_POLICY_VERSION,
+                fieldCount: input.fields.length,
+                listCount: input.lists.length,
+                classification: "restricted-redacted",
+              },
+            }
+          );
+          const response = await client.responses.parse({
+            model: PUBLIC_COPY_EDITORIAL_MODEL,
+            instructions: EDITORIAL_INSTRUCTIONS,
+            input: JSON.stringify(input),
+            text: {
+              format: zodTextFormat(
+                EditorialDocumentSchema,
+                "textos_publicos_corregidos"
+              ),
+            },
+            max_output_tokens: 24_000,
+            store: false,
+          });
+          if (!response.output_parsed) {
+            throw new Error("La respuesta editorial está vacía.");
+          }
+          const result: PublicCopyEditorialResult = {
+            ...validateEditorialOutput(input, response.output_parsed),
+            model: PUBLIC_COPY_EDITORIAL_MODEL,
+            keySlot,
+          };
+          editorialObservation.update({
+            output: {
+              completed: true,
+              keySlot,
+              attempt: attemptIndex + 1,
+              fieldCount: Object.keys(result.fields).length,
+              listCount: Object.keys(result.lists).length,
+              itemCount: Object.values(result.lists).reduce(
+                (total, items) => total + items.length,
+                0
+              ),
+            },
+          });
+          return result;
+        } catch (error) {
+          console.warn(
+            `[PublicCopyEditorial] OpenAI ${keySlot} request failed (${error instanceof Error ? error.name : "unknown"}).`
+          );
+        }
+      }
+
+      throw new Error(
+        "No fue posible validar editorialmente los textos públicos con OpenAI. Verifique las credenciales e inténtelo de nuevo."
       );
     }
-  }
-
-  throw new Error(
-    "No fue posible validar editorialmente los textos públicos con OpenAI. Verifique las credenciales e inténtelo de nuevo."
   );
 }
 

@@ -1,3 +1,5 @@
+import { withLangfuseObservation } from "./observability/langfuse";
+
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 export const CV_REQUEST_TEMPLATE = `Hola {{nombre}}, muchas gracias por su solicitud de empleo.
@@ -196,48 +198,90 @@ export async function sendApiChatText(
     };
   }
 
-  let response: Response;
-  try {
-    response = await fetchImpl(config.endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-    });
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      (error.name === "TimeoutError" || error.name === "AbortError")
-    ) {
-      throw new ApiChatDeliveryUnknownError(
-        "ApiChat no respondió dentro del tiempo permitido; verifique la conversación antes de reintentar."
-      );
-    }
-    throw new ApiChatDeliveryUnknownError(
-      "No fue posible confirmar la entrega con ApiChat; verifique la conversación antes de reintentar."
-    );
-  }
+  return withLangfuseObservation(
+    {
+      name: "apichat.text.send",
+      asType: "tool",
+      traceName: "apichat-outbound",
+      tags: ["apichat", "whatsapp", "outbound"],
+      metadata: {
+        provider: "apichat",
+        operation: "send_text",
+        mode: config.mode,
+        destinationDigits: phoneDigits.length,
+        textCharacters: input.message.length,
+        timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      },
+    },
+    async observation => {
+      let response: Response;
+      try {
+        response = await fetchImpl(config.endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+        });
+      } catch (error) {
+        observation.update({
+          metadata: {
+            outcome:
+              error instanceof Error &&
+              (error.name === "TimeoutError" || error.name === "AbortError")
+                ? "timeout"
+                : "delivery_unknown",
+          },
+        });
+        if (
+          error instanceof Error &&
+          (error.name === "TimeoutError" || error.name === "AbortError")
+        ) {
+          throw new ApiChatDeliveryUnknownError(
+            "ApiChat no respondió dentro del tiempo permitido; verifique la conversación antes de reintentar."
+          );
+        }
+        throw new ApiChatDeliveryUnknownError(
+          "No fue posible confirmar la entrega con ApiChat; verifique la conversación antes de reintentar."
+        );
+      }
 
-  const rawBody = await response.text();
-  let payload: unknown = null;
-  if (rawBody) {
-    try {
-      payload = JSON.parse(rawBody);
-    } catch {
-      payload = null;
+      const rawBody = await response.text();
+      let payload: unknown = null;
+      if (rawBody) {
+        try {
+          payload = JSON.parse(rawBody);
+        } catch {
+          payload = null;
+        }
+      }
+      const providerRejected =
+        payload &&
+        typeof payload === "object" &&
+        (payload as Record<string, unknown>).success === false;
+      if (!response.ok || providerRejected) {
+        observation.update({
+          metadata: {
+            outcome: "provider_rejected",
+            statusCode: response.status,
+          },
+        });
+        throw new Error(providerErrorMessage(response.status, payload));
+      }
+      const result = {
+        providerMessageId: providerMessageId(payload),
+        statusCode: response.status,
+      };
+      observation.update({
+        output: { status: "completed" },
+        metadata: {
+          outcome: "success",
+          statusCode: result.statusCode,
+          providerReferencePresent: Boolean(result.providerMessageId),
+        },
+      });
+      return result;
     }
-  }
-  const providerRejected =
-    payload &&
-    typeof payload === "object" &&
-    (payload as Record<string, unknown>).success === false;
-  if (!response.ok || providerRejected) {
-    throw new Error(providerErrorMessage(response.status, payload));
-  }
-  return {
-    providerMessageId: providerMessageId(payload),
-    statusCode: response.status,
-  };
+  );
 }
 
 export async function verifyApiChatInboundText(
@@ -260,44 +304,90 @@ export async function verifyApiChatInboundText(
   url.searchParams.set("number", input.phoneInternational.replace(/\D/g, ""));
   url.searchParams.set("fromMe", "false");
   url.searchParams.set("limit", "1");
-  let response: Response;
-  try {
-    response = await (options.fetchImpl ?? fetch)(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "client-id": config.clientId!,
-        token: config.token,
+  return withLangfuseObservation(
+    {
+      name: "apichat.text.verify_inbound",
+      asType: "tool",
+      traceName: "apichat-inbound-verification",
+      tags: ["apichat", "whatsapp", "inbound"],
+      metadata: {
+        provider: "apichat",
+        operation: "verify_inbound_text",
+        mode: config.mode,
+        destinationDigits: input.phoneInternational.replace(/\D/g, "").length,
+        textCharacters: input.text.length,
+        timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       },
-      signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-    });
-  } catch {
-    throw new Error(
-      "No fue posible verificar el mensaje entrante con ApiChat."
-    );
-  }
-  if (!response.ok) {
-    throw new Error(
-      `ApiChat rechazó la verificación entrante con código HTTP ${response.status}.`
-    );
-  }
-  const payload = (await response.json().catch(() => null)) as unknown;
-  if (!Array.isArray(payload)) return false;
-  const expectedPhone = input.phoneInternational.replace(/\D/g, "");
-  return payload.some(record => {
-    if (!record || typeof record !== "object") return false;
-    const container = record as Record<string, unknown>;
-    const message =
-      container.message && typeof container.message === "object"
-        ? (container.message as Record<string, unknown>)
-        : container;
-    const fromMe = message.from_me ?? container.from_me;
-    return (
-      String(message.id ?? "") === input.providerMessageId &&
-      String(message.type ?? "") === "text" &&
-      fromMe === false &&
-      String(message.number ?? "").replace(/\D/g, "") === expectedPhone &&
-      String(message.text ?? "").trim() === input.text.trim()
-    );
-  });
+    },
+    async observation => {
+      let response: Response;
+      try {
+        response = await (options.fetchImpl ?? fetch)(url, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "client-id": config.clientId!,
+            token: config.token,
+          },
+          signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+        });
+      } catch {
+        observation.update({
+          metadata: { outcome: "verification_unavailable" },
+        });
+        throw new Error(
+          "No fue posible verificar el mensaje entrante con ApiChat."
+        );
+      }
+      if (!response.ok) {
+        observation.update({
+          metadata: {
+            outcome: "provider_rejected",
+            statusCode: response.status,
+          },
+        });
+        throw new Error(
+          `ApiChat rechazó la verificación entrante con código HTTP ${response.status}.`
+        );
+      }
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!Array.isArray(payload)) {
+        observation.update({
+          output: { status: "completed" },
+          metadata: {
+            outcome: "invalid_provider_payload",
+            statusCode: response.status,
+            verified: false,
+          },
+        });
+        return false;
+      }
+      const expectedPhone = input.phoneInternational.replace(/\D/g, "");
+      const verified = payload.some(record => {
+        if (!record || typeof record !== "object") return false;
+        const container = record as Record<string, unknown>;
+        const message =
+          container.message && typeof container.message === "object"
+            ? (container.message as Record<string, unknown>)
+            : container;
+        const fromMe = message.from_me ?? container.from_me;
+        return (
+          String(message.id ?? "") === input.providerMessageId &&
+          String(message.type ?? "") === "text" &&
+          fromMe === false &&
+          String(message.number ?? "").replace(/\D/g, "") === expectedPhone &&
+          String(message.text ?? "").trim() === input.text.trim()
+        );
+      });
+      observation.update({
+        output: { status: "completed" },
+        metadata: {
+          outcome: verified ? "verified" : "not_verified",
+          statusCode: response.status,
+          verified,
+        },
+      });
+      return verified;
+    }
+  );
 }

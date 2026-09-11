@@ -1,10 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import {
-  ApiChatDeliveryUnknownError,
-  sendApiChatText,
-} from "./apichat";
+import { ApiChatDeliveryUnknownError, sendApiChatText } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
+import { withLangfuseObservation } from "./observability/langfuse";
 import {
   assertNoAutomatedSalaryOffer,
   extractExplicitSalaryExpectation,
@@ -167,7 +165,7 @@ export async function inboxDetail(pool: Pool, conversationId: number) {
   };
 }
 
-export async function setInboxAutomation(
+async function setInboxAutomationInternal(
   pool: Pool,
   input: {
     conversationId: number;
@@ -263,7 +261,47 @@ export async function setInboxAutomation(
   }
 }
 
-export async function sendInboxText(
+export async function setInboxAutomation(
+  pool: Pool,
+  input: {
+    conversationId: number;
+    nextState: "agent" | "human";
+    actorUserId: number;
+    actorRole: string;
+    override: boolean;
+  }
+) {
+  return withLangfuseObservation(
+    {
+      name: "inbox.automation.change",
+      asType: "chain",
+      traceName: "inbox-control",
+      sessionId: input.conversationId,
+      userId: input.actorUserId,
+      tags: ["inbox", "human-control"],
+      metadata: {
+        operation: "change_automation_state",
+        role: input.actorRole,
+        state: input.nextState,
+        override: input.override,
+      },
+    },
+    async observation => {
+      const result = await setInboxAutomationInternal(pool, input);
+      observation.update({
+        output: { status: "completed" },
+        metadata: {
+          outcome: "success",
+          state: input.nextState,
+          override: input.override,
+        },
+      });
+      return result;
+    }
+  );
+}
+
+async function sendInboxTextInternal(
   pool: Pool,
   input: { conversationId: number; text: string; actorUserId: number },
   dependencies: {
@@ -392,7 +430,41 @@ export async function sendInboxText(
   }
 }
 
-export async function recordNormalizedInboundText(
+export async function sendInboxText(
+  pool: Pool,
+  input: { conversationId: number; text: string; actorUserId: number },
+  dependencies: {
+    sendText?: typeof sendApiChatText;
+    settings?: typeof getApiChatRuntimeSettings;
+  } = {}
+) {
+  return withLangfuseObservation(
+    {
+      name: "inbox.message.send",
+      asType: "chain",
+      traceName: "inbox-human-message",
+      sessionId: input.conversationId,
+      userId: input.actorUserId,
+      tags: ["inbox", "whatsapp", "outbound", "human"],
+      metadata: {
+        operation: "send_human_text",
+        textCharacters: input.text.trim().length,
+      },
+    },
+    async observation => {
+      const result = await sendInboxTextInternal(pool, input, dependencies);
+      observation.update({
+        output: { status: "completed" },
+        metadata: {
+          outcome: result.status,
+        },
+      });
+      return result;
+    }
+  );
+}
+
+async function recordNormalizedInboundTextInternal(
   pool: Pool,
   input: {
     applicationId: number;
@@ -488,4 +560,41 @@ export async function recordNormalizedInboundText(
   } finally {
     client.release();
   }
+}
+
+export async function recordNormalizedInboundText(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    conversationId: number;
+    providerMessageId: string;
+    phoneInternational: string;
+    text: string;
+  }
+) {
+  return withLangfuseObservation(
+    {
+      name: "inbox.message.record_inbound",
+      asType: "chain",
+      traceName: "inbox-inbound-message",
+      sessionId: input.conversationId,
+      tags: ["inbox", "whatsapp", "inbound"],
+      metadata: {
+        operation: "record_inbound_text",
+        destinationDigits: input.phoneInternational.replace(/\D/g, "").length,
+        textCharacters: input.text.trim().length,
+      },
+    },
+    async observation => {
+      const result = await recordNormalizedInboundTextInternal(pool, input);
+      observation.update({
+        output: { status: "completed" },
+        metadata: {
+          outcome: result.inserted ? "inserted" : "duplicate",
+          inserted: result.inserted,
+        },
+      });
+      return result;
+    }
+  );
 }

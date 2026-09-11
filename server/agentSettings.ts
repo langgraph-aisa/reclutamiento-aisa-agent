@@ -8,6 +8,8 @@ import type { Pool, PoolClient } from "pg";
 import {
   AGENT_MODELS,
   DEFAULT_AGENT_SETTINGS,
+  LANGFUSE_CAPTURE_MODES,
+  LANGFUSE_CLOUD_BASE_URLS,
   OPENAI_TRANSCRIPTION_MODELS,
   OPENAI_TTS_MODELS,
   OPENAI_TTS_VOICES,
@@ -39,8 +41,11 @@ const preferenceKeys = {
   useMethodologies: "use_methodologies",
   useResponsesApi: "use_responses_api",
   methodologyInterpretation: "methodology_interpretation",
+  langfuseEnabled: "langfuse_enabled",
   langfuseBaseUrl: "langfuse_base_url",
   langfuseEnvironment: "langfuse_environment",
+  langfuseCaptureMode: "langfuse_capture_mode",
+  langfuseSampleRate: "langfuse_sample_rate",
 } as const;
 
 type SettingRow = {
@@ -188,6 +193,13 @@ function intValue(value: string | undefined, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function sampleRateValue(value: string | undefined, fallback: number) {
+  const parsed = Number(value ?? "");
+  return Number.isFinite(parsed) && parsed >= 0.01 && parsed <= 1
+    ? parsed
+    : fallback;
+}
+
 async function settingRows(db: Queryable) {
   const result = await db.query<SettingRow>(
     `SELECT setting_key,setting_value,is_secret,updated_at
@@ -263,12 +275,35 @@ function preferencesFromRows(rows: SettingRow[]): AgentPreferences {
     methodologyInterpretation:
       values.get(preferenceKeys.methodologyInterpretation) ??
       DEFAULT_AGENT_SETTINGS.methodologyInterpretation,
-    langfuseBaseUrl:
-      values.get(preferenceKeys.langfuseBaseUrl) ??
-      DEFAULT_AGENT_SETTINGS.langfuseBaseUrl,
+    langfuseEnabled: boolValue(
+      values.get(preferenceKeys.langfuseEnabled),
+      DEFAULT_AGENT_SETTINGS.langfuseEnabled
+    ),
+    langfuseBaseUrl: LANGFUSE_CLOUD_BASE_URLS.includes(
+      values.get(
+        preferenceKeys.langfuseBaseUrl
+      ) as AgentPreferences["langfuseBaseUrl"]
+    )
+      ? (values.get(
+          preferenceKeys.langfuseBaseUrl
+        ) as AgentPreferences["langfuseBaseUrl"])
+      : DEFAULT_AGENT_SETTINGS.langfuseBaseUrl,
     langfuseEnvironment:
       values.get(preferenceKeys.langfuseEnvironment) ??
       DEFAULT_AGENT_SETTINGS.langfuseEnvironment,
+    langfuseCaptureMode: LANGFUSE_CAPTURE_MODES.includes(
+      values.get(
+        preferenceKeys.langfuseCaptureMode
+      ) as AgentPreferences["langfuseCaptureMode"]
+    )
+      ? (values.get(
+          preferenceKeys.langfuseCaptureMode
+        ) as AgentPreferences["langfuseCaptureMode"])
+      : DEFAULT_AGENT_SETTINGS.langfuseCaptureMode,
+    langfuseSampleRate: sampleRateValue(
+      values.get(preferenceKeys.langfuseSampleRate),
+      DEFAULT_AGENT_SETTINGS.langfuseSampleRate
+    ),
   };
 }
 
@@ -389,8 +424,11 @@ export async function saveAgentPreferences(
         preferenceKeys.methodologyInterpretation,
         preferences.methodologyInterpretation,
       ],
+      [preferenceKeys.langfuseEnabled, String(preferences.langfuseEnabled)],
       [preferenceKeys.langfuseBaseUrl, preferences.langfuseBaseUrl],
       [preferenceKeys.langfuseEnvironment, preferences.langfuseEnvironment],
+      [preferenceKeys.langfuseCaptureMode, preferences.langfuseCaptureMode],
+      [preferenceKeys.langfuseSampleRate, String(preferences.langfuseSampleRate)],
     ];
     for (const [key, value] of entries) {
       await upsertSetting(client, key, value, false);
@@ -413,6 +451,11 @@ export async function saveAgentPreferences(
           summaryWordLimit: preferences.summaryWordLimit,
           useMethodologies: preferences.useMethodologies,
           useResponsesApi: preferences.useResponsesApi,
+          langfuseEnabled: preferences.langfuseEnabled,
+          langfuseBaseUrl: preferences.langfuseBaseUrl,
+          langfuseEnvironment: preferences.langfuseEnvironment,
+          langfuseCaptureMode: preferences.langfuseCaptureMode,
+          langfuseSampleRate: preferences.langfuseSampleRate,
         }),
       ]
     );

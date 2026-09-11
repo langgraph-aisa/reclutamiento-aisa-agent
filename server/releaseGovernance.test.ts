@@ -58,10 +58,13 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.130");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.130");
+    expect(APP_VERSION).toBe("2.0.131");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.131");
     expect(AUDITED_RUNTIME).toEqual({
-      langfuse: "3.38.20",
+      langfuseTracing: "5.11.1",
+      langfuseLangChain: "5.11.1",
+      langfuseOpenAI: "5.11.1",
+      openTelemetry: "0.222.0",
       langGraph: "1.4.14",
       langChainOpenAI: "1.5.11",
       openAiSdk: "7.13.0",
@@ -440,9 +443,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(89);
+    expect(audit.files).toHaveLength(92);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(89);
+    expect(publicCopyAudit.files).toHaveLength(92);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -498,16 +501,16 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.130");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.131");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
     expect(wordCount).toBeGreaterThanOrEqual(2_400);
-    expect(wordCount).toBeLessThanOrEqual(4_000);
+    expect(wordCount).toBeLessThanOrEqual(4_200);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.130");
+    expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.131");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.129");
     expect(readme).toContain("Vista 360° del Candidato");
     expect(readme).toContain("tres tarjetas en escritorio");
@@ -542,7 +545,7 @@ describe("black-box release contract", () => {
       "Zona 1–25, departamento y municipio obligatorios"
     );
     expect(readme).toContain("Revisión Humana 360° compactada");
-    expect(readme).toContain("Langfuse-3.38.20");
+    expect(readme).toContain("Langfuse%20SDK-5.11.1");
     expect(readme).toContain("LangGraph-1.4.14");
     expect(readme).toContain("no constituye certificación");
     expect(readme).toContain("Ontología, epistemología y fenomenología");

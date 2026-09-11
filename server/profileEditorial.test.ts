@@ -1,12 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { constructorOptions, getAgentRuntimeSettings, parse } = vi.hoisted(
-  () => ({
-    constructorOptions: [] as Array<Record<string, unknown>>,
-    getAgentRuntimeSettings: vi.fn(),
-    parse: vi.fn(),
-  })
-);
+const {
+  constructorOptions,
+  getAgentRuntimeSettings,
+  observationUpdate,
+  observeOpenAIClient,
+  parse,
+  withLangfuseObservation,
+} = vi.hoisted(() => ({
+  constructorOptions: [] as Array<Record<string, unknown>>,
+  getAgentRuntimeSettings: vi.fn(),
+  observationUpdate: vi.fn(),
+  observeOpenAIClient: vi.fn(<T extends object>(client: T) => client),
+  parse: vi.fn(),
+  withLangfuseObservation: vi.fn(
+    async <T>(
+      _options: Record<string, unknown>,
+      callback: (observation: {
+        id: string;
+        traceId: string;
+        update: (attributes: Record<string, unknown>) => void;
+      }) => Promise<T>
+    ) =>
+      callback({
+        id: "observation-test",
+        traceId: "trace-test",
+        update: observationUpdate,
+      })
+  ),
+}));
 
 vi.mock("openai", () => ({
   default: class OpenAI {
@@ -19,6 +41,10 @@ vi.mock("openai", () => ({
 }));
 
 vi.mock("./agentSettings", () => ({ getAgentRuntimeSettings }));
+vi.mock("./observability/langfuse", () => ({
+  observeOpenAIClient,
+  withLangfuseObservation,
+}));
 
 import {
   compactRequirements,
@@ -88,6 +114,31 @@ describe("profile requirement editorial validation", () => {
         text: { format: expect.anything() },
       })
     );
+    expect(observeOpenAIClient).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        generationName: "public-copy-editorial-primary",
+        generationMetadata: expect.objectContaining({
+          keySlot: "primary",
+          attempt: 1,
+          version: PUBLIC_COPY_EDITORIAL_POLICY_VERSION,
+        }),
+      })
+    );
+    const observabilityOptions = JSON.stringify([
+      ...withLangfuseObservation.mock.calls.map(call => call[0]),
+      ...observeOpenAIClient.mock.calls.map(call => call[1]),
+    ]);
+    expect(observabilityOptions).not.toContain("licensia tipo B");
+    expect(observabilityOptions).not.toContain("primary-secret");
+    expect(observationUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        output: expect.objectContaining({
+          completed: true,
+          keySlot: "primary",
+        }),
+      })
+    );
   });
 
   it("rotates to the backup key without exposing either credential", async () => {
@@ -121,6 +172,13 @@ describe("profile requirement editorial validation", () => {
       "primary-secret",
       "backup-secret",
     ]);
+    expect(
+      observeOpenAIClient.mock.calls.map(
+        call =>
+          (call[1] as { generationMetadata: { keySlot: string } })
+            .generationMetadata.keySlot
+      )
+    ).toEqual(["primary", "backup"]);
     expect(warning.mock.calls.flat().join(" ")).not.toMatch(
       /primary-secret|backup-secret/
     );

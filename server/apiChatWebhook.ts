@@ -9,6 +9,7 @@ import {
 } from "./apiChatSettings";
 import { getPool } from "./db";
 import { recordNormalizedInboundText } from "./inbox";
+import { withLangfuseObservation } from "./observability/langfuse";
 
 export const APICHAT_NORMALIZED_WEBHOOK_PATH = "/api/webhooks/apichat/incoming";
 
@@ -71,29 +72,53 @@ export function quarantineFingerprint(secret: string, value: string) {
 export async function resolveInboundConversation(
   pool: WebhookPool,
   phoneInternational: string
-) : Promise<InboundConversationResolution> {
-  const result = await pool.query<{
-    application_id: number;
-    conversation_id: number;
-  }>(
-    `SELECT a.id AS application_id,conv.id AS conversation_id
-       FROM candidates c
-       JOIN applications a ON a.candidate_id=c.id
-       JOIN conversations conv ON conv.application_id=a.id
-      WHERE c.phone_international=$1
-        AND conv.provider='apichat'
-        AND conv.status IN ('pendiente','activo')
-      ORDER BY conv.id
-      LIMIT 2`,
-    [phoneInternational]
+): Promise<InboundConversationResolution> {
+  return withLangfuseObservation(
+    {
+      name: "apichat.webhook.resolve_conversation",
+      asType: "retriever",
+      metadata: {
+        provider: "apichat",
+        operation: "resolve_conversation",
+        destinationDigits: phoneInternational.replace(/\D/g, "").length,
+      },
+    },
+    async observation => {
+      const result = await pool.query<{
+        application_id: number;
+        conversation_id: number;
+      }>(
+        `SELECT a.id AS application_id,conv.id AS conversation_id
+           FROM candidates c
+           JOIN applications a ON a.candidate_id=c.id
+           JOIN conversations conv ON conv.application_id=a.id
+          WHERE c.phone_international=$1
+            AND conv.provider='apichat'
+            AND conv.status IN ('pendiente','activo')
+          ORDER BY conv.id
+          LIMIT 2`,
+        [phoneInternational]
+      );
+      const resolution: InboundConversationResolution =
+        result.rows.length === 0
+          ? { kind: "unmatched" }
+          : result.rows.length > 1
+            ? { kind: "ambiguous" }
+            : {
+                kind: "resolved",
+                applicationId: result.rows[0].application_id,
+                conversationId: result.rows[0].conversation_id,
+              };
+      observation.update({
+        output: { status: "completed" },
+        metadata: {
+          outcome: resolution.kind,
+          matchCount: result.rows.length,
+        },
+      });
+      return resolution;
+    }
   );
-  if (result.rows.length === 0) return { kind: "unmatched" };
-  if (result.rows.length > 1) return { kind: "ambiguous" };
-  return {
-    kind: "resolved",
-    applicationId: result.rows[0].application_id,
-    conversationId: result.rows[0].conversation_id,
-  };
 }
 
 export async function quarantineUnknownInboundText(
@@ -105,25 +130,48 @@ export async function quarantineUnknownInboundText(
     reason: "sin_conversacion_activa" | "conversacion_ambigua";
   }
 ) {
-  const providerMessageHash = quarantineFingerprint(
-    input.webhookSecret,
-    `message:${input.providerMessageId}`
+  return withLangfuseObservation(
+    {
+      name: "apichat.webhook.quarantine",
+      asType: "guardrail",
+      tags: ["apichat", "inbound", "quarantine"],
+      metadata: {
+        provider: "apichat",
+        operation: "quarantine_inbound",
+        outcome: input.reason,
+        destinationDigits: input.phoneInternational.replace(/\D/g, "").length,
+      },
+    },
+    async observation => {
+      const providerMessageHash = quarantineFingerprint(
+        input.webhookSecret,
+        `message:${input.providerMessageId}`
+      );
+      const phoneFingerprint = quarantineFingerprint(
+        input.webhookSecret,
+        `phone:${input.phoneInternational}`
+      );
+      const result = await pool.query<{ id: number }>(
+        `INSERT INTO inbound_message_quarantine
+           (provider,provider_message_hash,phone_fingerprint,reason)
+         VALUES ('apichat_normalized',$1,$2,$3)
+         ON CONFLICT (provider,provider_message_hash) DO UPDATE
+           SET occurrence_count=inbound_message_quarantine.occurrence_count+1,
+               last_received_at=now()
+         RETURNING id`,
+        [providerMessageHash, phoneFingerprint, input.reason]
+      );
+      const quarantineId = result.rows[0]?.id ?? null;
+      observation.update({
+        output: { status: "completed" },
+        metadata: {
+          outcome: input.reason,
+          persisted: quarantineId !== null,
+        },
+      });
+      return { quarantineId };
+    }
   );
-  const phoneFingerprint = quarantineFingerprint(
-    input.webhookSecret,
-    `phone:${input.phoneInternational}`
-  );
-  const result = await pool.query<{ id: number }>(
-    `INSERT INTO inbound_message_quarantine
-       (provider,provider_message_hash,phone_fingerprint,reason)
-     VALUES ('apichat_normalized',$1,$2,$3)
-     ON CONFLICT (provider,provider_message_hash) DO UPDATE
-       SET occurrence_count=inbound_message_quarantine.occurrence_count+1,
-           last_received_at=now()
-     RETURNING id`,
-    [providerMessageHash, phoneFingerprint, input.reason]
-  );
-  return { quarantineId: result.rows[0]?.id ?? null };
 }
 
 type WebhookDependencies = {
@@ -177,90 +225,151 @@ export function createApiChatInboundWebhookHandler(
 ): RequestHandler {
   const dependencies = { ...defaultDependencies, ...overrides };
   return async (request, response) => {
-    try {
-      const pool = await dependencies.pool();
-      if (!pool) {
-        response.status(503).json({
-          accepted: false,
-          error: "El receptor no tiene conexión con PostgreSQL.",
-        });
-        return;
-      }
-      const secret = await dependencies.secret(pool);
-      if (!secret) {
-        response.status(503).json({
-          accepted: false,
-          error: "El secreto del webhook no está configurado.",
-        });
-        return;
-      }
-      if (!bearerMatchesSecret(request.get("authorization"), secret)) {
-        response.status(401).json({ accepted: false, error: "No autorizado." });
-        return;
-      }
+    await withLangfuseObservation(
+      {
+        name: "apichat.webhook.receive",
+        asType: "chain",
+        traceName: "apichat-inbound-webhook",
+        tags: ["apichat", "webhook", "inbound"],
+        metadata: {
+          provider: "apichat",
+          operation: "receive_webhook",
+        },
+      },
+      async observation => {
+        try {
+          const pool = await dependencies.pool();
+          if (!pool) {
+            observation.update({
+              metadata: { outcome: "database_unavailable", statusCode: 503 },
+            });
+            response.status(503).json({
+              accepted: false,
+              error: "El receptor no tiene conexión con PostgreSQL.",
+            });
+            return;
+          }
+          const secret = await dependencies.secret(pool);
+          if (!secret) {
+            observation.update({
+              metadata: { outcome: "configuration_missing", statusCode: 503 },
+            });
+            response.status(503).json({
+              accepted: false,
+              error: "El secreto del webhook no está configurado.",
+            });
+            return;
+          }
+          if (!bearerMatchesSecret(request.get("authorization"), secret)) {
+            observation.update({
+              metadata: { outcome: "unauthorized", statusCode: 401 },
+            });
+            response
+              .status(401)
+              .json({ accepted: false, error: "No autorizado." });
+            return;
+          }
 
-      const parsed = NormalizedInboundTextSchema.safeParse(request.body);
-      if (!parsed.success) {
-        response.status(400).json({
-          accepted: false,
-          error: "El evento normalizado de texto no es válido.",
-        });
-        return;
-      }
-      const event = parsed.data;
-      const providerVerified = await dependencies.verifyProvider(pool, event);
-      if (!providerVerified) {
-        response.status(422).json({
-          accepted: false,
-          error: "El mensaje no pudo verificarse con ApiChat.",
-        });
-        return;
-      }
-      const resolution = await dependencies.resolveConversation(
-        pool,
-        event.phoneInternational
-      );
-      if (resolution.kind !== "resolved") {
-        await dependencies.quarantineUnknown(pool, {
-          providerMessageId: event.providerMessageId,
-          phoneInternational: event.phoneInternational,
-          webhookSecret: secret,
-          reason:
-            resolution.kind === "ambiguous"
-              ? "conversacion_ambigua"
-              : "sin_conversacion_activa",
-        });
-        if (resolution.kind === "ambiguous") {
-          response.status(409).json({
-            accepted: false,
-            quarantined: true,
-            error: "Existe más de una conversación activa para el teléfono.",
+          const parsed = NormalizedInboundTextSchema.safeParse(request.body);
+          if (!parsed.success) {
+            observation.update({
+              metadata: { outcome: "invalid_payload", statusCode: 400 },
+            });
+            response.status(400).json({
+              accepted: false,
+              error: "El evento normalizado de texto no es válido.",
+            });
+            return;
+          }
+          const event = parsed.data;
+          const providerVerified = await dependencies.verifyProvider(
+            pool,
+            event
+          );
+          if (!providerVerified) {
+            observation.update({
+              metadata: { outcome: "not_verified", statusCode: 422 },
+            });
+            response.status(422).json({
+              accepted: false,
+              error: "El mensaje no pudo verificarse con ApiChat.",
+            });
+            return;
+          }
+          const resolution = await dependencies.resolveConversation(
+            pool,
+            event.phoneInternational
+          );
+          if (resolution.kind !== "resolved") {
+            await dependencies.quarantineUnknown(pool, {
+              providerMessageId: event.providerMessageId,
+              phoneInternational: event.phoneInternational,
+              webhookSecret: secret,
+              reason:
+                resolution.kind === "ambiguous"
+                  ? "conversacion_ambigua"
+                  : "sin_conversacion_activa",
+            });
+            if (resolution.kind === "ambiguous") {
+              observation.update({
+                output: { status: "completed" },
+                metadata: {
+                  outcome: "quarantined_ambiguous",
+                  statusCode: 409,
+                },
+              });
+              response.status(409).json({
+                accepted: false,
+                quarantined: true,
+                error:
+                  "Existe más de una conversación activa para el teléfono.",
+              });
+              return;
+            }
+            observation.update({
+              output: { status: "completed" },
+              metadata: {
+                outcome: "quarantined_unmatched",
+                statusCode: 202,
+              },
+            });
+            response.status(202).json({ accepted: true, quarantined: true });
+            return;
+          }
+
+          const recorded = await dependencies.recordInbound(pool, {
+            applicationId: resolution.applicationId,
+            conversationId: resolution.conversationId,
+            providerMessageId: event.providerMessageId,
+            phoneInternational: event.phoneInternational,
+            text: event.text,
           });
-          return;
+          const statusCode = recorded.inserted ? 201 : 200;
+          observation.update({
+            output: { status: "completed" },
+            metadata: {
+              outcome: recorded.inserted ? "inserted" : "duplicate",
+              statusCode,
+              inserted: recorded.inserted,
+            },
+          });
+          response.status(statusCode).json({
+            accepted: true,
+            duplicate: !recorded.inserted,
+            conversationId: recorded.conversationId,
+          });
+        } catch {
+          // Deliberadamente no se registra el cuerpo: puede contener datos privados.
+          observation.update({
+            metadata: { outcome: "internal_error", statusCode: 500 },
+          });
+          response.status(500).json({
+            accepted: false,
+            error: "No fue posible registrar el evento entrante.",
+          });
         }
-        response.status(202).json({ accepted: true, quarantined: true });
-        return;
       }
-
-      const recorded = await dependencies.recordInbound(pool, {
-        applicationId: resolution.applicationId,
-        conversationId: resolution.conversationId,
-        providerMessageId: event.providerMessageId,
-        phoneInternational: event.phoneInternational,
-        text: event.text,
-      });
-      response.status(recorded.inserted ? 201 : 200).json({
-        accepted: true,
-        duplicate: !recorded.inserted,
-        conversationId: recorded.conversationId,
-      });
-    } catch {
-      // Deliberadamente no se registra el cuerpo: puede contener datos privados.
-      response.status(500).json({
-        accepted: false,
-        error: "No fue posible registrar el evento entrante.",
-      });
-    }
+    );
   };
 }
 

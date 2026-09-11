@@ -18,6 +18,7 @@ import {
 import { normalizePhone } from "./phone";
 import { resolveApplicationLocation } from "./applicationLocation";
 import { COOKIE_NAME } from "@shared/const";
+import { APP_VERSION } from "@shared/release";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import {
@@ -33,6 +34,8 @@ import {
 } from "./cvRequest";
 import {
   AGENT_MODELS,
+  LANGFUSE_CAPTURE_MODES,
+  LANGFUSE_CLOUD_BASE_URLS,
   OPENAI_TRANSCRIPTION_MODELS,
   OPENAI_TTS_MODELS,
   OPENAI_TTS_VOICES,
@@ -48,6 +51,7 @@ import {
   saveAgentPreferences,
   saveAgentSecret,
 } from "./agentSettings";
+import { initializeLangfuseFromDatabase } from "./observability/langfuse";
 import {
   APICHAT_SECRET_KEYS,
   getApiChatConfiguration,
@@ -832,12 +836,29 @@ function asJson(value: unknown) {
 
 function safeIntegrationMessage(error: unknown, fallback: string) {
   const message = error instanceof Error ? error.message : "";
+  if (
+    message.includes('relation "agent_user_assignments" does not exist')
+  ) {
+    return "La tabla de asignación responsable no existe. Aplique la migración 0014_cognitive_governance.sql en la base de datos.";
+  }
   const allowedMessages = [
     "No existe una fuente estable para cifrar credenciales",
+    "No existe una clave dedicada para cifrar credenciales",
+    "AGENT_SETTINGS_ENCRYPTION_KEY debe contener al menos",
     "La API Key",
     "La OpenAI Responses API",
     "No hay una API key",
     "Configure las claves pública",
+    "Configure y guarde las claves pública",
+    "Configure una clave estable de seudonimización",
+    "Active el envío de trazas Langfuse",
+    "La región de Langfuse",
+    "El ambiente de Langfuse",
+    "El porcentaje de muestreo de Langfuse",
+    "Langfuse rechazó",
+    "No fue posible establecer conexión con la región de Langfuse",
+    "No fue posible iniciar el procesador de trazas de Langfuse",
+    "El procesador de Langfuse",
     "ApiChat no está configurado",
     "ApiChat rechazó la verificación",
     "La verificación integrada de ApiChat",
@@ -1757,9 +1778,23 @@ export const appRouter = router({
     ),
     assignJarvi: adminProcedure
       .input(z.object({ userId: z.number().int().positive() }))
-      .mutation(async ({ input, ctx }) =>
-        assignJarviUser(await requirePool(), input.userId, ctx.user.id)
-      ),
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await assignJarviUser(
+            await requirePool(),
+            input.userId,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible asignar el responsable de JARVI HR."
+            ),
+          });
+        }
+      }),
   }),
 
   positions: router({
@@ -3472,15 +3507,8 @@ export const appRouter = router({
           useMethodologies: z.boolean(),
           useResponsesApi: z.boolean(),
           methodologyInterpretation: z.string().trim().min(100).max(12_000),
-          langfuseBaseUrl: z
-            .url()
-            .max(500)
-            .refine(
-              value => ["https:", "http:"].includes(new URL(value).protocol),
-              {
-                message: "La URL de Langfuse debe usar HTTP o HTTPS.",
-              }
-            ),
+          langfuseEnabled: z.boolean(),
+          langfuseBaseUrl: z.enum(LANGFUSE_CLOUD_BASE_URLS),
           langfuseEnvironment: z
             .string()
             .trim()
@@ -3490,11 +3518,19 @@ export const appRouter = router({
               message:
                 "El environment de Langfuse solo admite letras, números, punto, guion y guion bajo.",
             }),
+          langfuseCaptureMode: z.enum(LANGFUSE_CAPTURE_MODES),
+          langfuseSampleRate: z.number().min(0.01).max(1),
         })
       )
       .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
-        return saveAgentPreferences(pool, input, ctx.user.id);
+        const configuration = await saveAgentPreferences(
+          pool,
+          input,
+          ctx.user.id
+        );
+        await initializeLangfuseFromDatabase(pool, { release: APP_VERSION });
+        return configuration;
       }),
     saveSecret: adminProcedure
       .input(
@@ -3515,14 +3551,49 @@ export const appRouter = router({
             message: "La API key de OpenAI debe comenzar con sk-.",
           });
         }
+        if (
+          input.value &&
+          input.key === "langfuse_public_key" &&
+          !input.value.startsWith("pk-lf-")
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "La clave pública de Langfuse debe comenzar con pk-lf-.",
+          });
+        }
+        if (
+          input.value &&
+          input.key === "langfuse_secret_key" &&
+          !input.value.startsWith("sk-lf-")
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "La clave secreta de Langfuse debe comenzar con sk-lf-.",
+          });
+        }
         try {
-          return await saveAgentSecret(
+          const state = await saveAgentSecret(
             pool,
             input.key,
             input.value,
             ctx.user.id
           );
+          if (input.key.startsWith("langfuse_")) {
+            await initializeLangfuseFromDatabase(pool, {
+              release: APP_VERSION,
+            });
+          }
+          return state;
         } catch (error) {
+          console.error(
+            "[AgentSecret] No fue posible guardar la credencial:",
+            error instanceof Error
+              ? error.message.replace(
+                  /sk-[A-Za-z0-9_-]{8,}/g,
+                  "[credencial protegida]"
+                )
+              : String(error)
+          );
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
             message: safeIntegrationMessage(

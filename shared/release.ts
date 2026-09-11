@@ -11,7 +11,18 @@ function auditedVersion(specifier: string) {
 }
 
 export const AUDITED_RUNTIME = {
-  langfuse: auditedVersion(packageMetadata.dependencies.langfuse),
+  langfuseTracing: auditedVersion(
+    packageMetadata.dependencies["@langfuse/tracing"]
+  ),
+  langfuseLangChain: auditedVersion(
+    packageMetadata.dependencies["@langfuse/langchain"]
+  ),
+  langfuseOpenAI: auditedVersion(
+    packageMetadata.dependencies["@langfuse/openai"]
+  ),
+  openTelemetry: auditedVersion(
+    packageMetadata.dependencies["@opentelemetry/sdk-node"]
+  ),
   langGraph: auditedVersion(
     packageMetadata.dependencies["@langchain/langgraph"]
   ),

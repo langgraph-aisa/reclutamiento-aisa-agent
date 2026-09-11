@@ -18,6 +18,7 @@ import {
   DEFAULT_AGENT_SETTINGS,
   EVALUATION_BLOCKS,
   JARVI_HR_IDENTITY_EMAIL,
+  LANGFUSE_CLOUD_BASE_URLS,
   OPENAI_API_ENDPOINTS,
   OPENAI_SPEECH_FORMATS,
   OPENAI_TRANSCRIPTION_EXTENSIONS,
@@ -80,7 +81,7 @@ export default function AgentEvaluator() {
   const verifyLangfuse = trpc.agent.verifyLangfuse.useMutation({
     onSuccess: result =>
       toast.success(
-        `Langfuse verificado · ${result.projects} proyecto${result.projects === 1 ? "" : "s"}`
+        `Langfuse en vivo · traza de control ${result.traceId.slice(0, 12)}…`
       ),
     onError: error => toast.error(error.message),
   });
@@ -108,8 +109,11 @@ export default function AgentEvaluator() {
       useMethodologies: configuration.data.useMethodologies,
       useResponsesApi: configuration.data.useResponsesApi,
       methodologyInterpretation: configuration.data.methodologyInterpretation,
+      langfuseEnabled: configuration.data.langfuseEnabled,
       langfuseBaseUrl: configuration.data.langfuseBaseUrl,
       langfuseEnvironment: configuration.data.langfuseEnvironment,
+      langfuseCaptureMode: configuration.data.langfuseCaptureMode,
+      langfuseSampleRate: configuration.data.langfuseSampleRate,
     });
   }, [configuration.data]);
 
@@ -128,6 +132,10 @@ export default function AgentEvaluator() {
     preferences.useResponsesApi &&
       (configuration.data?.secrets.openai_api_key.configured ||
         configuration.data?.secrets.openai_api_key_backup.configured)
+  );
+  const langfuseReady = Boolean(
+    configuration.data?.secrets.langfuse_public_key.configured &&
+      configuration.data?.secrets.langfuse_secret_key.configured
   );
 
   return (
@@ -608,6 +616,18 @@ export default function AgentEvaluator() {
             />
           </CardHeader>
           <CardContent className="space-y-4">
+            <ControlSwitch
+              icon={Activity}
+              title="Enviar trazas en vivo"
+              description="Active OpenTelemetry y publique cada ejecución gobernada en el proyecto configurado."
+              checked={preferences.langfuseEnabled}
+              onCheckedChange={langfuseEnabled =>
+                setPreferences(current => ({
+                  ...current,
+                  langfuseEnabled,
+                }))
+              }
+            />
             <SecretField
               label="LANGFUSE_PUBLIC_KEY"
               description="Identificador público del proyecto"
@@ -626,41 +646,111 @@ export default function AgentEvaluator() {
               onSave={value => persistSecret("langfuse_secret_key", value)}
               onRemove={() => persistSecret("langfuse_secret_key", null)}
             />
-            <div className="space-y-2">
-              <Label className="font-semibold text-primary">
-                LANGFUSE_BASE_URL
-              </Label>
-              <Input
-                value={preferences.langfuseBaseUrl}
-                onChange={event =>
-                  setPreferences(current => ({
-                    ...current,
-                    langfuseBaseUrl: event.target.value,
-                  }))
-                }
-                className="rounded-2xl font-mono text-xs"
-                placeholder="https://cloud.langfuse.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="font-semibold text-primary">
-                LANGFUSE_TRACING_ENVIRONMENT
-              </Label>
-              <Input
-                value={preferences.langfuseEnvironment}
-                onChange={event =>
-                  setPreferences(current => ({
-                    ...current,
-                    langfuseEnvironment: event.target.value,
-                  }))
-                }
-                className="rounded-2xl font-mono text-xs"
-                placeholder="production"
-              />
-              <p className="text-xs text-muted-foreground">
-                Separe las trazas por ambiente, por ejemplo: production, staging
-                o development.
-              </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="font-semibold text-primary">
+                  Región de Langfuse Cloud
+                </Label>
+                <Select
+                  value={preferences.langfuseBaseUrl}
+                  onValueChange={langfuseBaseUrl =>
+                    setPreferences(current => ({
+                      ...current,
+                      langfuseBaseUrl:
+                        langfuseBaseUrl as AgentPreferences["langfuseBaseUrl"],
+                    }))
+                  }
+                >
+                  <SelectTrigger className="rounded-2xl font-mono text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LANGFUSE_CLOUD_BASE_URLS.map(baseUrl => (
+                      <SelectItem key={baseUrl} value={baseUrl}>
+                        {baseUrl.includes("hipaa")
+                          ? "Estados Unidos · HIPAA"
+                          : baseUrl.includes("us.cloud")
+                            ? "Estados Unidos"
+                            : baseUrl.includes("jp.cloud")
+                              ? "Japón"
+                              : "Europa"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  La región debe coincidir con el proyecto que emitió las claves.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="font-semibold text-primary">
+                  Ambiente de trazabilidad
+                </Label>
+                <Input
+                  value={preferences.langfuseEnvironment}
+                  onChange={event =>
+                    setPreferences(current => ({
+                      ...current,
+                      langfuseEnvironment: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl font-mono text-xs"
+                  placeholder="production"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use production, staging o development para separar trazas.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="font-semibold text-primary">
+                  Protección del contenido
+                </Label>
+                <Select
+                  value={preferences.langfuseCaptureMode}
+                  onValueChange={langfuseCaptureMode =>
+                    setPreferences(current => ({
+                      ...current,
+                      langfuseCaptureMode:
+                        langfuseCaptureMode as AgentPreferences["langfuseCaptureMode"],
+                    }))
+                  }
+                >
+                  <SelectTrigger className="rounded-2xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="metadata_only">
+                      Solo metadatos (recomendado)
+                    </SelectItem>
+                    <SelectItem value="redacted">
+                      Contenido anonimizado
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="font-semibold text-primary">
+                  Muestreo de ejecuciones
+                </Label>
+                <Select
+                  value={String(preferences.langfuseSampleRate)}
+                  onValueChange={langfuseSampleRate =>
+                    setPreferences(current => ({
+                      ...current,
+                      langfuseSampleRate: Number(langfuseSampleRate),
+                    }))
+                  }
+                >
+                  <SelectTrigger className="rounded-2xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">100 % · auditoría completa</SelectItem>
+                    <SelectItem value="0.5">50 % · carga moderada</SelectItem>
+                    <SelectItem value="0.1">10 % · alto volumen</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <Button
               className="w-full rounded-full"
@@ -673,16 +763,23 @@ export default function AgentEvaluator() {
             <Button
               variant="outline"
               className="w-full rounded-full"
-              disabled={verifyLangfuse.isPending}
+              disabled={verifyLangfuse.isPending || !langfuseReady}
               onClick={() => verifyLangfuse.mutate()}
             >
               <CheckCircle2 className="mr-2 h-4 w-4" />
               Verificar conexión Langfuse
             </Button>
+            {!langfuseReady ? (
+              <p className="rounded-2xl border border-amber-300 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
+                Para verificar, guarde por separado la clave pública y la clave
+                secreta. El estado de ambas debe cambiar de “Pendiente” a
+                “Configurada”.
+              </p>
+            ) : null}
             <p className="text-xs leading-5 text-muted-foreground">
-              La traza omite nombre, teléfono, correo y respuestas del
-              candidato; registra solamente identificador técnico, modelo,
-              resultado y estado.
+              El SDK modular v5 envía spans OpenTelemetry en vivo. Por defecto,
+              la traza omite el texto del candidato y conserva identificadores
+              seudónimos, modelo, latencia, consumo, resultado y estado.
             </p>
           </CardContent>
         </Card>

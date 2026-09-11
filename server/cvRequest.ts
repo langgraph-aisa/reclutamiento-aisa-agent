@@ -5,6 +5,7 @@ import {
   sendApiChatText,
 } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
+import { withLangfuseObservation } from "./observability/langfuse";
 import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
 
 type ApplicationContact = {
@@ -34,7 +35,7 @@ export function cvRequestMessageKey(applicationId: number) {
   return `cv_request:${applicationId}`;
 }
 
-export async function ensureCvRequestMessage(
+async function ensureCvRequestMessageInternal(
   client: PoolClient,
   application: ApplicationContact
 ) {
@@ -77,6 +78,45 @@ export async function ensureCvRequestMessage(
   return existing.rows[0] ? { ...existing.rows[0], created: false } : null;
 }
 
+export async function ensureCvRequestMessage(
+  client: PoolClient,
+  application: ApplicationContact
+) {
+  return withLangfuseObservation(
+    {
+      name: "cv_request.message.ensure",
+      asType: "chain",
+      traceName: "cv-request",
+      sessionId: application.id,
+      tags: ["apichat", "cv-request", "outbound"],
+      metadata: {
+        operation: "ensure_cv_request",
+        positionTemplateConfigured: Boolean(
+          application.whatsapp_message?.trim()
+        ),
+        globalTemplateConfigured: Boolean(
+          application.global_whatsapp_message?.trim()
+        ),
+      },
+    },
+    async observation => {
+      const result = await ensureCvRequestMessageInternal(client, application);
+      observation.update({
+        output: { status: "completed" },
+        metadata: {
+          outcome: result
+            ? result.created
+              ? "created"
+              : "existing"
+            : "missing",
+          created: result?.created ?? false,
+        },
+      });
+      return result;
+    }
+  );
+}
+
 function safeDeliveryError(error: unknown) {
   return (
     error instanceof Error
@@ -85,7 +125,7 @@ function safeDeliveryError(error: unknown) {
   ).slice(0, 1000);
 }
 
-export async function deliverCvRequestMessage(
+async function deliverCvRequestMessageInternal(
   pool: Pool,
   messageId: number
 ): Promise<CvRequestDelivery> {
@@ -209,4 +249,34 @@ export async function deliverCvRequestMessage(
     }
     return { status: "unknown", error: safeError };
   }
+}
+
+export async function deliverCvRequestMessage(
+  pool: Pool,
+  messageId: number
+): Promise<CvRequestDelivery> {
+  return withLangfuseObservation(
+    {
+      name: "cv_request.message.deliver",
+      asType: "chain",
+      traceName: "cv-request-delivery",
+      sessionId: messageId,
+      tags: ["apichat", "cv-request", "outbound"],
+      metadata: {
+        operation: "deliver_cv_request",
+      },
+    },
+    async observation => {
+      const result = await deliverCvRequestMessageInternal(pool, messageId);
+      observation.update({
+        output: { status: "completed" },
+        metadata: {
+          outcome: result.status,
+          providerReferencePresent:
+            result.status === "sent" && Boolean(result.providerMessageId),
+        },
+      });
+      return result;
+    }
+  );
 }
