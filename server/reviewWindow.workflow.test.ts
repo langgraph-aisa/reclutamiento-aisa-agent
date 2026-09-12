@@ -128,7 +128,7 @@ describe("workflow de revisión humana", () => {
     });
   });
 
-  it("normaliza dinámicamente el envelope oficial y separa únicamente texto entrante", () => {
+  it("normaliza dinámicamente el envelope oficial y sincroniza ambos sentidos", () => {
     const result = executeNormalizer({
       body: {
         messages: [
@@ -160,6 +160,7 @@ describe("workflow de revisión humana", () => {
             type: "text",
             from_me: false,
             is_group: true,
+            chat_type: "group",
             text: "No debe ingresar",
           },
         ],
@@ -173,8 +174,16 @@ describe("workflow de revisión humana", () => {
             {
               providerMessageId: "msg.official-100",
               phoneInternational: "+50255555555",
+              direction: "inbound",
               messageType: "text",
               text: "Mensaje de prueba",
+            },
+            {
+              providerMessageId: "msg.outbound-102",
+              phoneInternational: "+50255555555",
+              direction: "outbound",
+              messageType: "text",
+              text: "No debe duplicarse",
             },
           ],
         },
@@ -185,7 +194,7 @@ describe("workflow de revisión humana", () => {
       .jsCode;
     expect(normalizer).toContain("payload.messages");
     expect(normalizer).toContain("const events = []");
-    expect(normalizer).toContain("message.from_me !== false");
+    expect(normalizer).toContain("message.from_me === true ? 'outbound'");
     expect(normalizer).toContain("message.chat_type === 'group'");
     expect(normalizer).toContain("messageType: 'text'");
     expect(whatsappNode("Entregar a Talento AISA").parameters.url).toContain(
@@ -236,6 +245,7 @@ describe("workflow de revisión humana", () => {
             {
               providerMessageId: "msg.link-200",
               phoneInternational: "+50255555555",
+              direction: "inbound",
               messageType: "link",
               link: "https://aisa.com.gt/plaza",
               caption: "Mire la plaza",
@@ -243,6 +253,7 @@ describe("workflow de revisión humana", () => {
             {
               providerMessageId: "msg.loc-201",
               phoneInternational: "+50255555555",
+              direction: "inbound",
               messageType: "location",
               latitude: 14.6,
               longitude: -90.5,

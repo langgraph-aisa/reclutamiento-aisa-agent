@@ -12,6 +12,7 @@ import {
   verifyApiChatInboundLink,
   verifyApiChatInboundLocation,
   verifyApiChatInboundText,
+  verifyApiChatOutboundText,
 } from "./apichat";
 
 afterEach(() => vi.restoreAllMocks());
@@ -467,5 +468,37 @@ describe("endpoints oficiales restantes de ApiChat", () => {
         { fetchImpl }
       )
     ).resolves.toBe(false);
+  });
+
+  it("verifica textos salientes contra el proveedor con fromMe verdadero", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            from_me: true,
+            message: {
+              id: "provider-10",
+              number: "50255555555",
+              type: "text",
+              text: "A la orden",
+            },
+          },
+        ]),
+        { status: 200 }
+      )
+    );
+    await expect(
+      verifyApiChatOutboundText(
+        {
+          providerMessageId: "provider-10",
+          phoneInternational: "+50255555555",
+          text: "A la orden",
+        },
+        config,
+        { fetchImpl }
+      )
+    ).resolves.toBe(true);
+    const url = new URL(String(fetchImpl.mock.calls[0]?.[0]));
+    expect(url.searchParams.get("fromMe")).toBe("true");
   });
 });

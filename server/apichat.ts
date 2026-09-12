@@ -484,7 +484,8 @@ async function verifyApiChatInboundEvent(
   },
   matchesEvent: (message: Record<string, unknown>) => boolean,
   configInput: ApiChatConfig,
-  options: ApiChatVerifyOptions = {}
+  options: ApiChatVerifyOptions = {},
+  fromMe = false
 ) {
   const config = validateApiChatConfig(configInput);
   if (config.mode !== "native") {
@@ -495,9 +496,10 @@ async function verifyApiChatInboundEvent(
   const url = new URL("/v1/messages", config.endpoint);
   url.searchParams.set("messageId", input.providerMessageId);
   url.searchParams.set("number", input.phoneInternational.replace(/\D/g, ""));
-  url.searchParams.set("fromMe", "false");
+  url.searchParams.set("fromMe", fromMe ? "true" : "false");
   url.searchParams.set("limit", "1");
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const expectedFromMe = fromMe;
   return withLangfuseObservation(
     {
       name: `apichat.${operation}.verify_inbound`,
@@ -563,10 +565,10 @@ async function verifyApiChatInboundEvent(
           container.message && typeof container.message === "object"
             ? (container.message as Record<string, unknown>)
             : container;
-        const fromMe = message.from_me ?? container.from_me;
+        const fromMeValue = message.from_me ?? container.from_me;
         if (
           String(message.id ?? "") !== input.providerMessageId ||
-          fromMe !== false ||
+          fromMeValue !== expectedFromMe ||
           String(message.number ?? "").replace(/\D/g, "") !== expectedPhone
         ) {
           return false;
@@ -654,5 +656,79 @@ export function verifyApiChatInboundLocation(
       ),
     configInput,
     options
+  );
+}
+
+export function verifyApiChatOutboundText(
+  input: {
+    providerMessageId: string;
+    phoneInternational: string;
+    text: string;
+  },
+  configInput: ApiChatConfig,
+  options: ApiChatVerifyOptions = {}
+) {
+  return verifyApiChatInboundEvent(
+    "outbound_text",
+    input,
+    message =>
+      String(message.type ?? "") === "text" &&
+      String(message.text ?? "").trim() === input.text.trim(),
+    configInput,
+    options,
+    true
+  );
+}
+
+export function verifyApiChatOutboundLink(
+  input: {
+    providerMessageId: string;
+    phoneInternational: string;
+    link: string;
+  },
+  configInput: ApiChatConfig,
+  options: ApiChatVerifyOptions = {}
+) {
+  return verifyApiChatInboundEvent(
+    "outbound_link",
+    input,
+    message =>
+      String(message.type ?? "") === "link" &&
+      String(message.link ?? "").trim() === input.link.trim(),
+    configInput,
+    options,
+    true
+  );
+}
+
+export function verifyApiChatOutboundLocation(
+  input: {
+    providerMessageId: string;
+    phoneInternational: string;
+    latitude: number;
+    longitude: number;
+  },
+  configInput: ApiChatConfig,
+  options: ApiChatVerifyOptions = {}
+) {
+  const withinTolerance = (actual: unknown, expected: number) =>
+    Number.isFinite(Number(actual)) &&
+    Math.abs(Number(actual) - expected) < 0.0001;
+  return verifyApiChatInboundEvent(
+    "outbound_location",
+    input,
+    message =>
+      String(message.type ?? "") === "location" &&
+      withinTolerance(
+        (message as Record<string, unknown>).latitude,
+        input.latitude
+      ) &&
+      withinTolerance(
+        (message as Record<string, unknown>).longitude,
+        input.longitude
+      ),
+    configInput,
+    options,
+    true
   );
 }

@@ -6,6 +6,9 @@ import {
   verifyApiChatInboundLink,
   verifyApiChatInboundLocation,
   verifyApiChatInboundText,
+  verifyApiChatOutboundLink,
+  verifyApiChatOutboundLocation,
+  verifyApiChatOutboundText,
 } from "./apichat";
 import {
   getApiChatRuntimeSettings,
@@ -16,6 +19,9 @@ import {
   recordNormalizedInboundLink,
   recordNormalizedInboundLocation,
   recordNormalizedInboundText,
+  recordNormalizedOutboundLink,
+  recordNormalizedOutboundLocation,
+  recordNormalizedOutboundText,
 } from "./inbox";
 import { withLangfuseObservation } from "./observability/langfuse";
 
@@ -61,6 +67,7 @@ export const NormalizedInboundTextSchema = z.discriminatedUnion(
         phoneInternational,
         messageType: z.literal("text"),
         text: z.string().trim().min(1).max(10_000),
+        direction: z.enum(["inbound", "outbound"]).optional(),
       })
       .strict(),
     z
@@ -70,6 +77,7 @@ export const NormalizedInboundTextSchema = z.discriminatedUnion(
         messageType: z.literal("link"),
         link: secureHttpsUrl,
         caption: z.string().trim().max(1_000).optional(),
+        direction: z.enum(["inbound", "outbound"]).optional(),
       })
       .strict(),
     z
@@ -80,6 +88,7 @@ export const NormalizedInboundTextSchema = z.discriminatedUnion(
         latitude: z.number().min(-90).max(90),
         longitude: z.number().min(-180).max(180),
         address: z.string().trim().max(300).optional(),
+        direction: z.enum(["inbound", "outbound"]).optional(),
       })
       .strict(),
   ]
@@ -101,6 +110,7 @@ export type InboundRecordInput = {
   conversationId: number;
   providerMessageId: string;
   phoneInternational: string;
+  direction: "inbound" | "outbound";
 } & (
   | { messageType: "text"; text: string }
   | { messageType: "link"; link: string; caption?: string }
@@ -279,69 +289,103 @@ async function verifyProviderDefault(
   event: NormalizedInboundEvent
 ) {
   const settings = await getApiChatRuntimeSettings(pool as Pool);
+  const outbound = event.direction === "outbound";
   if (event.messageType === "link") {
-    return verifyApiChatInboundLink(
-      {
-        providerMessageId: event.providerMessageId,
-        phoneInternational: event.phoneInternational,
-        link: event.link,
-      },
-      settings
-    );
+    return outbound
+      ? verifyApiChatOutboundLink(
+          {
+            providerMessageId: event.providerMessageId,
+            phoneInternational: event.phoneInternational,
+            link: event.link,
+          },
+          settings
+        )
+      : verifyApiChatInboundLink(
+          {
+            providerMessageId: event.providerMessageId,
+            phoneInternational: event.phoneInternational,
+            link: event.link,
+          },
+          settings
+        );
   }
   if (event.messageType === "location") {
-    return verifyApiChatInboundLocation(
-      {
-        providerMessageId: event.providerMessageId,
-        phoneInternational: event.phoneInternational,
-        latitude: event.latitude,
-        longitude: event.longitude,
-      },
-      settings
-    );
+    return outbound
+      ? verifyApiChatOutboundLocation(
+          {
+            providerMessageId: event.providerMessageId,
+            phoneInternational: event.phoneInternational,
+            latitude: event.latitude,
+            longitude: event.longitude,
+          },
+          settings
+        )
+      : verifyApiChatInboundLocation(
+          {
+            providerMessageId: event.providerMessageId,
+            phoneInternational: event.phoneInternational,
+            latitude: event.latitude,
+            longitude: event.longitude,
+          },
+          settings
+        );
   }
-  return verifyApiChatInboundText(
-    {
-      providerMessageId: event.providerMessageId,
-      phoneInternational: event.phoneInternational,
-      text: event.text,
-    },
-    settings
-  );
+  return outbound
+    ? verifyApiChatOutboundText(
+        {
+          providerMessageId: event.providerMessageId,
+          phoneInternational: event.phoneInternational,
+          text: event.text,
+        },
+        settings
+      )
+    : verifyApiChatInboundText(
+        {
+          providerMessageId: event.providerMessageId,
+          phoneInternational: event.phoneInternational,
+          text: event.text,
+        },
+        settings
+      );
 }
 
 function recordInboundDefault(
   pool: WebhookPool,
   input: InboundRecordInput
 ) {
+  const record = input.direction === "outbound"
+    ? {
+        text: recordNormalizedOutboundText,
+        link: recordNormalizedOutboundLink,
+        location: recordNormalizedOutboundLocation,
+      }
+    : {
+        text: recordNormalizedInboundText,
+        link: recordNormalizedInboundLink,
+        location: recordNormalizedInboundLocation,
+      };
+  const base = {
+    applicationId: input.applicationId,
+    conversationId: input.conversationId,
+    providerMessageId: input.providerMessageId,
+    phoneInternational: input.phoneInternational,
+  };
   if (input.messageType === "link") {
-    return recordNormalizedInboundLink(pool as Pool, {
-      applicationId: input.applicationId,
-      conversationId: input.conversationId,
-      providerMessageId: input.providerMessageId,
-      phoneInternational: input.phoneInternational,
+    return record.link(pool as Pool, {
+      ...base,
       link: input.link,
       caption: input.caption,
     });
   }
   if (input.messageType === "location") {
-    return recordNormalizedInboundLocation(pool as Pool, {
-      applicationId: input.applicationId,
-      conversationId: input.conversationId,
-      providerMessageId: input.providerMessageId,
-      phoneInternational: input.phoneInternational,
+    return record.location(pool as Pool, {
+      ...base,
       latitude: input.latitude,
       longitude: input.longitude,
       address: input.address,
     });
   }
-  return recordNormalizedInboundText(pool as Pool, {
-    applicationId: input.applicationId,
-    conversationId: input.conversationId,
-    providerMessageId: input.providerMessageId,
-    phoneInternational: input.phoneInternational,
-    text: input.text,
-  });
+  return record.text(pool as Pool, { ...base, text: input.text });
 }
 
 const defaultDependencies: WebhookDependencies = {
@@ -475,6 +519,7 @@ export function createApiChatInboundWebhookHandler(
             conversationId: resolution.conversationId,
             providerMessageId: event.providerMessageId,
             phoneInternational: event.phoneInternational,
+            direction: event.direction ?? "inbound",
             ...(event.messageType === "text"
               ? { messageType: "text" as const, text: event.text }
               : event.messageType === "link"

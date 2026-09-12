@@ -8,7 +8,7 @@ import {
   quarantineUnknownInboundText,
   resolveInboundConversation,
 } from "./apiChatWebhook";
-import { recordNormalizedInboundLink, recordNormalizedInboundText } from "./inbox";
+import { recordNormalizedInboundLink, recordNormalizedInboundText, recordNormalizedOutboundText } from "./inbox";
 
 async function executeWebhook(
   overrides: Parameters<typeof createApiChatInboundWebhookHandler>[0],
@@ -326,13 +326,19 @@ describe("persistencia minimizada e idempotente", () => {
       sql.includes("UPDATE conversations")
     );
     expect(timelineUpdate?.[0]).toContain("last_message_at=now()");
-    expect(timelineUpdate?.[0]).toContain("last_inbound_at=now()");
+    expect(timelineUpdate?.[0]).toContain(
+      "last_inbound_at=CASE WHEN $2='inbound' THEN now()"
+    );
+    expect(timelineUpdate?.[0]).toContain(
+      "last_outbound_at=CASE WHEN $2='outbound' THEN now()"
+    );
     expect(timelineUpdate?.[0]).toContain("updated_at=now()");
     const insert = calls.find(([sql]) =>
       sql.includes("INSERT INTO conversation_messages")
     );
-    expect(String(insert?.[1]?.[4])).toMatch(/^apichat:[a-f0-9]{64}$/);
-    expect(String(insert?.[0])).toContain("'inbound'");
+    expect(String(insert?.[1]?.[5])).toMatch(/^apichat:[a-f0-9]{64}$/);
+    expect(String(insert?.[1]?.[1])).toBe("inbound");
+    expect(String(insert?.[1]?.[6])).toBe("received");
     expect(String(insert?.[0])).toContain("message_type");
   });
 
@@ -598,9 +604,85 @@ describe("eventos normalizados de enlace y ubicación", () => {
     const insert = calls.find(([sql]) =>
       sql.includes("INSERT INTO conversation_messages")
     );
-    expect(String(insert?.[1]?.[1])).toBe("link");
-    expect(String(insert?.[1]?.[2])).toBe(
+    expect(String(insert?.[1]?.[2])).toBe("link");
+    expect(String(insert?.[1]?.[3])).toBe(
       "https://aisa.com.gt/plaza\nDisponible"
     );
+  });
+});
+
+describe("sincronización bidireccional de la bandeja", () => {
+  it("acepta un texto saliente verificado y lo entrega como outbound", async () => {
+    const recordInbound = vi.fn(async () => ({
+      inserted: true,
+      conversationId: 12,
+    }));
+    const response = await executeWebhook(
+      {
+        pool: vi.fn(async () => ({ query: vi.fn() }) as never),
+        secret: vi.fn(async () => "secreto-webhook"),
+        resolveConversation: vi.fn(async () => ({
+          kind: "resolved",
+          applicationId: 41,
+          conversationId: 12,
+        })),
+        recordInbound,
+      },
+      { ...validEvent, direction: "outbound", text: "A la orden" }
+    );
+    expect(response.statusCode).toBe(201);
+    expect(recordInbound).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        direction: "outbound",
+        messageType: "text",
+        text: "A la orden",
+      })
+    );
+  });
+
+  it("rechaza direcciones no admitidas", async () => {
+    expect(
+      NormalizedInboundTextSchema.safeParse({
+        ...validEvent,
+        direction: "lateral",
+      }).success
+    ).toBe(false);
+  });
+
+  it("persiste un mensaje saliente como enviado sin extraer expectativa salarial", async () => {
+    const calls: Array<[string, unknown[] | undefined]> = [];
+    const query = vi.fn(async (sql: string, parameters?: unknown[]) => {
+      calls.push([sql, parameters]);
+      if (sql.includes("SELECT a.id AS application_id")) {
+        return { rows: [{ conversation_id: 12, application_id: 41 }] };
+      }
+      if (sql.includes("INSERT INTO conversation_messages")) {
+        return { rows: [{ id: 93 }] };
+      }
+      return { rows: [] };
+    });
+    const pool = {
+      connect: vi.fn(async () => ({ query, release: vi.fn() })),
+    };
+
+    const result = await recordNormalizedOutboundText(pool as never, {
+      applicationId: 41,
+      conversationId: 12,
+      providerMessageId: "msg.out-300",
+      phoneInternational: validEvent.phoneInternational,
+      text: "A la orden 😊",
+    });
+
+    expect(result).toEqual({ inserted: true, conversationId: 12 });
+    const insert = calls.find(([sql]) =>
+      sql.includes("INSERT INTO conversation_messages")
+    );
+    expect(String(insert?.[1]?.[1])).toBe("outbound");
+    expect(String(insert?.[1]?.[6])).toBe("sent");
+    const salaryAudit = calls.find(([sql]) =>
+      sql.includes("agent_salary_expectation_captured")
+    );
+    expect(salaryAudit).toBeUndefined();
   });
 });

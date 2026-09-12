@@ -722,6 +722,7 @@ async function recordNormalizedInboundEventInternal(
     messageType: "text" | "link" | "location";
     body: string;
     text?: string;
+    direction: "inbound" | "outbound";
   }
 ) {
   const client = await pool.connect();
@@ -756,27 +757,31 @@ async function recordNormalizedInboundEventInternal(
     const inserted = await client.query(
       `INSERT INTO conversation_messages
          (conversation_id,direction,message_type,body,provider_message_id,message_key,delivery_status)
-       VALUES ($1,'inbound',$2,$3,$4,$5,'received')
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
        ON CONFLICT (message_key) DO NOTHING RETURNING id`,
       [
         conversationId,
+        input.direction,
         input.messageType,
         input.body,
         input.providerMessageId.slice(0, 180),
         `apichat:${createHash("sha256")
           .update(input.providerMessageId)
           .digest("hex")}`,
+        input.direction === "outbound" ? "sent" : "received",
       ]
     );
     if (inserted.rows[0]) {
       await client.query(
         `UPDATE conversations
-            SET status='activo',last_message_at=now(),last_inbound_at=now(),
+            SET status='activo',last_message_at=now(),
+                last_inbound_at=CASE WHEN $2='inbound' THEN now() ELSE last_inbound_at END,
+                last_outbound_at=CASE WHEN $2='outbound' THEN now() ELSE last_outbound_at END,
                 updated_at=now()
           WHERE id=$1`,
-        [conversationId]
+        [conversationId, input.direction]
       );
-      if (input.text) {
+      if (input.text && input.direction === "inbound") {
         const expectation = extractExplicitSalaryExpectation(
           input.text,
           "message"
@@ -823,6 +828,7 @@ type InboundEventInput = {
   messageType: "text" | "link" | "location";
   body: string;
   text?: string;
+  direction: "inbound" | "outbound";
 };
 
 async function recordNormalizedInboundEvent(
@@ -872,6 +878,27 @@ export function recordNormalizedInboundText(
     messageType: "text",
     body: text,
     text,
+    direction: "inbound",
+  });
+}
+
+export function recordNormalizedOutboundText(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    conversationId: number;
+    providerMessageId: string;
+    phoneInternational: string;
+    text: string;
+  }
+) {
+  const text = input.text.trim();
+  return recordNormalizedInboundEvent(pool, {
+    ...input,
+    messageType: "text",
+    body: text,
+    text,
+    direction: "outbound",
   });
 }
 
@@ -891,6 +918,27 @@ export function recordNormalizedInboundLink(
     ...input,
     messageType: "link",
     body: caption ? `${input.link}\n${caption}` : input.link,
+    direction: "inbound",
+  });
+}
+
+export function recordNormalizedOutboundLink(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    conversationId: number;
+    providerMessageId: string;
+    phoneInternational: string;
+    link: string;
+    caption?: string;
+  }
+) {
+  const caption = input.caption?.trim();
+  return recordNormalizedInboundEvent(pool, {
+    ...input,
+    messageType: "link",
+    body: caption ? `${input.link}\n${caption}` : input.link,
+    direction: "outbound",
   });
 }
 
@@ -914,6 +962,31 @@ export function recordNormalizedInboundLocation(
       longitude: input.longitude,
       address: input.address?.trim() || null,
     }),
+    direction: "inbound",
+  });
+}
+
+export function recordNormalizedOutboundLocation(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    conversationId: number;
+    providerMessageId: string;
+    phoneInternational: string;
+    latitude: number;
+    longitude: number;
+    address?: string;
+  }
+) {
+  return recordNormalizedInboundEvent(pool, {
+    ...input,
+    messageType: "location",
+    body: JSON.stringify({
+      latitude: input.latitude,
+      longitude: input.longitude,
+      address: input.address?.trim() || null,
+    }),
+    direction: "outbound",
   });
 }
 
