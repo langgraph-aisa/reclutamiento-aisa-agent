@@ -113,6 +113,9 @@ export async function syncInboxConversation(
   if (settings.mode !== "native") {
     return { processed: 0, inserted: 0, skipped: 0 };
   }
+  if (settings.disabledEndpoints?.includes("/messagesHistory")) {
+    return { processed: 0, inserted: 0, skipped: 0 };
+  }
   const url = new URL("/v1/messages", settings.endpoint);
   url.searchParams.set(
     "number",

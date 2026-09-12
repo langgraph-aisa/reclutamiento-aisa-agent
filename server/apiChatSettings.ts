@@ -144,7 +144,10 @@ export async function getApiChatRuntimeSettings(
 ): Promise<ApiChatConfig> {
   const rows = await settingRows(pool);
   const preferences = preferencesFromRows(rows);
-  return validateApiChatConfig({
+  const disabledEndpoints = endpointStatesFromRows(rows)
+    .filter(state => !state.enabled)
+    .map(state => state.path);
+  const validated = validateApiChatConfig({
     ...preferences,
     token: encryptedSecret(rows, "token") ?? "",
     clientId:
@@ -156,6 +159,7 @@ export async function getApiChatRuntimeSettings(
         ? (encryptedSecret(rows, "account_id") ?? undefined)
         : undefined,
   });
+  return { ...validated, disabledEndpoints };
 }
 
 export const APICHAT_OFFICIAL_ENDPOINTS = [
@@ -198,15 +202,79 @@ export const APICHAT_OFFICIAL_ENDPOINTS = [
 
 export async function getApiChatEndpoints(pool: Pool | null) {
   const readiness = await getApiChatReceptionReadiness(pool);
-  const enabled = readiness.sendReady && readiness.mode === "native";
+  const baseEnabled = readiness.sendReady && readiness.mode === "native";
+  const rows = pool ? await settingRows(pool) : [];
+  const states = endpointStatesFromRows(rows);
   return {
     mode: readiness.mode,
-    enabled,
+    enabled: baseEnabled && states.every(state => state.enabled),
     endpoints: APICHAT_OFFICIAL_ENDPOINTS.map(endpoint => ({
       ...endpoint,
-      enabled,
+      enabled:
+        baseEnabled &&
+        (states.find(state => state.path === endpoint.path)?.enabled ?? true),
     })),
   };
+}
+
+const ENDPOINT_STATE_PREFIX = "endpoint_enabled:";
+
+function endpointStatesFromRows(rows: SettingRow[]) {
+  const validPaths = new Set<string>(
+    APICHAT_OFFICIAL_ENDPOINTS.map(endpoint => endpoint.path)
+  );
+  return rows
+    .filter(row => row.setting_key.startsWith(ENDPOINT_STATE_PREFIX))
+    .map(row => ({
+      path: row.setting_key.slice(ENDPOINT_STATE_PREFIX.length),
+      enabled: row.setting_value !== "false",
+    }))
+    .filter(state => validPaths.has(state.path));
+}
+
+export async function saveApiChatEndpointStates(
+  pool: Pool,
+  endpoints: Array<{ path: string; enabled: boolean }>,
+  actorUserId: number
+) {
+  const validPaths = new Set<string>(
+    APICHAT_OFFICIAL_ENDPOINTS.map(endpoint => endpoint.path)
+  );
+  for (const endpoint of endpoints) {
+    if (!validPaths.has(endpoint.path)) {
+      throw new Error(
+        `El endpoint ${endpoint.path} no pertenece al catálogo oficial de ApiChat.`
+      );
+    }
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const endpoint of endpoints) {
+      await upsertSetting(
+        client,
+        `${ENDPOINT_STATE_PREFIX}${endpoint.path}`,
+        String(endpoint.enabled),
+        false
+      );
+    }
+    await client.query(
+      `INSERT INTO audit_log
+         (actor_user_id,entity_type,entity_id,action,after_json)
+       VALUES ($1,'apichat_configuration',0,'endpoints_updated',$2::jsonb)`,
+      [
+        actorUserId,
+        JSON.stringify({ endpoints }),
+      ]
+    );
+    await client.query("COMMIT");
+    return getApiChatEndpoints(pool);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function getApiChatReceptionReadiness(pool: Pool | null) {

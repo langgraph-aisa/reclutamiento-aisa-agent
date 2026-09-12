@@ -5,6 +5,7 @@ import {
   getApiChatEndpoints,
   getApiChatReceptionReadiness,
   getApiChatRuntimeSettings,
+  saveApiChatEndpointStates,
   saveApiChatPreferences,
   saveApiChatSecret,
   verifyApiChatConnection,
@@ -263,5 +264,57 @@ describe("catálogo oficial de endpoints ApiChat", () => {
     const result = await getApiChatEndpoints(pool as never);
     expect(result.mode).toBe("legacy");
     expect(result.enabled).toBe(false);
+  });
+
+  it("persiste el apagado de un endpoint y lo refleja en el runtime", async () => {
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "test-key-material-with-more-than-thirty-two-characters"
+    );
+    const { pool, stored } = memoryPool();
+    stored.set("api_mode", {
+      setting_key: "api_mode",
+      setting_value: "native",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    stored.set("api_endpoint", {
+      setting_key: "api_endpoint",
+      setting_value: "https://api.apichat.io/v1/sendText",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    stored.set("connect_to", {
+      setting_key: "connect_to",
+      setting_value: "apichat.io",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    await saveApiChatSecret(pool as never, "client_id", "client-safe-3210", 7);
+    await saveApiChatSecret(pool as never, "token", "token-safe-9876", 7);
+
+    const saved = await saveApiChatEndpointStates(
+      pool as never,
+      [{ path: "/sendLink", enabled: false }],
+      7
+    );
+    expect(saved.endpoints.find(e => e.path === "/sendLink")?.enabled).toBe(
+      false
+    );
+    expect(saved.enabled).toBe(false);
+    expect(stored.get("endpoint_enabled:/sendLink")?.setting_value).toBe(
+      "false"
+    );
+
+    const runtime = await getApiChatRuntimeSettings(pool as never);
+    expect(runtime.disabledEndpoints).toContain("/sendLink");
+
+    await expect(
+      saveApiChatEndpointStates(
+        pool as never,
+        [{ path: "/sendFake", enabled: false }],
+        7
+      )
+    ).rejects.toThrow("catálogo oficial");
   });
 });

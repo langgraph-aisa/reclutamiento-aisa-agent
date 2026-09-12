@@ -97,6 +97,7 @@ const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   assessment_items_reordered: "preguntas reordenadas",
   credential_rotated: "credencial rotada",
   credential_removed: "credencial retirada",
+  endpoints_updated: "endpoints actualizados",
   preferences_updated: "preferencias actualizadas",
   jarvi_responsible_assigned: "responsable asignado",
   inbox_human_takeover: "control transferido",

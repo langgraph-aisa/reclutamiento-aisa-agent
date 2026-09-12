@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
@@ -81,6 +82,34 @@ export default function Config() {
   const reception = apiChatReception.data;
   const apiChatEndpoints = trpc.config.apiChatEndpoints.useQuery();
   const endpointCatalog = apiChatEndpoints.data;
+  const saveApiChatEndpoints = trpc.config.saveApiChatEndpoints.useMutation({
+    onSuccess: async data => {
+      await apiChatEndpoints.refetch();
+      if (data?.enabled) {
+        toast.success("Endpoints guardados y habilitados");
+      } else {
+        toast.success("Endpoints guardados; pendientes de credenciales");
+      }
+    },
+    onError: error => toast.error(error.message),
+  });
+  const [endpointToggles, setEndpointToggles] = useState<
+    Record<string, boolean>
+  >({});
+
+  useEffect(() => {
+    if (!endpointCatalog) return;
+    const next: Record<string, boolean> = {};
+    for (const endpoint of endpointCatalog.endpoints) {
+      next[endpoint.path] = endpoint.enabled;
+    }
+    setEndpointToggles(current => {
+      const changed = Object.keys(next).some(
+        key => (current[key] ?? true) !== next[key]
+      );
+      return changed ? next : current;
+    });
+  }, [endpointCatalog]);
   const importCatalog = trpc.geo.importCatalog.useMutation();
   const catalog = trpc.geo.adminCatalog.useQuery();
   const updateItem = trpc.geo.updateItem.useMutation({
@@ -300,51 +329,83 @@ export default function Config() {
                       Endpoints oficiales habilitados
                     </h3>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Catálogo completo de ApiChat operado directamente por el
-                      backend para envío y recepción.
+                      Encienda o apague cada endpoint; el cambio se aplica al
+                      guardar.
                     </p>
                   </div>
-                  <Badge
-                    variant={endpointCatalog?.enabled ? "default" : "outline"}
+                  <Button
                     className="rounded-full"
+                    disabled={
+                      saveApiChatEndpoints.isPending ||
+                      apiChatEndpoints.isLoading
+                    }
+                    onClick={() =>
+                      saveApiChatEndpoints.mutate({
+                        endpoints: (
+                          endpointCatalog?.endpoints ?? []
+                        ).map(endpoint => ({
+                          path: endpoint.path,
+                          enabled:
+                            endpointToggles[endpoint.path] ?? endpoint.enabled,
+                        })),
+                      })
+                    }
                   >
-                    {endpointCatalog?.enabled
-                      ? "Todos habilitados"
-                      : "Pendientes de credenciales"}
-                  </Badge>
+                    {saveApiChatEndpoints.isPending ? (
+                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}{" "}
+                    Guardar endpoints
+                  </Button>
                 </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  {(endpointCatalog?.endpoints ?? []).map(endpoint => (
-                    <div
-                      key={`${endpoint.method}-${endpoint.path}`}
-                      className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/40 p-2.5"
-                    >
-                      <span
-                        className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold text-white ${
-                          endpoint.method === "GET"
-                            ? "bg-sky-600"
-                            : "bg-emerald-600"
-                        }`}
+                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {(endpointCatalog?.endpoints ?? []).map(endpoint => {
+                    const enabled =
+                      endpointToggles[endpoint.path] ?? endpoint.enabled;
+                    return (
+                      <div
+                        key={`${endpoint.method}-${endpoint.path}`}
+                        className="flex items-start gap-2 rounded-xl border border-border/70 bg-muted/40 p-2.5"
                       >
-                        {endpoint.method}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-mono text-xs text-primary">
-                          {endpoint.path}
-                        </p>
-                        <p className="truncate text-[10px] leading-4 text-muted-foreground">
-                          {endpoint.description}
-                        </p>
+                        <span
+                          className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold text-white ${
+                            endpoint.method === "GET"
+                              ? "bg-sky-600"
+                              : "bg-emerald-600"
+                          }`}
+                        >
+                          {endpoint.method}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words font-mono text-xs text-primary">
+                            {endpoint.path}
+                          </p>
+                          <p className="mt-0.5 text-[10px] leading-4 text-muted-foreground">
+                            {endpoint.description}
+                          </p>
+                        </div>
+                        <Switch
+                          checked={enabled}
+                          onCheckedChange={value =>
+                            setEndpointToggles(current => ({
+                              ...current,
+                              [endpoint.path]: value,
+                            }))
+                          }
+                          aria-label={`Activar ${endpoint.path}`}
+                          className="mt-0.5 shrink-0"
+                        />
                       </div>
-                      <Badge
-                        variant={endpoint.enabled ? "default" : "outline"}
-                        className="shrink-0 rounded-full"
-                      >
-                        {endpoint.enabled ? "Habilitado" : "Pendiente"}
-                      </Badge>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
+                {endpointCatalog && !endpointCatalog.enabled ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Los interruptores se aplicarán cuando las credenciales estén
+                    configuradas y el modo sea API nativa.
+                  </p>
+                ) : null}
               </div>
               <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
                 <CredentialField

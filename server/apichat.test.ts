@@ -470,6 +470,28 @@ describe("endpoints oficiales restantes de ApiChat", () => {
     ).resolves.toBe(false);
   });
 
+  it("rechaza envíos cuando el endpoint está apagado en configuración", async () => {
+    const fetchImpl = vi.fn();
+    await expect(
+      sendApiChatLink(
+        {
+          phoneInternational: "+50255555555",
+          link: "https://aisa.com.gt/plaza",
+        },
+        { ...config, disabledEndpoints: ["/sendLink"] },
+        { fetchImpl }
+      )
+    ).rejects.toThrow("desactivado en Configuración");
+    expect(fetchImpl).not.toHaveBeenCalled();
+    await expect(
+      deleteApiChatMessage(
+        { phoneInternational: "+50255555555", messageId: "provider-9" },
+        { ...config, disabledEndpoints: ["/deleteMessage"] },
+        { fetchImpl }
+      )
+    ).rejects.toThrow("desactivado en Configuración");
+  });
+
   it("verifica textos salientes contra el proveedor con fromMe verdadero", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       new Response(

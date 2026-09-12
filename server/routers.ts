@@ -58,6 +58,7 @@ import {
   getApiChatConfiguration,
   getApiChatEndpoints,
   getApiChatReceptionReadiness,
+  saveApiChatEndpointStates,
   saveApiChatPreferences,
   saveApiChatSecret,
   verifyApiChatConnection,
@@ -4056,6 +4057,37 @@ export const appRouter = router({
     apiChatEndpoints: adminProcedure.query(async () => {
       return getApiChatEndpoints(await getPool());
     }),
+    saveApiChatEndpoints: adminProcedure
+      .input(
+        z.object({
+          endpoints: z
+            .array(
+              z.object({
+                path: z.string().trim().min(1).max(120),
+                enabled: z.boolean(),
+              })
+            )
+            .min(1)
+            .max(20),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveApiChatEndpointStates(
+            await requirePool(),
+            input.endpoints,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar el estado de los endpoints."
+            ),
+          });
+        }
+      }),
     saveApiChatPreferences: adminProcedure
       .input(
         z.object({

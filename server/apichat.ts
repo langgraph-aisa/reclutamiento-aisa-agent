@@ -17,6 +17,7 @@ export type ApiChatConfig = {
   clientId?: string;
   accountId?: string;
   connectTo?: string;
+  disabledEndpoints?: string[];
 };
 
 export type ApiChatSendResult = {
@@ -132,6 +133,7 @@ export function validateApiChatConfig(input: ApiChatConfig): ApiChatConfig {
     clientId,
     accountId,
     connectTo,
+    disabledEndpoints: (input.disabledEndpoints ?? []).filter(Boolean),
   };
 }
 
@@ -178,6 +180,14 @@ function requireNativeMode(config: ApiChatConfig, operation: string) {
   if (config.mode !== "native") {
     throw new Error(
       `La operación ${operation} exige el modo de API nativa de ApiChat.`
+    );
+  }
+}
+
+function assertApiChatEndpointEnabled(config: ApiChatConfig, path: string) {
+  if (config.disabledEndpoints?.includes(path)) {
+    throw new Error(
+      `El endpoint ${path} está desactivado en Configuración > WhatsApp.`
     );
   }
 }
@@ -284,6 +294,7 @@ export async function sendApiChatText(
   options: ApiChatPostOptions = {}
 ): Promise<ApiChatSendResult> {
   const config = validateApiChatConfig(configInput);
+  assertApiChatEndpointEnabled(config, "/sendMessage");
   const phoneDigits = outboundPhoneDigits(input.phoneInternational);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -324,6 +335,7 @@ export async function sendApiChatLink(
 ): Promise<ApiChatSendResult> {
   const config = validateApiChatConfig(configInput);
   requireNativeMode(config, "sendLink");
+  assertApiChatEndpointEnabled(config, "/sendLink");
   const phoneDigits = outboundPhoneDigits(input.phoneInternational);
   const link = secureUrl(input.link, "el enlace").toString();
   const caption = input.caption?.trim();
@@ -355,6 +367,7 @@ export async function sendApiChatLocation(
 ): Promise<ApiChatSendResult> {
   const config = validateApiChatConfig(configInput);
   requireNativeMode(config, "sendLocation");
+  assertApiChatEndpointEnabled(config, "/sendLocation");
   const phoneDigits = outboundPhoneDigits(input.phoneInternational);
   if (
     !Number.isFinite(input.latitude) ||
@@ -398,6 +411,7 @@ export async function sendApiChatFile(
 ): Promise<ApiChatSendResult> {
   const config = validateApiChatConfig(configInput);
   requireNativeMode(config, "sendFile");
+  assertApiChatEndpointEnabled(config, "/sendFile");
   const phoneDigits = outboundPhoneDigits(input.phoneInternational);
   const file = secureUrl(input.fileUrl, "el archivo").toString();
   const fileName = input.fileName?.trim().slice(0, 260);
@@ -426,6 +440,7 @@ export async function sendApiChatPtt(
 ): Promise<ApiChatSendResult> {
   const config = validateApiChatConfig(configInput);
   requireNativeMode(config, "sendPTT");
+  assertApiChatEndpointEnabled(config, "/sendPTT");
   const phoneDigits = outboundPhoneDigits(input.phoneInternational);
   const audio = secureUrl(input.audioUrl, "el audio").toString();
   const body: Record<string, unknown> = { number: phoneDigits, ptt: audio };
@@ -449,6 +464,7 @@ export async function deleteApiChatMessage(
 ): Promise<ApiChatSendResult> {
   const config = validateApiChatConfig(configInput);
   requireNativeMode(config, "deleteMessage");
+  assertApiChatEndpointEnabled(config, "/deleteMessage");
   const phoneDigits = outboundPhoneDigits(input.phoneInternational);
   const messageId = input.messageId.trim().slice(0, 180);
   if (!messageId) {
