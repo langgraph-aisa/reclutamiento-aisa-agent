@@ -87,6 +87,8 @@ const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   work_started: "trabajo iniciado",
   protocol_saved: "protocolo guardado",
   protocol_activated: "protocolo activado",
+  protocol_delete_code_sent: "código de borrado enviado",
+  protocol_deleted: "versión eliminada",
   assessment_item_saved: "pregunta guardada",
   assessment_items_reordered: "preguntas reordenadas",
   credential_rotated: "credencial rotada",

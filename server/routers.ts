@@ -11,6 +11,7 @@ import {
   LOGIN_CODE_RESEND_SECONDS,
   LOGIN_CODE_TTL_MINUTES,
   maskEmail,
+  sendDeleteCode,
   sendLoginCode,
   setLocalSession,
   verifyLoginCode,
@@ -85,6 +86,9 @@ import {
   setInboxAutomation,
 } from "./inbox";
 import {
+  ASSESSMENT_DELETE_CODE_MAX_ATTEMPTS,
+  ASSESSMENT_DELETE_CODE_RESEND_SECONDS,
+  ASSESSMENT_DELETE_CODE_TTL_MINUTES,
   ASSESSMENT_GOVERNANCE_RULES,
   ASSESSMENT_LEVELS,
   missingPsychometricEvidenceTerms,
@@ -2425,6 +2429,239 @@ export const appRouter = router({
           return result.rows[0];
         } catch (error) {
           await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+      }),
+    requestDeleteCode: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const target = await pool.query(
+          `SELECT id,name,version,status FROM assessment_protocols WHERE id=$1 LIMIT 1`,
+          [input.id]
+        );
+        const protocol = target.rows[0];
+        if (!protocol)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "El protocolo de prueba no existe.",
+          });
+        if (protocol.status === "activo")
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Una versión activa no puede eliminarse; retire primero su activación.",
+          });
+        const sessions = await pool.query(
+          `SELECT 1 FROM assessment_sessions WHERE protocol_id=$1 LIMIT 1`,
+          [input.id]
+        );
+        if (sessions.rows[0])
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "La versión tiene sesiones de evaluación vinculadas y no puede eliminarse.",
+          });
+        const account = await pool.query(
+          `SELECT email FROM users WHERE id=$1 LIMIT 1`,
+          [ctx.user.id]
+        );
+        const email = account.rows[0]?.email;
+        if (!email)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "La cuenta no tiene un correo registrado para recibir el código de borrado.",
+          });
+        const recent = await pool.query(
+          `SELECT created_at FROM protocol_delete_challenges
+             WHERE protocol_id=$1 AND user_id=$2
+             ORDER BY created_at DESC LIMIT 1`,
+          [input.id, ctx.user.id]
+        );
+        if (
+          recent.rows[0] &&
+          Date.now() - new Date(recent.rows[0].created_at).getTime() <
+            ASSESSMENT_DELETE_CODE_RESEND_SECONDS * 1000
+        ) {
+          return {
+            success: true,
+            emailMask: maskEmail(email),
+            expiresInMinutes: ASSESSMENT_DELETE_CODE_TTL_MINUTES,
+            retryAfterSeconds: ASSESSMENT_DELETE_CODE_RESEND_SECONDS,
+          };
+        }
+        const code = createLoginCode();
+        const codeHash = await hashLoginCode(code);
+        await pool.query(
+          `UPDATE protocol_delete_challenges
+              SET used_at=COALESCE(used_at,now())
+            WHERE protocol_id=$1 AND user_id=$2 AND used_at IS NULL`,
+          [input.id, ctx.user.id]
+        );
+        const challenge = await pool.query(
+          `INSERT INTO protocol_delete_challenges
+             (protocol_id,user_id,code_hash,max_attempts,expires_at,requested_ip)
+           VALUES ($1,$2,$3,$4,now()+($5 * interval '1 minute'),$6)
+           RETURNING id`,
+          [
+            input.id,
+            ctx.user.id,
+            codeHash,
+            ASSESSMENT_DELETE_CODE_MAX_ATTEMPTS,
+            ASSESSMENT_DELETE_CODE_TTL_MINUTES,
+            requestIp(ctx.req),
+          ]
+        );
+        try {
+          await sendDeleteCode({
+            email,
+            code,
+            expiresInMinutes: ASSESSMENT_DELETE_CODE_TTL_MINUTES,
+            protocolName: protocol.name,
+            version: protocol.version,
+            status: protocol.status,
+          });
+        } catch (error) {
+          await pool.query(
+            `UPDATE protocol_delete_challenges SET used_at=now() WHERE id=$1`,
+            [challenge.rows[0].id]
+          );
+          console.error(
+            "[Assessments] SMTP delete code delivery failed",
+            error instanceof Error ? error.message : "unknown error"
+          );
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message:
+              "No fue posible enviar el código de borrado. Revise la configuración SMTP en EasyPanel.",
+          });
+        }
+        await pool.query(
+          `INSERT INTO audit_log
+             (actor_user_id,entity_type,entity_id,action,after_json)
+           VALUES ($1,'assessment_protocol',$2,'protocol_delete_code_sent',$3::jsonb)`,
+          [
+            ctx.user.id,
+            input.id,
+            asJson({ version: protocol.version, status: protocol.status }),
+          ]
+        );
+        return {
+          success: true,
+          emailMask: maskEmail(email),
+          expiresInMinutes: ASSESSMENT_DELETE_CODE_TTL_MINUTES,
+          retryAfterSeconds: ASSESSMENT_DELETE_CODE_RESEND_SECONDS,
+        };
+      }),
+    deleteProtocol: adminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          code: z.string().regex(/^\d{6}$/),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const client = await pool.connect();
+        let committed = false;
+        try {
+          await client.query("BEGIN");
+          const locked = await client.query(
+            `SELECT id,name,version,status,job_position_id
+               FROM assessment_protocols WHERE id=$1 FOR UPDATE`,
+            [input.id]
+          );
+          const protocol = locked.rows[0];
+          if (!protocol)
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "El protocolo de prueba no existe.",
+            });
+          if (protocol.status === "activo")
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                "Una versión activa no puede eliminarse; retire primero su activación.",
+            });
+          const sessions = await client.query(
+            `SELECT 1 FROM assessment_sessions WHERE protocol_id=$1 LIMIT 1`,
+            [input.id]
+          );
+          if (sessions.rows[0])
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                "La versión tiene sesiones de evaluación vinculadas y no puede eliminarse.",
+            });
+          const challenge = await client.query(
+            `SELECT id,code_hash,attempts,max_attempts,expires_at
+               FROM protocol_delete_challenges
+              WHERE protocol_id=$1 AND user_id=$2 AND used_at IS NULL
+              ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+            [input.id, ctx.user.id]
+          );
+          const row = challenge.rows[0];
+          const valid =
+            row &&
+            row.attempts < row.max_attempts &&
+            new Date(row.expires_at).getTime() > Date.now() &&
+            (await verifyLoginCode(input.code, row.code_hash));
+          if (!valid) {
+            if (row)
+              await client.query(
+                `UPDATE protocol_delete_challenges
+                    SET attempts=attempts+1,
+                        used_at=CASE
+                          WHEN attempts+1>=max_attempts OR expires_at<=now()
+                          THEN now() ELSE used_at
+                        END
+                  WHERE id=$1`,
+                [row.id]
+              );
+            await client.query("COMMIT");
+            committed = true;
+            throw new TRPCError({
+              code: "UNAUTHORIZED",
+              message:
+                "El código de borrado es inválido, expiró o superó el máximo de intentos.",
+            });
+          }
+          await client.query(
+            `UPDATE protocol_delete_challenges SET used_at=now() WHERE id=$1`,
+            [row.id]
+          );
+          const items = await client.query(
+            `SELECT count(*)::int AS item_count
+               FROM assessment_items WHERE protocol_id=$1`,
+            [input.id]
+          );
+          await client.query(
+            `DELETE FROM assessment_protocols WHERE id=$1`,
+            [input.id]
+          );
+          await client.query(
+            `INSERT INTO audit_log
+               (actor_user_id,entity_type,entity_id,action,before_json)
+             VALUES ($1,'assessment_protocol',$2,'protocol_deleted',$3::jsonb)`,
+            [
+              ctx.user.id,
+              input.id,
+              asJson({
+                name: protocol.name,
+                version: protocol.version,
+                status: protocol.status,
+                itemCount: items.rows[0]?.item_count ?? 0,
+              }),
+            ]
+          );
+          await client.query("COMMIT");
+          committed = true;
+          return { success: true as const };
+        } catch (error) {
+          if (!committed) await client.query("ROLLBACK");
           throw error;
         } finally {
           client.release();

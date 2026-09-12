@@ -835,6 +835,36 @@ export const assessmentSessions = pgTable(
   })
 );
 
+export const protocolDeleteChallenges = pgTable(
+  "protocol_delete_challenges",
+  {
+    id: serial("id").primaryKey(),
+    protocolId: integer("protocol_id")
+      .references(() => assessmentProtocols.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: integer("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    codeHash: text("code_hash").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(5).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    requestedIp: varchar("requested_ip", { length: 80 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    protocolUserCreatedIdx: index(
+      "protocol_delete_challenges_protocol_user_created_idx"
+    ).on(table.protocolId, table.userId, table.createdAt),
+    expiresIdx: index("protocol_delete_challenges_expires_idx").on(
+      table.expiresAt
+    ),
+  })
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {

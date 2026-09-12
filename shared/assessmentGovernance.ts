@@ -159,3 +159,71 @@ export function missingPsychometricEvidenceTerms(value: string) {
     term => !normalized.includes(normalizedEvidence(term))
   );
 }
+
+export const ASSESSMENT_STATUS_LABELS: Record<string, string> = {
+  borrador: "Borrador",
+  activo: "Activo",
+  retirado: "Retirado",
+};
+
+export const ASSESSMENT_DELETE_TITLE_WORD_LIMIT = 11;
+export const ASSESSMENT_DELETE_CODE_TTL_MINUTES = 10;
+export const ASSESSMENT_DELETE_CODE_MAX_ATTEMPTS = 5;
+export const ASSESSMENT_DELETE_CODE_RESEND_SECONDS = 60;
+
+export type AssessmentDeleteTarget = {
+  name: string;
+  version: number;
+  status: string;
+  itemCount?: number | null;
+  activeItemCount?: number | null;
+};
+
+function deleteTargetNameWords(value: string) {
+  return value
+    .trim()
+    .split(/\s+/)
+    .filter(word => /[A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ]/.test(word));
+}
+
+/**
+ * Título descriptivo de la acción de borrado, compuesto en tiempo de ejecución
+ * a partir del estado, la versión y el nombre registrados; nunca excede el
+ * límite institucional de palabras y no incluye texto fijo por protocolo.
+ */
+export function assessmentDeleteAlertTitle(target: AssessmentDeleteTarget) {
+  const statusLabel = (
+    ASSESSMENT_STATUS_LABELS[target.status] ?? target.status
+  ).toLowerCase();
+  const head = ["Eliminar", statusLabel, `v${target.version}`, "de"];
+  const tail = ["confirmada", "por", "código"];
+  const nameBudget = Math.max(
+    1,
+    ASSESSMENT_DELETE_TITLE_WORD_LIMIT - head.length - tail.length
+  );
+  const words = deleteTargetNameWords(target.name);
+  const truncated = words.length > nameBudget;
+  const namePart = `${words.slice(0, nameBudget).join(" ")}${truncated ? "…" : ""}`;
+  return [...head, namePart, ...tail].join(" ");
+}
+
+/**
+ * Descripción generada desde el registro seleccionado: referencia, estado,
+ * versión, preguntas y exigencia del código temporal. Ninguna oración depende
+ * de valores literales del protocolo.
+ */
+export function assessmentDeleteAlertDescription(
+  target: AssessmentDeleteTarget
+) {
+  const statusLabel = (
+    ASSESSMENT_STATUS_LABELS[target.status] ?? target.status
+  ).toLowerCase();
+  const reference = `${target.name} · v${target.version} · ${statusLabel}.`;
+  const items =
+    target.itemCount != null
+      ? `Contiene ${target.itemCount} preguntas registradas y ${target.activeItemCount ?? 0} habilitadas, que se eliminarán junto con la definición versionada.`
+      : "Las preguntas asociadas y la definición de esta versión se eliminarán de forma permanente.";
+  const requirement =
+    "El borrado exige un código temporal de seis dígitos enviado al correo registrado de la sesión actual.";
+  return [reference, items, requirement].join(" ");
+}

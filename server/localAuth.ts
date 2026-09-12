@@ -141,11 +141,7 @@ export async function notifyPasswordReset(
   }
 }
 
-export async function sendLoginCode(payload: {
-  email: string;
-  code: string;
-  expiresInMinutes?: number;
-}) {
+async function createSmtpTransporter() {
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const password = process.env.SMTP_PASSWORD;
@@ -156,19 +152,58 @@ export async function sendLoginCode(payload: {
     throw new Error("SMTP no está configurado en EasyPanel.");
   if (!Number.isInteger(port) || port < 1 || port > 65535)
     throw new Error("SMTP_PORT no es válido.");
+  return {
+    from,
+    transporter: nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: { user, pass: password },
+    }),
+  };
+}
 
+function escapeMailText(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+export async function sendLoginCode(payload: {
+  email: string;
+  code: string;
+  expiresInMinutes?: number;
+}) {
+  const { from, transporter } = await createSmtpTransporter();
   const expiresInMinutes = payload.expiresInMinutes ?? LOGIN_CODE_TTL_MINUTES;
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: { user, pass: password },
-  });
   await transporter.sendMail({
     from,
     to: payload.email,
     subject: "Código de acceso · Talento AISA",
     text: `Su código de acceso es ${payload.code}. Expira en ${expiresInMinutes} minutos. Si usted no solicitó este acceso, ignore este mensaje.`,
     html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#0b2f53"><h1 style="font-size:22px">Talento AISA</h1><p>Utilice el siguiente código para ingresar a la plataforma:</p><p style="font-size:34px;letter-spacing:8px;font-weight:700;margin:28px 0">${payload.code}</p><p>El código expira en <strong>${expiresInMinutes} minutos</strong> y solo puede utilizarse una vez.</p><p style="color:#64748b;font-size:13px">Si usted no solicitó este acceso, ignore este mensaje.</p></div>`,
+  });
+}
+
+export async function sendDeleteCode(payload: {
+  email: string;
+  code: string;
+  expiresInMinutes?: number;
+  protocolName: string;
+  version: number;
+  status: string;
+}) {
+  const { from, transporter } = await createSmtpTransporter();
+  const expiresInMinutes = payload.expiresInMinutes ?? LOGIN_CODE_TTL_MINUTES;
+  const name = escapeMailText(payload.protocolName.slice(0, 180));
+  const status = escapeMailText(payload.status.slice(0, 24));
+  await transporter.sendMail({
+    from,
+    to: payload.email,
+    subject: "Código de borrado · Talento AISA",
+    text: `Su código de borrado es ${payload.code}. Al ingresarlo se confirma la eliminación de la versión v${payload.version} (${payload.status}) de ${payload.protocolName}. Expira en ${expiresInMinutes} minutos. Si usted no solicitó este borrado, ignore este mensaje.`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#0b2f53"><h1 style="font-size:22px">Talento AISA</h1><p>Utilice el siguiente código para confirmar la eliminación de la versión <strong>v${payload.version}</strong> (${status}) de ${name}:</p><p style="font-size:34px;letter-spacing:8px;font-weight:700;margin:28px 0">${payload.code}</p><p>El código expira en <strong>${expiresInMinutes} minutos</strong> y solo puede utilizarse una vez.</p><p style="color:#64748b;font-size:13px">Si usted no solicitó este borrado, ignore este mensaje.</p></div>`,
   });
 }
