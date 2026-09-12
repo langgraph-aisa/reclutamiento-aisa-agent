@@ -16,9 +16,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
-import { Bot, CheckCircle2, Clock3, FileText, Link2, MapPin, MessageCircle, Search, Send, ShieldAlert, Trash2, UserRound, Volume2 } from "lucide-react";
+import { Bot, CheckCircle2, Clock3, FileText, Link2, MapPin, Phone, Search, Send, ShieldAlert, Trash2, UserRound, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 
 function initialApplicationId() {
   const value = new URLSearchParams(window.location.search).get("application");
@@ -26,15 +27,40 @@ function initialApplicationId() {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-const trafficStyle = {
-  verde: "border-emerald-300 bg-emerald-100 text-emerald-900",
-  amarillo: "border-amber-300 bg-amber-100 text-amber-950",
-  rojo: "border-red-300 bg-red-100 text-red-900",
-} as const;
-
-function trafficClass(value: unknown) {
-  const key = value === "verde" || value === "amarillo" ? value : "rojo";
-  return trafficStyle[key];
+function automationBadge(state: string | null | undefined) {
+  if (state === "agent") {
+    return (
+      <Badge variant="outline" className="shrink-0 rounded-full border-emerald-300 bg-emerald-100 px-2 text-[9px] text-emerald-900">
+        agente
+      </Badge>
+    );
+  }
+  if (state === "handoff_pending" || state === "human") {
+    return (
+      <Badge variant="outline" className="shrink-0 rounded-full border-amber-300 bg-amber-100 px-2 text-[9px] text-amber-950">
+        humano
+      </Badge>
+    );
+  }
+  if (state === "completed") {
+    return (
+      <Badge variant="outline" className="shrink-0 rounded-full border-slate-300 bg-slate-100 px-2 text-[9px] text-slate-700">
+        finalizado
+      </Badge>
+    );
+  }
+  if (state === "error") {
+    return (
+      <Badge variant="outline" className="shrink-0 rounded-full border-red-300 bg-red-100 px-2 text-[9px] text-red-900">
+        error
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="shrink-0 rounded-full px-2 text-[9px]">
+      pendiente
+    </Badge>
+  );
 }
 
 export default function Inbox() {
@@ -263,18 +289,33 @@ export default function Inbox() {
                 className={`w-full rounded-2xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedId === row.id ? "border-primary bg-primary/5" : "border-transparent bg-muted/45 hover:border-border"}`}
               >
                 <div className="flex items-start gap-3">
-                  <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-800">
-                    <MessageCircle className="h-5 w-5" />
-                    <span className={`absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-card ${row.traffic_light === "verde" ? "bg-emerald-500" : row.traffic_light === "amarillo" ? "bg-amber-500" : "bg-red-500"}`} />
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-800">
+                    <Phone className="h-4 w-4" />
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
                       <strong className="truncate text-sm text-primary">{row.full_name ?? "Sin nombre"}</strong>
-                      <Badge variant="outline" className={`shrink-0 rounded-full px-2 text-[9px] ${trafficClass(row.traffic_light)}`}>{row.traffic_light}</Badge>
+                      {automationBadge(row.automation_state)}
                     </span>
-                    <span className="mt-1 block truncate text-xs text-muted-foreground">{row.position_title}</span>
-                    <span className="mt-2 block line-clamp-2 text-xs leading-5 text-muted-foreground">{row.last_message_body ?? "Conversación sin mensajes"}</span>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">{row.position_title ?? "Plaza sin nombre"}</span>
+                    <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                      <Phone className="h-3 w-3 shrink-0" /> {row.phone_international ?? "Sin teléfono"}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-muted-foreground">{row.last_message_body ?? "Conversación sin mensajes"}</span>
                   </span>
+                </div>
+                <div className="mt-2 flex items-center gap-2 border-t border-border/60 pt-2">
+                  <span className="rounded-lg bg-muted/70 px-2 py-0.5 text-xs font-semibold text-primary">
+                    {row.evaluation_score != null ? `${row.evaluation_score}/100` : "Sin puntaje"}
+                  </span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Punteo IA</span>
+                  <Link
+                    href={`/admin/candidates?application=${row.application_id}`}
+                    onClick={event => event.stopPropagation()}
+                    className="ml-auto rounded-full border border-border/70 px-3 py-1 text-xs font-semibold text-primary hover:bg-muted"
+                  >
+                    Detalle
+                  </Link>
                 </div>
               </button>
             ))}
@@ -285,15 +326,6 @@ export default function Inbox() {
         <Card className="overflow-hidden rounded-3xl border-0 shadow-soft">
           {current ? (
             <>
-              <CardHeader className="border-b border-border/70 bg-primary text-primary-foreground">
-                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-                  <div>
-                    <CardTitle className="text-xl text-white">{current.full_name ?? "Sin nombre"}</CardTitle>
-                    <p className="mt-1 text-sm text-white/75">{current.position_title} · {current.phone_international}</p>
-                  </div>
-                  <Badge variant="outline" className={`w-fit rounded-full ${trafficClass(current.traffic_light)}`}>{current.traffic_light} · {current.automation_state}</Badge>
-                </div>
-              </CardHeader>
               <CardContent className="space-y-4 p-4">
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <Info label="Punteo actual" value={detail.data?.assessment?.score ?? "Sin puntaje"} />
