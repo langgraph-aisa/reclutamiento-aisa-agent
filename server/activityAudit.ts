@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import {
   activityActionLabel,
+  activitySummary,
   activityTitle,
   adminPageLabel,
   normalizeAdminPath,
@@ -96,6 +97,12 @@ function projectedAudit(row: AuditRow) {
     action: row.action,
     outcome,
     title: activityTitle(actorLabel, row.action, pagePath),
+    summary: activitySummary({
+      actorLabel,
+      action: row.action,
+      pagePath,
+      outcome,
+    }),
     expectedAction: "Persistir una operación autorizada con trazabilidad",
     actualAction: activityActionLabel(row.action),
     entityType: row.entity_type,
@@ -128,6 +135,12 @@ function projectedActivity(row: ActivityRow) {
     action: row.event_type,
     outcome: row.outcome,
     title: activityTitle(actorLabel, row.event_type, pagePath),
+    summary: activitySummary({
+      actorLabel,
+      action: row.event_type,
+      pagePath,
+      outcome: row.outcome,
+    }),
     expectedAction: row.expected_action,
     actualAction: row.actual_action,
     entityType: row.entity_type,

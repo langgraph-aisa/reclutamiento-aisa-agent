@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
+  ACTIVITY_SUMMARY_WORD_LIMIT,
   ACTIVITY_TITLE_WORD_LIMIT,
   DEFAULT_AGENT_SETTINGS,
   OPENAI_API_ENDPOINTS,
@@ -13,6 +14,7 @@ import {
   missingPsychometricEvidenceTerms,
 } from "../shared/assessmentGovernance";
 import {
+  activitySummary,
   activityTitle,
   countWords,
   normalizeAdminPath,
@@ -89,6 +91,17 @@ describe("gobierno cognitivo de caja negra", () => {
     expect(inboxTitle).toMatch(
       /^Contribución de JARVI HR al módulo Bandeja de entrada/
     );
+    const summary = activitySummary({
+      actorLabel: "JARVI HR",
+      action: "protocol_saved",
+      pagePath: "/admin/assessments",
+      outcome: "guardado",
+    });
+    expect(countWords(summary)).toBe(ACTIVITY_SUMMARY_WORD_LIMIT);
+    expect(summary).toContain("protocolo guardado");
+    expect(summary).toContain("Resultado final: Guardado");
+    expect(summary).toContain("sin copiar datos privados");
+    expect(summary).not.toMatch(/tel[eé]fono|contrase[nñ]a|api key/i);
     expect(title).not.toMatch(/Control ISO|Talento AISA|hoy|evidencia/i);
     expect(normalizeAdminPath("/admin/forms/25?tab=rules")).toBe(
       "/admin/jobs"

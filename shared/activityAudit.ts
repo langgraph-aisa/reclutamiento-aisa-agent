@@ -1,4 +1,7 @@
-import { ACTIVITY_TITLE_WORD_LIMIT } from "./agentConfig";
+import {
+  ACTIVITY_SUMMARY_WORD_LIMIT,
+  ACTIVITY_TITLE_WORD_LIMIT,
+} from "./agentConfig";
 
 export const ADMIN_PAGE_LABELS: Record<string, string> = {
   "/admin": "Resumen",
@@ -46,6 +49,43 @@ export function countWords(value: string) {
   return value.trim().split(/\s+/).filter(Boolean).length;
 }
 
+export function exactWordCount(value: string, expected: number) {
+  const words = value.trim().split(/\s+/).filter(Boolean).slice(0, expected);
+  const padding = [
+    "con",
+    "evidencia",
+    "operativa",
+    "trazable",
+    "vigente",
+    "institucional",
+  ];
+  while (words.length < expected) {
+    words.push(padding[words.length % padding.length]);
+  }
+  return words.join(" ");
+}
+
+const TITLE_PAGE_TOKEN: Record<string, string> = {
+  "/admin": "Resumen",
+  "/admin/inbox": "Bandeja",
+  "/admin/human-review": "Revisión-Humana",
+  "/admin/candidates": "Candidatos",
+  "/admin/jobs": "Plazas",
+  "/admin/profiles": "Perfiles",
+  "/admin/assessments": "Pruebas",
+  "/admin/reports": "Informes",
+  "/admin/mst-eir": "MST-EIR",
+  "/admin/agent-evaluator": "Agente-IA",
+  "/admin/activity": "Actividad",
+  "/admin/config": "Configuración",
+  "/admin/users": "Usuarios",
+  "/admin/account": "Cuenta",
+};
+
+function titlePageToken(pagePath: string) {
+  return TITLE_PAGE_TOKEN[normalizeAdminPath(pagePath)] ?? "Administración";
+}
+
 const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   page_opened: "apertura autorizada",
   work_started: "trabajo iniciado",
@@ -88,4 +128,30 @@ export function activityTitle(
   return words.length <= ACTIVITY_TITLE_WORD_LIMIT
     ? title
     : words.slice(0, ACTIVITY_TITLE_WORD_LIMIT).join(" ");
+}
+
+/**
+ * Resumen técnico de exactamente 33 palabras: describe la acción del usuario y
+ * su afectación, sin exponer datos privados ni credenciales.
+ */
+export function activitySummary(input: {
+  actorLabel: string;
+  action: string;
+  pagePath: string;
+  outcome: ActivityOutcome;
+}) {
+  const actorReference = input.actorLabel === "JARVI HR"
+    ? "JARVI HR"
+    : input.actorLabel.startsWith("Sistema")
+      ? "Sistema AISA"
+      : "Usuario autorizado";
+  const outcome = input.outcome === "configuracion"
+    ? "Configuración"
+    : input.outcome === "error"
+      ? "Error"
+      : ACTIVITY_OUTCOME_LABELS[input.outcome];
+  return exactWordCount(
+    `${actorReference} ejecutó ${activityActionLabel(input.action)} en ${titlePageToken(input.pagePath)}. Talento AISA registró fecha, hora, resultado y correlación técnica sin copiar datos privados, credenciales, teclas, respuestas ni contenido confidencial. Resultado final: ${outcome} con trazabilidad institucional vigente verificable.`,
+    ACTIVITY_SUMMARY_WORD_LIMIT
+  );
 }

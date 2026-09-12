@@ -87,6 +87,9 @@ export function ActivityAuditBar() {
             <p className="mt-1 truncate text-sm font-bold text-primary">
               {event.title}
             </p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+              {event.summary}
+            </p>
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">

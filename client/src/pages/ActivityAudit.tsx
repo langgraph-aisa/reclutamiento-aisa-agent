@@ -151,6 +151,7 @@ export default function ActivityAudit() {
                     <span className="text-xs text-muted-foreground">{event.pageLabel}</span>
                   </div>
                   <h2 className="mt-2 font-bold text-primary">{event.title}</h2>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{event.summary}</p>
                 </div>
                 <p className="shrink-0 text-xs text-muted-foreground">{event.actorLabel}</p>
               </div>
