@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
-import { Bot, CheckCircle2, FileText, Link2, MapPin, MessageCircle, Search, Send, ShieldAlert, Trash2, UserRound, Volume2 } from "lucide-react";
+import { Bot, CheckCircle2, Clock3, FileText, Link2, MapPin, MessageCircle, Search, Send, ShieldAlert, Trash2, UserRound, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -313,22 +313,69 @@ export default function Inbox() {
                   ) : null}
                 </div>
 
-                <div className="h-[360px] space-y-3 overflow-y-auto rounded-2xl bg-muted/35 p-4">
-                  {(detail.data?.messages ?? []).map(item => (
-                    <div key={item.id} className={`flex items-end gap-1 ${item.direction === "outbound" ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-6 ${item.direction === "outbound" ? "bg-primary text-primary-foreground" : "border border-border/70 bg-card text-primary"}`}>
-                        {item.message_type === "audio" ? <Volume2 className="mb-2 h-4 w-4" /> : null}
-                        {item.original_file_name ? <p className="mb-2 inline-flex items-center gap-2 font-semibold"><FileText className="h-4 w-4" /> {item.original_file_name}</p> : null}
-                        <p className="whitespace-pre-wrap break-words">{item.body || item.transcript || "Adjunto recibido"}</p>
-                        <p className={`mt-2 text-[10px] ${item.direction === "outbound" ? "text-white/65" : "text-muted-foreground"}`}>{item.delivery_status} · {new Date(item.created_at).toLocaleString("es-GT", { timeZone: "America/Guatemala" })}</p>
+                <div className="h-[440px] space-y-1.5 overflow-y-auto rounded-2xl bg-[#0b141a] p-3">
+                  {(detail.data?.messages ?? []).map(item => {
+                    const outbound = item.direction === "outbound";
+                    const trash = user?.role === "admin" || humanKeyboard ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="hidden h-6 w-6 shrink-0 self-center rounded-full text-white/40 hover:text-[#f15c6d] group-hover:inline-flex"
+                        aria-label={`Eliminar mensaje ${item.id}`}
+                        title="Eliminar mensaje"
+                        onClick={() =>
+                          removeMessage.mutate({
+                            conversationId: current.id,
+                            messageId: item.id,
+                          })
+                        }
+                        disabled={removeMessage.isPending}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    ) : null;
+                    return (
+                      <div
+                        key={item.id}
+                        className={`group flex items-end gap-1 ${outbound ? "justify-end" : "justify-start"}`}
+                      >
+                        {outbound ? trash : null}
+                        <div
+                          className={`max-w-[78%] rounded-lg px-2.5 pb-1.5 pt-1.5 text-sm leading-[1.35] shadow-sm ${
+                            outbound
+                              ? "rounded-tr-none bg-[#005c4b] text-white"
+                              : "rounded-tl-none bg-[#202c33] text-white"
+                          }`}
+                        >
+                          {item.message_type === "audio" ? (
+                            <Volume2 className="mb-1 h-3.5 w-3.5 text-white/80" />
+                          ) : null}
+                          {item.original_file_name ? (
+                            <p className="mb-0.5 flex items-center gap-1 text-xs font-semibold text-white/90">
+                              <FileText className="h-3 w-3" />{" "}
+                              {item.original_file_name}
+                            </p>
+                          ) : null}
+                          <p className="whitespace-pre-wrap break-words">
+                            {item.body || item.transcript || "Adjunto recibido"}
+                          </p>
+                          <p className="mt-0.5 flex items-center justify-end gap-1 text-[10px] leading-none text-white/60">
+                            {new Date(item.created_at).toLocaleTimeString(
+                              "es-GT",
+                              {
+                                hour: "numeric",
+                                minute: "2-digit",
+                                hour12: true,
+                                timeZone: "America/Guatemala",
+                              }
+                            )}
+                            {messageTicks(item.direction, item.delivery_status)}
+                          </p>
+                        </div>
+                        {!outbound ? trash : null}
                       </div>
-                      {user?.role === "admin" || humanKeyboard ? (
-                        <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 self-center text-muted-foreground hover:text-destructive" aria-label={`Eliminar mensaje ${item.id}`} title="Eliminar mensaje" onClick={() => removeMessage.mutate({ conversationId: current.id, messageId: item.id })} disabled={removeMessage.isPending}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      ) : null}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -391,4 +438,17 @@ export default function Inbox() {
 
 function Info({ label, value }: { label: string; value: unknown }) {
   return <div className="rounded-2xl bg-muted/55 p-3"><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p><p className="mt-2 text-sm font-bold text-primary">{String(value)}</p></div>;
+}
+
+function messageTicks(direction: string, status: string) {
+  if (direction === "inbound") return null;
+  if (status === "sending")
+    return <Clock3 className="h-3 w-3 text-white/60" />;
+  if (status === "sent")
+    return (
+      <span className="font-bold tracking-tighter text-[#53bdeb]">✓✓</span>
+    );
+  if (status === "failed")
+    return <span className="font-bold text-[#f15c6d]">!</span>;
+  return <span className="text-[#8696a0]">✓</span>;
 }
