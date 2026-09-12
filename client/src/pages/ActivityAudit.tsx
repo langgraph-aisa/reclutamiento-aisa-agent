@@ -5,10 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import {
   ACTIVITY_OUTCOME_LABELS,
-  countWords,
   type ActivityOutcome,
 } from "@shared/activityAudit";
-import { ACTIVITY_SUMMARY_WORD_LIMIT, ACTIVITY_TITLE_WORD_LIMIT } from "@shared/agentConfig";
 import { CalendarDays, RefreshCw, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -152,7 +150,6 @@ export default function ActivityAudit() {
                     <span className="text-xs text-muted-foreground">{event.pageLabel}</span>
                   </div>
                   <h2 className="mt-2 font-bold text-primary">{event.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{event.summary}</p>
                 </div>
                 <p className="shrink-0 text-xs text-muted-foreground">{event.actorLabel}</p>
               </div>
@@ -163,8 +160,6 @@ export default function ActivityAudit() {
                   <Detail label="Correlación" value={event.correlationId} />
                   <Detail label="Acción esperada" value={event.expectedAction ?? "No aplica"} />
                   <Detail label="Acción real" value={event.actualAction ?? event.action} />
-                  <Detail label="Título" value={`${countWords(event.title)}/${ACTIVITY_TITLE_WORD_LIMIT} palabras`} />
-                  <Detail label="Resumen" value={`${countWords(event.summary)}/${ACTIVITY_SUMMARY_WORD_LIMIT} palabras`} />
                 </dl>
               </details>
             </article>

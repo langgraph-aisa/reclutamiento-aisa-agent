@@ -78,7 +78,6 @@ export const OPENAI_SPEECH_FORMATS = [
   "pcm",
 ] as const;
 
-export const ACTIVITY_SUMMARY_WORD_LIMIT = 35;
 export const ACTIVITY_TITLE_WORD_LIMIT = 11;
 export const JARVI_HR_IDENTITY_EMAIL = "adminit@aisa.com.gt";
 

@@ -1,7 +1,4 @@
-import {
-  ACTIVITY_SUMMARY_WORD_LIMIT,
-  ACTIVITY_TITLE_WORD_LIMIT,
-} from "./agentConfig";
+import { ACTIVITY_TITLE_WORD_LIMIT } from "./agentConfig";
 
 export const ADMIN_PAGE_LABELS: Record<string, string> = {
   "/admin": "Resumen",
@@ -49,21 +46,7 @@ export function countWords(value: string) {
   return value.trim().split(/\s+/).filter(Boolean).length;
 }
 
-export function exactWordCount(value: string, expected: number) {
-  const words = value.trim().split(/\s+/).filter(Boolean).slice(0, expected);
-  const padding = [
-    "con",
-    "evidencia",
-    "operativa",
-    "trazable",
-    "vigente",
-    "institucional",
-  ];
-  while (words.length < expected) {
-    words.push(padding[words.length % padding.length]);
-  }
-  return words.join(" ");
-}
+
 
 const TITLE_PAGE_TOKEN: Record<string, string> = {
   "/admin": "Resumen",
@@ -111,31 +94,15 @@ function titlePageToken(pagePath: string) {
   return TITLE_PAGE_TOKEN[normalizeAdminPath(pagePath)] ?? "Administración";
 }
 
+/**
+ * Título asertivo y técnico de máximo 11 palabras: resume únicamente la acción
+ * del usuario y menciona el módulo afectado o consultado, sin fórmulas fijas.
+ */
 export function activityTitle(action: string, pagePath: string) {
-  return exactWordCount(
-    `Control ISO registró ${activityActionLabel(action)} en ${titlePageToken(pagePath)} para Talento AISA hoy`,
-    ACTIVITY_TITLE_WORD_LIMIT
-  );
-}
-
-export function activitySummary(input: {
-  actorLabel: string;
-  action: string;
-  pagePath: string;
-  outcome: ActivityOutcome;
-}) {
-  const actorReference = input.actorLabel === "JARVI HR"
-    ? "JARVI HR"
-    : input.actorLabel.startsWith("Sistema")
-      ? "Sistema AISA"
-      : "Usuario autorizado";
-  const outcome = input.outcome === "configuracion"
-    ? "Configuración"
-    : input.outcome === "error"
-      ? "Error"
-      : ACTIVITY_OUTCOME_LABELS[input.outcome];
-  return exactWordCount(
-    `${actorReference} ejecutó ${activityActionLabel(input.action)} en ${titlePageToken(input.pagePath)}. Talento AISA registró fecha, hora, resultado, origen y correlación técnica sin copiar datos privados, credenciales, teclas, respuestas ni contenido confidencial. Resultado final: ${outcome} con trazabilidad institucional vigente verificable.`,
-    ACTIVITY_SUMMARY_WORD_LIMIT
-  );
+  const label = activityActionLabel(action);
+  const title = `${label.charAt(0).toUpperCase()}${label.slice(1)} en ${titlePageToken(pagePath)}`;
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  return words.length <= ACTIVITY_TITLE_WORD_LIMIT
+    ? title
+    : words.slice(0, ACTIVITY_TITLE_WORD_LIMIT).join(" ");
 }

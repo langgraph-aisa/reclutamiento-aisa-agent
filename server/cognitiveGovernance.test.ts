@@ -1,7 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
-  ACTIVITY_SUMMARY_WORD_LIMIT,
   ACTIVITY_TITLE_WORD_LIMIT,
   DEFAULT_AGENT_SETTINGS,
   OPENAI_API_ENDPOINTS,
@@ -14,7 +13,6 @@ import {
   missingPsychometricEvidenceTerms,
 } from "../shared/assessmentGovernance";
 import {
-  activitySummary,
   activityTitle,
   countWords,
   normalizeAdminPath,
@@ -62,17 +60,20 @@ describe("gobierno cognitivo de caja negra", () => {
     );
   });
 
-  it("proyecta títulos de 11 palabras y resúmenes de 35 sin datos privados", () => {
+  it("proyecta títulos asertivos de máximo 11 palabras sin fórmulas fijas", () => {
     const title = activityTitle("protocol_saved", "/admin/assessments");
-    const summary = activitySummary({
-      actorLabel: "JARVI HR",
-      action: "protocol_saved",
-      pagePath: "/admin/assessments",
-      outcome: "guardado",
-    });
-    expect(countWords(title)).toBe(ACTIVITY_TITLE_WORD_LIMIT);
-    expect(countWords(summary)).toBe(ACTIVITY_SUMMARY_WORD_LIMIT);
-    expect(summary).not.toMatch(/tel[eé]fono|contrase[nñ]a|api key/i);
+    expect(countWords(title)).toBeLessThanOrEqual(ACTIVITY_TITLE_WORD_LIMIT);
+    expect(title).toBe("Protocolo guardado en Pruebas");
+    expect(activityTitle("page_opened", "/admin/config")).toBe(
+      "Apertura autorizada en Configuración"
+    );
+    expect(activityTitle("credential_rotated", "/admin/config")).toBe(
+      "Credencial rotada en Configuración"
+    );
+    expect(activityTitle("inbox_message_deleted", "/admin/inbox")).toBe(
+      "Mensaje de bandeja eliminado en Bandeja"
+    );
+    expect(title).not.toMatch(/Control ISO|Talento AISA|hoy|evidencia/i);
     expect(normalizeAdminPath("/admin/forms/25?tab=rules")).toBe(
       "/admin/jobs"
     );
