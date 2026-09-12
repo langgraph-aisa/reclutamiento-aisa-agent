@@ -292,8 +292,3 @@ VALUES
   ('ai_agent', 'audio_max_mb', '5', false, now()),
   ('ai_agent', 'document_max_mb', '5', false, now())
 ON CONFLICT (provider, setting_key) DO NOTHING;
-
-INSERT INTO integration_settings
-  (provider, setting_key, setting_value, is_secret, updated_at)
-VALUES ('apichat', 'webhook_secret', NULL, true, now())
-ON CONFLICT (provider, setting_key) DO NOTHING;

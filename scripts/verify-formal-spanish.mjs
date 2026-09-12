@@ -9,8 +9,6 @@ const scanTargets = [
   "client/src/components",
   "server",
   "shared",
-  "n8n-workflows",
-  "scripts/create_workflows.py",
   "drizzle/schema.ts",
 ];
 const supportedExtensions = new Set([

@@ -36,8 +36,7 @@ import { toast } from "sonner";
 type ApiChatSecretKey =
   | "client_id"
   | "token"
-  | "account_id"
-  | "webhook_secret";
+  | "account_id";
 
 const defaultMessage = `Hola {{nombre}}, muchas gracias por su solicitud de empleo.
 
@@ -80,27 +79,6 @@ export default function Config() {
   });
   const apiChatReception = trpc.config.apiChatReception.useQuery();
   const reception = apiChatReception.data;
-  const verifyReception = async () => {
-    const result = await apiChatReception.refetch();
-    const data = result.data;
-    if (!data) {
-      toast.error("No fue posible verificar la recepción.");
-      return;
-    }
-    if (data.receiveReady) {
-      toast.success(
-        "Recepción lista: el webhook puede autenticar los mensajes entrantes."
-      );
-    } else if (data.secretConfigured) {
-      toast.info(
-        "Recepción incompleta: configure una URL HTTPS de webhook válida."
-      );
-    } else {
-      toast.info(
-        "Recepción incompleta: configure el secreto del webhook con al menos 32 caracteres."
-      );
-    }
-  };
   const importCatalog = trpc.geo.importCatalog.useMutation();
   const catalog = trpc.geo.adminCatalog.useQuery();
   const updateItem = trpc.geo.updateItem.useMutation({
@@ -115,7 +93,6 @@ export default function Config() {
     mode: "native" as "native" | "legacy",
     endpoint: "https://api.apichat.io/v1/sendText",
     connectTo: "apichat.io",
-    webhookUrl: "",
   });
 
   useEffect(() => {
@@ -124,7 +101,6 @@ export default function Config() {
       mode: apiChatConfiguration.data.mode,
       endpoint: apiChatConfiguration.data.endpoint,
       connectTo: apiChatConfiguration.data.connectTo,
-      webhookUrl: apiChatConfiguration.data.webhookUrl,
     });
   }, [apiChatConfiguration.data]);
 
@@ -299,27 +275,6 @@ export default function Config() {
                     placeholder="apichat.io"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="apichat-webhook"
-                    className="text-sm font-semibold text-primary"
-                  >
-                    URL del webhook
-                  </Label>
-                  <Input
-                    id="apichat-webhook"
-                    value={apiChat.webhookUrl}
-                    onChange={event =>
-                      setApiChat(current => ({
-                        ...current,
-                        webhookUrl: event.target.value,
-                      }))
-                    }
-                    className="rounded-2xl font-mono text-xs"
-                    inputMode="url"
-                    placeholder="https://…/webhook/apichat/incoming"
-                  />
-                </div>
               </div>
               <Button
                 className="rounded-full"
@@ -371,22 +326,6 @@ export default function Config() {
                   }
                   onSave={value => persistApiChatSecret("account_id", value)}
                   onRemove={() => persistApiChatSecret("account_id", null)}
-                />
-                <CredentialField
-                  label="Secreto del webhook"
-                  description="Mínimo 32 caracteres; compartido únicamente con el adaptador n8n"
-                  placeholder="Ingrese un secreto aleatorio"
-                  state={apiChatConfiguration.data?.secrets.webhook_secret}
-                  pending={
-                    saveApiChatSecret.isPending || verifyApiChat.isPending
-                  }
-                  onSave={value =>
-                    persistApiChatSecret("webhook_secret", value)
-                  }
-                  onRemove={() =>
-                    persistApiChatSecret("webhook_secret", null)
-                  }
-                  onVerify={() => verifyReception()}
                 />
               </div>
               <div className="rounded-2xl border border-emerald-400/20 bg-secondary p-4 text-sm leading-6 text-secondary-foreground">

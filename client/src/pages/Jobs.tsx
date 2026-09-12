@@ -446,7 +446,7 @@ export default function Jobs() {
               </p>
               <p className="mt-1 text-sm text-white/60">
                 {isAdmin
-                  ? "Defina preguntas y reglas; al calificar, ApiChat solicita el CV directamente y sin n8n."
+                  ? "Defina preguntas y reglas; al calificar, ApiChat solicita el CV directamente desde el backend."
                   : "La configuración de formularios y perfiles está reservada al rol Administrador."}
               </p>
             </div>

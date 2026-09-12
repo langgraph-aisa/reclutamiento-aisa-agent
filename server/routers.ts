@@ -4058,7 +4058,6 @@ export const appRouter = router({
           mode: z.enum(["native", "legacy"]),
           endpoint: z.url().max(500),
           connectTo: z.string().trim().max(160),
-          webhookUrl: z.union([z.literal(""), z.url().max(500)]),
         })
       )
       .mutation(async ({ input, ctx }) => {
@@ -4086,17 +4085,6 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ input, ctx }) => {
-        if (
-          input.key === "webhook_secret" &&
-          input.value &&
-          input.value.length < 32
-        ) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message:
-              "El secreto del webhook debe contener al menos 32 caracteres aleatorios.",
-          });
-        }
         try {
           return await saveApiChatSecret(
             await requirePool(),

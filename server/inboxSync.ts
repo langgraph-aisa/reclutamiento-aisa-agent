@@ -13,17 +13,21 @@ export const INBOX_SYNC_INTERVAL_MS = 1_000;
 export const INBOX_SYNC_HISTORY_LIMIT = 10;
 export const INBOX_SYNC_CONVERSATION_REFRESH_MS = 60_000;
 export const INBOX_SYNC_MAX_CONVERSATIONS = 50;
+export const INBOX_SYNC_MIN_GAP_MS = 15_000;
+export const INBOX_SYNC_BACKOFF_MS = 60_000;
 
 export type SyncConversation = {
   conversationId: number;
   applicationId: number;
   phoneInternational: string;
+  lastSyncedAt: number;
 };
 
 export type InboxSyncState = {
   conversations: SyncConversation[];
   cursor: number;
   refreshedAt: number;
+  pausedUntil: number;
 };
 
 export type InboxSyncRecorder = {
@@ -51,7 +55,7 @@ type InboxSyncDependencies = {
 };
 
 export function emptyInboxSyncState(): InboxSyncState {
-  return { conversations: [], cursor: 0, refreshedAt: 0 };
+  return { conversations: [], cursor: 0, refreshedAt: 0, pausedUntil: 0 };
 }
 
 async function listSyncConversations(pool: Pool): Promise<SyncConversation[]> {
@@ -69,6 +73,7 @@ async function listSyncConversations(pool: Pool): Promise<SyncConversation[]> {
     conversationId: Number(row.conversation_id),
     applicationId: Number(row.application_id),
     phoneInternational: String(row.phone_international),
+    lastSyncedAt: 0,
   }));
 }
 
@@ -260,6 +265,9 @@ export async function syncInboxOnce(
   dependencies: InboxSyncDependencies = {}
 ) {
   const now = Date.now();
+  if (state.pausedUntil > now) {
+    return { processed: 0, inserted: 0, skipped: 0, conversations: 0 };
+  }
   if (now - state.refreshedAt > INBOX_SYNC_CONVERSATION_REFRESH_MS) {
     state.conversations = await listSyncConversations(pool);
     state.refreshedAt = now;
@@ -268,9 +276,24 @@ export async function syncInboxOnce(
   if (!state.conversations.length) {
     return { processed: 0, inserted: 0, skipped: 0, conversations: 0 };
   }
-  const conversation = state.conversations[state.cursor % state.conversations.length];
-  state.cursor = (state.cursor + 1) % state.conversations.length;
+  let selected = -1;
+  for (let offset = 0; offset < state.conversations.length; offset += 1) {
+    const index = (state.cursor + offset) % state.conversations.length;
+    if (
+      now - state.conversations[index].lastSyncedAt >=
+      INBOX_SYNC_MIN_GAP_MS
+    ) {
+      selected = index;
+      break;
+    }
+  }
+  if (selected < 0) {
+    return { processed: 0, inserted: 0, skipped: 0, conversations: state.conversations.length };
+  }
+  const conversation = state.conversations[selected];
+  state.cursor = (selected + 1) % state.conversations.length;
   const result = await syncInboxConversation(pool, conversation, dependencies);
+  conversation.lastSyncedAt = Date.now();
   return { ...result, conversations: state.conversations.length };
 }
 
@@ -286,6 +309,7 @@ export function startInboxSyncBridge(
   const intervalMs = options.intervalMs ?? INBOX_SYNC_INTERVAL_MS;
   const state = emptyInboxSyncState();
   let running = false;
+  let backoffLogged = false;
   const timer = setInterval(() => {
     if (running) return;
     running = true;
@@ -299,11 +323,24 @@ export function startInboxSyncBridge(
           recorder: options.recorder,
         });
       } catch (error) {
-        console.warn(
-          `[InboxSync] ${error instanceof Error ? error.message : "error desconocido"}`
-        );
+        const message =
+          error instanceof Error ? error.message : "error desconocido";
+        if (/429/.test(message)) {
+          state.pausedUntil = Date.now() + INBOX_SYNC_BACKOFF_MS;
+          if (!backoffLogged) {
+            console.warn(
+              `[InboxSync] Límite de tasa del proveedor (HTTP 429); pausa de ${Math.round(INBOX_SYNC_BACKOFF_MS / 1_000)} segundos.`
+            );
+            backoffLogged = true;
+          }
+        } else {
+          console.warn(`[InboxSync] ${message}`);
+        }
       } finally {
         running = false;
+        if (state.pausedUntil && Date.now() >= state.pausedUntil) {
+          backoffLogged = false;
+        }
       }
     })();
   }, intervalMs);

@@ -17,7 +17,6 @@ export const APICHAT_SECRET_KEYS = [
   "client_id",
   "token",
   "account_id",
-  "webhook_secret",
 ] as const;
 export type ApiChatSecretKey = (typeof APICHAT_SECRET_KEYS)[number];
 
@@ -25,14 +24,12 @@ export type ApiChatPreferences = {
   mode: ApiChatMode;
   endpoint: string;
   connectTo: string;
-  webhookUrl: string;
 };
 
 export const DEFAULT_APICHAT_PREFERENCES: ApiChatPreferences = {
   mode: "native",
   endpoint: "https://api.apichat.io/v1/sendText",
   connectTo: "apichat.io",
-  webhookUrl: "",
 };
 
 type SettingRow = {
@@ -48,7 +45,6 @@ const preferenceKeys = {
   mode: "api_mode",
   endpoint: "api_endpoint",
   connectTo: "connect_to",
-  webhookUrl: "webhook_url",
 } as const;
 
 async function settingRows(db: Queryable) {
@@ -77,7 +73,6 @@ function preferencesFromRows(rows: SettingRow[]): ApiChatPreferences {
     connectTo:
       values.get(preferenceKeys.connectTo)?.trim() ||
       DEFAULT_APICHAT_PREFERENCES.connectTo,
-    webhookUrl: values.get(preferenceKeys.webhookUrl)?.trim() || "",
   };
 }
 
@@ -141,7 +136,6 @@ export function validateApiChatPreferences(
     mode: validated.mode,
     endpoint: validated.endpoint,
     connectTo: validated.connectTo ?? "",
-    webhookUrl: validated.webhookUrl ?? "",
   };
 }
 
@@ -164,11 +158,6 @@ export async function getApiChatRuntimeSettings(
   });
 }
 
-export async function getApiChatWebhookSecret(pool: Pool) {
-  const rows = await settingRows(pool);
-  return encryptedSecret(rows, "webhook_secret");
-}
-
 export async function getApiChatReceptionReadiness(pool: Pool | null) {
   const configuration = await getApiChatConfiguration(pool);
   const secrets = configuration.secrets;
@@ -176,24 +165,10 @@ export async function getApiChatReceptionReadiness(pool: Pool | null) {
     configuration.mode === "native"
       ? Boolean(secrets.client_id.configured && secrets.token.configured)
       : Boolean(secrets.account_id.configured && secrets.token.configured);
-  let webhookUrlValid = false;
-  if (configuration.webhookUrl) {
-    try {
-      const parsed = new URL(configuration.webhookUrl);
-      webhookUrlValid =
-        parsed.protocol === "https:" && !parsed.username && !parsed.password;
-    } catch {
-      webhookUrlValid = false;
-    }
-  }
   return {
     mode: configuration.mode,
     sendReady,
-    receiveReady:
-      Boolean(secrets.webhook_secret.configured) && webhookUrlValid,
-    secretConfigured: Boolean(secrets.webhook_secret.configured),
-    webhookUrl: configuration.webhookUrl,
-    webhookUrlValid,
+    receiveReady: sendReady,
   };
 }
 
@@ -228,7 +203,6 @@ export async function saveApiChatPreferences(
       [preferenceKeys.mode, preferences.mode],
       [preferenceKeys.endpoint, preferences.endpoint],
       [preferenceKeys.connectTo, preferences.connectTo],
-      [preferenceKeys.webhookUrl, preferences.webhookUrl],
     ];
     for (const [key, value] of entries) {
       await upsertSetting(client, key, value, false);
@@ -243,7 +217,6 @@ export async function saveApiChatPreferences(
           mode: preferences.mode,
           endpoint: preferences.endpoint,
           connectTo: preferences.connectTo,
-          webhookUrl: preferences.webhookUrl,
         }),
       ]
     );

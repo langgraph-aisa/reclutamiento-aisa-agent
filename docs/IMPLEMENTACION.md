@@ -6,13 +6,13 @@
 **Fecha de actualización:** 11 de septiembre de 2026
 
 **Proyecto:** `reclutamiento-automatizado`  
-**Destino:** EasyPanel 2.33.2 sobre VPS de Google, PostgreSQL y n8n on-premise
+**Destino:** EasyPanel 2.33.2 sobre VPS de Google y PostgreSQL
 
 ---
 
 ## 1. Alcance validado
 
-Talento AISA sustituye el uso operativo de Google Sheets por una aplicación React/Express/tRPC y PostgreSQL. La plataforma administra **perfiles laborales**, **plazas**, **formularios**, **preguntas**, **reglas automáticas**, **candidatos**, **evaluaciones**, **revisión humana** e **informes**. El backend integra OpenAI y el envío ApiChat; n8n se limita al adaptador opcional de entrada del workflow 04.
+Talento AISA sustituye el uso operativo de Google Sheets por una aplicación React/Express/tRPC y PostgreSQL. La plataforma administra **perfiles laborales**, **plazas**, **formularios**, **preguntas**, **reglas automáticas**, **candidatos**, **evaluaciones**, **revisión humana** e **informes**. El backend integra OpenAI y ApiChat directamente: el envío y la recepción de WhatsApp ocurren contra la API oficial, sin adaptadores intermedios.
 
 El alcance candidato 2.0.130 agrega actividad administrativa, bandeja ApiChat,
 receptor normalizado de texto, protocolos versionados, asignación de JARVI HR,
@@ -21,7 +21,7 @@ política salarial y servicios aislados de transcripción/TTS. Consulte el
 para el estado exacto, las brechas y el rollback; no interprete las tablas
 preparatorias de adjuntos como un pipeline productivo de medios terminado.
 
-La validación técnica confirmó que un Administrador puede crear un perfil laboral, asociarlo a una o varias plazas, generar un formulario por plaza y definir para cada pregunta su tipo, obligatoriedad, opciones visibles, respuestas que aprueban, descarte directo, rangos numéricos, experiencia mínima o máxima en meses y criterio de razonamiento para IA. El evaluador del backend consulta estas configuraciones desde PostgreSQL; los JSON de n8n no forman parte de esa ejecución.
+La validación técnica confirmó que un Administrador puede crear un perfil laboral, asociarlo a una o varias plazas, generar un formulario por plaza y definir para cada pregunta su tipo, obligatoriedad, opciones visibles, respuestas que aprueban, descarte directo, rangos numéricos, experiencia mínima o máxima en meses y criterio de razonamiento para IA. El evaluador del backend consulta estas configuraciones desde PostgreSQL.
 
 > **Resultado operativo:** una respuesta de descarte puede producir `No calificado`; una respuesta abierta puede ser razonada por OpenAI según el perfil y los criterios de la pregunta; el resultado estructurado queda persistido con motivo, resumen y resultados por regla.
 
@@ -83,7 +83,7 @@ En el proyecto de EasyPanel, crear un servicio **App**, cargar el ZIP o conectar
 | Puerto          | Variable `PORT` inyectada por EasyPanel       |
 | Build Path      | `/` si el ZIP contiene el proyecto en la raíz |
 
-No copiar `node_modules`, `.git`, `.manus-logs` ni archivos `.env`. El ZIP entregado excluye estos elementos y conserva `client/`, `server/`, `drizzle/`, `database/`, `n8n-workflows/`, `scripts/`, `docs/` y archivos de configuración.
+No copiar `node_modules`, `.git`, `.manus-logs` ni archivos `.env`. El ZIP entregado excluye estos elementos y conserva `client/`, `server/`, `drizzle/`, `database/`, `scripts/`, `docs/` y archivos de configuración.
 
 ## 6. Variables de entorno de la aplicación
 
@@ -176,20 +176,11 @@ El orden recomendado de configuración es el siguiente:
 
 El backend rechaza una pregunta de selección sin opciones y una regla de descarte sin respuestas aprobadas ni rango. También impide que un envío manipulado omita preguntas obligatorias o use una opción que no existe.
 
-## 9. n8n como adaptador opcional de entrada
+## 9. ApiChat directo para envío y recepción
 
-Los workflows 01 a 03 son referencias históricas importables y no participan en el runtime vigente. El backend aplica reglas, llama a OpenAI, persiste la evaluación y envía la solicitud de CV directamente. No existe una espera operativa de 30 segundos ni cancelación diferida.
+El backend aplica reglas, llama a OpenAI, persiste la evaluación y envía la solicitud de CV directamente contra la API de ApiChat. No existe una espera operativa de 30 segundos ni cancelación diferida, y no hay ningún intermediario de reenvío: la recepción se obtiene con la regla de sincronización de un segundo (`server/inboxSync.ts`), que consulta `GET /v1/messages` por conversación activa y rellena entradas y salidas con deduplicación por `providerMessageId`.
 
-| Workflow | Estado y alcance verificable |
-| --- | --- |
-| `01_flujo_maestro_postulaciones.json` | Referencia histórica; no recibe postulaciones del runtime web. |
-| `02_agente_plaza_template.json` | Plantilla histórica; no evalúa las postulaciones actuales. |
-| `03_revision_humana_30s.json` | Investigación histórica; la espera no está conectada. |
-| `04_whatsapp_apichat.json` | Único adaptador operativo posible: normaliza texto entrante y lo entrega al receptor autenticado del backend. No evalúa ni envía mensajes salientes. |
-
-Para importar el workflow 04 configure exclusivamente su Header Auth interno; no requiere credenciales PostgreSQL ni OpenAI. El artefacto responde después del último nodo y tiene desactivada la conservación de ejecuciones correctas, erróneas, manuales y progreso. Antes de exponerlo, verifique que el Bearer coincida con el secreto cifrado de la UI, que el backend persista antes del acuse y que no queden payloads en el historial de n8n.
-
-El receptor revalida el identificador, teléfono, dirección y texto mediante `GET /v1/messages` de ApiChat antes de resolver y persistir. Una discordancia responde `422`; un fallo de red o rechazo de la consulta de verificación responde `500`, sin registrar el cuerpo. Esta mitigación ya está conectada en el backend, pero debe probarse de extremo a extremo en el ambiente objetivo junto con el acuse posterior. Nunca incorpore Client ID, token o Bearer dentro del JSON versionado.
+La bandeja envía además enlaces (`/v1/sendLink`), ubicaciones (`/v1/sendLocation`), archivos por URL HTTPS (`/v1/sendFile`), notas de voz por URL HTTPS (`/v1/sendPTT`) y puede eliminar mensajes del proveedor (`/v1/deleteMessage`). Los medios entrantes (audio, PDF, Word) permanecen excluidos por política hasta completar el pipeline seguro. Nunca incorpore Client ID o token en archivos versionados; las credenciales viven cifradas en PostgreSQL y se administran desde Configuración > WhatsApp.
 
 ## 10. Pruebas de aceptación en EasyPanel
 
@@ -226,10 +217,9 @@ pnpm test:black-box
 pnpm check
 pnpm test
 pnpm build
-python3 scripts/validate_workflows.py
 ```
 
-La validación final debe mostrar TypeScript sin errores, todas las pruebas Vitest aprobadas, build de producción correcto y artefactos n8n estructuralmente válidos. La conexión SMTP se valida en EasyPanel; ApiChat se verifica desde el módulo administrativo y el envío real se confirma con un número controlado.
+La validación final debe mostrar TypeScript sin errores, todas las pruebas Vitest aprobadas y build de producción correcto. La conexión SMTP se valida en EasyPanel; ApiChat se verifica desde el módulo administrativo y el envío real se confirma con un número controlado.
 
 Las referencias ISO, DORA y de pruebas se utilizan como orientación metodológica. Estos comandos no constituyen certificación ISO, medición DORA completa ni validación psicométrica.
 
@@ -245,9 +235,9 @@ Las referencias ISO, DORA y de pruebas se utilizan como orientación metodológi
 | No aparece formulario | Publicar formulario y plaza; confirmar `public_slug`                            |
 | Lista sin opciones    | Editar pregunta `select` y guardar **Opciones que verá el candidato**           |
 | El agente no evalúa   | Revisar la configuración cifrada de OpenAI, la activación de Responses API y los logs controlados del backend |
-| No llega texto entrante | Revisar importación y activación del workflow 04, Bearer interno, acuse posterior, no retención y revalidación con ApiChat |
+| No llega texto entrante | Revisar credenciales ApiChat, verificación del módulo administrativo, regla de sincronización de un segundo y deduplicación por `providerMessageId` |
 | WhatsApp no continúa  | Revisar estado, bóveda PostgreSQL, verificación ApiChat y control de automatización |
-| Webhook responde 401  | Revisar secreto cifrado y encabezado Bearer; no registrar el cuerpo             |
+| Límite de tasa 429   | El puente se pausa y retoma con espaciamiento automático                        |
 | Audio no se procesa   | El webhook vigente acepta texto; validar el servicio aislado y no asumir pipeline de medios |
 
 ## 13. Archivos principales
@@ -265,7 +255,6 @@ Las referencias ISO, DORA y de pruebas se utilizan como orientación metodológi
 | `client/src/pages/Profiles.tsx`               | Definición del perfil laboral                                    |
 | `client/src/pages/FormBuilder.tsx`            | Constructor y reglas                                             |
 | `client/src/pages/Apply.tsx`                  | Formulario público mobile-first                                  |
-| `n8n-workflows/*.json`                        | Referencias históricas y adaptador opcional de entrada 04        |
 | `docs/ANALISIS_COGNITIVO_DORA_2.0.130.md`     | Alcance, DORA/ISO, despliegue, rollback y brechas                 |
 
 ## Referencias

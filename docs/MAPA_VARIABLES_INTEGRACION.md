@@ -10,9 +10,8 @@ JARVI RH separa secretos del servidor y configuración administrable. EasyPanel 
 | Sesiones          | `JWT_SECRET` de EasyPanel                    | Autenticación del servidor            | Ninguna                 |
 | Cifrado           | `AGENT_SETTINGS_ENCRYPTION_KEY` de EasyPanel | AES-256-GCM del servidor              | Ninguna                 |
 | SMTP              | Variables SMTP de EasyPanel                  | Correo de acceso                      | Ninguna                 |
-| ApiChat           | `integration_settings`, proveedor `apichat`  | `apiChatSettings.ts`, `cvRequest.ts` y `apiChatWebhook.ts` | Estado y máscara |
+| ApiChat           | `integration_settings`, proveedor `apichat`  | `apiChatSettings.ts`, `cvRequest.ts`, `inbox.ts` y `inboxSync.ts` | Estado y máscara |
 | OpenAI / Langfuse | `integration_settings`, proveedor `ai_agent` | Agente y control editorial            | Estado y máscara        |
-| n8n opcional      | URLs de webhook específicas                  | Adaptadores explícitos                | Solo estado operativo   |
 
 ## ApiChat
 
@@ -23,11 +22,9 @@ Las antiguas variables de entorno de ApiChat están retiradas del runtime de la 
 | `api_mode`          | Configuración   | Contrato `native` o `legacy` |
 | `api_endpoint`      | Configuración   | Endpoint HTTPS de envío      |
 | `connect_to`        | Configuración   | Identificador de conexión    |
-| `webhook_url`       | Configuración   | URL de eventos entrantes     |
 | `client_id`         | Secreto cifrado | Encabezado de API nativa     |
 | `token`             | Secreto cifrado | Autenticación ApiChat        |
 | `account_id`        | Secreto cifrado | Compatibilidad heredada      |
-| `webhook_secret`    | Secreto cifrado | Bearer del receptor entrante |
 
 El servidor no admite una caída silenciosa al entorno. Si falta una credencial, si una fila secreta está en texto plano o si el ciphertext no puede descifrarse, el envío falla de forma cerrada con un mensaje controlado. La interfaz no dispone de un endpoint que devuelva el secreto original.
 
@@ -41,10 +38,8 @@ flowchart LR
   P -->|ciphertext| R[apiChatSettings]
   R -->|descifrado solo en memoria| C[Cliente ApiChat del servidor]
   C -->|client-id + token| X[api.apichat.io]
-  W[Webhook ApiChat en n8n] -->|sobre oficial messages| N[Normalizador de texto]
-  N -->|Bearer + JSON cerrado| B[Receptor entrante del backend]
-  B -->|GET /v1/messages| X
-  B -->|verificación previa + deduplicación| D[(conversations)]
+  S[inboxSync cada segundo] -->|GET /v1/messages| X
+  S -->|registro con deduplicación| D[(conversations)]
   T -->|acción sin valor| L[(audit_log)]
   P -->|configurada + últimos 4| U
 ```
@@ -54,11 +49,11 @@ flowchart LR
 1. Respaldar PostgreSQL.
 2. Ejecutar `drizzle/migrations/0013_apichat_credential_vault.sql` y después `drizzle/migrations/0014_cognitive_governance.sql`.
 3. Desplegar el artefacto aprobado conservando una fuente estable de cifrado.
-4. Ingresar Client ID, token y secreto del webhook desde Administración > Configuración > WhatsApp.
+4. Ingresar Client ID y token desde Administración > Configuración > WhatsApp.
 5. Ejecutar **Verificar**; esta acción usa `GET /v1/status` y no envía mensajes.
-6. Eliminar las antiguas variables ApiChat de EasyPanel y redesplegar.
+6. Eliminar las antiguas variables ApiChat de EasyPanel y redesesplegar.
 7. Ejecutar un envío controlado solo después de una verificación satisfactoria.
-8. Enviar un texto ficticio al receptor normalizado, verificar deduplicación y confirmar que el error no imprime el cuerpo.
+8. Confirmar que la bandeja rellena entradas y salidas desde `GET /v1/messages` con deduplicación por `providerMessageId`.
 
 ## OpenAI
 
@@ -89,22 +84,19 @@ Referencias oficiales: [transcripción](https://developers.openai.com/api/refere
 `voiceTranscription.ts` acepta una extensión declarada permitida o, en su
 defecto, un MIME presente en una tabla de mapeo; también aplica cuota, timeout y
 rotación. No compara extensión y MIME ni detecta el formato por contenido. Esto
-no equivale a un pipeline de medios completo: la versión actual del webhook
-admite texto normalizado; endpoint productivo, bucket, antivirus, descarga del
+no equivale a un pipeline de medios completo: la sincronización vigente admite
+texto, enlace y ubicación; endpoint productivo, bucket, antivirus, descarga del
 proveedor, retención y reproductor permanecen pendientes.
 
-## n8n
+## Sincronización de recepción
 
-`04_whatsapp_apichat.json` no participa en el envío runtime: `server/cvRequest.ts` envía directamente después del commit, sin espera de 30 segundos, con la configuración cifrada. El workflow 04 es exclusivamente el adaptador entrante importable. Al activarlo, publica `/webhook/apichat/incoming`, acepta el sobre oficial `messages`, descarta tipos no textuales, grupos y mensajes propios, y reenvía el contrato mínimo con una credencial Header Auth interna. El backend revalida identificador, teléfono, dirección y texto mediante `GET /v1/messages` antes de resolver o persistir; una discordancia responde `422` y un fallo de verificación responde `500`. El artefacto responde después del último nodo y desactiva la retención de ejecuciones en n8n. El secreto se configura en n8n y en la UI; nunca se escribe en el JSON.
-
-La deduplicación documentada se limita a los mensajes entrantes por `providerMessageId`. El envío saliente conserva estado local, pero no ofrece una garantía de entrega exactamente una vez; un resultado desconocido requiere conciliación antes de reintentar. Los receptores de alertas internas disponen de CRUD de configuración, no de un canal de entrega implementado.
+La recepción no depende de ningún intermediario. `server/inboxSync.ts` recorre cada segundo las conversaciones activas y consulta `GET /v1/messages` con los encabezados oficiales; registra entradas y salidas que falten, con deduplicación por `providerMessageId`. Ante el límite de tasa del proveedor (HTTP 429), el puente se pausa y retoma con espaciamiento automático. La deduplicación documentada se limita a los mensajes por `providerMessageId`. El envío saliente conserva estado local, pero no ofrece una garantía de entrega exactamente una vez; un resultado desconocido requiere conciliación antes de reintentar. Los receptores de alertas internas disponen de CRUD de configuración, no de un canal de entrega implementado.
 
 ## Controles verificables
 
-- `server/integrations.secrets.test.ts` impide reintroducir lectura de entorno en el cliente runtime de ApiChat.
 - `server/apiChatSettings.test.ts` verifica cifrado, máscara, rechazo de texto plano y comprobación sin envío.
 - `server/apichat.test.ts` valida encabezados, payload, HTTPS, dominio/ruta nativos y errores controlados.
-- `server/apiChatWebhook.test.ts` comprueba Bearer, contrato cerrado, revalidación previa, deduplicación y cuarentena minimizada.
+- `server/inbox.test.ts` y `server/inboxSync.test.ts` comprueban envío multi-tipo, borrado, sincronización cada segundo y cuarentena minimizada.
 - `server/agentSettings.test.ts` verifica modelos, voz y cuotas especializadas.
 - `server/releaseGovernance.test.ts` mantiene el contrato de caja negra del release.
 

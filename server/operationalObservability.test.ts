@@ -29,10 +29,6 @@ vi.mock("./observability/langfuse", () => ({
 }));
 
 import { sendApiChatText } from "./apichat";
-import {
-  createApiChatInboundWebhookHandler,
-  quarantineUnknownInboundText,
-} from "./apiChatWebhook";
 import { ensureCvRequestMessage } from "./cvRequest";
 import {
   recordNormalizedInboundText,
@@ -89,84 +85,6 @@ describe("observabilidad operacional sin contenido privado", () => {
     expect(serialized).not.toContain(privatePhone);
     expect(serialized).not.toContain(privateToken);
     expect(serialized).not.toContain(providerReference);
-  });
-
-  it("clasifica la deduplicación del webhook sin observar su cuerpo", async () => {
-    const privateText = "mensaje-entrante-privado-sentinel";
-    let statusCode = 200;
-    const response = {
-      status(code: number) {
-        statusCode = code;
-        return response;
-      },
-      json() {
-        return response;
-      },
-    };
-    const handler = createApiChatInboundWebhookHandler({
-      pool: vi.fn(async () => ({ query: vi.fn() }) as never),
-      secret: vi.fn(async () => "webhook-private-sentinel"),
-      verifyProvider: vi.fn(async () => true),
-      resolveConversation: vi.fn(async () => ({
-        kind: "resolved" as const,
-        applicationId: 41,
-        conversationId: 19,
-      })),
-      recordInbound: vi.fn(async () => ({
-        inserted: false,
-        conversationId: 19,
-      })),
-    });
-
-    await Promise.resolve(
-      handler(
-        {
-          body: {
-            providerMessageId: "provider-private-sentinel",
-            phoneInternational: "+50255551234",
-            messageType: "text",
-            text: privateText,
-          },
-          get: () => "Bearer webhook-private-sentinel",
-        } as never,
-        response as never,
-        vi.fn()
-      )
-    );
-
-    expect(statusCode).toBe(200);
-    const record = observation("apichat.webhook.receive");
-    expect(record.updates.at(-1)).toMatchObject({
-      metadata: { outcome: "duplicate", inserted: false, statusCode: 200 },
-    });
-    expect(JSON.stringify(record)).not.toContain(privateText);
-  });
-
-  it("observa la cuarentena mediante una razón categórica y huellas solo en PostgreSQL", async () => {
-    const privatePhone = "+50255551234";
-    const privateProviderId = "provider-private-sentinel";
-    const privateSecret = "webhook-private-sentinel";
-    const query = vi.fn(async () => ({ rows: [{ id: 9 }] }));
-
-    await quarantineUnknownInboundText({ query } as never, {
-      providerMessageId: privateProviderId,
-      phoneInternational: privatePhone,
-      webhookSecret: privateSecret,
-      reason: "sin_conversacion_activa",
-    });
-
-    const record = observation("apichat.webhook.quarantine");
-    expect(record.options).toMatchObject({ asType: "guardrail" });
-    expect(record.updates.at(-1)).toMatchObject({
-      metadata: {
-        outcome: "sin_conversacion_activa",
-        persisted: true,
-      },
-    });
-    const serialized = JSON.stringify(record);
-    expect(serialized).not.toContain(privatePhone);
-    expect(serialized).not.toContain(privateProviderId);
-    expect(serialized).not.toContain(privateSecret);
   });
 
   it("traza la creación idempotente de la solicitud de CV sin datos del candidato", async () => {

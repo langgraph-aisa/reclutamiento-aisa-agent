@@ -3,7 +3,6 @@ import {
   getApiChatConfiguration,
   getApiChatReceptionReadiness,
   getApiChatRuntimeSettings,
-  getApiChatWebhookSecret,
   saveApiChatPreferences,
   saveApiChatSecret,
   verifyApiChatConnection,
@@ -59,22 +58,14 @@ describe("ApiChat credential vault", () => {
         mode: "native",
         endpoint: "https://api.apichat.io/v1/sendText",
         connectTo: "apichat.io",
-        webhookUrl: "https://automation.example.test/webhook/apichat/incoming",
       },
       7
     );
     await saveApiChatSecret(pool as never, "client_id", "client-safe-3210", 7);
     await saveApiChatSecret(pool as never, "token", "token-safe-9876", 7);
-    await saveApiChatSecret(
-      pool as never,
-      "webhook_secret",
-      "webhook-safe-2468",
-      7
-    );
 
     expect(stored.get("client_id")?.setting_value).toMatch(/^enc:v2:/);
     expect(stored.get("token")?.setting_value).toMatch(/^enc:v2:/);
-    expect(stored.get("webhook_secret")?.setting_value).toMatch(/^enc:v2:/);
     expect(JSON.stringify([...stored.values()])).not.toContain(
       "token-safe-9876"
     );
@@ -89,10 +80,6 @@ describe("ApiChat credential vault", () => {
       masked: "••••••••9876",
     });
     expect(JSON.stringify(configuration)).not.toContain("token-safe-9876");
-    expect(JSON.stringify(configuration)).not.toContain("webhook-safe-2468");
-    await expect(getApiChatWebhookSecret(pool as never)).resolves.toBe(
-      "webhook-safe-2468"
-    );
 
     const runtime = await getApiChatRuntimeSettings(pool as never);
     expect(runtime).toMatchObject({
@@ -205,38 +192,11 @@ describe("preparación de envío y recepción", () => {
       is_secret: false,
       updated_at: new Date(),
     });
-    stored.set("webhook_url", {
-      setting_key: "webhook_url",
-      setting_value: "https://automation.example.test/webhook/apichat/incoming",
-      is_secret: false,
-      updated_at: new Date(),
-    });
     await saveApiChatSecret(pool as never, "client_id", "client-safe-3210", 7);
     await saveApiChatSecret(pool as never, "token", "token-safe-9876", 7);
 
     const sendOnly = await getApiChatReceptionReadiness(pool as never);
     expect(sendOnly.sendReady).toBe(true);
-    expect(sendOnly.receiveReady).toBe(false);
-    expect(sendOnly.secretConfigured).toBe(false);
-
-    await saveApiChatSecret(
-      pool as never,
-      "webhook_secret",
-      "webhook-safe-2468",
-      7
-    );
-    const ready = await getApiChatReceptionReadiness(pool as never);
-    expect(ready.sendReady).toBe(true);
-    expect(ready.receiveReady).toBe(true);
-
-    stored.set("webhook_url", {
-      setting_key: "webhook_url",
-      setting_value: "http://inseguro.example.test/webhook",
-      is_secret: false,
-      updated_at: new Date(),
-    });
-    const insecure = await getApiChatReceptionReadiness(pool as never);
-    expect(insecure.receiveReady).toBe(false);
-    expect(insecure.webhookUrlValid).toBe(false);
+    expect(sendOnly.receiveReady).toBe(true);
   });
 });

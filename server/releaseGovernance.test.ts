@@ -443,9 +443,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(93);
+    expect(audit.files).toHaveLength(87);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(93);
+    expect(publicCopyAudit.files).toHaveLength(87);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");

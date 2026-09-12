@@ -2,7 +2,7 @@
 
 ## Alcance
 
-Este proyecto contiene una aplicación web responsive para postulaciones y operación de reclutamiento, una base PostgreSQL transaccional, un catálogo inicial de departamentos y municipios de Guatemala y cuatro workflows JSON para n8n. Las credenciales permanecen fuera del repositorio.
+Este proyecto contiene una aplicación web responsive para postulaciones y operación de reclutamiento, una base PostgreSQL transaccional y un catálogo inicial de departamentos y municipios de Guatemala. La mensajería de WhatsApp es ApiChat directo desde el backend. Las credenciales permanecen fuera del repositorio.
 
 > La configuración de la base de datos del entorno administrado de desarrollo no se utiliza para PostgreSQL. La migración se entrega para ejecutarse en la instancia PostgreSQL que se configure en EasyPanel.
 
@@ -12,8 +12,7 @@ Este proyecto contiene una aplicación web responsive para postulaciones y opera
 | --------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------- |
 | Aplicación React + Express + tRPC | Formulario público, panel, configuración e informes                                   | `DATABASE_URL`, autenticación del proveedor elegido  |
 | PostgreSQL                        | Plazas, formularios, respuestas, candidatos, evaluaciones, conversaciones y auditoría | Usuario, contraseña, host, puerto, SSL               |
-| n8n on-premise                    | Adaptador entrante ApiChat; los demás flujos son referencias importables              | Header Auth interno para el workflow 04               |
-| ApiChat                           | Solicitud directa de CV por WhatsApp                                                  | Credenciales cifradas desde Configuración > WhatsApp |
+| ApiChat                           | Envío y recepción directos de WhatsApp desde el backend                                | Credenciales cifradas desde Configuración > WhatsApp |
 | OpenAI                            | Razonamiento y servicios aislados de transcripción/TTS; no hay endpoint productivo de medios | Claves cifradas desde Agente de IA LangGraph |
 | Langfuse + OpenTelemetry          | Trazas jerárquicas, consumo, latencia y calidad operacional                          | Claves cifradas desde Agente de IA LangGraph |
 
@@ -32,40 +31,29 @@ Las funciones `process_public_application` y `finalize_application_evaluation` p
 
 `DATABASE_URL` es obligatorio para operación real. `JWT_SECRET`, las variables de OAuth del template y los valores `VITE_*` se gestionan desde la configuración segura del proyecto.
 
-### n8n y evaluación
+### Sincronización de mensajes
 
-El runtime de evaluación no consulta `N8N_AGENT_EVALUATION_URL`, `N8N_MANUAL_STATUS_WEBHOOK_URL` ni `OPENAI_MODEL`. La evaluación se ejecuta en el backend y el envío ApiChat ocurre después de confirmar la operación local. El workflow 04 es la única excepción funcional: adapta mensajes entrantes desde la URL de n8n hacia el receptor autenticado del backend.
+El runtime de evaluación no consulta `N8N_AGENT_EVALUATION_URL`, `N8N_MANUAL_STATUS_WEBHOOK_URL` ni `OPENAI_MODEL`. La evaluación se ejecuta en el backend y el envío ApiChat ocurre después de confirmar la operación local. La recepción la resuelve el puente `inboxSync`, que cada segundo consulta `GET /v1/messages` de las conversaciones activas y registra entradas y salidas con deduplicación por `providerMessageId`.
 
 ### ApiChat
 
-ApiChat no utiliza variables de entorno en JARVI RH 2.0.131. Ejecute las migraciones y configure endpoint, conexión, webhook, Client ID, token y secreto del receptor desde Administración > Configuración > WhatsApp. Los secretos se cifran en el servidor antes de almacenarse en `integration_settings`; no se devuelven al navegador.
+ApiChat no utiliza variables de entorno en JARVI RH 2.0.131. Ejecute las migraciones y configure endpoint, conexión, Client ID y token desde Administración > Configuración > WhatsApp. Los secretos se cifran en el servidor antes de almacenarse en `integration_settings`; no se devuelven al navegador.
 
 ### Langfuse
 
 Langfuse tampoco requiere claves en EasyPanel. Conserve únicamente la raíz estable `AGENT_SETTINGS_ENCRYPTION_KEY`; ingrese las claves del proyecto desde Administración > Agente de IA LangGraph. Guarde cada credencial hasta ver **Configurada**, seleccione la misma región del proyecto, active la telemetría y verifique. La primera validación fuerza una traza diagnóstica. Consulte [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md) antes del despliegue.
 
-No copie la URL del editor de n8n (`/workflow/...`) como webhook. El nodo Webhook muestra su URL de producción después de activar el workflow 04; esa URL es la que debe guardar en Configuración > WhatsApp y registrar en ApiChat.
+## Recepción directa
 
-## Importación de n8n
-
-Solo el workflow 04 interviene opcionalmente en el runtime vigente y lo hace como adaptador entrante. Los workflows 01 a 03 son referencias históricas para experimentación aislada:
-
-1. `01_flujo_maestro_postulaciones.json` documenta el flujo maestro anterior; no recibe las postulaciones del runtime actual.
-2. `02_agente_plaza_template.json` documenta una plantilla anterior; no sustituye al evaluador del backend.
-3. `03_revision_humana_30s.json` conserva la referencia histórica de una espera que no existe en la operación vigente.
-4. `04_whatsapp_apichat.json` recibe el sobre oficial `messages`, conserva únicamente texto entrante individual y lo normaliza para el backend. Configure «Cabecera interna Talento AISA» con `Authorization: Bearer <secreto>`, actívelo y confirme `/webhook/apichat/incoming`.
-
-Para el único adaptador operativo, asigne solamente la credencial Header Auth interna al nodo «Entregar a Talento AISA». El marcador `PENDIENTE_WEBHOOK_HEADER` debe reemplazarse dentro de n8n sin guardar el secreto en el JSON. Las credenciales PostgreSQL/OpenAI y los demás marcadores pertenecen exclusivamente a los workflows históricos y no son requisitos del runtime.
-
-El envío runtime de solicitud de CV no depende de credenciales n8n y se ejecuta directamente desde el backend después del commit, sin espera de 30 segundos. La recepción sí requiere el adaptador 04 activado cuando ApiChat está configurado con la URL de n8n. El receptor revalida cada texto mediante `GET /v1/messages` antes de resolver y persistir; una discordancia responde `422` y un fallo de verificación responde `500`. El workflow responde después del último nodo y desactiva la retención de ejecuciones en n8n.
+La recepción no requiere importar artefactos ni registrar URLs de reenvío: el puente `inboxSync` consulta el historial oficial `GET /v1/messages` cada segundo por conversación activa y rellena la bandeja con deduplicación por `providerMessageId`. Ante HTTP 429, el puente se pausa y retoma con espaciamiento automático.
 
 ## Publicación de la aplicación
 
-La aplicación puede montarse en EasyPanel como servicio Node con el comando `pnpm build` y `pnpm start`. No hardcodear el puerto: EasyPanel debe inyectar `PORT`. El formulario público usa `/apply/{public_slug}` y el panel protegido usa `/admin`. Se recomienda servir HTTPS y colocar la aplicación y n8n bajo un proxy inverso con límites de solicitud adecuados.
+La aplicación puede montarse en EasyPanel como servicio Node con el comando `pnpm build` y `pnpm start`. No hardcodear el puerto: EasyPanel debe inyectar `PORT`. El formulario público usa `/apply/{public_slug}` y el panel protegido usa `/admin`. Se recomienda servir HTTPS bajo un proxy inverso con límites de solicitud adecuados.
 
 ## Pruebas de aceptación
 
-Enviar una postulación completa y comprobar que solo se crea al pulsar `Enviar formulario`. Repetir el envío con el mismo teléfono y plaza para verificar el aviso de duplicado. Crear una regla `hardFail`, probar una respuesta incorrecta y confirmar `no_calificado`. Probar una respuesta abierta con experiencia expresada en meses y verificar que la IA devuelve JSON estructurado. Seleccionar **Solicitar CV por WhatsApp** (estado interno `calificado`) y comprobar el envío directo posterior al commit y el estado local de entrega; un resultado desconocido exige conciliación manual antes del reintento. En una recepción ficticia separada, verificar la deduplicación entrante por `providerMessageId`, la consulta al proveedor, el acuse posterior y la no retención en n8n.
+Enviar una postulación completa y comprobar que solo se crea al pulsar `Enviar formulario`. Repetir el envío con el mismo teléfono y plaza para verificar el aviso de duplicado. Crear una regla `hardFail`, probar una respuesta incorrecta y confirmar `no_calificado`. Probar una respuesta abierta con experiencia expresada en meses y verificar que la IA devuelve JSON estructurado. Seleccionar **Solicitar CV por WhatsApp** (estado interno `calificado`) y comprobar el envío directo posterior al commit y el estado local de entrega; un resultado desconocido exige conciliación manual antes del reintento. Confirmar que la bandeja rellena entradas y salidas desde `GET /v1/messages` con deduplicación por `providerMessageId`.
 
 ## Validación de workflows y límites de la plantilla
 

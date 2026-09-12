@@ -55,11 +55,9 @@ openssl rand -base64 48
 
 La migración no contiene tokens ni Client ID reales. El query inicial documentado en `ANALISIS_COGNITIVO_DORA_2.0.130.md` crea preferencias públicas y filas secretas nulas; los valores recuperables se ingresan exclusivamente por las tarjetas seguras.
 
-## n8n
+## ApiChat directo
 
-Los workflows 01 a 03 son referencias históricas/importables. El backend evalúa directamente y envía ApiChat después del commit. El workflow 04 sí contiene un nodo Webhook real: después de importarlo, configure «Cabecera interna Talento AISA» con el mismo Bearer guardado en la UI, actívelo y registre la URL de producción `/webhook/apichat/incoming` en ApiChat. El adaptador mapea el sobre oficial `messages` y no contiene secretos.
-
-No sustituya marcadores de credenciales por secretos dentro de un JSON versionado. No presente la espera histórica de 30 segundos ni los workflows opcionales como parte del runtime vigente.
+El backend evalúa directamente y envía ApiChat después del commit. La recepción no requiere importaciones: el puente `inboxSync` consulta `GET /v1/messages` cada segundo y rellena la bandeja con entradas y salidas deduplicadas por `providerMessageId`. No sustituya marcadores de credenciales por secretos dentro de archivos versionados ni presente esperas históricas como parte del runtime vigente.
 
 ## Verificación técnica
 
@@ -69,7 +67,6 @@ pnpm test:black-box
 pnpm test
 pnpm check
 pnpm build
-python3 scripts/validate_workflows.py
 ```
 
 Confirme además:

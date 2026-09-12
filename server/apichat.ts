@@ -17,7 +17,6 @@ export type ApiChatConfig = {
   clientId?: string;
   accountId?: string;
   connectTo?: string;
-  webhookUrl?: string;
 };
 
 export type ApiChatSendResult = {
@@ -98,9 +97,6 @@ export function validateApiChatConfig(input: ApiChatConfig): ApiChatConfig {
   const clientId = input.clientId?.trim() || undefined;
   const accountId = input.accountId?.trim() || undefined;
   const connectTo = input.connectTo?.trim() || undefined;
-  const webhookUrl = input.webhookUrl?.trim()
-    ? secureUrl(input.webhookUrl.trim(), "la URL del webhook").toString()
-    : undefined;
 
   if (mode === "native" && !clientId) {
     throw new Error("ApiChat no está configurado: falta el Client ID.");
@@ -136,7 +132,6 @@ export function validateApiChatConfig(input: ApiChatConfig): ApiChatConfig {
     clientId,
     accountId,
     connectTo,
-    webhookUrl,
   };
 }
 

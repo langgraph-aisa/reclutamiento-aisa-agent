@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +39,8 @@ function trafficClass(value: unknown) {
 
 export default function Inbox() {
   const { user } = useAuth();
+  const { theme } = useTheme();
+  const lightChat = theme === "light";
   const [search, setSearch] = useState("");
   const [positionId, setPositionId] = useState("all");
   const [automationState, setAutomationState] = useState("all");
@@ -313,14 +316,14 @@ export default function Inbox() {
                   ) : null}
                 </div>
 
-                <div className="h-[440px] space-y-1.5 overflow-y-auto rounded-2xl bg-[#0b141a] p-3">
+                <div className={`h-[440px] space-y-1.5 overflow-y-auto rounded-2xl p-3 ${lightChat ? "bg-[#D3D3D3]" : "bg-[#0b141a]"}`}>
                   {(detail.data?.messages ?? []).map(item => {
                     const outbound = item.direction === "outbound";
                     const trash = user?.role === "admin" || humanKeyboard ? (
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="hidden h-6 w-6 shrink-0 self-center rounded-full text-white/40 hover:text-[#f15c6d] group-hover:inline-flex"
+                        className={`hidden h-6 w-6 shrink-0 self-center rounded-full group-hover:inline-flex ${lightChat ? "text-black/40 hover:text-[#f15c6d]" : "text-white/40 hover:text-[#f15c6d]"}`}
                         aria-label={`Eliminar mensaje ${item.id}`}
                         title="Eliminar mensaje"
                         onClick={() =>
