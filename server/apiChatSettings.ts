@@ -158,6 +158,57 @@ export async function getApiChatRuntimeSettings(
   });
 }
 
+export const APICHAT_OFFICIAL_ENDPOINTS = [
+  {
+    method: "POST",
+    path: "/sendMessage",
+    description: "Envío de mensaje de texto a un chat nuevo o existente.",
+  },
+  {
+    method: "POST",
+    path: "/sendFile",
+    description: "Envío de un archivo a un chat nuevo o existente.",
+  },
+  {
+    method: "POST",
+    path: "/sendPTT",
+    description: "Envío de una nota de voz (PTT) a un chat nuevo o existente.",
+  },
+  {
+    method: "POST",
+    path: "/sendLink",
+    description: "Envío de texto con enlace y vista previa.",
+  },
+  {
+    method: "POST",
+    path: "/sendLocation",
+    description: "Envío de una ubicación a un chat nuevo o existente.",
+  },
+  {
+    method: "GET",
+    path: "/messagesHistory",
+    description: "Listado de mensajes ordenado por tiempo descendente.",
+  },
+  {
+    method: "POST",
+    path: "/deleteMessage",
+    description: "Eliminación de un mensaje de WhatsApp.",
+  },
+] as const;
+
+export async function getApiChatEndpoints(pool: Pool | null) {
+  const readiness = await getApiChatReceptionReadiness(pool);
+  const enabled = readiness.sendReady && readiness.mode === "native";
+  return {
+    mode: readiness.mode,
+    enabled,
+    endpoints: APICHAT_OFFICIAL_ENDPOINTS.map(endpoint => ({
+      ...endpoint,
+      enabled,
+    })),
+  };
+}
+
 export async function getApiChatReceptionReadiness(pool: Pool | null) {
   const configuration = await getApiChatConfiguration(pool);
   const secrets = configuration.secrets;

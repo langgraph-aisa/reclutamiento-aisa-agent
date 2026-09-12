@@ -79,6 +79,8 @@ export default function Config() {
   });
   const apiChatReception = trpc.config.apiChatReception.useQuery();
   const reception = apiChatReception.data;
+  const apiChatEndpoints = trpc.config.apiChatEndpoints.useQuery();
+  const endpointCatalog = apiChatEndpoints.data;
   const importCatalog = trpc.geo.importCatalog.useMutation();
   const catalog = trpc.geo.adminCatalog.useQuery();
   const updateItem = trpc.geo.updateItem.useMutation({
@@ -291,6 +293,59 @@ export default function Config() {
                 )}{" "}
                 Guardar conexión
               </Button>
+              <div className="rounded-2xl border border-border/70 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-semibold text-primary">
+                      Endpoints oficiales habilitados
+                    </h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Catálogo completo de ApiChat operado directamente por el
+                      backend para envío y recepción.
+                    </p>
+                  </div>
+                  <Badge
+                    variant={endpointCatalog?.enabled ? "default" : "outline"}
+                    className="rounded-full"
+                  >
+                    {endpointCatalog?.enabled
+                      ? "Todos habilitados"
+                      : "Pendientes de credenciales"}
+                  </Badge>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {(endpointCatalog?.endpoints ?? []).map(endpoint => (
+                    <div
+                      key={`${endpoint.method}-${endpoint.path}`}
+                      className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/40 p-2.5"
+                    >
+                      <span
+                        className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold text-white ${
+                          endpoint.method === "GET"
+                            ? "bg-sky-600"
+                            : "bg-emerald-600"
+                        }`}
+                      >
+                        {endpoint.method}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-mono text-xs text-primary">
+                          {endpoint.path}
+                        </p>
+                        <p className="truncate text-[10px] leading-4 text-muted-foreground">
+                          {endpoint.description}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={endpoint.enabled ? "default" : "outline"}
+                        className="shrink-0 rounded-full"
+                      >
+                        {endpoint.enabled ? "Habilitado" : "Pendiente"}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
                 <CredentialField
                   label="Client ID"

@@ -56,6 +56,7 @@ import { initializeLangfuseFromDatabase } from "./observability/langfuse";
 import {
   APICHAT_SECRET_KEYS,
   getApiChatConfiguration,
+  getApiChatEndpoints,
   getApiChatReceptionReadiness,
   saveApiChatPreferences,
   saveApiChatSecret,
@@ -4051,6 +4052,9 @@ export const appRouter = router({
     }),
     apiChatReception: adminProcedure.query(async () => {
       return getApiChatReceptionReadiness(await getPool());
+    }),
+    apiChatEndpoints: adminProcedure.query(async () => {
+      return getApiChatEndpoints(await getPool());
     }),
     saveApiChatPreferences: adminProcedure
       .input(

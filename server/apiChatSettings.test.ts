@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  APICHAT_OFFICIAL_ENDPOINTS,
   getApiChatConfiguration,
+  getApiChatEndpoints,
   getApiChatReceptionReadiness,
   getApiChatRuntimeSettings,
   saveApiChatPreferences,
@@ -198,5 +200,68 @@ describe("preparación de envío y recepción", () => {
     const sendOnly = await getApiChatReceptionReadiness(pool as never);
     expect(sendOnly.sendReady).toBe(true);
     expect(sendOnly.receiveReady).toBe(true);
+  });
+});
+
+describe("catálogo oficial de endpoints ApiChat", () => {
+  it("expone los siete endpoints documentados con estado derivado", async () => {
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "test-key-material-with-more-than-thirty-two-characters"
+    );
+    expect(APICHAT_OFFICIAL_ENDPOINTS).toHaveLength(7);
+    expect(APICHAT_OFFICIAL_ENDPOINTS.map(endpoint => endpoint.path)).toEqual([
+      "/sendMessage",
+      "/sendFile",
+      "/sendPTT",
+      "/sendLink",
+      "/sendLocation",
+      "/messagesHistory",
+      "/deleteMessage",
+    ]);
+
+    const { pool, stored } = memoryPool();
+    stored.set("api_mode", {
+      setting_key: "api_mode",
+      setting_value: "native",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    stored.set("api_endpoint", {
+      setting_key: "api_endpoint",
+      setting_value: "https://api.apichat.io/v1/sendText",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    stored.set("connect_to", {
+      setting_key: "connect_to",
+      setting_value: "apichat.io",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+
+    const pending = await getApiChatEndpoints(pool as never);
+    expect(pending.enabled).toBe(false);
+    expect(pending.endpoints.every(endpoint => !endpoint.enabled)).toBe(true);
+
+    await saveApiChatSecret(pool as never, "client_id", "client-safe-3210", 7);
+    await saveApiChatSecret(pool as never, "token", "token-safe-9876", 7);
+
+    const ready = await getApiChatEndpoints(pool as never);
+    expect(ready.enabled).toBe(true);
+    expect(ready.endpoints.every(endpoint => endpoint.enabled)).toBe(true);
+  });
+
+  it("mantiene los endpoints pendientes en modo heredado", async () => {
+    const { pool, stored } = memoryPool();
+    stored.set("api_mode", {
+      setting_key: "api_mode",
+      setting_value: "legacy",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    const result = await getApiChatEndpoints(pool as never);
+    expect(result.mode).toBe("legacy");
+    expect(result.enabled).toBe(false);
   });
 });
