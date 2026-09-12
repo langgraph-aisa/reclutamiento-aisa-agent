@@ -59,11 +59,11 @@ export default function Inbox() {
       timeRange,
       limit: timeRange === "hour" ? 10 : 30,
     },
-    { refetchInterval: 4_000, refetchIntervalInBackground: false }
+    { refetchInterval: 1_000, refetchIntervalInBackground: false }
   );
   const detail = trpc.inbox.detail.useQuery(
     { conversationId: selectedId ?? 0 },
-    { enabled: Boolean(selectedId), refetchInterval: 4_000, refetchIntervalInBackground: false }
+    { enabled: Boolean(selectedId), refetchInterval: 1_000, refetchIntervalInBackground: false }
   );
   const setAutomation = trpc.inbox.setAutomation.useMutation({
     onSuccess: async () => {

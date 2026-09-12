@@ -56,6 +56,8 @@ El modo heredado conserva las cajas de ID de cuenta y conexión únicamente para
 
 No existe una espera operativa de 30 segundos: el envío se inicia desde el backend después del commit. La deduplicación por identificador del proveedor se aplica a la recepción. El envío saliente conserva una clave lógica y estados locales, pero no garantiza entrega exactamente una vez; ante un resultado desconocido debe verificarse la conversación antes de reintentar.
 
+La bandeja se sincroniza con una regla de un segundo: el servidor recorre las conversaciones activas por turnos y rellena desde `GET /v1/messages` los mensajes entrantes y salientes que el webhook no hubiera registrado; el cliente además refresca la lista y el detalle cada segundo.
+
 El estado **Calificado por AISA** (`calificado_aisa`) no envía mensajes. El receptor entrante `POST /api/webhooks/apichat/incoming` procesa texto normalizado, exige `Authorization: Bearer <secreto>` y revalida identificador, teléfono, dirección y texto mediante `GET /v1/messages` con las credenciales cifradas. Esta consulta ocurre antes de resolver la conversación y persistir. Una discordancia responde `422`; un fallo de red o rechazo del proveedor responde `500`, sin registrar el cuerpo. Después de verificar, el receptor deduplica por `providerMessageId`. Un teléfono sin postulación se registra en `inbound_message_quarantine` solo como huellas HMAC, sin conservar número ni mensaje.
 
 El cuerpo cerrado admitido acepta tres tipos normalizados: `text`, `link` y `location`. El workflow 04 convierte el sobre oficial y entrega cada evento con su identificador, teléfono E.164 y contenido correspondiente; los medios (audio, PDF, Word) permanecen excluidos por política hasta completar el pipeline seguro.

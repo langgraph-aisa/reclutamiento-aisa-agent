@@ -7,6 +7,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter, auditPublishedPublicCopy } from "../routers";
 import { registerApiChatInboundWebhook } from "../apiChatWebhook";
+import { startInboxSyncBridge } from "../inboxSync";
 import { getPool } from "../db";
 import { APP_VERSION } from "../../shared/release";
 import {
@@ -37,6 +38,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const pool = await getPool();
+  let stopInboxSync: (() => void) | null = null;
   if (pool) {
     const observability = await initializeLangfuseFromDatabase(pool, {
       release: APP_VERSION,
@@ -44,6 +46,7 @@ async function startServer() {
     console.log(
       `[Observability] Langfuse state=${observability.state}${observability.reasonCode ? ` reason=${observability.reasonCode}` : ""}.`
     );
+    stopInboxSync = startInboxSyncBridge(() => getPool());
   } else {
     console.warn("[Observability] Langfuse state=disabled reason=DATABASE_UNAVAILABLE.");
   }
@@ -109,6 +112,7 @@ async function startServer() {
       await new Promise<void>((resolve, reject) => {
         server.close(error => (error ? reject(error) : resolve()));
       });
+      stopInboxSync?.();
       await shutdownLangfuse();
       if (pool) await pool.end();
       console.log("[Lifecycle] Cierre ordenado completado.");
