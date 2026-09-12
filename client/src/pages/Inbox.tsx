@@ -70,7 +70,7 @@ export default function Inbox() {
   const [search, setSearch] = useState("");
   const [positionId, setPositionId] = useState("all");
   const [automationState, setAutomationState] = useState("all");
-  const [timeRange, setTimeRange] = useState<"hour" | "all">("hour");
+  const [timeRange, setTimeRange] = useState<"hour" | "all">("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [override, setOverride] = useState(false);
@@ -86,7 +86,7 @@ export default function Inbox() {
           ? undefined
           : (automationState as "agent" | "handoff_pending" | "human" | "completed" | "error"),
       timeRange,
-      limit: timeRange === "hour" ? 10 : 30,
+      limit: timeRange === "hour" ? 10 : 200,
     },
     { refetchInterval: 1_000, refetchIntervalInBackground: false }
   );
@@ -264,7 +264,7 @@ export default function Inbox() {
           <SelectTrigger className="rounded-xl"><SelectValue placeholder="Periodo" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="hour">Última hora · 10</SelectItem>
-            <SelectItem value="all">Histórico completo · 30</SelectItem>
+            <SelectItem value="all">Todas las conversaciones · 200</SelectItem>
           </SelectContent>
         </Select>
       </section>
@@ -276,7 +276,7 @@ export default function Inbox() {
             <p className="text-xs text-muted-foreground">
               {timeRange === "hour"
                 ? "Hasta 10 conversaciones de la última hora."
-                : "Hasta 30 resultados históricos por consulta."}
+                : "Hasta 200 conversaciones con todos los candidatos."}
             </p>
           </CardHeader>
           <CardContent className="max-h-[720px] space-y-2 overflow-y-auto p-2">
@@ -328,7 +328,7 @@ export default function Inbox() {
             <>
               <CardContent className="space-y-4 p-4">
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <Info label="Punteo actual" value={detail.data?.assessment?.score ?? "Sin puntaje"} />
+                  <Info label="Punteo de prueba" value={detail.data?.assessment?.score ?? "Sin puntaje"} />
                   <Info label="Prueba actual" value={detail.data?.assessment?.name ?? "Sin prueba activa"} />
                   <Info label="Ubicación" value={[current.location_zone, current.location_municipality, current.location_department].filter(Boolean).join(", ") || "Sin confirmar"} />
                   <Info label="Último contacto" value={current.last_message_at ? new Date(current.last_message_at).toLocaleString("es-GT", { timeZone: "America/Guatemala" }) : "Sin mensajes"} />

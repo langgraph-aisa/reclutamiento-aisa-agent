@@ -1963,7 +1963,7 @@ export const appRouter = router({
               .enum(["agent", "handoff_pending", "human", "completed", "error"])
               .optional(),
             timeRange: z.enum(["hour", "all"]).optional(),
-            limit: z.number().int().min(1).max(30).optional(),
+            limit: z.number().int().min(1).max(200).optional(),
           })
           .optional()
       )

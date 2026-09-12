@@ -162,8 +162,8 @@ export async function listInbox(
       `COALESCE(conv.last_message_at,conv.updated_at) >= now() - interval '1 hour'`
     );
   }
-  const defaultLimit = (input.timeRange ?? "hour") === "hour" ? 10 : 30;
-  values.push(Math.max(1, Math.min(input.limit ?? defaultLimit, 30)));
+  const defaultLimit = (input.timeRange ?? "hour") === "hour" ? 10 : 100;
+  values.push(Math.max(1, Math.min(input.limit ?? defaultLimit, 200)));
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const result = await pool.query(
     `SELECT conv.id,conv.application_id,conv.status,conv.automation_state,

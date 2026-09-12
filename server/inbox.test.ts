@@ -34,7 +34,7 @@ describe("bandeja de entrada", () => {
     expect(String(query.mock.calls[0]?.[0])).not.toContain(
       "now() - interval '1 hour'"
     );
-    expect(query.mock.calls[0]?.[1]).toEqual([30]);
+    expect(query.mock.calls[0]?.[1]).toEqual([100]);
   });
 
   it("permite abrir una postulación directa aunque su conversación sea histórica", async () => {
