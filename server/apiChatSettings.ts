@@ -169,6 +169,34 @@ export async function getApiChatWebhookSecret(pool: Pool) {
   return encryptedSecret(rows, "webhook_secret");
 }
 
+export async function getApiChatReceptionReadiness(pool: Pool | null) {
+  const configuration = await getApiChatConfiguration(pool);
+  const secrets = configuration.secrets;
+  const sendReady =
+    configuration.mode === "native"
+      ? Boolean(secrets.client_id.configured && secrets.token.configured)
+      : Boolean(secrets.account_id.configured && secrets.token.configured);
+  let webhookUrlValid = false;
+  if (configuration.webhookUrl) {
+    try {
+      const parsed = new URL(configuration.webhookUrl);
+      webhookUrlValid =
+        parsed.protocol === "https:" && !parsed.username && !parsed.password;
+    } catch {
+      webhookUrlValid = false;
+    }
+  }
+  return {
+    mode: configuration.mode,
+    sendReady,
+    receiveReady:
+      Boolean(secrets.webhook_secret.configured) && webhookUrlValid,
+    secretConfigured: Boolean(secrets.webhook_secret.configured),
+    webhookUrl: configuration.webhookUrl,
+    webhookUrlValid,
+  };
+}
+
 async function upsertSetting(
   client: PoolClient,
   key: string,

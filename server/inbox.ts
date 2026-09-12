@@ -1,6 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { ApiChatDeliveryUnknownError, sendApiChatText } from "./apichat";
+import {
+  ApiChatDeliveryUnknownError,
+  deleteApiChatMessage,
+  sendApiChatFile,
+  sendApiChatLink,
+  sendApiChatLocation,
+  sendApiChatPtt,
+  sendApiChatText,
+} from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
 import { withLangfuseObservation } from "./observability/langfuse";
 import {
@@ -14,6 +22,102 @@ export type InboxAutomationState =
   | "human"
   | "completed"
   | "error";
+
+export type InboxOutboundDraft =
+  | { type: "text"; text: string }
+  | { type: "link"; link: string; caption?: string }
+  | {
+      type: "location";
+      latitude: number;
+      longitude: number;
+      address?: string;
+    }
+  | { type: "file"; fileUrl: string; fileName?: string; caption?: string }
+  | { type: "ptt"; audioUrl: string };
+
+type InboxSendDependencies = {
+  sendText?: typeof sendApiChatText;
+  sendLink?: typeof sendApiChatLink;
+  sendLocation?: typeof sendApiChatLocation;
+  sendFile?: typeof sendApiChatFile;
+  sendPtt?: typeof sendApiChatPtt;
+  settings?: typeof getApiChatRuntimeSettings;
+};
+
+function httpsContentUrl(value: string, label: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`El ${label} no es una URL válida.`);
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+    throw new Error(
+      `El ${label} debe utilizar HTTPS y no debe incluir credenciales.`
+    );
+  }
+  return parsed.toString();
+}
+
+function validateInboxDraft(draft: InboxOutboundDraft) {
+  if (draft.type === "text") {
+    if (!draft.text.trim()) throw new Error("El mensaje está vacío.");
+    if (draft.text.length > 3_000)
+      throw new Error("El mensaje supera 3,000 caracteres.");
+    assertNoAutomatedSalaryOffer(draft.text);
+    return;
+  }
+  const caption = "caption" in draft ? draft.caption?.trim() : undefined;
+  if (caption && caption.length > 1_000)
+    throw new Error("El texto adjunto supera 1,000 caracteres.");
+  if (caption) assertNoAutomatedSalaryOffer(caption);
+  if (draft.type === "link") {
+    httpsContentUrl(draft.link, "enlace");
+    return;
+  }
+  if (draft.type === "location") {
+    if (
+      !Number.isFinite(draft.latitude) ||
+      draft.latitude < -90 ||
+      draft.latitude > 90 ||
+      !Number.isFinite(draft.longitude) ||
+      draft.longitude < -180 ||
+      draft.longitude > 180
+    ) {
+      throw new Error("La ubicación no es válida.");
+    }
+    if ((draft.address?.trim().length ?? 0) > 300)
+      throw new Error("La dirección supera 300 caracteres.");
+    return;
+  }
+  if (draft.type === "file") {
+    httpsContentUrl(draft.fileUrl, "archivo");
+    return;
+  }
+  httpsContentUrl(draft.audioUrl, "audio");
+}
+
+function inboxDraftBody(draft: InboxOutboundDraft) {
+  if (draft.type === "text") return draft.text.trim();
+  if (draft.type === "link") {
+    const caption = draft.caption?.trim();
+    return caption ? `${draft.link}\n${caption}` : draft.link;
+  }
+  if (draft.type === "location") {
+    return JSON.stringify({
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      address: draft.address?.trim() || null,
+    });
+  }
+  if (draft.type === "file") {
+    const caption = draft.caption?.trim();
+    return [draft.fileName?.trim() || draft.fileUrl, caption]
+      .filter(Boolean)
+      .join("\n");
+  }
+  return "Nota de voz";
+}
 
 function trafficLight(state: string) {
   if (state === "agent") return "verde" as const;
@@ -301,19 +405,17 @@ export async function setInboxAutomation(
   );
 }
 
-async function sendInboxTextInternal(
+async function sendInboxMessageInternal(
   pool: Pool,
-  input: { conversationId: number; text: string; actorUserId: number },
-  dependencies: {
-    sendText?: typeof sendApiChatText;
-    settings?: typeof getApiChatRuntimeSettings;
-  } = {}
+  input: {
+    conversationId: number;
+    draft: InboxOutboundDraft;
+    actorUserId: number;
+  },
+  dependencies: InboxSendDependencies = {}
 ) {
-  const text = input.text.trim();
-  if (!text) throw new Error("El mensaje está vacío.");
-  if (text.length > 3_000)
-    throw new Error("El mensaje supera 3,000 caracteres.");
-  assertNoAutomatedSalaryOffer(text);
+  validateInboxDraft(input.draft);
+  const body = inboxDraftBody(input.draft);
   const client = await pool.connect();
   let conversation: Record<string, unknown>;
   let messageId: number;
@@ -339,10 +441,11 @@ async function sendInboxTextInternal(
     const inserted = await client.query(
       `INSERT INTO conversation_messages
          (conversation_id,direction,message_type,body,message_key,delivery_status,metadata)
-       VALUES ($1,'outbound','text',$2,$3,'sending',$4::jsonb) RETURNING id`,
+       VALUES ($1,'outbound',$2,$3,$4,'sending',$5::jsonb) RETURNING id`,
       [
         conversation.id,
-        text,
+        input.draft.type,
+        body,
         messageKey,
         JSON.stringify({ actorType: "human", actorUserId: input.actorUserId }),
       ]
@@ -357,13 +460,48 @@ async function sendInboxTextInternal(
   }
   let result: Awaited<ReturnType<typeof sendApiChatText>>;
   try {
-    result = await (dependencies.sendText ?? sendApiChatText)(
-      {
-        phoneInternational: String(conversation.phone_international),
-        message: text,
-      },
-      await (dependencies.settings ?? getApiChatRuntimeSettings)(pool)
-    );
+    const settings = await (dependencies.settings ??
+      getApiChatRuntimeSettings)(pool);
+    const phone = {
+      phoneInternational: String(conversation.phone_international),
+    };
+    const draft = input.draft;
+    if (draft.type === "text") {
+      result = await (dependencies.sendText ?? sendApiChatText)(
+        { ...phone, message: draft.text },
+        settings
+      );
+    } else if (draft.type === "link") {
+      result = await (dependencies.sendLink ?? sendApiChatLink)(
+        { ...phone, link: draft.link, caption: draft.caption },
+        settings
+      );
+    } else if (draft.type === "location") {
+      result = await (dependencies.sendLocation ?? sendApiChatLocation)(
+        {
+          ...phone,
+          latitude: draft.latitude,
+          longitude: draft.longitude,
+          address: draft.address,
+        },
+        settings
+      );
+    } else if (draft.type === "file") {
+      result = await (dependencies.sendFile ?? sendApiChatFile)(
+        {
+          ...phone,
+          fileUrl: draft.fileUrl,
+          fileName: draft.fileName,
+          caption: draft.caption,
+        },
+        settings
+      );
+    } else {
+      result = await (dependencies.sendPtt ?? sendApiChatPtt)(
+        { ...phone, audioUrl: draft.audioUrl },
+        settings
+      );
+    }
   } catch (error) {
     const safeError = (
       error instanceof Error
@@ -430,13 +568,14 @@ async function sendInboxTextInternal(
   }
 }
 
-export async function sendInboxText(
+export async function sendInboxMessage(
   pool: Pool,
-  input: { conversationId: number; text: string; actorUserId: number },
-  dependencies: {
-    sendText?: typeof sendApiChatText;
-    settings?: typeof getApiChatRuntimeSettings;
-  } = {}
+  input: {
+    conversationId: number;
+    draft: InboxOutboundDraft;
+    actorUserId: number;
+  },
+  dependencies: InboxSendDependencies = {}
 ) {
   return withLangfuseObservation(
     {
@@ -447,12 +586,14 @@ export async function sendInboxText(
       userId: input.actorUserId,
       tags: ["inbox", "whatsapp", "outbound", "human"],
       metadata: {
-        operation: "send_human_text",
-        textCharacters: input.text.trim().length,
+        operation: `send_human_${input.draft.type}`,
+        ...(input.draft.type === "text"
+          ? { textCharacters: input.draft.text.trim().length }
+          : {}),
       },
     },
     async observation => {
-      const result = await sendInboxTextInternal(pool, input, dependencies);
+      const result = await sendInboxMessageInternal(pool, input, dependencies);
       observation.update({
         output: { status: "completed" },
         metadata: {
@@ -464,14 +605,123 @@ export async function sendInboxText(
   );
 }
 
-async function recordNormalizedInboundTextInternal(
+export function sendInboxText(
+  pool: Pool,
+  input: { conversationId: number; text: string; actorUserId: number },
+  dependencies: InboxSendDependencies = {}
+) {
+  return sendInboxMessage(
+    pool,
+    {
+      conversationId: input.conversationId,
+      actorUserId: input.actorUserId,
+      draft: { type: "text", text: input.text },
+    },
+    dependencies
+  );
+}
+
+export function sendInboxLink(
+  pool: Pool,
+  input: {
+    conversationId: number;
+    link: string;
+    caption?: string;
+    actorUserId: number;
+  },
+  dependencies: InboxSendDependencies = {}
+) {
+  return sendInboxMessage(
+    pool,
+    {
+      conversationId: input.conversationId,
+      actorUserId: input.actorUserId,
+      draft: { type: "link", link: input.link, caption: input.caption },
+    },
+    dependencies
+  );
+}
+
+export function sendInboxLocation(
+  pool: Pool,
+  input: {
+    conversationId: number;
+    latitude: number;
+    longitude: number;
+    address?: string;
+    actorUserId: number;
+  },
+  dependencies: InboxSendDependencies = {}
+) {
+  return sendInboxMessage(
+    pool,
+    {
+      conversationId: input.conversationId,
+      actorUserId: input.actorUserId,
+      draft: {
+        type: "location",
+        latitude: input.latitude,
+        longitude: input.longitude,
+        address: input.address,
+      },
+    },
+    dependencies
+  );
+}
+
+export function sendInboxFile(
+  pool: Pool,
+  input: {
+    conversationId: number;
+    fileUrl: string;
+    fileName?: string;
+    caption?: string;
+    actorUserId: number;
+  },
+  dependencies: InboxSendDependencies = {}
+) {
+  return sendInboxMessage(
+    pool,
+    {
+      conversationId: input.conversationId,
+      actorUserId: input.actorUserId,
+      draft: {
+        type: "file",
+        fileUrl: input.fileUrl,
+        fileName: input.fileName,
+        caption: input.caption,
+      },
+    },
+    dependencies
+  );
+}
+
+export function sendInboxPtt(
+  pool: Pool,
+  input: { conversationId: number; audioUrl: string; actorUserId: number },
+  dependencies: InboxSendDependencies = {}
+) {
+  return sendInboxMessage(
+    pool,
+    {
+      conversationId: input.conversationId,
+      actorUserId: input.actorUserId,
+      draft: { type: "ptt", audioUrl: input.audioUrl },
+    },
+    dependencies
+  );
+}
+
+async function recordNormalizedInboundEventInternal(
   pool: Pool,
   input: {
     applicationId: number;
     conversationId: number;
     providerMessageId: string;
     phoneInternational: string;
-    text: string;
+    messageType: "text" | "link" | "location";
+    body: string;
+    text?: string;
   }
 ) {
   const client = await pool.connect();
@@ -506,11 +756,12 @@ async function recordNormalizedInboundTextInternal(
     const inserted = await client.query(
       `INSERT INTO conversation_messages
          (conversation_id,direction,message_type,body,provider_message_id,message_key,delivery_status)
-       VALUES ($1,'inbound','text',$2,$3,$4,'received')
+       VALUES ($1,'inbound',$2,$3,$4,$5,'received')
        ON CONFLICT (message_key) DO NOTHING RETURNING id`,
       [
         conversationId,
-        input.text.trim(),
+        input.messageType,
+        input.body,
         input.providerMessageId.slice(0, 180),
         `apichat:${createHash("sha256")
           .update(input.providerMessageId)
@@ -525,30 +776,32 @@ async function recordNormalizedInboundTextInternal(
           WHERE id=$1`,
         [conversationId]
       );
-      const expectation = extractExplicitSalaryExpectation(
-        input.text,
-        "message"
-      );
-      if (expectation) {
-        const salaryUpdate = await client.query(
-          `UPDATE applications
-              SET salary_expectation_gtq=$1,salary_expectation_source='message',
-                  salary_expectation_captured_at=now(),updated_at=now()
-            WHERE id=$2
-              AND (salary_expectation_gtq=0 OR $1 < salary_expectation_gtq)
-            RETURNING id`,
-          [expectation.amountGtq, input.applicationId]
+      if (input.text) {
+        const expectation = extractExplicitSalaryExpectation(
+          input.text,
+          "message"
         );
-        if (salaryUpdate.rows[0]) {
-          await client.query(
-            `INSERT INTO audit_log
-               (actor_user_id,entity_type,entity_id,action,after_json)
-             VALUES (NULL,'application',$1,'agent_salary_expectation_captured',$2::jsonb)`,
-            [
-              input.applicationId,
-              JSON.stringify({ source: "message", selection: "lowest_gtq" }),
-            ]
+        if (expectation) {
+          const salaryUpdate = await client.query(
+            `UPDATE applications
+                SET salary_expectation_gtq=$1,salary_expectation_source='message',
+                    salary_expectation_captured_at=now(),updated_at=now()
+              WHERE id=$2
+                AND (salary_expectation_gtq=0 OR $1 < salary_expectation_gtq)
+              RETURNING id`,
+            [expectation.amountGtq, input.applicationId]
           );
+          if (salaryUpdate.rows[0]) {
+            await client.query(
+              `INSERT INTO audit_log
+                 (actor_user_id,entity_type,entity_id,action,after_json)
+               VALUES (NULL,'application',$1,'agent_salary_expectation_captured',$2::jsonb)`,
+              [
+                input.applicationId,
+                JSON.stringify({ source: "message", selection: "lowest_gtq" }),
+              ]
+            );
+          }
         }
       }
     }
@@ -562,15 +815,19 @@ async function recordNormalizedInboundTextInternal(
   }
 }
 
-export async function recordNormalizedInboundText(
+type InboundEventInput = {
+  applicationId: number;
+  conversationId: number;
+  providerMessageId: string;
+  phoneInternational: string;
+  messageType: "text" | "link" | "location";
+  body: string;
+  text?: string;
+};
+
+async function recordNormalizedInboundEvent(
   pool: Pool,
-  input: {
-    applicationId: number;
-    conversationId: number;
-    providerMessageId: string;
-    phoneInternational: string;
-    text: string;
-  }
+  input: InboundEventInput
 ) {
   return withLangfuseObservation(
     {
@@ -580,13 +837,13 @@ export async function recordNormalizedInboundText(
       sessionId: input.conversationId,
       tags: ["inbox", "whatsapp", "inbound"],
       metadata: {
-        operation: "record_inbound_text",
+        operation: `record_inbound_${input.messageType}`,
         destinationDigits: input.phoneInternational.replace(/\D/g, "").length,
-        textCharacters: input.text.trim().length,
+        textCharacters: input.text?.trim().length ?? 0,
       },
     },
     async observation => {
-      const result = await recordNormalizedInboundTextInternal(pool, input);
+      const result = await recordNormalizedInboundEventInternal(pool, input);
       observation.update({
         output: { status: "completed" },
         metadata: {
@@ -597,4 +854,171 @@ export async function recordNormalizedInboundText(
       return result;
     }
   );
+}
+
+export function recordNormalizedInboundText(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    conversationId: number;
+    providerMessageId: string;
+    phoneInternational: string;
+    text: string;
+  }
+) {
+  const text = input.text.trim();
+  return recordNormalizedInboundEvent(pool, {
+    ...input,
+    messageType: "text",
+    body: text,
+    text,
+  });
+}
+
+export function recordNormalizedInboundLink(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    conversationId: number;
+    providerMessageId: string;
+    phoneInternational: string;
+    link: string;
+    caption?: string;
+  }
+) {
+  const caption = input.caption?.trim();
+  return recordNormalizedInboundEvent(pool, {
+    ...input,
+    messageType: "link",
+    body: caption ? `${input.link}\n${caption}` : input.link,
+  });
+}
+
+export function recordNormalizedInboundLocation(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    conversationId: number;
+    providerMessageId: string;
+    phoneInternational: string;
+    latitude: number;
+    longitude: number;
+    address?: string;
+  }
+) {
+  return recordNormalizedInboundEvent(pool, {
+    ...input,
+    messageType: "location",
+    body: JSON.stringify({
+      latitude: input.latitude,
+      longitude: input.longitude,
+      address: input.address?.trim() || null,
+    }),
+  });
+}
+
+export async function deleteInboxMessage(
+  pool: Pool,
+  input: {
+    conversationId: number;
+    messageId: number;
+    actorUserId: number;
+    actorRole: string;
+  },
+  dependencies: {
+    deleteMessage?: typeof deleteApiChatMessage;
+    settings?: typeof getApiChatRuntimeSettings;
+  } = {}
+) {
+  const client = await pool.connect();
+  let providerTarget: {
+    phoneInternational: string;
+    providerMessageId: string;
+  } | null = null;
+  try {
+    await client.query("BEGIN");
+    const conversation = await client.query(
+      `SELECT automation_state,agent_enabled,human_takeover,application_id
+         FROM conversations WHERE id=$1 FOR UPDATE`,
+      [input.conversationId]
+    );
+    const state = conversation.rows[0];
+    if (!state) throw new Error("La conversación no existe.");
+    const humanControl = state.human_takeover && !state.agent_enabled;
+    if (!humanControl && input.actorRole !== "admin") {
+      throw new Error(
+        "El borrado de mensajes exige control humano o rol de administrador."
+      );
+    }
+    const message = await client.query(
+      `SELECT m.*,c.phone_international
+         FROM conversation_messages m
+         JOIN conversations conv ON conv.id=m.conversation_id
+         JOIN applications a ON a.id=conv.application_id
+         JOIN candidates c ON c.id=a.candidate_id
+        WHERE m.id=$1 AND m.conversation_id=$2
+        FOR UPDATE OF m`,
+      [input.messageId, input.conversationId]
+    );
+    const row = message.rows[0];
+    if (!row) throw new Error("El mensaje no existe en la conversación.");
+    if (row.direction === "outbound" && row.provider_message_id) {
+      providerTarget = {
+        phoneInternational: String(row.phone_international),
+        providerMessageId: String(row.provider_message_id),
+      };
+    }
+    await client.query(`DELETE FROM conversation_messages WHERE id=$1`, [
+      input.messageId,
+    ]);
+    await client.query(
+      `INSERT INTO audit_log
+         (actor_user_id,entity_type,entity_id,action,after_json)
+       VALUES ($1,'application',$2,'inbox_message_deleted',$3::jsonb)`,
+      [
+        input.actorUserId,
+        state.application_id,
+        JSON.stringify({
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+          direction: row.direction,
+          messageType: row.message_type,
+          providerMessageId: providerTarget?.providerMessageId ?? null,
+        }),
+      ]
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  if (providerTarget) {
+    try {
+      await (dependencies.deleteMessage ?? deleteApiChatMessage)(
+        {
+          phoneInternational: providerTarget.phoneInternational,
+          messageId: providerTarget.providerMessageId,
+        },
+        await (dependencies.settings ?? getApiChatRuntimeSettings)(pool)
+      );
+    } catch (error) {
+      const safeError = (
+        error instanceof Error
+          ? error.message
+          : "ApiChat rechazó el borrado del mensaje."
+      ).slice(0, 1_000);
+      await pool.query(
+        `INSERT INTO audit_log
+           (actor_user_id,entity_type,entity_id,action,comment)
+         VALUES ($1,'application',NULL,'inbox_message_provider_delete_failed',$2)`,
+        [
+          input.actorUserId,
+          `Mensaje local ${input.messageId} eliminado; ApiChat conserva ${providerTarget.providerMessageId}: ${safeError}`,
+        ]
+      );
+    }
+  }
+  return { success: true as const };
 }

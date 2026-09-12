@@ -58,7 +58,7 @@ No existe una espera operativa de 30 segundos: el envío se inicia desde el back
 
 El estado **Calificado por AISA** (`calificado_aisa`) no envía mensajes. El receptor entrante `POST /api/webhooks/apichat/incoming` procesa texto normalizado, exige `Authorization: Bearer <secreto>` y revalida identificador, teléfono, dirección y texto mediante `GET /v1/messages` con las credenciales cifradas. Esta consulta ocurre antes de resolver la conversación y persistir. Una discordancia responde `422`; un fallo de red o rechazo del proveedor responde `500`, sin registrar el cuerpo. Después de verificar, el receptor deduplica por `providerMessageId`. Un teléfono sin postulación se registra en `inbound_message_quarantine` solo como huellas HMAC, sin conservar número ni mensaje.
 
-El cuerpo cerrado admitido es:
+El cuerpo cerrado admitido acepta tres tipos normalizados: `text`, `link` y `location`. El workflow 04 convierte el sobre oficial y entrega cada evento con su identificador, teléfono E.164 y contenido correspondiente; los medios (audio, PDF, Word) permanecen excluidos por política hasta completar el pipeline seguro.
 
 ```json
 {
@@ -68,6 +68,8 @@ El cuerpo cerrado admitido es:
   "text": "Mensaje ficticio de una persona candidata"
 }
 ```
+
+La bandeja de entrada envía además enlaces (`/v1/sendLink`), ubicaciones (`/v1/sendLocation`), archivos por URL HTTPS (`/v1/sendFile`), notas de voz por URL HTTPS (`/v1/sendPTT`) y puede eliminar mensajes del proveedor (`/v1/deleteMessage`). Cada operación conserva el control humano, la persistencia previa, los estados de entrega, la auditoría y la observabilidad del envío de texto.
 
 Si no existe una conversación activa, el receptor responde `202` y conserva solo las huellas de cuarentena. Si encuentra más de una, responde `409`: la ambigüedad no se trata como recepción exitosa, pero el contenido tampoco es recuperable desde la cuarentena minimizada. La operación debe corregir la duplicidad antes del reintento.
 

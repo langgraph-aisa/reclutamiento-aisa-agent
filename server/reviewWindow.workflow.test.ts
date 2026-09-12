@@ -196,4 +196,66 @@ describe("workflow de revisión humana", () => {
     ).toBe("genericCredentialType");
     expect(JSON.stringify(whatsappWorkflow)).not.toContain("APICHAT_");
   });
+
+  it("normaliza también enlaces y ubicaciones sin admitir medios sin pipeline", () => {
+    const result = executeNormalizer({
+      body: {
+        messages: [
+          {
+            id: "msg.link-200",
+            number: "50255555555",
+            type: "link",
+            from_me: false,
+            chat_type: "private",
+            link: "https://aisa.com.gt/plaza",
+            text: "Mire la plaza",
+          },
+          {
+            id: "msg.loc-201",
+            number: "50255555555",
+            type: "location",
+            from_me: false,
+            latitude: "14.6",
+            longitude: "-90.5",
+            address: "Zona 10",
+          },
+          {
+            id: "msg.file-202",
+            number: "50255555555",
+            type: "file",
+            from_me: false,
+          },
+        ],
+      },
+    });
+
+    expect(result).toEqual([
+      {
+        json: {
+          events: [
+            {
+              providerMessageId: "msg.link-200",
+              phoneInternational: "+50255555555",
+              messageType: "link",
+              link: "https://aisa.com.gt/plaza",
+              caption: "Mire la plaza",
+            },
+            {
+              providerMessageId: "msg.loc-201",
+              phoneInternational: "+50255555555",
+              messageType: "location",
+              latitude: 14.6,
+              longitude: -90.5,
+              address: "Zona 10",
+            },
+          ],
+        },
+      },
+    ]);
+    const normalizer = whatsappNode("Normalizar mensajes ApiChat").parameters
+      .jsCode;
+    expect(normalizer).toContain("messageType: 'link'");
+    expect(normalizer).toContain("messageType: 'location'");
+    expect(normalizer).toContain("latitude");
+  });
 });

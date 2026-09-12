@@ -78,6 +78,29 @@ export default function Config() {
     },
     onError: error => toast.error(error.message),
   });
+  const apiChatReception = trpc.config.apiChatReception.useQuery();
+  const reception = apiChatReception.data;
+  const verifyReception = async () => {
+    const result = await apiChatReception.refetch();
+    const data = result.data;
+    if (!data) {
+      toast.error("No fue posible verificar la recepción.");
+      return;
+    }
+    if (data.receiveReady) {
+      toast.success(
+        "Recepción lista: el webhook puede autenticar los mensajes entrantes."
+      );
+    } else if (data.secretConfigured) {
+      toast.info(
+        "Recepción incompleta: configure una URL HTTPS de webhook válida."
+      );
+    } else {
+      toast.info(
+        "Recepción incompleta: configure el secreto del webhook con al menos 32 caracteres."
+      );
+    }
+  };
   const importCatalog = trpc.geo.importCatalog.useMutation();
   const catalog = trpc.geo.adminCatalog.useQuery();
   const updateItem = trpc.geo.updateItem.useMutation({
@@ -193,6 +216,22 @@ export default function Config() {
                     El backend envía directamente la solicitud de CV cuando se
                     selecciona “Solicitar CV por WhatsApp”.
                   </p>
+                </div>
+                <div className="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
+                  <Badge
+                    variant={reception?.sendReady ? "default" : "outline"}
+                    className="rounded-full"
+                  >
+                    {reception?.sendReady ? "Envío listo" : "Envío pendiente"}
+                  </Badge>
+                  <Badge
+                    variant={reception?.receiveReady ? "default" : "outline"}
+                    className="rounded-full"
+                  >
+                    {reception?.receiveReady
+                      ? "Recepción lista"
+                      : "Recepción pendiente"}
+                  </Badge>
                 </div>
               </div>
             </CardHeader>
@@ -347,6 +386,7 @@ export default function Config() {
                   onRemove={() =>
                     persistApiChatSecret("webhook_secret", null)
                   }
+                  onVerify={() => verifyReception()}
                 />
               </div>
               <div className="rounded-2xl border border-emerald-400/20 bg-secondary p-4 text-sm leading-6 text-secondary-foreground">

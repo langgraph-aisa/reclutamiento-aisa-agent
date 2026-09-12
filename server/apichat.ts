@@ -165,83 +165,82 @@ function providerErrorMessage(status: number, payload: unknown) {
   return `ApiChat rechazó el mensaje con código HTTP ${status}.`;
 }
 
-export async function sendApiChatText(
-  input: { phoneInternational: string; message: string },
-  configInput: ApiChatConfig,
-  options: { fetchImpl?: typeof fetch; timeoutMs?: number } = {}
-): Promise<ApiChatSendResult> {
-  const config = validateApiChatConfig(configInput);
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const phoneDigits = input.phoneInternational.replace(/\D/g, "");
+function officialActionUrl(config: ApiChatConfig, action: string) {
+  return new URL(`/v1/${action}`, config.endpoint).toString();
+}
+
+function outboundPhoneDigits(phoneInternational: string) {
+  const phoneDigits = phoneInternational.replace(/\D/g, "");
   if (!phoneDigits) {
     throw new Error(
       "No es posible enviar por ApiChat: el teléfono no es válido."
     );
   }
+  return phoneDigits;
+}
 
-  const headers: Record<string, string> = {
+function requireNativeMode(config: ApiChatConfig, operation: string) {
+  if (config.mode !== "native") {
+    throw new Error(
+      `La operación ${operation} exige el modo de API nativa de ApiChat.`
+    );
+  }
+}
+
+function nativeHeaders(config: ApiChatConfig) {
+  return {
     "Content-Type": "application/json",
     Accept: "application/json",
-  };
-  let body: Record<string, string>;
-  if (config.mode === "native") {
-    headers["client-id"] = config.clientId!;
-    headers.token = config.token;
-    body = { number: phoneDigits, text: input.message };
-  } else {
-    headers.Authorization = `Bearer ${config.token}`;
-    body = {
-      accountId: config.accountId!,
-      connectTo: config.connectTo!,
-      to: input.phoneInternational,
-      message: input.message,
-    };
-  }
+    "client-id": config.clientId!,
+    token: config.token,
+  } as const;
+}
 
+type ApiChatPostOptions = { fetchImpl?: typeof fetch; timeoutMs?: number };
+
+async function postApiChatAction(
+  operation: string,
+  url: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+  options: ApiChatPostOptions,
+  metadata: Record<string, unknown>
+): Promise<ApiChatSendResult> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return withLangfuseObservation(
     {
-      name: "apichat.text.send",
+      name: `apichat.${operation}.send`,
       asType: "tool",
       traceName: "apichat-outbound",
       tags: ["apichat", "whatsapp", "outbound"],
       metadata: {
         provider: "apichat",
-        operation: "send_text",
-        mode: config.mode,
-        destinationDigits: phoneDigits.length,
-        textCharacters: input.message.length,
-        timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        operation: `send_${operation}`,
+        timeoutMs,
+        ...metadata,
       },
     },
     async observation => {
       let response: Response;
       try {
-        response = await fetchImpl(config.endpoint, {
+        response = await fetchImpl(url, {
           method: "POST",
           headers,
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+          signal: AbortSignal.timeout(timeoutMs),
         });
       } catch (error) {
-        observation.update({
-          metadata: {
-            outcome:
-              error instanceof Error &&
-              (error.name === "TimeoutError" || error.name === "AbortError")
-                ? "timeout"
-                : "delivery_unknown",
-          },
-        });
-        if (
+        const timedOut =
           error instanceof Error &&
-          (error.name === "TimeoutError" || error.name === "AbortError")
-        ) {
-          throw new ApiChatDeliveryUnknownError(
-            "ApiChat no respondió dentro del tiempo permitido; verifique la conversación antes de reintentar."
-          );
-        }
+          (error.name === "TimeoutError" || error.name === "AbortError");
+        observation.update({
+          metadata: { outcome: timedOut ? "timeout" : "delivery_unknown" },
+        });
         throw new ApiChatDeliveryUnknownError(
-          "No fue posible confirmar la entrega con ApiChat; verifique la conversación antes de reintentar."
+          timedOut
+            ? "ApiChat no respondió dentro del tiempo permitido; verifique la conversación antes de reintentar."
+            : "No fue posible confirmar la entrega con ApiChat; verifique la conversación antes de reintentar."
         );
       }
 
@@ -284,14 +283,208 @@ export async function sendApiChatText(
   );
 }
 
-export async function verifyApiChatInboundText(
+export async function sendApiChatText(
+  input: { phoneInternational: string; message: string },
+  configInput: ApiChatConfig,
+  options: ApiChatPostOptions = {}
+): Promise<ApiChatSendResult> {
+  const config = validateApiChatConfig(configInput);
+  const phoneDigits = outboundPhoneDigits(input.phoneInternational);
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  let body: Record<string, unknown>;
+  let url: string;
+  if (config.mode === "native") {
+    headers["client-id"] = config.clientId!;
+    headers.token = config.token;
+    body = { number: phoneDigits, text: input.message };
+    url = officialActionUrl(config, "sendText");
+  } else {
+    headers.Authorization = `Bearer ${config.token}`;
+    body = {
+      accountId: config.accountId!,
+      connectTo: config.connectTo!,
+      to: input.phoneInternational,
+      message: input.message,
+    };
+    url = config.endpoint;
+  }
+  return postApiChatAction("text", url, headers, body, options, {
+    mode: config.mode,
+    destinationDigits: phoneDigits.length,
+    textCharacters: input.message.length,
+  });
+}
+
+export async function sendApiChatLink(
+  input: {
+    phoneInternational: string;
+    link: string;
+    caption?: string;
+  },
+  configInput: ApiChatConfig,
+  options: ApiChatPostOptions = {}
+): Promise<ApiChatSendResult> {
+  const config = validateApiChatConfig(configInput);
+  requireNativeMode(config, "sendLink");
+  const phoneDigits = outboundPhoneDigits(input.phoneInternational);
+  const link = secureUrl(input.link, "el enlace").toString();
+  const caption = input.caption?.trim();
+  const body: Record<string, unknown> = { number: phoneDigits, link };
+  if (caption) body.caption = caption;
+  return postApiChatAction(
+    "link",
+    officialActionUrl(config, "sendLink"),
+    nativeHeaders(config),
+    body,
+    options,
+    {
+      mode: config.mode,
+      destinationDigits: phoneDigits.length,
+      captionCharacters: caption?.length ?? 0,
+    }
+  );
+}
+
+export async function sendApiChatLocation(
+  input: {
+    phoneInternational: string;
+    latitude: number;
+    longitude: number;
+    address?: string;
+  },
+  configInput: ApiChatConfig,
+  options: ApiChatPostOptions = {}
+): Promise<ApiChatSendResult> {
+  const config = validateApiChatConfig(configInput);
+  requireNativeMode(config, "sendLocation");
+  const phoneDigits = outboundPhoneDigits(input.phoneInternational);
+  if (
+    !Number.isFinite(input.latitude) ||
+    input.latitude < -90 ||
+    input.latitude > 90 ||
+    !Number.isFinite(input.longitude) ||
+    input.longitude < -180 ||
+    input.longitude > 180
+  ) {
+    throw new Error("La ubicación de ApiChat no es válida.");
+  }
+  const address = input.address?.trim();
+  const body: Record<string, unknown> = {
+    number: phoneDigits,
+    latitude: input.latitude,
+    longitude: input.longitude,
+  };
+  if (address) body.address = address;
+  return postApiChatAction(
+    "location",
+    officialActionUrl(config, "sendLocation"),
+    nativeHeaders(config),
+    body,
+    options,
+    {
+      mode: config.mode,
+      destinationDigits: phoneDigits.length,
+    }
+  );
+}
+
+export async function sendApiChatFile(
+  input: {
+    phoneInternational: string;
+    fileUrl: string;
+    fileName?: string;
+    caption?: string;
+  },
+  configInput: ApiChatConfig,
+  options: ApiChatPostOptions = {}
+): Promise<ApiChatSendResult> {
+  const config = validateApiChatConfig(configInput);
+  requireNativeMode(config, "sendFile");
+  const phoneDigits = outboundPhoneDigits(input.phoneInternational);
+  const file = secureUrl(input.fileUrl, "el archivo").toString();
+  const fileName = input.fileName?.trim().slice(0, 260);
+  const caption = input.caption?.trim();
+  const body: Record<string, unknown> = { number: phoneDigits, file };
+  if (fileName) body.name = fileName;
+  if (caption) body.caption = caption;
+  return postApiChatAction(
+    "file",
+    officialActionUrl(config, "sendFile"),
+    nativeHeaders(config),
+    body,
+    options,
+    {
+      mode: config.mode,
+      destinationDigits: phoneDigits.length,
+      fileBytesHint: null,
+    }
+  );
+}
+
+export async function sendApiChatPtt(
+  input: { phoneInternational: string; audioUrl: string },
+  configInput: ApiChatConfig,
+  options: ApiChatPostOptions = {}
+): Promise<ApiChatSendResult> {
+  const config = validateApiChatConfig(configInput);
+  requireNativeMode(config, "sendPTT");
+  const phoneDigits = outboundPhoneDigits(input.phoneInternational);
+  const audio = secureUrl(input.audioUrl, "el audio").toString();
+  const body: Record<string, unknown> = { number: phoneDigits, ptt: audio };
+  return postApiChatAction(
+    "ptt",
+    officialActionUrl(config, "sendPTT"),
+    nativeHeaders(config),
+    body,
+    options,
+    {
+      mode: config.mode,
+      destinationDigits: phoneDigits.length,
+    }
+  );
+}
+
+export async function deleteApiChatMessage(
+  input: { phoneInternational: string; messageId: string },
+  configInput: ApiChatConfig,
+  options: ApiChatPostOptions = {}
+): Promise<ApiChatSendResult> {
+  const config = validateApiChatConfig(configInput);
+  requireNativeMode(config, "deleteMessage");
+  const phoneDigits = outboundPhoneDigits(input.phoneInternational);
+  const messageId = input.messageId.trim().slice(0, 180);
+  if (!messageId) {
+    throw new Error("El identificador del mensaje de ApiChat no es válido.");
+  }
+  const body: Record<string, unknown> = { number: phoneDigits, messageId };
+  return postApiChatAction(
+    "delete_message",
+    officialActionUrl(config, "deleteMessage"),
+    nativeHeaders(config),
+    body,
+    options,
+    {
+      mode: config.mode,
+      destinationDigits: phoneDigits.length,
+      targetMessageId: messageId,
+    }
+  );
+}
+
+type ApiChatVerifyOptions = { fetchImpl?: typeof fetch; timeoutMs?: number };
+
+async function verifyApiChatInboundEvent(
+  operation: string,
   input: {
     providerMessageId: string;
     phoneInternational: string;
-    text: string;
   },
+  matchesEvent: (message: Record<string, unknown>) => boolean,
   configInput: ApiChatConfig,
-  options: { fetchImpl?: typeof fetch; timeoutMs?: number } = {}
+  options: ApiChatVerifyOptions = {}
 ) {
   const config = validateApiChatConfig(configInput);
   if (config.mode !== "native") {
@@ -304,19 +497,19 @@ export async function verifyApiChatInboundText(
   url.searchParams.set("number", input.phoneInternational.replace(/\D/g, ""));
   url.searchParams.set("fromMe", "false");
   url.searchParams.set("limit", "1");
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return withLangfuseObservation(
     {
-      name: "apichat.text.verify_inbound",
+      name: `apichat.${operation}.verify_inbound`,
       asType: "tool",
       traceName: "apichat-inbound-verification",
       tags: ["apichat", "whatsapp", "inbound"],
       metadata: {
         provider: "apichat",
-        operation: "verify_inbound_text",
+        operation: `verify_inbound_${operation}`,
         mode: config.mode,
         destinationDigits: input.phoneInternational.replace(/\D/g, "").length,
-        textCharacters: input.text.length,
-        timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+        timeoutMs,
       },
     },
     async observation => {
@@ -329,7 +522,7 @@ export async function verifyApiChatInboundText(
             "client-id": config.clientId!,
             token: config.token,
           },
-          signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+          signal: AbortSignal.timeout(timeoutMs),
         });
       } catch {
         observation.update({
@@ -371,13 +564,14 @@ export async function verifyApiChatInboundText(
             ? (container.message as Record<string, unknown>)
             : container;
         const fromMe = message.from_me ?? container.from_me;
-        return (
-          String(message.id ?? "") === input.providerMessageId &&
-          String(message.type ?? "") === "text" &&
-          fromMe === false &&
-          String(message.number ?? "").replace(/\D/g, "") === expectedPhone &&
-          String(message.text ?? "").trim() === input.text.trim()
-        );
+        if (
+          String(message.id ?? "") !== input.providerMessageId ||
+          fromMe !== false ||
+          String(message.number ?? "").replace(/\D/g, "") !== expectedPhone
+        ) {
+          return false;
+        }
+        return matchesEvent(message);
       });
       observation.update({
         output: { status: "completed" },
@@ -389,5 +583,76 @@ export async function verifyApiChatInboundText(
       });
       return verified;
     }
+  );
+}
+
+export function verifyApiChatInboundText(
+  input: {
+    providerMessageId: string;
+    phoneInternational: string;
+    text: string;
+  },
+  configInput: ApiChatConfig,
+  options: ApiChatVerifyOptions = {}
+) {
+  return verifyApiChatInboundEvent(
+    "text",
+    input,
+    message =>
+      String(message.type ?? "") === "text" &&
+      String(message.text ?? "").trim() === input.text.trim(),
+    configInput,
+    options
+  );
+}
+
+export function verifyApiChatInboundLink(
+  input: {
+    providerMessageId: string;
+    phoneInternational: string;
+    link: string;
+  },
+  configInput: ApiChatConfig,
+  options: ApiChatVerifyOptions = {}
+) {
+  return verifyApiChatInboundEvent(
+    "link",
+    input,
+    message =>
+      String(message.type ?? "") === "link" &&
+      String(message.link ?? "").trim() === input.link.trim(),
+    configInput,
+    options
+  );
+}
+
+export function verifyApiChatInboundLocation(
+  input: {
+    providerMessageId: string;
+    phoneInternational: string;
+    latitude: number;
+    longitude: number;
+  },
+  configInput: ApiChatConfig,
+  options: ApiChatVerifyOptions = {}
+) {
+  const withinTolerance = (actual: unknown, expected: number) =>
+    Number.isFinite(Number(actual)) &&
+    Math.abs(Number(actual) - expected) < 0.0001;
+  return verifyApiChatInboundEvent(
+    "location",
+    input,
+    message =>
+      String(message.type ?? "") === "location" &&
+      withinTolerance(
+        (message as Record<string, unknown>).latitude,
+        input.latitude
+      ) &&
+      withinTolerance(
+        (message as Record<string, unknown>).longitude,
+        input.longitude
+      ),
+    configInput,
+    options
   );
 }

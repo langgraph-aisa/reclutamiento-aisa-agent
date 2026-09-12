@@ -2,13 +2,21 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import express, { type Express, type RequestHandler } from "express";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { verifyApiChatInboundText } from "./apichat";
+import {
+  verifyApiChatInboundLink,
+  verifyApiChatInboundLocation,
+  verifyApiChatInboundText,
+} from "./apichat";
 import {
   getApiChatRuntimeSettings,
   getApiChatWebhookSecret,
 } from "./apiChatSettings";
 import { getPool } from "./db";
-import { recordNormalizedInboundText } from "./inbox";
+import {
+  recordNormalizedInboundLink,
+  recordNormalizedInboundLocation,
+  recordNormalizedInboundText,
+} from "./inbox";
 import { withLangfuseObservation } from "./observability/langfuse";
 
 export const APICHAT_NORMALIZED_WEBHOOK_PATH = "/api/webhooks/apichat/incoming";
@@ -22,21 +30,87 @@ const providerMessageId = z
     message: "providerMessageId contiene caracteres no admitidos.",
   });
 
-export const NormalizedInboundTextSchema = z
-  .object({
-    providerMessageId,
-    phoneInternational: z
-      .string()
-      .trim()
-      .regex(/^\+[1-9]\d{7,14}$/, {
-        message: "phoneInternational debe utilizar el formato E.164.",
-      }),
-    messageType: z.literal("text"),
-    text: z.string().trim().min(1).max(10_000),
-  })
-  .strict();
+const phoneInternational = z
+  .string()
+  .trim()
+  .regex(/^\+[1-9]\d{7,14}$/, {
+    message: "phoneInternational debe utilizar el formato E.164.",
+  });
 
-export type NormalizedInboundText = z.infer<typeof NormalizedInboundTextSchema>;
+const secureHttpsUrl = z
+  .string()
+  .trim()
+  .max(2_000)
+  .refine(value => {
+    try {
+      const parsed = new URL(value);
+      return (
+        parsed.protocol === "https:" && !parsed.username && !parsed.password
+      );
+    } catch {
+      return false;
+    }
+  }, "El enlace debe utilizar HTTPS y no debe incluir credenciales.");
+
+export const NormalizedInboundTextSchema = z.discriminatedUnion(
+  "messageType",
+  [
+    z
+      .object({
+        providerMessageId,
+        phoneInternational,
+        messageType: z.literal("text"),
+        text: z.string().trim().min(1).max(10_000),
+      })
+      .strict(),
+    z
+      .object({
+        providerMessageId,
+        phoneInternational,
+        messageType: z.literal("link"),
+        link: secureHttpsUrl,
+        caption: z.string().trim().max(1_000).optional(),
+      })
+      .strict(),
+    z
+      .object({
+        providerMessageId,
+        phoneInternational,
+        messageType: z.literal("location"),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        address: z.string().trim().max(300).optional(),
+      })
+      .strict(),
+  ]
+);
+
+export const NormalizedInboundEventSchema = NormalizedInboundTextSchema;
+
+export type NormalizedInboundEvent = z.infer<
+  typeof NormalizedInboundTextSchema
+>;
+
+export type NormalizedInboundText = Extract<
+  NormalizedInboundEvent,
+  { messageType: "text" }
+>;
+
+export type InboundRecordInput = {
+  applicationId: number;
+  conversationId: number;
+  providerMessageId: string;
+  phoneInternational: string;
+} & (
+  | { messageType: "text"; text: string }
+  | { messageType: "link"; link: string; caption?: string }
+  | {
+      messageType: "location";
+      latitude: number;
+      longitude: number;
+      address?: string;
+    }
+);
 
 export type InboundConversationResolution =
   | {
@@ -183,17 +257,11 @@ type WebhookDependencies = {
   ) => Promise<InboundConversationResolution>;
   verifyProvider: (
     pool: WebhookPool,
-    event: NormalizedInboundText
+    event: NormalizedInboundEvent
   ) => Promise<boolean>;
   recordInbound: (
     pool: WebhookPool,
-    input: {
-      applicationId: number;
-      conversationId: number;
-      providerMessageId: string;
-      phoneInternational: string;
-      text: string;
-    }
+    input: InboundRecordInput
   ) => Promise<{ inserted: boolean; conversationId: number }>;
   quarantineUnknown: (
     pool: WebhookPool,
@@ -206,17 +274,82 @@ type WebhookDependencies = {
   ) => Promise<{ quarantineId: number | null }>;
 };
 
+async function verifyProviderDefault(
+  pool: WebhookPool,
+  event: NormalizedInboundEvent
+) {
+  const settings = await getApiChatRuntimeSettings(pool as Pool);
+  if (event.messageType === "link") {
+    return verifyApiChatInboundLink(
+      {
+        providerMessageId: event.providerMessageId,
+        phoneInternational: event.phoneInternational,
+        link: event.link,
+      },
+      settings
+    );
+  }
+  if (event.messageType === "location") {
+    return verifyApiChatInboundLocation(
+      {
+        providerMessageId: event.providerMessageId,
+        phoneInternational: event.phoneInternational,
+        latitude: event.latitude,
+        longitude: event.longitude,
+      },
+      settings
+    );
+  }
+  return verifyApiChatInboundText(
+    {
+      providerMessageId: event.providerMessageId,
+      phoneInternational: event.phoneInternational,
+      text: event.text,
+    },
+    settings
+  );
+}
+
+function recordInboundDefault(
+  pool: WebhookPool,
+  input: InboundRecordInput
+) {
+  if (input.messageType === "link") {
+    return recordNormalizedInboundLink(pool as Pool, {
+      applicationId: input.applicationId,
+      conversationId: input.conversationId,
+      providerMessageId: input.providerMessageId,
+      phoneInternational: input.phoneInternational,
+      link: input.link,
+      caption: input.caption,
+    });
+  }
+  if (input.messageType === "location") {
+    return recordNormalizedInboundLocation(pool as Pool, {
+      applicationId: input.applicationId,
+      conversationId: input.conversationId,
+      providerMessageId: input.providerMessageId,
+      phoneInternational: input.phoneInternational,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      address: input.address,
+    });
+  }
+  return recordNormalizedInboundText(pool as Pool, {
+    applicationId: input.applicationId,
+    conversationId: input.conversationId,
+    providerMessageId: input.providerMessageId,
+    phoneInternational: input.phoneInternational,
+    text: input.text,
+  });
+}
+
 const defaultDependencies: WebhookDependencies = {
   pool: getPool,
   secret: pool => getApiChatWebhookSecret(pool as Pool),
-  verifyProvider: async (pool, event) =>
-    verifyApiChatInboundText(
-      event,
-      await getApiChatRuntimeSettings(pool as Pool)
-    ),
+  verifyProvider: verifyProviderDefault,
   resolveConversation: resolveInboundConversation,
-  recordInbound: (pool, input) =>
-    recordNormalizedInboundText(pool as Pool, input),
+  recordInbound: recordInboundDefault,
   quarantineUnknown: quarantineUnknownInboundText,
 };
 
@@ -277,7 +410,7 @@ export function createApiChatInboundWebhookHandler(
             });
             response.status(400).json({
               accepted: false,
-              error: "El evento normalizado de texto no es válido.",
+              error: "El evento normalizado de la bandeja no es válido.",
             });
             return;
           }
@@ -342,7 +475,16 @@ export function createApiChatInboundWebhookHandler(
             conversationId: resolution.conversationId,
             providerMessageId: event.providerMessageId,
             phoneInternational: event.phoneInternational,
-            text: event.text,
+            ...(event.messageType === "text"
+              ? { messageType: "text" as const, text: event.text }
+              : event.messageType === "link"
+                ? { messageType: "link" as const, link: event.link, caption: event.caption }
+                : {
+                    messageType: "location" as const,
+                    latitude: event.latitude,
+                    longitude: event.longitude,
+                    address: event.address,
+                  }),
           });
           const statusCode = recorded.inserted ? 201 : 200;
           observation.update({

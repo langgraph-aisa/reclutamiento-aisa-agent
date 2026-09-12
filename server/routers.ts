@@ -56,6 +56,7 @@ import { initializeLangfuseFromDatabase } from "./observability/langfuse";
 import {
   APICHAT_SECRET_KEYS,
   getApiChatConfiguration,
+  getApiChatReceptionReadiness,
   saveApiChatPreferences,
   saveApiChatSecret,
   verifyApiChatConnection,
@@ -80,8 +81,13 @@ import {
   recordAdminActivity,
 } from "./activityAudit";
 import {
+  deleteInboxMessage,
   inboxDetail,
   listInbox,
+  sendInboxFile,
+  sendInboxLink,
+  sendInboxLocation,
+  sendInboxPtt,
   sendInboxText,
   setInboxAutomation,
 } from "./inbox";
@@ -2013,6 +2019,127 @@ export const appRouter = router({
           });
         }
       }),
+    sendLink: roleProcedure
+      .input(
+        z.object({
+          conversationId: z.number().int().positive(),
+          link: z.string().url().max(2_000),
+          caption: z.string().trim().max(1_000).optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await sendInboxLink(await requirePool(), {
+            ...input,
+            actorUserId: ctx.user.id,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible enviar el enlace."
+            ),
+          });
+        }
+      }),
+    sendLocation: roleProcedure
+      .input(
+        z.object({
+          conversationId: z.number().int().positive(),
+          latitude: z.number().min(-90).max(90),
+          longitude: z.number().min(-180).max(180),
+          address: z.string().trim().max(300).optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await sendInboxLocation(await requirePool(), {
+            ...input,
+            actorUserId: ctx.user.id,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible enviar la ubicación."
+            ),
+          });
+        }
+      }),
+    sendFile: roleProcedure
+      .input(
+        z.object({
+          conversationId: z.number().int().positive(),
+          fileUrl: z.string().url().max(2_000),
+          fileName: z.string().trim().max(260).optional(),
+          caption: z.string().trim().max(1_000).optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await sendInboxFile(await requirePool(), {
+            ...input,
+            actorUserId: ctx.user.id,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible enviar el archivo."
+            ),
+          });
+        }
+      }),
+    sendPtt: roleProcedure
+      .input(
+        z.object({
+          conversationId: z.number().int().positive(),
+          audioUrl: z.string().url().max(2_000),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await sendInboxPtt(await requirePool(), {
+            ...input,
+            actorUserId: ctx.user.id,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible enviar la nota de voz."
+            ),
+          });
+        }
+      }),
+    deleteMessage: roleProcedure
+      .input(
+        z.object({
+          conversationId: z.number().int().positive(),
+          messageId: z.number().int().positive(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await deleteInboxMessage(await requirePool(), {
+            ...input,
+            actorUserId: ctx.user.id,
+            actorRole: ctx.user.role,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible eliminar el mensaje."
+            ),
+          });
+        }
+      }),
   }),
 
   assessments: router({
@@ -3921,6 +4048,9 @@ export const appRouter = router({
       }),
     apiChatConfiguration: adminProcedure.query(async () => {
       return getApiChatConfiguration(await getPool());
+    }),
+    apiChatReception: adminProcedure.query(async () => {
+      return getApiChatReceptionReadiness(await getPool());
     }),
     saveApiChatPreferences: adminProcedure
       .input(

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getApiChatConfiguration,
+  getApiChatReceptionReadiness,
   getApiChatRuntimeSettings,
   getApiChatWebhookSecret,
   saveApiChatPreferences,
@@ -171,5 +172,71 @@ describe("ApiChat credential vault", () => {
         }),
       })
     );
+  });
+});
+
+describe("preparación de envío y recepción", () => {
+  it("reporta listo únicamente con credenciales y webhook HTTPS completos", async () => {
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "test-key-material-with-more-than-thirty-two-characters"
+    );
+    const { pool, stored } = memoryPool();
+
+    const pending = await getApiChatReceptionReadiness(pool as never);
+    expect(pending.sendReady).toBe(false);
+    expect(pending.receiveReady).toBe(false);
+
+    stored.set("api_mode", {
+      setting_key: "api_mode",
+      setting_value: "native",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    stored.set("api_endpoint", {
+      setting_key: "api_endpoint",
+      setting_value: "https://api.apichat.io/v1/sendText",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    stored.set("connect_to", {
+      setting_key: "connect_to",
+      setting_value: "apichat.io",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    stored.set("webhook_url", {
+      setting_key: "webhook_url",
+      setting_value: "https://automation.example.test/webhook/apichat/incoming",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    await saveApiChatSecret(pool as never, "client_id", "client-safe-3210", 7);
+    await saveApiChatSecret(pool as never, "token", "token-safe-9876", 7);
+
+    const sendOnly = await getApiChatReceptionReadiness(pool as never);
+    expect(sendOnly.sendReady).toBe(true);
+    expect(sendOnly.receiveReady).toBe(false);
+    expect(sendOnly.secretConfigured).toBe(false);
+
+    await saveApiChatSecret(
+      pool as never,
+      "webhook_secret",
+      "webhook-safe-2468",
+      7
+    );
+    const ready = await getApiChatReceptionReadiness(pool as never);
+    expect(ready.sendReady).toBe(true);
+    expect(ready.receiveReady).toBe(true);
+
+    stored.set("webhook_url", {
+      setting_key: "webhook_url",
+      setting_value: "http://inseguro.example.test/webhook",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    const insecure = await getApiChatReceptionReadiness(pool as never);
+    expect(insecure.receiveReady).toBe(false);
+    expect(insecure.webhookUrlValid).toBe(false);
   });
 });

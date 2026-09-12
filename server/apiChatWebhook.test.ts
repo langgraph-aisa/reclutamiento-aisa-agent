@@ -8,7 +8,7 @@ import {
   quarantineUnknownInboundText,
   resolveInboundConversation,
 } from "./apiChatWebhook";
-import { recordNormalizedInboundText } from "./inbox";
+import { recordNormalizedInboundLink, recordNormalizedInboundText } from "./inbox";
 
 async function executeWebhook(
   overrides: Parameters<typeof createApiChatInboundWebhookHandler>[0],
@@ -331,7 +331,9 @@ describe("persistencia minimizada e idempotente", () => {
     const insert = calls.find(([sql]) =>
       sql.includes("INSERT INTO conversation_messages")
     );
-    expect(String(insert?.[1]?.[3])).toMatch(/^apichat:[a-f0-9]{64}$/);
+    expect(String(insert?.[1]?.[4])).toMatch(/^apichat:[a-f0-9]{64}$/);
+    expect(String(insert?.[0])).toContain("'inbound'");
+    expect(String(insert?.[0])).toContain("message_type");
   });
 
   it("no adelanta timestamps cuando el proveedor reintenta el mismo mensaje", async () => {
@@ -451,5 +453,154 @@ describe("persistencia minimizada e idempotente", () => {
     expect(table).not.toMatch(/\bbody\b|\btext\b|phone_international/i);
     expect(table).toContain("phone_fingerprint");
     expect(table).toContain("provider_message_hash");
+  });
+});
+
+describe("eventos normalizados de enlace y ubicación", () => {
+  it("acepta un enlace verificado y lo entrega al registro", async () => {
+    const recordInbound = vi.fn(async () => ({
+      inserted: true,
+      conversationId: 12,
+    }));
+    const response = await executeWebhook(
+      {
+        pool: vi.fn(async () => ({ query: vi.fn() }) as never),
+        secret: vi.fn(async () => "secreto-webhook"),
+        resolveConversation: vi.fn(async () => ({
+          kind: "resolved",
+          applicationId: 41,
+          conversationId: 12,
+        })),
+        recordInbound,
+      },
+      {
+        providerMessageId: "normalized.msg-200",
+        phoneInternational: "+50255555555",
+        messageType: "link",
+        link: "https://aisa.com.gt/plaza",
+        caption: "Disponible",
+      }
+    );
+    expect(response.statusCode).toBe(201);
+    expect(recordInbound).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        messageType: "link",
+        link: "https://aisa.com.gt/plaza",
+        caption: "Disponible",
+      })
+    );
+  });
+
+  it("acepta una ubicación dentro de rangos válidos", async () => {
+    const recordInbound = vi.fn(async () => ({
+      inserted: true,
+      conversationId: 12,
+    }));
+    const response = await executeWebhook(
+      {
+        pool: vi.fn(async () => ({ query: vi.fn() }) as never),
+        secret: vi.fn(async () => "secreto-webhook"),
+        resolveConversation: vi.fn(async () => ({
+          kind: "resolved",
+          applicationId: 41,
+          conversationId: 12,
+        })),
+        recordInbound,
+      },
+      {
+        providerMessageId: "normalized.msg-201",
+        phoneInternational: "+50255555555",
+        messageType: "location",
+        latitude: 14.6,
+        longitude: -90.5,
+        address: "Zona 10",
+      }
+    );
+    expect(response.statusCode).toBe(201);
+    expect(recordInbound).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        messageType: "location",
+        latitude: 14.6,
+        longitude: -90.5,
+      })
+    );
+  });
+
+  it("rechaza tipos no admitidos y coordenadas o enlaces inseguros", async () => {
+    const response = await executeWebhook(
+      {
+        pool: vi.fn(async () => ({ query: vi.fn() }) as never),
+        secret: vi.fn(async () => "secreto-webhook"),
+      },
+      {
+        ...validEvent,
+        messageType: "audio",
+        audioUrl: "https://example.test/audio.ogg",
+      }
+    );
+    expect(response.statusCode).toBe(400);
+
+    expect(
+      NormalizedInboundTextSchema.safeParse({
+        providerMessageId: "normalized.msg-202",
+        phoneInternational: "+50255555555",
+        messageType: "location",
+        latitude: 95,
+        longitude: 0,
+      }).success
+    ).toBe(false);
+    expect(
+      NormalizedInboundTextSchema.safeParse({
+        providerMessageId: "normalized.msg-203",
+        phoneInternational: "+50255555555",
+        messageType: "link",
+        link: "http://inseguro.example.test",
+      }).success
+    ).toBe(false);
+    expect(
+      NormalizedInboundTextSchema.safeParse({
+        providerMessageId: "normalized.msg-204",
+        phoneInternational: "+50255555555",
+        messageType: "file",
+        mediaUrl: "https://example.test/documento.pdf",
+      }).success
+    ).toBe(false);
+  });
+
+  it("persiste un enlace entrante con tipo y cuerpo correspondientes", async () => {
+    const calls: Array<[string, unknown[] | undefined]> = [];
+    const query = vi.fn(async (sql: string, parameters?: unknown[]) => {
+      calls.push([sql, parameters]);
+      if (sql.includes("SELECT a.id AS application_id")) {
+        return { rows: [{ conversation_id: 12, application_id: 41 }] };
+      }
+      if (sql.includes("INSERT INTO conversation_messages")) {
+        return { rows: [{ id: 92 }] };
+      }
+      return { rows: [] };
+    });
+    const pool = {
+      connect: vi.fn(async () => ({ query, release: vi.fn() })),
+    };
+
+    const result = await recordNormalizedInboundLink(pool as never, {
+      applicationId: 41,
+      conversationId: 12,
+      providerMessageId: validEvent.providerMessageId,
+      phoneInternational: validEvent.phoneInternational,
+      link: "https://aisa.com.gt/plaza",
+      caption: "Disponible",
+    });
+
+    expect(result).toEqual({ inserted: true, conversationId: 12 });
+    const insert = calls.find(([sql]) =>
+      sql.includes("INSERT INTO conversation_messages")
+    );
+    expect(String(insert?.[1]?.[1])).toBe("link");
+    expect(String(insert?.[1]?.[2])).toBe(
+      "https://aisa.com.gt/plaza\nDisponible"
+    );
   });
 });

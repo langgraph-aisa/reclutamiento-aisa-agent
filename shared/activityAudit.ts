@@ -97,6 +97,8 @@ const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   jarvi_responsible_assigned: "responsable asignado",
   inbox_human_takeover: "control transferido",
   inbox_agent_resumed: "agente reanudado",
+  inbox_message_deleted: "mensaje de bandeja eliminado",
+  inbox_message_provider_delete_failed: "borrado del proveedor pendiente",
   agent_salary_expectation_captured: "expectativa salarial registrada",
   public_copy_editorially_normalized: "texto normalizado",
 };

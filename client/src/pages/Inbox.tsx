@@ -3,10 +3,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
-import { Bot, CheckCircle2, FileText, MessageCircle, Search, Send, ShieldAlert, UserRound, Volume2 } from "lucide-react";
+import { Bot, CheckCircle2, FileText, Link2, MapPin, MessageCircle, Search, Send, ShieldAlert, Trash2, UserRound, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -71,6 +80,109 @@ export default function Inbox() {
     },
     onError: error => toast.error(error.message),
   });
+  const refreshAfterSend = async () => {
+    await Promise.all([detail.refetch(), conversations.refetch()]);
+  };
+  const sendLink = trpc.inbox.sendLink.useMutation({
+    onSuccess: async () => {
+      closeQuickAction();
+      await refreshAfterSend();
+      toast.success("Enlace enviado");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const sendLocation = trpc.inbox.sendLocation.useMutation({
+    onSuccess: async () => {
+      closeQuickAction();
+      await refreshAfterSend();
+      toast.success("Ubicación enviada");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const sendFile = trpc.inbox.sendFile.useMutation({
+    onSuccess: async () => {
+      closeQuickAction();
+      await refreshAfterSend();
+      toast.success("Archivo enviado");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const sendPtt = trpc.inbox.sendPtt.useMutation({
+    onSuccess: async () => {
+      closeQuickAction();
+      await refreshAfterSend();
+      toast.success("Nota de voz enviada");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const removeMessage = trpc.inbox.deleteMessage.useMutation({
+    onSuccess: async () => {
+      await refreshAfterSend();
+      toast.success("Mensaje eliminado con trazabilidad registrada");
+    },
+    onError: error => toast.error(error.message),
+  });
+
+  const [quickKind, setQuickKind] = useState<
+    "link" | "location" | "file" | "ptt" | null
+  >(null);
+  const [quickLink, setQuickLink] = useState("");
+  const [quickCaption, setQuickCaption] = useState("");
+  const [quickLatitude, setQuickLatitude] = useState("");
+  const [quickLongitude, setQuickLongitude] = useState("");
+  const [quickAddress, setQuickAddress] = useState("");
+  const [quickFileUrl, setQuickFileUrl] = useState("");
+  const [quickFileName, setQuickFileName] = useState("");
+  const [quickAudioUrl, setQuickAudioUrl] = useState("");
+
+  const openQuickAction = (kind: "link" | "location" | "file" | "ptt") => {
+    setQuickKind(kind);
+    setQuickLink("");
+    setQuickCaption("");
+    setQuickLatitude("");
+    setQuickLongitude("");
+    setQuickAddress("");
+    setQuickFileUrl("");
+    setQuickFileName("");
+    setQuickAudioUrl("");
+  };
+
+  function closeQuickAction() {
+    setQuickKind(null);
+  }
+
+  const submitQuickAction = () => {
+    if (!selectedId) return;
+    if (quickKind === "link") {
+      sendLink.mutate({
+        conversationId: selectedId,
+        link: quickLink,
+        caption: quickCaption.trim() || undefined,
+      });
+    } else if (quickKind === "location") {
+      sendLocation.mutate({
+        conversationId: selectedId,
+        latitude: Number(quickLatitude),
+        longitude: Number(quickLongitude),
+        address: quickAddress.trim() || undefined,
+      });
+    } else if (quickKind === "file") {
+      sendFile.mutate({
+        conversationId: selectedId,
+        fileUrl: quickFileUrl,
+        fileName: quickFileName.trim() || undefined,
+        caption: quickCaption.trim() || undefined,
+      });
+    } else if (quickKind === "ptt") {
+      sendPtt.mutate({ conversationId: selectedId, audioUrl: quickAudioUrl });
+    }
+  };
+
+  const quickPending =
+    sendLink.isPending ||
+    sendLocation.isPending ||
+    sendFile.isPending ||
+    sendPtt.isPending;
 
   useEffect(() => {
     const rows = conversations.data ?? [];
@@ -203,15 +315,27 @@ export default function Inbox() {
 
                 <div className="h-[360px] space-y-3 overflow-y-auto rounded-2xl bg-muted/35 p-4">
                   {(detail.data?.messages ?? []).map(item => (
-                    <div key={item.id} className={`flex ${item.direction === "outbound" ? "justify-end" : "justify-start"}`}>
+                    <div key={item.id} className={`flex items-end gap-1 ${item.direction === "outbound" ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-6 ${item.direction === "outbound" ? "bg-primary text-primary-foreground" : "border border-border/70 bg-card text-primary"}`}>
                         {item.message_type === "audio" ? <Volume2 className="mb-2 h-4 w-4" /> : null}
                         {item.original_file_name ? <p className="mb-2 inline-flex items-center gap-2 font-semibold"><FileText className="h-4 w-4" /> {item.original_file_name}</p> : null}
                         <p className="whitespace-pre-wrap break-words">{item.body || item.transcript || "Adjunto recibido"}</p>
                         <p className={`mt-2 text-[10px] ${item.direction === "outbound" ? "text-white/65" : "text-muted-foreground"}`}>{item.delivery_status} · {new Date(item.created_at).toLocaleString("es-GT", { timeZone: "America/Guatemala" })}</p>
                       </div>
+                      {user?.role === "admin" || humanKeyboard ? (
+                        <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 self-center text-muted-foreground hover:text-destructive" aria-label={`Eliminar mensaje ${item.id}`} title="Eliminar mensaje" onClick={() => removeMessage.mutate({ conversationId: current.id, messageId: item.id })} disabled={removeMessage.isPending}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : null}
                     </div>
                   ))}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" className="rounded-full" disabled={!humanKeyboard} onClick={() => openQuickAction("link")}><Link2 className="mr-2 h-3.5 w-3.5" /> Enlace</Button>
+                  <Button size="sm" variant="outline" className="rounded-full" disabled={!humanKeyboard} onClick={() => openQuickAction("location")}><MapPin className="mr-2 h-3.5 w-3.5" /> Ubicación</Button>
+                  <Button size="sm" variant="outline" className="rounded-full" disabled={!humanKeyboard} onClick={() => openQuickAction("file")}><FileText className="mr-2 h-3.5 w-3.5" /> Archivo</Button>
+                  <Button size="sm" variant="outline" className="rounded-full" disabled={!humanKeyboard} onClick={() => openQuickAction("ptt")}><Volume2 className="mr-2 h-3.5 w-3.5" /> Nota de voz</Button>
                 </div>
 
                 <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -221,6 +345,39 @@ export default function Inbox() {
                   </Button>
                 </div>
                 {!humanKeyboard ? <p className="inline-flex items-center gap-2 text-xs text-amber-800"><ShieldAlert className="h-4 w-4" /> JARVI HR mantiene el control; la transferencia exige finalización o excepción administrativa.</p> : <p className="inline-flex items-center gap-2 text-xs text-emerald-800"><CheckCircle2 className="h-4 w-4" /> Control humano activo y registrado.</p>}
+
+                <Dialog open={quickKind !== null} onOpenChange={open => { if (!open) closeQuickAction(); }}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>{quickKind === "link" ? "Enviar enlace" : quickKind === "location" ? "Enviar ubicación" : quickKind === "file" ? "Enviar archivo" : "Enviar nota de voz"}</DialogTitle>
+                      <DialogDescription>El envío se registra con control humano y trazabilidad en la conversación.</DialogDescription>
+                    </DialogHeader>
+                    {quickKind === "link" ? (
+                      <div className="space-y-3">
+                        <div className="space-y-2"><Label>URL HTTPS</Label><Input value={quickLink} onChange={event => setQuickLink(event.target.value)} placeholder="https://…" inputMode="url" /></div>
+                        <div className="space-y-2"><Label>Texto de vista previa</Label><Textarea value={quickCaption} onChange={event => setQuickCaption(event.target.value)} rows={2} placeholder="Opcional" /></div>
+                      </div>
+                    ) : quickKind === "location" ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-2"><Label>Latitud</Label><Input value={quickLatitude} onChange={event => setQuickLatitude(event.target.value)} inputMode="decimal" placeholder="-90 a 90" /></div>
+                        <div className="space-y-2"><Label>Longitud</Label><Input value={quickLongitude} onChange={event => setQuickLongitude(event.target.value)} inputMode="decimal" placeholder="-180 a 180" /></div>
+                        <div className="space-y-2 sm:col-span-2"><Label>Dirección</Label><Input value={quickAddress} onChange={event => setQuickAddress(event.target.value)} placeholder="Opcional" /></div>
+                      </div>
+                    ) : quickKind === "file" ? (
+                      <div className="space-y-3">
+                        <div className="space-y-2"><Label>URL del archivo (HTTPS)</Label><Input value={quickFileUrl} onChange={event => setQuickFileUrl(event.target.value)} placeholder="https://…" inputMode="url" /></div>
+                        <div className="space-y-2"><Label>Nombre del archivo</Label><Input value={quickFileName} onChange={event => setQuickFileName(event.target.value)} placeholder="Opcional" /></div>
+                        <div className="space-y-2"><Label>Texto adjunto</Label><Textarea value={quickCaption} onChange={event => setQuickCaption(event.target.value)} rows={2} placeholder="Opcional" /></div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2"><Label>URL del audio (HTTPS)</Label><Input value={quickAudioUrl} onChange={event => setQuickAudioUrl(event.target.value)} placeholder="https://…" inputMode="url" /></div>
+                    )}
+                    <DialogFooter>
+                      <Button variant="ghost" onClick={closeQuickAction}>Cancelar</Button>
+                      <Button disabled={quickPending} onClick={submitQuickAction}>{quickPending ? "Enviando…" : "Enviar"}</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </CardContent>
             </>
           ) : (
