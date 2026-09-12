@@ -60,18 +60,34 @@ describe("gobierno cognitivo de caja negra", () => {
     );
   });
 
-  it("proyecta títulos asertivos de máximo 11 palabras sin fórmulas fijas", () => {
-    const title = activityTitle("protocol_saved", "/admin/assessments");
+  it("proyecta títulos dinámicos de máximo 11 palabras con usuario, módulo y acción", () => {
+    const title = activityTitle(
+      "José Ardón",
+      "protocol_saved",
+      "/admin/assessments"
+    );
     expect(countWords(title)).toBeLessThanOrEqual(ACTIVITY_TITLE_WORD_LIMIT);
-    expect(title).toBe("Protocolo guardado en Pruebas");
-    expect(activityTitle("page_opened", "/admin/config")).toBe(
-      "Apertura autorizada en Configuración"
+    expect(title).toBe(
+      "Contribución de José Ardón al módulo Pruebas psicométricas y protocolo guardado"
     );
-    expect(activityTitle("credential_rotated", "/admin/config")).toBe(
-      "Credencial rotada en Configuración"
+    expect(
+      activityTitle("José Ardón", "page_opened", "/admin/config")
+    ).toBe(
+      "Contribución de José Ardón al módulo Configuración y apertura autorizada"
     );
-    expect(activityTitle("inbox_message_deleted", "/admin/inbox")).toBe(
-      "Mensaje de bandeja eliminado en Bandeja"
+    expect(
+      activityTitle("José Ardón", "credential_rotated", "/admin/config")
+    ).toBe(
+      "Contribución de José Ardón al módulo Configuración y credencial rotada"
+    );
+    const inboxTitle = activityTitle(
+      "JARVI HR",
+      "inbox_message_deleted",
+      "/admin/inbox"
+    );
+    expect(countWords(inboxTitle)).toBe(ACTIVITY_TITLE_WORD_LIMIT);
+    expect(inboxTitle).toMatch(
+      /^Contribución de JARVI HR al módulo Bandeja de entrada/
     );
     expect(title).not.toMatch(/Control ISO|Talento AISA|hoy|evidencia/i);
     expect(normalizeAdminPath("/admin/forms/25?tab=rules")).toBe(

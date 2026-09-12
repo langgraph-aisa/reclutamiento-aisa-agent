@@ -46,25 +46,6 @@ export function countWords(value: string) {
   return value.trim().split(/\s+/).filter(Boolean).length;
 }
 
-
-
-const TITLE_PAGE_TOKEN: Record<string, string> = {
-  "/admin": "Resumen",
-  "/admin/inbox": "Bandeja",
-  "/admin/human-review": "Revisión-Humana",
-  "/admin/candidates": "Candidatos",
-  "/admin/jobs": "Plazas",
-  "/admin/profiles": "Perfiles",
-  "/admin/assessments": "Pruebas",
-  "/admin/reports": "Informes",
-  "/admin/mst-eir": "MST-EIR",
-  "/admin/agent-evaluator": "Agente-IA",
-  "/admin/activity": "Actividad",
-  "/admin/config": "Configuración",
-  "/admin/users": "Usuarios",
-  "/admin/account": "Cuenta",
-};
-
 const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   page_opened: "apertura autorizada",
   work_started: "trabajo iniciado",
@@ -90,17 +71,19 @@ export function activityActionLabel(action: string) {
   return ACTIVITY_ACTION_LABELS[action] ?? "operación registrada";
 }
 
-function titlePageToken(pagePath: string) {
-  return TITLE_PAGE_TOKEN[normalizeAdminPath(pagePath)] ?? "Administración";
-}
-
 /**
- * Título asertivo y técnico de máximo 11 palabras: resume únicamente la acción
- * del usuario y menciona el módulo afectado o consultado, sin fórmulas fijas.
+ * Título asertivo y técnico de máximo 11 palabras: describe la contribución del
+ * actor al módulo y a la configuración o registro afectado, sin fórmulas fijas.
  */
-export function activityTitle(action: string, pagePath: string) {
+export function activityTitle(
+  actorLabel: string,
+  action: string,
+  pagePath: string
+) {
+  const actor = actorLabel.trim() || "Usuario registrado";
+  const module = adminPageLabel(pagePath);
   const label = activityActionLabel(action);
-  const title = `${label.charAt(0).toUpperCase()}${label.slice(1)} en ${titlePageToken(pagePath)}`;
+  const title = `Contribución de ${actor} al módulo ${module} y ${label}`;
   const words = title.trim().split(/\s+/).filter(Boolean);
   return words.length <= ACTIVITY_TITLE_WORD_LIMIT
     ? title

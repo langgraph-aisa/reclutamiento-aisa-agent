@@ -88,11 +88,12 @@ export default function ActivityAudit() {
       <Card className="rounded-3xl border-0 shadow-soft">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl text-primary">
-            <CalendarDays className="h-5 w-5" /> Mapa anual {year}
+            <CalendarDays className="h-5 w-5" /> Mapa de controles ISO/IEC 20000-1
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Cada celda abre el drilldown del día. Las vistas y estados en curso
-            no inflan el conteo de contribuciones terminales.
+            Cada celda del año {year} permite abrir el drilldown del día. Las
+            vistas y estados en curso no inflan el conteo de contribuciones
+            terminales.
           </p>
         </CardHeader>
         <CardContent>
