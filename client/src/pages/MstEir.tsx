@@ -134,7 +134,9 @@ export default function MstEir() {
   );
   const [projectName, setProjectName] = useState("");
   const [projectSummary, setProjectSummary] = useState("");
-  const [jobPositionId, setJobPositionId] = useState<string>("none");
+  const [checkedPositions, setCheckedPositions] = useState<Set<number>>(
+    new Set()
+  );
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
   const [newFolderName, setNewFolderName] = useState("");
   const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
@@ -147,6 +149,10 @@ export default function MstEir() {
   const settings = trpc.knowledge.settings.useQuery();
   const projects = trpc.knowledge.projects.useQuery();
   const positions = trpc.positions.list.useQuery();
+  const projectPositions = trpc.knowledge.projectPositions.useQuery(
+    { projectId: selectedProjectId ?? 0 },
+    { enabled: Boolean(selectedProjectId) }
+  );
   const folders = trpc.knowledge.folders.useQuery(
     { projectId: selectedProjectId ?? 0 },
     { enabled: Boolean(selectedProjectId) }
@@ -163,9 +169,10 @@ export default function MstEir() {
 
   const saveProject = trpc.knowledge.saveProject.useMutation({
     onSuccess: result => {
-      toast.success("Proyecto guardado correctamente.");
+      toast.success("Proyecto y plazas vinculadas guardados correctamente.");
       setSelectedProjectId(result.id);
       projects.refetch();
+      projectPositions.refetch();
     },
     onError: error =>
       toast.error(`No fue posible guardar el proyecto: ${error.message}`),
@@ -261,12 +268,14 @@ export default function MstEir() {
     if (!selectedProject) return;
     setProjectName(String(selectedProject.name ?? ""));
     setProjectSummary(String(selectedProject.summary ?? ""));
-    setJobPositionId(
-      selectedProject.job_position_id
-        ? String(selectedProject.job_position_id)
-        : "none"
-    );
   }, [selectedProject?.id, selectedProject?.updated_at]);
+
+  useEffect(() => {
+    const linked = new Set(
+      (projectPositions.data ?? []).map((row: any) => Number(row.position_id))
+    );
+    setCheckedPositions(linked);
+  }, [projectPositions.data, selectedProjectId]);
 
   const fileRows = useMemo(() => {
     const rows = (files.data ?? []) as KnowledgeFileRow[];
@@ -446,7 +455,7 @@ export default function MstEir() {
                   setSelectedProjectId(null);
                   setProjectName("");
                   setProjectSummary("");
-                  setJobPositionId("none");
+                  setCheckedPositions(new Set());
                   setSelectedFolderId(null);
                   setSelectedFileId(null);
                   setViewerOpen(false);
@@ -470,25 +479,53 @@ export default function MstEir() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="project-position">
-                Plaza vinculada (opcional)
-              </Label>
-              <Select value={jobPositionId} onValueChange={setJobPositionId}>
-                <SelectTrigger id="project-position" className="rounded-xl">
-                  <SelectValue placeholder="Sin plaza vinculada" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin plaza vinculada</SelectItem>
-                  {(positions.data ?? []).map(position => (
-                    <SelectItem key={position.id} value={String(position.id)}>
-                      {position.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Plazas vinculadas al RAG</Label>
+              <div className="max-h-56 space-y-1 overflow-y-auto rounded-2xl border border-border/70 bg-muted/30 p-2">
+                {(positions.data ?? []).map((position: any) => {
+                  const checked = checkedPositions.has(Number(position.id));
+                  return (
+                    <label
+                      key={position.id}
+                      className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm hover:bg-muted"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-emerald-700"
+                        checked={checked}
+                        disabled={!selectedProjectId || saveProject.isPending}
+                        onChange={event =>
+                          setCheckedPositions(current => {
+                            const next = new Set(current);
+                            if (event.target.checked) {
+                              next.add(Number(position.id));
+                            } else {
+                              next.delete(Number(position.id));
+                            }
+                            return next;
+                          })
+                        }
+                      />
+                      <span className="truncate">{position.title}</span>
+                    </label>
+                  );
+                })}
+                {!positions.data?.length && (
+                  <p className="p-2 text-xs text-muted-foreground">
+                    No existen plazas configuradas.
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  {checkedPositions.size} plazas vinculadas · se guardan junto
+                  con el proyecto
+                </p>
+              </div>
               <p className="text-xs text-muted-foreground">
-                Al vincular una plaza, el agente incorpora la base de
-                conocimiento de este proyecto durante la evaluación.
+                Marque todas las plazas que compartirán la base de
+                conocimiento de este proyecto durante la evaluación del
+                agente. La lista escanea las plazas configuradas para
+                mantener el RAG actualizado.
               </p>
             </div>
           </div>
@@ -507,7 +544,7 @@ export default function MstEir() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">
               {selectedProject
-                ? `${selectedProject.file_count ?? 0} archivos · ${selectedProject.folder_count ?? 0} carpetas`
+                ? `${selectedProject.position_count ?? 0} plazas · ${selectedProject.file_count ?? 0} archivos · ${selectedProject.folder_count ?? 0} carpetas`
                 : "Proyecto nuevo sin archivos"}
             </span>
             <div className="flex gap-2">
@@ -520,8 +557,7 @@ export default function MstEir() {
                     id: selectedProjectId ?? undefined,
                     name: projectName.trim(),
                     summary: projectSummary.trim(),
-                    jobPositionId:
-                      jobPositionId === "none" ? null : Number(jobPositionId),
+                    positionIds: Array.from(checkedPositions),
                   })
                 }
               >

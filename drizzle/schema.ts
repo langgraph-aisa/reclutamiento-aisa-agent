@@ -989,9 +989,6 @@ export const knowledgeProjects = pgTable(
     id: serial("id").primaryKey(),
     name: varchar("name", { length: 160 }).notNull(),
     summary: varchar("summary", { length: 2000 }).default("").notNull(),
-    jobPositionId: integer("job_position_id").references(() => jobPositions.id, {
-      onDelete: "set null",
-    }),
     createdByUserId: integer("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -1006,8 +1003,33 @@ export const knowledgeProjects = pgTable(
     nameUq: uniqueIndex("knowledge_projects_name_uq").on(
       sql`lower(${table.name})`
     ),
-    positionIdx: index("knowledge_projects_position_idx").on(
-      table.jobPositionId
+  })
+);
+
+export const knowledgeProjectPositions = pgTable(
+  "knowledge_project_positions",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .references(() => knowledgeProjects.id, { onDelete: "cascade" })
+      .notNull(),
+    positionId: integer("position_id")
+      .references(() => jobPositions.id, { onDelete: "cascade" })
+      .notNull(),
+    createdByUserId: integer("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    projectPositionUq: uniqueIndex("knowledge_project_positions_uq").on(
+      table.projectId,
+      table.positionId
+    ),
+    positionIdx: index("knowledge_project_positions_position_idx").on(
+      table.positionId
     ),
   })
 );
@@ -1109,5 +1131,7 @@ export type MethodologyDocument = typeof methodologyDocuments.$inferSelect;
 export type MethodologyDocumentRevision =
   typeof methodologyDocumentRevisions.$inferSelect;
 export type KnowledgeProject = typeof knowledgeProjects.$inferSelect;
+export type KnowledgeProjectPosition =
+  typeof knowledgeProjectPositions.$inferSelect;
 export type KnowledgeFolder = typeof knowledgeFolders.$inferSelect;
 export type KnowledgeFile = typeof knowledgeFiles.$inferSelect;

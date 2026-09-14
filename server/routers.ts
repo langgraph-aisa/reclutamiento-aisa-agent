@@ -3296,12 +3296,11 @@ export const appRouter = router({
     projects: adminProcedure.query(async () => {
       const pool = await requirePool();
       const result = await pool.query(
-        `SELECT p.id,p.name,p.summary,p.job_position_id,p.created_at,p.updated_at,
-                pos.title AS position_title,
+        `SELECT p.id,p.name,p.summary,p.created_at,p.updated_at,
+                (SELECT count(*)::int FROM knowledge_project_positions link WHERE link.project_id=p.id) AS position_count,
                 (SELECT count(*)::int FROM knowledge_files f WHERE f.project_id=p.id) AS file_count,
                 (SELECT count(*)::int FROM knowledge_folders fo WHERE fo.project_id=p.id) AS folder_count
            FROM knowledge_projects p
-           LEFT JOIN job_positions pos ON pos.id=p.job_position_id
           ORDER BY lower(p.name)`
       );
       return result.rows;
@@ -3312,7 +3311,7 @@ export const appRouter = router({
           id: z.number().int().positive().optional(),
           name: z.string().trim().min(1).max(160),
           summary: z.string().trim().max(2000),
-          jobPositionId: z.number().int().positive().nullable().optional(),
+          positionIds: z.array(z.number().int().positive()).max(120).default([]),
         })
       )
       .mutation(async ({ input, ctx }) => {
@@ -3324,26 +3323,16 @@ export const appRouter = router({
             ? (
                 await client.query(
                   `UPDATE knowledge_projects
-                      SET name=$1,summary=$2,job_position_id=$3,updated_at=now()
-                    WHERE id=$4 RETURNING id`,
-                  [
-                    input.name,
-                    input.summary,
-                    input.jobPositionId ?? null,
-                    input.id,
-                  ]
+                      SET name=$1,summary=$2,updated_at=now()
+                    WHERE id=$3 RETURNING id`,
+                  [input.name, input.summary, input.id]
                 )
               ).rows[0]
             : (
                 await client.query(
-                  `INSERT INTO knowledge_projects (name,summary,job_position_id,created_by_user_id)
-                   VALUES ($1,$2,$3,$4) RETURNING id`,
-                  [
-                    input.name,
-                    input.summary,
-                    input.jobPositionId ?? null,
-                    ctx.user.id,
-                  ]
+                  `INSERT INTO knowledge_projects (name,summary,created_by_user_id)
+                   VALUES ($1,$2,$3) RETURNING id`,
+                  [input.name, input.summary, ctx.user.id]
                 )
               ).rows[0];
           if (!project) {
@@ -3352,21 +3341,39 @@ export const appRouter = router({
               message: "El proyecto no existe.",
             });
           }
+          const projectId = Number(project.id);
+          const ids = Array.from(new Set(input.positionIds));
+          const valid = ids.length
+            ? (
+                await client.query(
+                  `SELECT id FROM job_positions WHERE id=ANY($1::int[])`,
+                  [ids]
+                )
+              ).rows.map((row: { id: number }) => Number(row.id))
+            : [];
+          await client.query(
+            `DELETE FROM knowledge_project_positions WHERE project_id=$1`,
+            [projectId]
+          );
+          for (const positionId of valid) {
+            await client.query(
+              `INSERT INTO knowledge_project_positions (project_id,position_id,created_by_user_id)
+               VALUES ($1,$2,$3) ON CONFLICT (project_id,position_id) DO NOTHING`,
+              [projectId, positionId, ctx.user.id]
+            );
+          }
           await client.query(
             `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
              VALUES ($1,'knowledge_project',$2,$3,$4::jsonb)`,
             [
               ctx.user.id,
-              project.id,
+              projectId,
               input.id ? "project_updated" : "project_created",
-              asJson({
-                name: input.name,
-                jobPositionId: input.jobPositionId ?? null,
-              }),
+              asJson({ name: input.name, positionIds: valid }),
             ]
           );
           await client.query("COMMIT");
-          return { id: Number(project.id) };
+          return { id: projectId, positionIds: valid };
         } catch (error) {
           await client.query("ROLLBACK");
           throw error;
@@ -3409,6 +3416,154 @@ export const appRouter = router({
             }
           }
           return { deleted: true };
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+      }),
+    projectPositions: adminProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const result = await pool.query(
+          `SELECT link.position_id,pos.title
+             FROM knowledge_project_positions link
+             JOIN job_positions pos ON pos.id=link.position_id
+            WHERE link.project_id=$1
+            ORDER BY lower(pos.title)`,
+          [input.projectId]
+        );
+        return result.rows;
+      }),
+    saveProjectPositions: adminProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          positionIds: z.array(z.number().int().positive()).max(120),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const client = await pool.connect();
+        const ids = Array.from(new Set(input.positionIds));
+        try {
+          await client.query("BEGIN");
+          const project = await client.query(
+            `SELECT id FROM knowledge_projects WHERE id=$1 FOR UPDATE`,
+            [input.projectId]
+          );
+          if (!project.rows[0]) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "El proyecto no existe.",
+            });
+          }
+          if (ids.length) {
+            const valid = await client.query(
+              `SELECT id FROM job_positions WHERE id = ANY($1::int[])`,
+              [ids]
+            );
+            if (valid.rows.length !== ids.length) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Una de las plazas seleccionadas no existe.",
+              });
+            }
+          }
+          await client.query(
+            `DELETE FROM knowledge_project_positions
+              WHERE project_id=$1 AND NOT (position_id = ANY($2::int[]))`,
+            [input.projectId, ids]
+          );
+          if (ids.length) {
+            await client.query(
+              `INSERT INTO knowledge_project_positions (project_id,position_id,created_by_user_id)
+               SELECT $1, unnest($2::int[]), $3
+               ON CONFLICT (project_id,position_id) DO NOTHING`,
+              [input.projectId, ids, ctx.user.id]
+            );
+          }
+          await client.query(
+            `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+             VALUES ($1,'knowledge_project',$2,'project_positions_updated',$3::jsonb)`,
+            [ctx.user.id, input.projectId, asJson({ positionIds: ids })]
+          );
+          await client.query("COMMIT");
+          return { positionIds: ids };
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+      }),
+    positionProjectsMatrix: adminProcedure.query(async () => {
+      const pool = await requirePool();
+      const result = await pool.query(
+        `SELECT link.position_id,link.project_id,p.name AS project_name
+           FROM knowledge_project_positions link
+           JOIN knowledge_projects p ON p.id=link.project_id
+          ORDER BY lower(p.name)`
+      );
+      return result.rows;
+    }),
+    savePositionProjects: adminProcedure
+      .input(
+        z.object({
+          positionId: z.number().int().positive(),
+          projectIds: z.array(z.number().int().positive()).max(60),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const client = await pool.connect();
+        const ids = Array.from(new Set(input.projectIds));
+        try {
+          await client.query("BEGIN");
+          const position = await client.query(
+            `SELECT id FROM job_positions WHERE id=$1 FOR UPDATE`,
+            [input.positionId]
+          );
+          if (!position.rows[0]) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "La plaza no existe.",
+            });
+          }
+          if (ids.length) {
+            const valid = await client.query(
+              `SELECT id FROM knowledge_projects WHERE id = ANY($1::int[])`,
+              [ids]
+            );
+            if (valid.rows.length !== ids.length) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "Uno de los proyectos seleccionados no existe.",
+              });
+            }
+          }
+          await client.query(
+            `DELETE FROM knowledge_project_positions
+              WHERE position_id=$1 AND NOT (project_id = ANY($2::int[]))`,
+            [input.positionId, ids]
+          );
+          if (ids.length) {
+            await client.query(
+              `INSERT INTO knowledge_project_positions (project_id,position_id,created_by_user_id)
+               SELECT unnest($2::int[]), $1, $3
+               ON CONFLICT (project_id,position_id) DO NOTHING`,
+              [input.positionId, ids, ctx.user.id]
+            );
+          }
+          await client.query(
+            `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+             VALUES ($1,'job_position',$2,'position_projects_updated',$3::jsonb)`,
+            [ctx.user.id, input.positionId, asJson({ projectIds: ids })]
+          );
+          await client.query("COMMIT");
+          return { projectIds: ids };
         } catch (error) {
           await client.query("ROLLBACK");
           throw error;

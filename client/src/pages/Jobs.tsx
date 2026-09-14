@@ -2,6 +2,12 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +18,7 @@ import {
   Copy,
   Edit3,
   ExternalLink,
+  FolderKanban,
   Globe2,
   MessageCircle,
   Plus,
@@ -19,6 +26,7 @@ import {
   Search,
   Settings2,
   Trash2,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -78,6 +86,38 @@ export default function Jobs() {
   const [draft, setDraft] = useState<Draft>(blank);
   const [copied, setCopied] = useState("");
   const [search, setSearch] = useState("");
+  const [linkDialogPosition, setLinkDialogPosition] = useState<number | null>(
+    null
+  );
+  const [draftProjectIds, setDraftProjectIds] = useState<Set<number>>(
+    new Set()
+  );
+  const knowledgeProjects = trpc.knowledge.projects.useQuery(undefined, {
+    enabled: isAdmin,
+  });
+  const positionProjectsMatrix = trpc.knowledge.positionProjectsMatrix.useQuery(
+    undefined,
+    { enabled: isAdmin }
+  );
+  const savePositionProjects = trpc.knowledge.savePositionProjects.useMutation({
+    onSuccess: () => {
+      toast.success("Proyectos vinculados actualizados.");
+      positionProjectsMatrix.refetch();
+      setLinkDialogPosition(null);
+    },
+    onError: error => toast.error(error.message),
+  });
+  const linkedProjectsFor = (positionId: number) =>
+    (positionProjectsMatrix.data ?? []).filter(
+      (link: any) => Number(link.position_id) === positionId
+    );
+  const openLinkDialog = (positionId: number) => {
+    const linked = linkedProjectsFor(positionId).map((link: any) =>
+      Number(link.project_id)
+    );
+    setDraftProjectIds(new Set(linked));
+    setLinkDialogPosition(positionId);
+  };
   const jobs = (query.data ?? []).filter(
     (job: any) =>
       !search ||
@@ -368,6 +408,41 @@ export default function Jobs() {
                     {job.default_country ?? "GT"}
                   </span>
                 </div>
+                {isAdmin && (
+                  <div className="mt-4 rounded-2xl bg-sky-50/70 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Proyectos RAG
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => openLinkDialog(Number(job.id))}
+                      >
+                        <FolderKanban className="mr-2 h-3.5 w-3.5" />
+                        Vincular proyectos
+                      </Button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {linkedProjectsFor(Number(job.id)).length === 0 ? (
+                        <span className="text-xs text-muted-foreground">
+                          Sin proyectos vinculados
+                        </span>
+                      ) : (
+                        linkedProjectsFor(Number(job.id)).map((link: any) => (
+                          <Badge
+                            key={link.project_id}
+                            className="rounded-full bg-sky-100 text-sky-800"
+                          >
+                            {link.project_name}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="mt-5 flex flex-wrap gap-2">
                   <Link href={`/apply/${job.public_slug}`}>
                     <Button
@@ -462,6 +537,88 @@ export default function Jobs() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={linkDialogPosition !== null}
+        onOpenChange={open => {
+          if (!open) setLinkDialogPosition(null);
+        }}
+      >
+        <DialogContent className="max-h-[80vh] overflow-y-auto rounded-3xl sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-primary">
+              Vincular proyectos RAG a esta plaza
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Los proyectos marcados alimentarán al Agente de IA con su base de
+              conocimiento durante la evaluación de esta plaza.
+            </p>
+          </DialogHeader>
+          <div className="max-h-96 space-y-1 overflow-y-auto rounded-2xl border border-border/70 bg-muted/30 p-2">
+            {(knowledgeProjects.data ?? []).map((project: any) => {
+              const checked = draftProjectIds.has(Number(project.id));
+              return (
+                <label
+                  key={project.id}
+                  className="flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm hover:bg-muted"
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-emerald-700"
+                    checked={checked}
+                    disabled={savePositionProjects.isPending}
+                    onChange={event =>
+                      setDraftProjectIds(current => {
+                        const next = new Set(current);
+                        if (event.target.checked) {
+                          next.add(Number(project.id));
+                        } else {
+                          next.delete(Number(project.id));
+                        }
+                        return next;
+                      })
+                    }
+                  />
+                  <span className="truncate">{project.name}</span>
+                </label>
+              );
+            })}
+            {!knowledgeProjects.data?.length && (
+              <p className="p-2 text-xs text-muted-foreground">
+                No existen proyectos configurados.
+              </p>
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">
+              {draftProjectIds.size} proyectos vinculados
+            </span>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => setLinkDialogPosition(null)}
+              >
+                <X className="mr-2 h-4 w-4" /> Cerrar
+              </Button>
+              <Button
+                type="button"
+                className="rounded-full"
+                disabled={savePositionProjects.isPending}
+                onClick={() =>
+                  savePositionProjects.mutate({
+                    positionId: linkDialogPosition!,
+                    projectIds: Array.from(draftProjectIds),
+                  })
+                }
+              >
+                Guardar vinculaciones
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

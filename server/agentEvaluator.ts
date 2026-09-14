@@ -180,11 +180,12 @@ async function loadProjectKnowledgeContext(
       `SELECT p.id AS project_id,p.name AS project_name,p.summary AS project_summary,
               f.original_name,f.deep_analysis
          FROM knowledge_projects p
+         JOIN knowledge_project_positions link ON link.project_id=p.id
          LEFT JOIN knowledge_files f
            ON f.project_id=p.id
           AND f.analysis_status='analizado'
           AND COALESCE(f.deep_analysis,'')<>''
-        WHERE p.job_position_id=$1
+        WHERE link.position_id=$1
         ORDER BY p.id,f.id
         LIMIT 60`,
       [positionId]

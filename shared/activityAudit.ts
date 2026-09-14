@@ -116,6 +116,8 @@ const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   file_moved: "archivo movido",
   file_analysis_updated: "análisis actualizado",
   knowledge_settings_updated: "configuración de conocimiento actualizada",
+  project_positions_updated: "vinculación de plazas actualizada",
+  position_projects_updated: "proyectos vinculados actualizados",
 };
 
 export function activityActionLabel(action: string) {

@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.134</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.135</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.134-0b2d4b" alt="JARVI RH 2.0.134" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.135-0b2d4b" alt="JARVI RH 2.0.135" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse%20SDK-5.11.1-orange" alt="Langfuse SDK 5.11.1" />
@@ -24,7 +24,7 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.134 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.135 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
 Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH integra plazas, formularios y protocolos versionados, evaluación asistida por IA, revisión humana, conversaciones ApiChat, solicitud controlada de currículum y auditoría administrativa. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar, fijar remuneración o atribuir rasgos psicológicos: el personal autorizado conserva la decisión.
@@ -34,6 +34,13 @@ Talento AISA vincula capacidades técnicas con proyectos industriales, energéti
 ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
+
+### 14SEP2026 · JARVI RH 2.0.135
+
+- Un proyecto vincula múltiples plazas con lista de verificación que escanea las plazas configuradas; «Guardar proyecto» persiste las relaciones y la vista de plazas administra los proyectos de cada RAG.
+- La migración `0017` conserva el vínculo anterior en `knowledge_project_positions` sin pérdida de relaciones.
+
+Descripción: vinculación múltiple de plazas al RAG del proyecto desde ambas vistas administrativas.
 
 ### 14SEP2026 · JARVI RH 2.0.134
 
@@ -204,7 +211,7 @@ flowchart LR
 | Audio | Ofrece helpers aislados de cuota, formato, transcripción y TTS con rotación; no existe aún ingesta productiva de medios de candidatos. | `voiceTranscription.ts`, `agentSettings.ts` |
 | Gobierno | Proyecta actividad por hoja, drilldown anual, release, bitácora y puerta CI. | `activityAudit.ts`, `shared/release.ts`, `.github/workflows/black-box.yml` |
 
-Las dependencias no equivalen a capacidades automáticamente logradas. LangGraph contiene hoy un grafo lineal `START → evaluate → END`; ofrece una frontera explícita de orquestación, pero no un agente autónomo con múltiples herramientas. Drizzle tipa entidades, mientras varias consultas operativas usan SQL parametrizado directo. El envío ApiChat se ejecuta en el backend con los siete endpoints oficiales; la recepción la resuelve el puente `inboxSync` con deduplicación por identificador del proveedor. n8n quedó retirado en 2.0.133.
+Las dependencias no equivalen a capacidades logradas. LangGraph contiene un grafo lineal `START → evaluate → END`: frontera de orquestación, no un agente autónomo con múltiples herramientas. Drizzle tipa entidades, mientras varias consultas operativas usan SQL parametrizado directo. El envío ApiChat se ejecuta en el backend con los siete endpoints oficiales; la recepción la resuelve el puente `inboxSync` con deduplicación por identificador del proveedor. n8n quedó retirado en 2.0.133.
 
 El puente recorre en turnos, refresca el catálogo cada 60 segundos y se repliega 60 segundos ante un límite de tasa. La deduplicación impide registros dobles; la entrega exactamente una vez sigue sin demostrarse.
 
@@ -219,7 +226,7 @@ El puente recorre en turnos, refresca el catálogo cada 60 segundos y se replieg
 7. Un bloqueo consultivo PostgreSQL impide evaluar simultáneamente la misma postulación. Resultado, payload, modelo, reglas, resumen y evento se guardan en transacción.
 8. Reclutamiento revisa evidencia y modifica el estado con comentario. Solo la transición humana a `calificado` prepara la solicitud de CV. La clave `cv_request:{applicationId}` evita duplicados; un resultado incierto no se reintenta automáticamente.
 
-Este diseño combina automatización simbólica y generativa. Las reglas son falsables y repetibles; el modelo interpreta evidencia abierta, pero su salida permanece probabilística. Structured Outputs restringe la forma, no garantiza la verdad del contenido. La explicación es una justificación textual auditable, no una prueba causal del proceso interno del modelo. Por ello la prueba adecuada compara entradas, reglas, salidas y decisiones posteriores, e incluye casos adversos, cambio de modelo y revisión de falsos positivos/negativos.
+Este diseño combina automatización simbólica y generativa. Las reglas son falsables y repetibles; el modelo interpreta evidencia abierta, pero su salida permanece probabilística. Structured Outputs restringe la forma, no garantiza la verdad; la explicación es justificación auditable, no prueba causal del modelo. Por ello la prueba adecuada compara entradas, reglas, salidas y decisiones posteriores, e incluye casos adversos, cambio de modelo y revisión de falsos positivos/negativos.
 
 ## 4. Ontología, epistemología y fenomenología
 
@@ -229,7 +236,7 @@ Este diseño combina automatización simbólica y generativa. Las reglas son fal
 
 La interacción escrita adopta **usted** como forma institucional. Se sustituyó el tuteo en instrucciones, preguntas, errores, confirmaciones, correo y WhatsApp. El oráculo `scripts/verify-formal-spanish.mjs` detiene el release ante tratamientos informales; la migración `0012_dear_lifeguard.sql` corrige solo valores predeterminados y conserva textos libres.
 
-**Fenomenología.** La postulación es también una experiencia vivida: la persona interpreta preguntas, expone trayectoria y enfrenta una interfaz que distribuye poder. El análisis debe suspender la presunción de que el puntaje agota el fenómeno (Husserl, 2012; Moustakas, 1994). Reducir esa experiencia a seis números puede invisibilizar contexto o desigualdad de acceso. La revisión 360° reabre el horizonte mostrando respuesta, pregunta, brecha, motivo e historial. Una práctica responsable añade aviso de uso de IA, accesibilidad y canal de impugnación. La eficiencia comercial es legítima únicamente cuando conserva dignidad, agencia y responsabilidad institucional (UNESCO, 2021).
+**Fenomenología.** La postulación es también una experiencia vivida: la persona interpreta preguntas, expone trayectoria y enfrenta una interfaz que distribuye poder; el puntaje no agota el fenómeno (Husserl, 2012; Moustakas, 1994). Reducir esa experiencia a seis números puede invisibilizar contexto o desigualdad de acceso. La revisión 360° reabre el horizonte mostrando respuesta, pregunta, brecha, motivo e historial. Una práctica responsable añade aviso de uso de IA, accesibilidad y canal de impugnación. La eficiencia comercial es legítima únicamente cuando conserva dignidad, agencia y responsabilidad institucional (UNESCO, 2021).
 
 ## 5. Diseño de datos y procedencia para auditoría
 
@@ -297,13 +304,13 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y `AGENT_SETTINGS_ENCRYPTION_KEY`. Las credenciales de ApiChat y del agente se administran cifradas desde la interfaz. Las migraciones `0014` a `0016` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.134](docs/PRUEBAS_CAJA_NEGRA_2.0.134.md).
+`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y `AGENT_SETTINGS_ENCRYPTION_KEY`. Las credenciales de ApiChat y del agente se administran cifradas desde la interfaz. Las migraciones `0014` a `0016` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.135](docs/PRUEBAS_CAJA_NEGRA_2.0.135.md).
 
 ## 8. Capa cognitiva, resiliencia y alcance verificable
 
 La migración `0014` incorpora actividad transversal, bandeja, protocolos versionados, expectativa salarial y preferencias de transcripción/TTS. La migración `0015` añade `protocol_delete_challenges`: borrar una versión de prueba exige un código temporal de seis dígitos por correo. La migración `0016` añade proyectos, carpetas y archivos de conocimiento con resumen y análisis de IA; el directorio de almacenamiento se configura con `KNOWLEDGE_STORAGE_DIR`. Los helpers de audio aceptan una extensión declarada permitida o un MIME mapeado, aplican cuota administrativa y rotación principal/respaldo; no detectan el tipo por contenido. La recepción productiva de medios y documentos sigue pendiente de integrar con descarga, detección real de tipo, antivirus, bucket, previsualización y retención.
 
-La guía DORA define cinco métricas: tiempo de entrega, frecuencia de despliegue, recuperación, tasa de fallos y tasa de retrabajo. El repositorio aporta capacidades habilitadoras, pero no ingiere despliegues e incidentes suficientes para calcularlas; el mapa «Contribuciones a Talento AISA este año» no las sustituye.
+La guía DORA define cinco métricas: entrega, frecuencia de despliegue, recuperación, fallos y retrabajo. El repositorio no ingiere despliegues e incidentes suficientes para calcularlas; el mapa «Contribuciones a Talento AISA este año» no las sustituye.
 
 Los protocolos de evaluación son infraestructura de gobierno y autoría; no son instrumentos psicométricos validados. La activación técnica exige evidencia documental, pero únicamente un estudio para la población y uso previstos puede sostener validez y confiabilidad. El análisis completo, query de ApiChat sin secretos, checklist de despliegue, rollback y brechas está en [ANALISIS_COGNITIVO_DORA_2.0.130.md](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md); el protocolo operacional nuevo está en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md).
 
@@ -313,7 +320,7 @@ La contribución de JARVI RH no debe medirse por incorporar un modelo de lenguaj
 
 Se plantean cuatro proposiciones contrastables. **P1:** la estructura híbrida reduce el tiempo medio de revisión sin disminuir el acuerdo con especialistas. **P2:** mostrar evidencia, brechas y reglas mejora la detección de errores frente a mostrar solo una puntuación. **P3:** la recomendación varía más por la calidad del perfil e instrumento que por cambios menores de modelo. **P4:** una vía de revisión comprensible mejora la justicia procedimental percibida. Ninguna proposición se considera validada.
 
-El protocolo recomendado comienza con un corpus seudonimizado, estratificado por plaza y periodo, con base legal y retención aprobadas. Dos o más especialistas deben etiquetar cada caso de forma ciega y construir un patrón de referencia mediante adjudicación. Para clasificación se medirían precisión, exhaustividad, macro-F1, matriz de confusión y falsos negativos; para puntaje, error absoluto, estabilidad y calibración ordinal; para operación, latencia, disponibilidad, costo y proporción de decisiones humanas que revocan al agente. Los resultados deben desagregarse solo por atributos lícitos, necesarios y protegidos.
+El protocolo recomendado comienza con un corpus seudonimizado, estratificado por plaza y periodo. Dos o más especialistas etiquetan cada caso de forma ciega y construyen un patrón de referencia mediante adjudicación. Para clasificación se medirían precisión, exhaustividad, macro-F1, matriz de confusión y falsos negativos; para puntaje, error absoluto y calibración ordinal; para operación, latencia, disponibilidad y proporción de decisiones humanas que revocan al agente. Los resultados se desagregan solo por atributos lícitos, necesarios y protegidos.
 
 Las amenazas incluyen sesgo del corpus, criterios discriminatorios históricos, dependencia entre evaluadores y automatización del juicio. Se mitigan con preregistro, separación desarrollo–evaluación, réplica temporal y revisión ética. README, pruebas y bitácora aportan trazabilidad, no validación empírica.
 
@@ -385,7 +392,7 @@ Las páginas técnicas evolutivas se consultaron el 14 de septiembre de 2026. La
 - ApiChat. (s. f.). _OpenAPI oficial de la API de mensajería_. https://panel.apichat.io/docs/swagger
 - International Organization for Standardization. (2018). _ISO/IEC 20000-1:2018: Service management system requirements_. https://www.iso.org/standard/70636.html
 
-### Fuentes primarias incorporadas en 2.0.134
+### Fuentes primarias incorporadas en 2.0.135
 
 - pdf-parse. (s. f.). _Pure JavaScript PDF parsing_. https://www.npmjs.com/package/pdf-parse
 - Mammoth. (s. f.). _Convert .docx documents to HTML_. https://www.npmjs.com/package/mammoth
