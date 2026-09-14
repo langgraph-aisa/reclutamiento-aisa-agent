@@ -70,8 +70,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.135");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.135");
+    expect(APP_VERSION).toBe("2.0.136");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.136");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -639,6 +639,7 @@ describe("black-box release contract", () => {
       path.resolve("shared/activityAudit.ts"),
       "utf8"
     );
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
 
     expect(layout).toContain('label: "Administrador de Proyectos"');
     expect(layout).not.toContain('label: "MST-EIR"');
@@ -663,6 +664,14 @@ describe("black-box release contract", () => {
     expect(activity).toContain(
       '"/admin/mst-eir": "Administrador de Proyectos"'
     );
+    expect(routers).toContain("deep_analysis=$1::varchar");
+    expect(routers).toContain("summary_66=COALESCE($2::varchar,summary_66)");
+    expect(routers).toContain("CASE WHEN $1::varchar<>''");
+    expect(routers).not.toContain("CASE WHEN $1<>''");
+    const summarySlot = page.indexOf('id="project-summary"');
+    const positionsSlot = page.indexOf("Plazas vinculadas al RAG");
+    expect(summarySlot).toBeGreaterThan(-1);
+    expect(positionsSlot).toBeGreaterThan(summarySlot);
   });
 
   it("publishes the academic-commercial README with auditable proportions and references", () => {
@@ -673,7 +682,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.135");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.136");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -682,7 +691,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.135");
+    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.136");
     expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.132");
     expect(readme).toContain("ISO/IEC 20000-1:2018");
     expect(readme).toContain("`inboxSync`");

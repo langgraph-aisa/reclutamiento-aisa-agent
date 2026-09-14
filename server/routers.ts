@@ -3882,9 +3882,9 @@ export const appRouter = router({
         const pool = await requirePool();
         const updated = await pool.query(
           `UPDATE knowledge_files
-              SET deep_analysis=$1,
-                  summary_66=COALESCE($2,summary_66),
-                  analysis_status=CASE WHEN $1<>'' THEN 'analizado' ELSE analysis_status END,
+              SET deep_analysis=$1::varchar,
+                  summary_66=COALESCE($2::varchar,summary_66),
+                  analysis_status=CASE WHEN $1::varchar<>'' THEN 'analizado' ELSE analysis_status END,
                   updated_at=now()
             WHERE id=$3 RETURNING id`,
           [

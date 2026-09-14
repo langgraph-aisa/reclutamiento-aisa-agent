@@ -468,15 +468,29 @@ export default function MstEir() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="project-name">Nombre del proyecto</Label>
-              <Input
-                id="project-name"
-                value={projectName}
-                onChange={event => setProjectName(event.target.value)}
-                placeholder="Escriba el nombre del proyecto"
-                maxLength={160}
-              />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="project-name">Nombre del proyecto</Label>
+                <Input
+                  id="project-name"
+                  value={projectName}
+                  onChange={event => setProjectName(event.target.value)}
+                  placeholder="Escriba el nombre del proyecto"
+                  maxLength={160}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="project-summary">Resumen</Label>
+                <Textarea
+                  id="project-summary"
+                  value={projectSummary}
+                  onChange={event => setProjectSummary(event.target.value)}
+                  placeholder="Descripción breve para identificar el perfil"
+                  rows={3}
+                  maxLength={2000}
+                  className="rounded-2xl"
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Plazas vinculadas al RAG</Label>
@@ -528,18 +542,6 @@ export default function MstEir() {
                 mantener el RAG actualizado.
               </p>
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="project-summary">Resumen</Label>
-            <Textarea
-              id="project-summary"
-              value={projectSummary}
-              onChange={event => setProjectSummary(event.target.value)}
-              placeholder="Descripción breve para identificar el perfil"
-              rows={3}
-              maxLength={2000}
-              className="rounded-2xl"
-            />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs text-muted-foreground">

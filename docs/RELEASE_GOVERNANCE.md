@@ -1,16 +1,16 @@
-# Gobierno de release JARVI RH 2.0.135
+# Gobierno de release JARVI RH 2.0.136
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.135**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.136**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-### Alcance candidato 2.0.135
+### Alcance candidato 2.0.136
 
-El release candidato amplía la vinculación de plazas: un proyecto puede alimentar el RAG de múltiples plazas mediante la tabla `knowledge_project_positions` (migración `0017`), administrada con lista de verificación desde Administrador de Proyectos y con matriz de proyectos desde Plazas y formularios; «Guardar proyecto» persiste las relaciones en la misma transacción. El agente incorpora «BASE DE CONOCIMIENTO DEL PROYECTO (RAG)» para cada plaza vinculada. Las capacidades de 2.0.134, 2.0.133 y 2.0.132 permanecen bajo regresión.
+El release corrige el guardado del análisis de documentos: «Guardar análisis» declara `::varchar` explícito en el UPDATE de `knowledge_files` para que PostgreSQL deduzca un único tipo por parámetro y desaparezca el error «inconsistent types deduced for parameter $1». La vista de Descripción del Proyecto acomoda el Resumen en la columna izquierda, bajo el Nombre del proyecto y antes de las plazas vinculadas. La vinculación múltiple de plazas de 2.0.135 y las capacidades de 2.0.134, 2.0.133 y 2.0.132 permanecen bajo regresión.
 
 El alcance no incluye todavía descarga productiva de medios ApiChat, bucket, antivirus, previsualización de PDF/Word/audio, ejecución adaptativa completa de pruebas, validación psicométrica ni ingestión de despliegues e incidentes para calcular DORA. La actividad administrativa usa sondeo de cinco segundos según la vista, no streaming; la bandeja usa sincronización por sondeo de un segundo sin garantía de entrega exactamente una vez. Los resúmenes de actividad son deterministas aunque exista un selector reservado para un modelo futuro. La recepción ya no depende de un webhook ni de un workflow externo: el historial oficial del proveedor es la fuente que rellena la bandeja.
 
-El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.135 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.136.
+El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.136 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.137.
 
 La versión 2.0.129 convirtió Configuración > WhatsApp en el almacén operativo de ApiChat. `integration_settings` conserva preferencias y secretos cifrados; el cliente recibe únicamente estado y máscara. `cvRequest.ts` obtiene la configuración mediante `getApiChatRuntimeSettings` después de confirmar la transacción y `apichat.ts` ya no consulta el entorno. La ruta genérica de configuración queda limitada al proveedor no secreto `recruitment`.
 
@@ -135,4 +135,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.135.md](PRUEBAS_CAJA_NEGRA_2.0.135.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.136.md](PRUEBAS_CAJA_NEGRA_2.0.136.md).
