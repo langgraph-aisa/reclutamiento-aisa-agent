@@ -18,6 +18,7 @@ import {
 } from "./localAuth";
 import { normalizePhone } from "./phone";
 import { importSpreadsheetForm } from "./importForms";
+import { createFormPublicToken } from "./formTokens";
 import { resolveApplicationLocation } from "./applicationLocation";
 import { COOKIE_NAME } from "@shared/const";
 import { APP_VERSION } from "@shared/release";
@@ -859,6 +860,96 @@ async function normalizeLatestPositionForm(
   }
 }
 
+type PublicFormPayloadRow = {
+  id: number;
+  public_slug: string;
+  title: string;
+  department: string | null;
+  location_label: string | null;
+  description: string | null;
+  agent_key?: string | null;
+  responsibilities: unknown;
+  form_id: number;
+  form_title: string;
+  form_intro: string | null;
+  form_version: number | null;
+  form_token: string;
+  question_id: number | null;
+  field_key: string | null;
+  label: string | null;
+  help_text: string | null;
+  type: string | null;
+  required: boolean | null;
+  order_index: number | null;
+  answer_config: unknown;
+};
+
+/**
+ * Higiene de propiedad intelectual: el navegador recibe únicamente lo necesario
+ * para representar la pregunta. Las respuestas aceptadas, la marca de requisito
+ * indispensable, los criterios de evaluación y las instrucciones del agente
+ * permanecen en el servidor, de modo que la metodología de selección no pueda
+ * reconstruirse desde el bundle público.
+ */
+function publicAnswerConfig(value: unknown) {
+  const config = (value ?? {}) as Record<string, unknown>;
+  const sanitized: { options?: string[]; min?: number; max?: number } = {};
+  if (Array.isArray(config.options))
+    sanitized.options = config.options.map(option => String(option));
+  if (typeof config.min === "number") sanitized.min = config.min;
+  if (typeof config.max === "number") sanitized.max = config.max;
+  return sanitized;
+}
+
+/**
+ * Ontología del formulario público: el enlace identifica un formulario concreto
+ * —no la plaza completa—, de modo que una misma plaza puede ofrecer variantes A,
+ * B, C o D con enlaces, interruptores y trazabilidad independientes.
+ *
+ * Epistemología: el candidato se reconoce por su número de WhatsApp normalizado
+ * y la respuesta conserva siempre el formulario de origen; ninguna variante
+ * reescribe ni duplica la evidencia registrada por otra.
+ */
+function publicFormPayload(rows: PublicFormPayloadRow[]) {
+  if (!rows.length) return null;
+  const first = rows[0];
+  const responsibilities = (
+    Array.isArray(first.responsibilities) ? (first.responsibilities as unknown[]) : []
+  ).filter(
+    (responsibility: unknown): responsibility is string =>
+      typeof responsibility === "string" && responsibility.trim().length > 0
+  );
+  return {
+    id: first.id,
+    token: first.public_slug,
+    title: first.title,
+    department: first.department,
+    locationLabel: first.location_label,
+    description: first.description,
+    agentKey: first.agent_key ?? null,
+    responsibilities,
+    form: {
+      id: first.form_id,
+      token: first.form_token,
+      version: first.form_version,
+      title: first.form_title,
+      intro: first.form_intro,
+    },
+    questions: rows
+      .filter(row => row.question_id !== null)
+      .map(row => ({
+        id: row.question_id,
+        fieldKey: row.field_key,
+        label: row.label,
+        helpText: row.help_text,
+        type: row.type,
+        required: row.required,
+        orderIndex: row.order_index,
+        answerConfig: publicAnswerConfig(row.answer_config),
+      })),
+  };
+}
+
 function asJson(value: unknown) {
   return JSON.stringify(value ?? null);
 }
@@ -1484,15 +1575,18 @@ export const appRouter = router({
       .query(async ({ input }) => {
         const pool = await getPool();
         if (!pool) return null;
+        // Enlace de plaza: resuelve la variante publicada de mayor versión.
         const result = await pool.query(
           `SELECT p.id, p.public_slug, p.title, p.department, p.location_label, p.description, p.agent_key,
                 f.id AS form_id, f.title AS form_title, f.intro AS form_intro,
+                f.version AS form_version, f.public_token AS form_token,
                 profile.responsibilities,
                 q.id AS question_id, q.field_key, q.label, q.help_text, q.type, q.required,
-                q.order_index, q.answer_config, q.accepted_answers, q.hard_fail, q.evaluation_criteria
+                q.order_index, q.answer_config
            FROM job_positions p
            JOIN LATERAL (
-             SELECT published.id, published.title, published.intro
+             SELECT published.id, published.title, published.intro,
+                    published.version, published.public_token
                FROM application_forms published
               WHERE published.job_position_id = p.id
                 AND published.published = true
@@ -1516,64 +1610,69 @@ export const appRouter = router({
           ORDER BY q.order_index ASC`,
           [input.token]
         );
-        if (!result.rows.length) return null;
-        const first = result.rows[0];
-        return {
-          id: first.id,
-          token: first.public_slug,
-          title: first.title,
-          department: first.department,
-          locationLabel: first.location_label,
-          description: first.description,
-          agentKey: first.agent_key,
-          responsibilities: (Array.isArray(first.responsibilities)
-            ? (first.responsibilities as unknown[])
-            : []
-          ).filter(
-            (responsibility: unknown): responsibility is string =>
-              typeof responsibility === "string" &&
-              responsibility.trim().length > 0
-          ),
-          form: {
-            id: first.form_id,
-            title: first.form_title,
-            intro: first.form_intro,
-          },
-          questions: result.rows.map(row => ({
-            id: row.question_id,
-            fieldKey: row.field_key,
-            label: row.label,
-            helpText: row.help_text,
-            type: row.type,
-            required: row.required,
-            orderIndex: row.order_index,
-            answerConfig: row.answer_config ?? {},
-            acceptedAnswers: row.accepted_answers ?? [],
-            hardFail: row.hard_fail,
-          })),
-        };
+        return publicFormPayload(result.rows as PublicFormPayloadRow[]);
+      }),
+    getFormByToken: publicProcedure
+      .input(z.object({ token: z.string().min(16).max(64) }))
+      .query(async ({ input }) => {
+        const pool = await getPool();
+        if (!pool) return null;
+        // Enlace propio del formulario: exige el interruptor del formulario y la
+        // plaza publicada, de modo que apagar una variante invalida su enlace.
+        const result = await pool.query(
+          `SELECT p.id, p.public_slug, p.title, p.department, p.location_label, p.description, p.agent_key,
+                f.id AS form_id, f.title AS form_title, f.intro AS form_intro,
+                f.version AS form_version, f.public_token AS form_token,
+                profile.responsibilities,
+                q.id AS question_id, q.field_key, q.label, q.help_text, q.type, q.required,
+                q.order_index, q.answer_config
+           FROM application_forms f
+           JOIN job_positions p ON p.id = f.job_position_id
+           LEFT JOIN LATERAL (
+             SELECT jp.responsibilities
+               FROM job_profile_positions link
+               JOIN job_profiles jp ON jp.id = link.profile_id
+              WHERE link.job_position_id = p.id
+                AND jp.active = true
+              ORDER BY jp.updated_at DESC, jp.id DESC
+              LIMIT 1
+           ) profile ON true
+           LEFT JOIN form_questions q ON q.form_id = f.id AND q.active = true
+          WHERE f.public_token = $1
+            AND f.published = true
+            AND p.published = true
+          ORDER BY q.order_index ASC`,
+          [input.token]
+        );
+        return publicFormPayload(result.rows as PublicFormPayloadRow[]);
       }),
     submit: publicProcedure
       .input(
-        z.object({
-          token: z.string().min(8).max(120),
-          fullName: z.string().trim().min(2).max(240),
-          email: z.string().email().max(320).optional().or(z.literal("")),
-          phone: z.string().min(7).max(40),
-          location: z.object({
-            zoneId: z.number().int().positive(),
-            departmentId: z.number().int().positive(),
-            municipalityId: z.number().int().positive(),
-          }),
-          consents: z
-            .object({
-              adultConfirmed: requiredApplicationConfirmation,
-              informationTruthful: requiredApplicationConfirmation,
-              privacyAccepted: requiredApplicationConfirmation,
-            })
-            .strict(),
-          answers: z.record(z.string(), z.unknown()),
-        })
+        z
+          .object({
+            token: z.string().min(8).max(120).optional(),
+            formToken: z.string().min(16).max(64).optional(),
+            fullName: z.string().trim().min(2).max(240),
+            email: z.string().email().max(320).optional().or(z.literal("")),
+            phone: z.string().min(7).max(40),
+            location: z.object({
+              zoneId: z.number().int().positive(),
+              departmentId: z.number().int().positive(),
+              municipalityId: z.number().int().positive(),
+            }),
+            consents: z
+              .object({
+                adultConfirmed: requiredApplicationConfirmation,
+                informationTruthful: requiredApplicationConfirmation,
+                privacyAccepted: requiredApplicationConfirmation,
+              })
+              .strict(),
+            answers: z.record(z.string(), z.unknown()),
+          })
+          .refine(value => Boolean(value.token || value.formToken), {
+            message:
+              "Se requiere el enlace de la plaza o el enlace del formulario.",
+          })
       )
       .mutation(async ({ input }) => {
         const pool = await requirePool();
@@ -1585,19 +1684,50 @@ export const appRouter = router({
             client,
             input.location
           );
-          const positionResult = await client.query(
-            `SELECT p.id, f.id AS form_id FROM job_positions p
+          // El enlace identifica la plaza (variante publicada más reciente) o un
+          // formulario concreto. La identidad del candidato es siempre el
+          // WhatsApp normalizado y la postulación es única por plaza: completar
+          // otra variante agrega una participación, nunca un candidato nuevo.
+          let scope: { positionId: number; formId: number };
+          if (input.formToken) {
+            const formResult = await client.query(
+              `SELECT p.id AS position_id, f.id AS form_id
+                 FROM application_forms f
+                 JOIN job_positions p ON p.id = f.job_position_id
+                WHERE f.public_token = $1
+                  AND f.published = true
+                  AND p.published = true
+                LIMIT 1`,
+              [input.formToken]
+            );
+            if (!formResult.rows[0])
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message:
+                  "Este formulario no está disponible: su enlace fue apagado o la plaza fue retirada.",
+              });
+            scope = {
+              positionId: Number(formResult.rows[0].position_id),
+              formId: Number(formResult.rows[0].form_id),
+            };
+          } else {
+            const positionResult = await client.query(
+              `SELECT p.id, f.id AS form_id FROM job_positions p
              JOIN application_forms f ON f.job_position_id = p.id AND f.published = true
             WHERE p.public_slug = $1 AND p.published = true
             ORDER BY f.version DESC LIMIT 1`,
-            [input.token]
-          );
-          if (!positionResult.rows[0])
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "La plaza no está publicada o ya no está disponible.",
-            });
-          const position = positionResult.rows[0];
+              [input.token]
+            );
+            if (!positionResult.rows[0])
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "La plaza no está publicada o ya no está disponible.",
+              });
+            scope = {
+              positionId: Number(positionResult.rows[0].id),
+              formId: Number(positionResult.rows[0].form_id),
+            };
+          }
           const candidate = await client.query(
             `INSERT INTO candidates (phone_international, phone_country, full_name, email)
            VALUES ($1, $2, $3, $4)
@@ -1608,7 +1738,7 @@ export const appRouter = router({
           const candidateId = Number(candidate.rows[0].id);
           const existingApplication = await client.query(
             `SELECT id FROM applications WHERE candidate_id=$1 AND job_position_id=$2 LIMIT 1`,
-            [candidateId, position.id]
+            [candidateId, scope.positionId]
           );
           let applicationId: number;
           if (existingApplication.rows[0]) {
@@ -1616,14 +1746,14 @@ export const appRouter = router({
             const submission = await client.query(
               `SELECT 1 FROM application_form_submissions
                 WHERE application_id=$1 AND form_id=$2 LIMIT 1`,
-              [applicationId, position.form_id]
+              [applicationId, scope.formId]
             );
             if (submission.rows[0]) {
               await client.query("ROLLBACK");
               return {
                 alreadyApplied: true as const,
                 message:
-                  "Esta solicitud ya fue enviada previamente para esta plaza.",
+                  "Esta solicitud ya fue enviada previamente para este formulario. Puede completar otra variante con su enlace correspondiente.",
               };
             }
           } else {
@@ -1634,8 +1764,8 @@ export const appRouter = router({
                ) VALUES ($1,$2,$3,$4,$5,$6,'en_revision') RETURNING id`,
               [
                 candidateId,
-                position.id,
-                position.form_id,
+                scope.positionId,
+                scope.formId,
                 location.zoneId,
                 location.departmentId,
                 location.municipalityId,
@@ -1645,7 +1775,7 @@ export const appRouter = router({
           }
           const questions = await client.query(
             `SELECT id,field_key,required,type,answer_config FROM form_questions WHERE form_id = $1 AND active = true`,
-            [position.form_id]
+            [scope.formId]
           );
           for (const question of questions.rows) {
             const value = input.answers[question.field_key];
@@ -1687,7 +1817,7 @@ export const appRouter = router({
             `INSERT INTO application_form_submissions (application_id,form_id,source)
              VALUES ($1,$2,'formulario')
              ON CONFLICT (application_id,form_id) DO NOTHING`,
-            [applicationId, position.form_id]
+            [applicationId, scope.formId]
           );
           await client.query(
             `INSERT INTO audit_log
@@ -1847,10 +1977,25 @@ export const appRouter = router({
     list: roleProcedure.query(async () => {
       const pool = await getPool();
       if (!pool) return [];
-      const result =
-        await pool.query(`SELECT p.*, f.id AS form_id, f.title AS form_title, f.published AS form_published,
-        (SELECT count(*)::int FROM applications a WHERE a.job_position_id = p.id) AS applications_count
-        FROM job_positions p LEFT JOIN application_forms f ON f.job_position_id = p.id ORDER BY p.created_at DESC`);
+      // Una plaza puede tener varios formularios y anuncios: el formulario se
+      // resuelve con una subconsulta lateral de una sola fila para que la plaza
+      // aparezca exactamente una vez en el listado (sin duplicar la tarjeta).
+      const result = await pool.query(
+        `SELECT p.*,
+                latest_form.id AS form_id,
+                latest_form.title AS form_title,
+                latest_form.published AS form_published,
+                (SELECT count(*)::int FROM applications a WHERE a.job_position_id = p.id) AS applications_count
+           FROM job_positions p
+           LEFT JOIN LATERAL (
+             SELECT f.id, f.title, f.published
+               FROM application_forms f
+              WHERE f.job_position_id = p.id
+              ORDER BY f.version DESC, f.id DESC
+              LIMIT 1
+           ) latest_form ON true
+          ORDER BY p.created_at DESC`
+      );
       return result.rows;
     }),
     upsert: adminProcedure
@@ -1940,11 +2085,12 @@ export const appRouter = router({
           ]
         );
         await pool.query(
-          `INSERT INTO application_forms (job_position_id,version,title,intro,published,created_by_user_id) VALUES ($1,1,$2,$3,false,$4)`,
+          `INSERT INTO application_forms (job_position_id,version,title,intro,published,public_token,created_by_user_id) VALUES ($1,1,$2,$3,false,$4,$5)`,
           [
             result.rows[0].id,
             `Formulario · ${normalizedInput.title}`,
             "Complete sus datos para postularse a esta plaza.",
+            createFormPublicToken(),
             ctx.user.id,
           ]
         );
@@ -4290,14 +4436,24 @@ export const appRouter = router({
 
   forms: router({
     getByPosition: adminProcedure
-      .input(z.object({ positionId: z.number() }))
+      .input(
+        z.object({
+          positionId: z.number(),
+          formId: z.number().int().positive().optional(),
+        })
+      )
       .query(async ({ input }) => {
         const pool = await getPool();
         if (!pool) return null;
-        const form = await pool.query(
-          `SELECT * FROM application_forms WHERE job_position_id=$1 ORDER BY version DESC LIMIT 1`,
-          [input.positionId]
-        );
+        const form = input.formId
+          ? await pool.query(
+              `SELECT * FROM application_forms WHERE id=$1 AND job_position_id=$2 LIMIT 1`,
+              [input.formId, input.positionId]
+            )
+          : await pool.query(
+              `SELECT * FROM application_forms WHERE job_position_id=$1 ORDER BY version DESC, id DESC LIMIT 1`,
+              [input.positionId]
+            );
         if (!form.rows[0]) return null;
         const questions = await pool.query(
           `SELECT * FROM form_questions WHERE form_id=$1 ORDER BY order_index`,
@@ -4305,18 +4461,70 @@ export const appRouter = router({
         );
         return { ...form.rows[0], questions: questions.rows };
       }),
+    getPreview: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await getPool();
+        if (!pool) return null;
+        const rows = await pool.query(
+          `SELECT p.id, p.public_slug, p.title, p.department, p.location_label, p.description, p.agent_key,
+                  p.published AS position_published,
+                  f.id AS form_id, f.title AS form_title, f.intro AS form_intro,
+                  f.version AS form_version, f.public_token AS form_token,
+                  f.published AS form_published,
+                  profile.responsibilities,
+                  q.id AS question_id, q.field_key, q.label, q.help_text, q.type, q.required,
+                  q.order_index, q.answer_config
+             FROM application_forms f
+             JOIN job_positions p ON p.id = f.job_position_id
+             LEFT JOIN LATERAL (
+               SELECT jp.responsibilities
+                 FROM job_profile_positions link
+                 JOIN job_profiles jp ON jp.id = link.profile_id
+                WHERE link.job_position_id = p.id
+                  AND jp.active = true
+                ORDER BY jp.updated_at DESC, jp.id DESC
+                LIMIT 1
+             ) profile ON true
+             LEFT JOIN form_questions q ON q.form_id = f.id AND q.active = true
+            WHERE f.id = $1
+            ORDER BY q.order_index ASC`,
+          [input.id]
+        );
+        const payload = publicFormPayload(rows.rows as PublicFormPayloadRow[]);
+        if (!payload) return null;
+        const state = rows.rows[0] as {
+          form_published: boolean;
+          position_published: boolean;
+        };
+        return {
+          form: payload.form,
+          position: {
+            id: payload.id,
+            title: payload.title,
+            department: payload.department,
+            locationLabel: payload.locationLabel,
+            description: payload.description,
+            responsibilities: payload.responsibilities,
+          },
+          questions: payload.questions,
+          published: Boolean(state.form_published),
+          positionPublished: Boolean(state.position_published),
+          publicPath: `/apply/f/${payload.form.token}`,
+        };
+      }),
     listByPosition: roleProcedure
       .input(z.object({ positionId: z.number().int().positive() }))
       .query(async ({ input }) => {
         const pool = await getPool();
         if (!pool) return [];
         const forms = await pool.query(
-          `SELECT f.id,f.version,f.title,f.intro,f.published,f.source,f.import_meta,f.updated_at,
+          `SELECT f.id,f.version,f.title,f.intro,f.published,f.source,f.public_token,f.import_meta,f.updated_at,
                   (SELECT count(*)::int FROM form_questions q WHERE q.form_id=f.id) AS question_count,
                   (SELECT count(*)::int FROM application_form_submissions s WHERE s.form_id=f.id) AS submission_count
              FROM application_forms f
             WHERE f.job_position_id=$1
-            ORDER BY f.version`,
+            ORDER BY f.version, f.id`,
           [input.positionId]
         );
         return forms.rows;
@@ -4352,33 +4560,16 @@ export const appRouter = router({
             message: "La hoja supera el peso máximo de 5 MB.",
           });
         try {
-          const result = await importSpreadsheetForm(pool, {
+          // La importación incorpora candidatos, postulaciones y respuestas de
+          // una sola vez, pero conserva el formulario en borrador y NO ejecuta
+          // la evaluación automática con IA: esa evaluación se solicita cuando
+          // la persona responsable lo decida, para no cargar la infraestructura.
+          return await importSpreadsheetForm(pool, {
             positionId: input.positionId,
             fileName: input.fileName,
             buffer,
             actorUserId: ctx.user.id,
           });
-          for (const applicationId of result.affectedApplicationIds) {
-            setImmediate(() => {
-              void evaluateApplicationWithAgent(pool, applicationId).catch(
-                error => {
-                  const message = safeIntegrationMessage(
-                    error,
-                    "No fue posible ejecutar la evaluación automática."
-                  );
-                  if (
-                    !message.includes("no está habilitada") &&
-                    !message.includes("No hay una API key")
-                  ) {
-                    console.warn(
-                      `[Agent] Import ${applicationId}: ${message}`
-                    );
-                  }
-                }
-              );
-            });
-          }
-          return result;
         } catch (error) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -4448,13 +4639,14 @@ export const appRouter = router({
           [input.positionId]
         );
         const result = await pool.query(
-          `INSERT INTO application_forms (job_position_id,version,title,intro,published,created_by_user_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+          `INSERT INTO application_forms (job_position_id,version,title,intro,published,public_token,created_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
           [
             input.positionId,
             version.rows[0].version,
             normalizedInput.title,
             normalizedInput.intro ?? null,
             false,
+            createFormPublicToken(),
             ctx.user.id,
           ]
         );

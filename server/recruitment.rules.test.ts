@@ -112,4 +112,36 @@ describe("recruitment rules", () => {
     expect(result.passed).toBe(true);
     expect(result.results.every(item => item.passed)).toBe(true);
   });
+
+  it("evalúa cada variante por separado cuando dos formularios comparten la clave", () => {
+    const result = evaluateDeterministic(
+      [
+        {
+          fieldKey: "experiencia",
+          answerKey: "experiencia#formulario21",
+          questionId: 501,
+          label: "Experiencia (variante A)",
+          hardFail: true,
+          acceptedAnswers: ["Sí"],
+        },
+        {
+          fieldKey: "experiencia",
+          answerKey: "experiencia#formulario22",
+          questionId: 502,
+          label: "Experiencia (variante B)",
+          hardFail: true,
+          acceptedAnswers: ["Sí"],
+        },
+      ],
+      {
+        "experiencia#formulario21": "Sí",
+        "experiencia#formulario22": "No",
+      }
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.results.map(item => item.questionId)).toEqual([501, 502]);
+    expect(result.results.map(item => item.passed)).toEqual([true, false]);
+    expect(result.hardFailReason).toBe("Experiencia (variante B)");
+  });
 });

@@ -7,11 +7,13 @@ export function GuatemalaPhoneInput({
   onChange,
   className,
   ariaLabel = "Número de teléfono móvil de Guatemala",
+  disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   className?: string;
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="relative">
@@ -31,6 +33,7 @@ export function GuatemalaPhoneInput({
         onChange={event =>
           onChange(guatemalaLocalPhoneDigits(event.target.value))
         }
+        disabled={disabled}
       />
     </div>
   );

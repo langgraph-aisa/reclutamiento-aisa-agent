@@ -2,11 +2,14 @@ import { Button } from "@/components/ui/button";
 import { AppBrand } from "@/components/AppBrand";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GuatemalaPhoneInput } from "@/components/GuatemalaPhoneInput";
+import {
+  PublicField as Field,
+  QuestionControl,
+  type PublicQuestion,
+} from "@/components/PublicQuestionField";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { STANDARD_WORK_SCHEDULE } from "@shared/jobPresentation";
 import {
@@ -25,16 +28,6 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useRoute } from "wouter";
-
-type PublicQuestion = {
-  id: number;
-  fieldKey: string;
-  label: string;
-  helpText?: string | null;
-  type: string;
-  required: boolean;
-  answerConfig: { options?: string[]; min?: number; max?: number };
-};
 
 type PublicZone = {
   id: number;
@@ -112,13 +105,23 @@ const demoForm = {
 };
 
 export default function Apply() {
-  const [, params] = useRoute("/apply/:token");
-  const token = params?.token ?? "demo-vendedor";
-  const isDemo = token === "demo-vendedor";
-  const formQuery = trpc.publicJobs.getByToken.useQuery(
+  const [, positionParams] = useRoute("/apply/:token");
+  const [, formParams] = useRoute("/apply/f/:token");
+  // Dos capacidades distintas: el enlace de plaza resuelve la variante publicada
+  // más reciente y el enlace de formulario apunta a una variante concreta.
+  const formToken = formParams?.token ?? "";
+  const usesFormLink = formToken.length > 0;
+  const token = usesFormLink ? formToken : (positionParams?.token ?? "demo-vendedor");
+  const isDemo = !usesFormLink && token === "demo-vendedor";
+  const positionQuery = trpc.publicJobs.getByToken.useQuery(
     { token },
-    { enabled: !isDemo }
+    { enabled: !isDemo && !usesFormLink }
   );
+  const formLinkQuery = trpc.publicJobs.getFormByToken.useQuery(
+    { token: formToken },
+    { enabled: !isDemo && usesFormLink }
+  );
+  const formQuery = usesFormLink ? formLinkQuery : positionQuery;
   const zonesQuery = trpc.geo.zones.useQuery(undefined, { enabled: !isDemo });
   const submitMutation = trpc.publicJobs.submit.useMutation();
   const form = (isDemo ? demoForm : formQuery.data) as
@@ -187,7 +190,7 @@ export default function Apply() {
     }
     try {
       const result = await submitMutation.mutateAsync({
-        token,
+        ...(usesFormLink ? { formToken } : { token }),
         ...contact,
         location,
         consents,
@@ -217,10 +220,14 @@ export default function Apply() {
               <ShieldCheck className="h-6 w-6" />
             </div>
             <h1 className="mt-5 text-2xl font-800 text-primary">
-              Este enlace ya no está disponible
+              {usesFormLink
+                ? "Este formulario no está disponible"
+                : "Este enlace ya no está disponible"}
             </h1>
             <p className="mt-3 text-muted-foreground">
-              La plaza pudo haber sido cerrada o el enlace no es válido.
+              {usesFormLink
+                ? "La persona responsable apagó este formulario o la plaza fue retirada. Solicite el enlace vigente para continuar con su postulación."
+                : "La plaza pudo haber sido cerrada o el enlace no es válido."}
             </p>
           </CardContent>
         </Card>
@@ -511,87 +518,6 @@ export default function Apply() {
         )}
       </div>
     </main>
-  );
-}
-
-function QuestionControl({
-  question,
-  value,
-  onChange,
-}: {
-  question: PublicQuestion;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  if (question.type === "textarea")
-    return (
-      <Textarea
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        placeholder="Escriba su respuesta"
-        rows={4}
-      />
-    );
-  if (question.type === "select")
-    return (
-      <select
-        className="flex h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-        value={value}
-        onChange={event => onChange(event.target.value)}
-      >
-        <option value="">Seleccione una opción</option>
-        {(question.answerConfig.options ?? []).map(option => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    );
-  if (question.type === "number")
-    return (
-      <Input
-        type="number"
-        inputMode="decimal"
-        min={question.answerConfig.min}
-        max={question.answerConfig.max}
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        placeholder="Escriba un valor"
-      />
-    );
-  if (question.type === "phone")
-    return <GuatemalaPhoneInput value={value} onChange={onChange} />;
-  return (
-    <Input
-      value={value}
-      onChange={event => onChange(event.target.value)}
-      placeholder="Escriba su respuesta"
-    />
-  );
-}
-
-function Field({
-  label,
-  required,
-  help,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  help?: string | null;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label className="text-sm font-semibold text-primary">
-        {label}
-        {required && <span className="ml-1 text-emerald-700">*</span>}
-      </Label>
-      {help && (
-        <p className="text-xs leading-5 text-muted-foreground">{help}</p>
-      )}
-      {children}
-    </div>
   );
 }
 

@@ -10,7 +10,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { PublicFormPreview } from "@/components/PublicFormPreview";
 import { trpc } from "@/lib/trpc";
 import {
   BriefcaseBusiness,
@@ -18,6 +20,7 @@ import {
   Copy,
   Edit3,
   ExternalLink,
+  Eye,
   FileSpreadsheet,
   FolderKanban,
   Globe2,
@@ -102,7 +105,11 @@ export default function Jobs() {
   const importForm = trpc.forms.importSpreadsheet.useMutation({
     onSuccess: result => {
       toast.success(
-        `Importación completada: ${result.rowsImported} filas con respuestas, ${result.candidatesCreated} candidatos nuevos, ${result.applicationsCreated} postulaciones nuevas y ${result.answersInserted} respuestas agregadas.`
+        `${
+          result.reusedForm
+            ? "Importación aplicada al formulario existente de la plaza"
+            : "Importación completada"
+        }: ${result.rowsImported} filas con respuestas, ${result.candidatesCreated} candidatos nuevos, ${result.applicationsCreated} postulaciones nuevas y ${result.answersInserted} respuestas agregadas.`
       );
       if (importPositionId)
         utils.forms.listByPosition.invalidate({ positionId: importPositionId });
@@ -699,8 +706,8 @@ export default function Jobs() {
               La primera fila define las preguntas (columnas). La columna de
               teléfono o WhatsApp identifica al candidato: si no está
               registrado, se crea con ese número como única fuente de
-              relación. Las respuestas alimentan la evaluación y actualizan
-              el punteo.
+              relación. Los candidatos y sus respuestas se cargan de
+              inmediato y el formulario queda en borrador.
             </p>
           </DialogHeader>
           <label className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border border-dashed border-border/70 bg-muted/30 p-8 text-center">
@@ -724,8 +731,12 @@ export default function Jobs() {
           </label>
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">
-              Las respuestas importadas se agregan al análisis del agente sin
-              sobrescribir respuestas existentes.
+              Las respuestas importadas se agregan sin sobrescribir las
+              existentes. Si la plaza ya tiene un formulario con las mismas
+              preguntas, la importación agrega las respuestas a ese formulario
+              en lugar de crear otro. La evaluación automática con IA no se
+              ejecuta en la importación: se solicita cuando la persona
+              responsable lo decida.
             </span>
             <div className="flex gap-2">
               <Button
@@ -773,7 +784,29 @@ function PositionForms({
   positionId: number;
   isAdmin: boolean;
 }) {
+  const utils = trpc.useUtils();
   const forms = trpc.forms.listByPosition.useQuery({ positionId });
+  const [previewFormId, setPreviewFormId] = useState<number | null>(null);
+  const [copiedFormId, setCopiedFormId] = useState<number | null>(null);
+  const setFormPublished = trpc.forms.setPublished.useMutation({
+    onSuccess: (_result, variables) => {
+      toast.success(
+        variables.published
+          ? "Formulario habilitado: su enlace seguro ya recibe candidatos"
+          : "Formulario apagado: su enlace deja de estar disponible"
+      );
+      utils.forms.listByPosition.invalidate({ positionId });
+    },
+    onError: error =>
+      toast.error(`No fue posible cambiar el formulario: ${error.message}`),
+  });
+  const publicUrl = (form: any) =>
+    `${window.location.origin}/apply/f/${form.public_token}`;
+  const copyPublicUrl = async (form: any) => {
+    await navigator.clipboard?.writeText(publicUrl(form));
+    setCopiedFormId(Number(form.id));
+    window.setTimeout(() => setCopiedFormId(null), 1400);
+  };
   const rows = forms.data ?? [];
   if (!forms.data)
     return <p className="mt-2 text-xs text-muted-foreground">Cargando…</p>;
@@ -788,35 +821,131 @@ function PositionForms({
       {rows.map((form: any) => (
         <div
           key={form.id}
-          className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 text-xs"
+          className="rounded-xl border border-border/60 bg-background px-3 py-2 text-xs"
         >
-          <span className="font-semibold text-primary">
-            Formulario No. {form.version}
-          </span>
-          <span className="truncate text-muted-foreground">{form.title}</span>
-          <Badge
-            className={
-              form.source === "importado"
-                ? "rounded-full bg-sky-100 text-sky-800"
-                : "rounded-full bg-violet-100 text-violet-800"
-            }
-          >
-            {form.source === "importado" ? "Importado" : "Herramienta"}
-          </Badge>
-          <Badge
-            className={
-              form.published
-                ? "rounded-full bg-emerald-100 text-emerald-800"
-                : "rounded-full bg-amber-100 text-amber-800"
-            }
-          >
-            {form.published ? "habilitada" : "borrador"}
-          </Badge>
-          <span className="text-muted-foreground">
-            {form.question_count} preguntas · {form.submission_count} respuestas
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-primary">
+              Formulario No. {form.version}
+            </span>
+            <span className="truncate text-muted-foreground">{form.title}</span>
+            <Badge
+              className={
+                form.source === "importado"
+                  ? "rounded-full bg-sky-100 text-sky-800"
+                  : "rounded-full bg-violet-100 text-violet-800"
+              }
+            >
+              {form.source === "importado" ? "Importado" : "Herramienta"}
+            </Badge>
+            <Badge
+              className={
+                form.published
+                  ? "rounded-full bg-emerald-100 text-emerald-800"
+                  : "rounded-full bg-amber-100 text-amber-800"
+              }
+            >
+              {form.published ? "habilitada" : "borrador"}
+            </Badge>
+            <span className="text-muted-foreground">
+              {form.question_count} preguntas · {form.submission_count}{" "}
+              respuestas
+            </span>
+            {isAdmin ? (
+              <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                  <Switch
+                    checked={Boolean(form.published)}
+                    disabled={setFormPublished.isPending}
+                    onCheckedChange={published =>
+                      setFormPublished.mutate({
+                        id: Number(form.id),
+                        published,
+                      })
+                    }
+                    aria-label={`Encender o apagar el formulario No. ${form.version}`}
+                  />
+                  {form.published ? "Encendido" : "Apagado"}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={() => copyPublicUrl(form)}
+                  aria-label={`Copiar el enlace del formulario No. ${form.version}`}
+                >
+                  {copiedFormId === Number(form.id) ? (
+                    <Check className="mr-1.5 h-3.5 w-3.5" />
+                  ) : (
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  {copiedFormId === Number(form.id) ? "Copiado" : "Enlace"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={() =>
+                    window.open(
+                      publicUrl(form),
+                      "_blank",
+                      "noopener,noreferrer"
+                    )
+                  }
+                  aria-label={`Abrir el formulario público No. ${form.version}`}
+                >
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  Ver público
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={() => setPreviewFormId(Number(form.id))}
+                  aria-label={`Ver cómo se ve públicamente el formulario No. ${form.version}`}
+                >
+                  <Eye className="mr-1.5 h-3.5 w-3.5" />
+                  Cómo se ve
+                </Button>
+                <Link href={`/admin/forms/${positionId}?formId=${form.id}`}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full"
+                  >
+                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                    Preguntas
+                  </Button>
+                </Link>
+                <Link href={`/admin/forms/${positionId}?formId=${form.id}`}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full"
+                  >
+                    <Edit3 className="mr-1.5 h-3.5 w-3.5" />
+                    Editar
+                  </Button>
+                </Link>
+              </div>
+            ) : null}
+          </div>
+          <p className="mt-1.5 truncate text-[11px] text-muted-foreground">
+            Enlace seguro: /apply/f/{form.public_token}
+          </p>
         </div>
       ))}
+      <PublicFormPreview
+        formId={previewFormId}
+        open={previewFormId !== null}
+        onOpenChange={open => {
+          if (!open) setPreviewFormId(null);
+        }}
+      />
     </div>
   );
 }

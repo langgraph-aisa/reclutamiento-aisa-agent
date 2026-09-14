@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { PublicFormPreview } from "@/components/PublicFormPreview";
 import { trpc } from "@/lib/trpc";
 import {
   ArrowDown,
@@ -12,6 +13,8 @@ import {
   ArrowUp,
   BrainCircuit,
   Check,
+  Copy,
+  Eye,
   GripVertical,
   Pencil,
   Plus,
@@ -20,7 +23,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useRoute } from "wouter";
+import { Link, useRoute, useSearch } from "wouter";
 import { toast } from "sonner";
 
 type Question = {
@@ -57,9 +60,14 @@ const emptyQuestion: Question = {
 };
 export default function FormBuilder() {
   const [, params] = useRoute("/admin/forms/:positionId");
+  const search = useSearch();
+  // La plaza puede tener varias variantes (A, B, C, D): el parámetro `formId`
+  // indica cuál se está editando; sin él se abre la versión más reciente.
+  const requestedFormId =
+    Number(new URLSearchParams(search).get("formId") ?? 0) || undefined;
   const positionId = Number(params?.positionId ?? 0);
   const query = trpc.forms.getByPosition.useQuery(
-    { positionId },
+    { positionId, formId: requestedFormId },
     { enabled: positionId > 0 }
   );
   const linkedProfile = trpc.profiles.forPosition.useQuery(
@@ -114,10 +122,21 @@ export default function FormBuilder() {
   const [question, setQuestion] = useState<Question>(emptyQuestion);
   const [showQuestion, setShowQuestion] = useState(false);
   const [formDraft, setFormDraft] = useState({ title: "", intro: "" });
+  const [copiedPublicLink, setCopiedPublicLink] = useState(false);
+  const [showPublicPreview, setShowPublicPreview] = useState(false);
   const form = query.data;
   useEffect(() => {
     if (form) setFormDraft({ title: form.title, intro: form.intro ?? "" });
   }, [form]);
+  const formPublicUrl = form?.public_token
+    ? `${window.location.origin}/apply/f/${form.public_token}`
+    : "";
+  const copyFormLink = async () => {
+    if (!formPublicUrl) return;
+    await navigator.clipboard?.writeText(formPublicUrl);
+    setCopiedPublicLink(true);
+    window.setTimeout(() => setCopiedPublicLink(false), 1400);
+  };
   const saveForm = async () => {
     if (!form) return;
     await upsert.mutateAsync({
@@ -343,6 +362,37 @@ export default function FormBuilder() {
                 >
                   {form.published ? "Publicado" : "Borrador"}
                 </Badge>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl bg-muted/60 p-3 text-xs">
+                <span className="truncate text-muted-foreground">
+                  Enlace seguro del formulario: /apply/f/{form.public_token}
+                </span>
+                <div className="ml-auto flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full"
+                    onClick={copyFormLink}
+                    disabled={!formPublicUrl}
+                  >
+                    {copiedPublicLink ? (
+                      <Check className="mr-1.5 h-3.5 w-3.5" />
+                    ) : (
+                      <Copy className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    {copiedPublicLink ? "Copiado" : "Copiar enlace"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full"
+                    onClick={() => setShowPublicPreview(true)}
+                  >
+                    <Eye className="mr-1.5 h-3.5 w-3.5" /> Cómo se ve
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
@@ -591,6 +641,11 @@ export default function FormBuilder() {
           )}
         </>
       )}
+      <PublicFormPreview
+        formId={form?.id ?? null}
+        open={showPublicPreview}
+        onOpenChange={setShowPublicPreview}
+      />
     </div>
   );
 }

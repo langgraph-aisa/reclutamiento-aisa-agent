@@ -521,6 +521,11 @@ function CandidateDetail({
                     </Badge>
                   </div>
                   <p className="mt-1 text-xs text-white/45">
+                    Formulario No. {submission.version} ·{" "}
+                    {formAnswers.length}{" "}
+                    {formAnswers.length === 1 ? "respuesta" : "respuestas"}
+                  </p>
+                  <p className="mt-1 text-xs text-white/45">
                     {submission.submitted_at
                       ? new Date(
                           submission.submitted_at

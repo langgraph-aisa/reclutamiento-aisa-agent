@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import * as XLSX from "xlsx";
+import { createFormPublicToken } from "./formTokens";
 import { isValidInternationalPhone, normalizePhone } from "./phone";
 
 /**
@@ -19,6 +21,8 @@ import { isValidInternationalPhone, normalizePhone } from "./phone";
 export type ImportSpreadsheetResult = {
   formId: number;
   formVersion: number;
+  formPublicToken: string;
+  reusedForm: boolean;
   questionCount: number;
   rowsImported: number;
   rowsSkippedNoPhone: number;
@@ -108,6 +112,23 @@ function slugifyHeader(value: string) {
   return base || "pregunta";
 }
 
+/**
+ * Firma del instrumento: conjunto ordenado de preguntas normalizadas.
+ *
+ * Ontología: dos conjuntos idénticos de preguntas son el mismo instrumento, no
+ * dos variantes. Epistemología: reimportar una hoja con las mismas preguntas no
+ * crea otro formulario ni duplica la evidencia; agrega respuestas al instrumento
+ * existente, que es la operación idempotente ya aplicada a candidatos,
+ * postulaciones, participaciones y respuestas. Una variante distinta exige
+ * preguntas distintas.
+ */
+export function instrumentSignature(headers: string[]) {
+  const normalized = headers
+    .map(header => header.trim().replace(/\s+/g, " ").toLowerCase())
+    .join("\u0000");
+  return createHash("sha256").update(normalized).digest("hex");
+}
+
 function asJson(value: unknown) {
   return JSON.stringify(value ?? null);
 }
@@ -148,21 +169,71 @@ export async function importSpreadsheetForm(
     );
     if (!position.rows[0])
       throw new Error("La plaza seleccionada no existe.");
-    const versionRow = await client.query(
-      `SELECT COALESCE(MAX(version),0)+1 AS version FROM application_forms WHERE job_position_id=$1`,
+
+    // Mismo instrumento, misma evidencia: si la plaza ya tiene un formulario con
+    // exactamente estas preguntas, la importación agrega respuestas a él en lugar
+    // de crear un segundo formulario que duplicaría la evidencia.
+    const signature = instrumentSignature(
+      questionColumns.map(column => column.header)
+    );
+    const existingForms = await client.query(
+      `SELECT f.id, f.version, f.published, f.public_token,
+              jsonb_agg(q.label ORDER BY q.order_index, q.id) AS labels
+         FROM application_forms f
+         JOIN form_questions q ON q.form_id = f.id AND q.active = true
+        WHERE f.job_position_id = $1
+        GROUP BY f.id, f.version, f.published, f.public_token
+        ORDER BY f.version DESC, f.id DESC`,
       [input.positionId]
     );
-    const version = Number(versionRow.rows[0].version);
-    const form = await client.query(
+    const reusable = existingForms.rows.find(row => {
+      const labels = Array.isArray(row.labels) ? row.labels.map(String) : [];
+      return (
+        labels.length > 0 && instrumentSignature(labels) === signature
+      );
+    });
+
+    let version: number;
+    let formId: number;
+    let publicToken: string;
+    let questionIds: number[] = [];
+    let reusedForm = false;
+
+    if (reusable) {
+      reusedForm = true;
+      formId = Number(reusable.id);
+      version = Number(reusable.version);
+      publicToken = String(reusable.public_token ?? "");
+      if (!publicToken) {
+        publicToken = createFormPublicToken();
+        await client.query(
+          `UPDATE application_forms SET public_token=$1, updated_at=now() WHERE id=$2`,
+          [publicToken, formId]
+        );
+      }
+      const existingQuestions = await client.query(
+        `SELECT id FROM form_questions WHERE form_id=$1 AND active=true ORDER BY order_index, id`,
+        [formId]
+      );
+      questionIds = existingQuestions.rows.map(question => Number(question.id));
+    } else {
+      const versionRow = await client.query(
+        `SELECT COALESCE(MAX(version),0)+1 AS version FROM application_forms WHERE job_position_id=$1`,
+        [input.positionId]
+      );
+      version = Number(versionRow.rows[0].version);
+      publicToken = createFormPublicToken();
+      const form = await client.query(
       `INSERT INTO application_forms
-         (job_position_id,version,title,intro,published,source,import_meta,created_by_user_id)
-       VALUES ($1,$2,$3,$4,false,'importado',$5::jsonb,$6)
+         (job_position_id,version,title,intro,published,source,public_token,import_meta,created_by_user_id)
+       VALUES ($1,$2,$3,$4,false,'importado',$5,$6::jsonb,$7)
        RETURNING id`,
       [
         input.positionId,
         version,
         `Formulario importado · ${input.fileName}`.slice(0, 240),
         "Formulario cargado desde hoja de cálculo con respuestas de candidatos.",
+        publicToken,
         asJson({
           fileName: input.fileName,
           columns: grid.headers.filter(Boolean).length,
@@ -172,20 +243,20 @@ export async function importSpreadsheetForm(
         input.actorUserId,
       ]
     );
-    const formId = Number(form.rows[0].id);
+      formId = Number(form.rows[0].id);
 
-    const questionIds: number[] = [];
-    for (let index = 0; index < questionColumns.length; index++) {
-      const { header } = questionColumns[index];
-      const fieldKey = `${slugifyHeader(header)}_${index + 1}`.slice(0, 100);
-      const question = await client.query(
-        `INSERT INTO form_questions
-           (form_id,field_key,label,type,required,order_index)
-         VALUES ($1,$2,$3,'text',false,$4)
-         RETURNING id`,
-        [formId, fieldKey, header.slice(0, 2000), index]
-      );
-      questionIds.push(Number(question.rows[0].id));
+      for (let index = 0; index < questionColumns.length; index++) {
+        const { header } = questionColumns[index];
+        const fieldKey = `${slugifyHeader(header)}_${index + 1}`.slice(0, 100);
+        const question = await client.query(
+          `INSERT INTO form_questions
+             (form_id,field_key,label,type,required,order_index)
+           VALUES ($1,$2,$3,'text',false,$4)
+           RETURNING id`,
+          [formId, fieldKey, header.slice(0, 2000), index]
+        );
+        questionIds.push(Number(question.rows[0].id));
+      }
     }
 
     let rowsImported = 0;
@@ -276,13 +347,15 @@ export async function importSpreadsheetForm(
 
     await client.query(
       `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
-       VALUES ($1,'application_form',$2,'form_imported',$3::jsonb)`,
+       VALUES ($1,'application_form',$2,$3,$4::jsonb)`,
       [
         input.actorUserId,
         formId,
+        reusedForm ? "form_import_reused" : "form_imported",
         asJson({
           positionId: input.positionId,
           fileName: input.fileName,
+          reutilizado: reusedForm,
           questions: questionColumns.length,
           rowsImported,
           rowsSkippedNoPhone,
@@ -295,6 +368,8 @@ export async function importSpreadsheetForm(
     return {
       formId,
       formVersion: version,
+      formPublicToken: publicToken,
+      reusedForm,
       questionCount: questionColumns.length,
       rowsImported,
       rowsSkippedNoPhone,

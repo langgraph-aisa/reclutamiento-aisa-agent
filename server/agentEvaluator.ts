@@ -238,7 +238,10 @@ function publicEvaluationInput(source: EvaluationSource) {
     ubicacionDeclarada: source.declaredLocation,
     respuestas: source.questions.map(question => ({
       pregunta: question.label,
-      respuesta: source.answers[question.fieldKey] ?? null,
+      formulario: question.formTitle
+        ? `${question.formTitle}${question.formVersion ? ` · versión ${question.formVersion}` : ""}`
+        : null,
+      respuesta: source.answers[question.answerKey ?? question.fieldKey] ?? null,
       criterio: question.evaluationCriteria ?? null,
       instruccionEspecifica: question.aiPrompt ?? null,
       requisitoIndispensable: Boolean(question.hardFail),
@@ -334,17 +337,44 @@ async function evaluationSource(pool: Pool, applicationId: number) {
   );
   const row = application.rows[0];
   if (!row) throw new Error("Postulación no encontrada.");
+  // Trazabilidad por formulario: una plaza puede tener varias variantes (A, B, C,
+  // D) y una misma postulación puede acumular respuestas de más de una. La
+  // consulta conserva el formulario de origen y el identificador de la pregunta.
   const answers = await pool.query(
     `SELECT aa.question_id,aa.value_json,aa.normalized_value,q.field_key,q.label,q.hard_fail,
-            q.accepted_answers,q.answer_config,q.evaluation_criteria,q.ai_prompt
+            q.accepted_answers,q.answer_config,q.evaluation_criteria,q.ai_prompt,
+            q.form_id,f.title AS form_title,f.version AS form_version
        FROM application_answers aa
        JOIN form_questions q ON q.id=aa.question_id
+       JOIN application_forms f ON f.id=q.form_id
       WHERE aa.application_id=$1 AND q.active=true
-      ORDER BY q.order_index`,
+      ORDER BY f.version,q.order_index,aa.question_id`,
     [applicationId]
   );
+  // Si dos variantes reutilizan el mismo `fieldKey`, cada respuesta conserva su
+  // propia clave cualificada para que ninguna sobrescriba a la otra.
+  const fieldKeyOccurrences = new Map<string, number>();
+  for (const answer of answers.rows) {
+    const fieldKey = String(answer.field_key);
+    fieldKeyOccurrences.set(
+      fieldKey,
+      (fieldKeyOccurrences.get(fieldKey) ?? 0) + 1
+    );
+  }
+  const answerKeyFor = (answer: {
+    field_key: string;
+    form_id: number | null;
+  }) =>
+    (fieldKeyOccurrences.get(String(answer.field_key)) ?? 0) > 1
+      ? `${answer.field_key}#formulario${answer.form_id ?? 0}`
+      : String(answer.field_key);
   const questions = answers.rows.map(answer => ({
     fieldKey: answer.field_key,
+    answerKey: answerKeyFor(answer),
+    questionId: answer.question_id,
+    formId: answer.form_id ?? null,
+    formVersion: answer.form_version ?? null,
+    formTitle: answer.form_title ?? null,
     label: answer.label,
     hardFail: answer.hard_fail,
     acceptedAnswers: answer.accepted_answers ?? [],
@@ -352,9 +382,9 @@ async function evaluationSource(pool: Pool, applicationId: number) {
     evaluationCriteria: answer.evaluation_criteria ?? undefined,
     aiPrompt: answer.ai_prompt ?? undefined,
   }));
-  const answerValues = Object.fromEntries(
-    answers.rows.map(answer => [answer.field_key, answer.value_json])
-  );
+  const answerValues: Record<string, unknown> = {};
+  for (const answer of answers.rows)
+    answerValues[answerKeyFor(answer)] = answer.value_json;
   const profile = row.profile_name
     ? {
         name: row.profile_name,
@@ -685,6 +715,20 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
           try {
             await client.query("BEGIN");
             for (const rule of deterministic.results) {
+              // La marca determinista se ancla a la pregunta concreta para que
+              // dos variantes con el mismo `fieldKey` no compartan veredicto.
+              if (rule.questionId) {
+                await client.query(
+                  `UPDATE application_answers SET deterministic_result=$1
+                    WHERE application_id=$2 AND question_id=$3`,
+                  [
+                    rule.passed ? "passed" : "failed",
+                    applicationId,
+                    rule.questionId,
+                  ]
+                );
+                continue;
+              }
               await client.query(
                 `UPDATE application_answers aa SET deterministic_result=$1
                   FROM form_questions q

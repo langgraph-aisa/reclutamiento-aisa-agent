@@ -250,6 +250,9 @@ export const applicationForms = pgTable(
     source: varchar("source", { length: 24 })
       .default("herramienta")
       .notNull(),
+    publicToken: varchar("public_token", { length: 32 })
+      .default(sql`md5(random()::text || clock_timestamp()::text)`)
+      .notNull(),
     importMeta: jsonb("import_meta"),
     createdByUserId: integer("created_by_user_id").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -263,6 +266,9 @@ export const applicationForms = pgTable(
     oneVersion: uniqueIndex("application_forms_job_version_uq").on(
       table.jobPositionId,
       table.version
+    ),
+    publicTokenUq: uniqueIndex("application_forms_public_token_uq").on(
+      table.publicToken
     ),
   })
 );

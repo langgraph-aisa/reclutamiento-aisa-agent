@@ -35,6 +35,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/login" component={Login} />
+      <Route path="/apply/f/:token" component={Apply} />
       <Route path="/apply/:token" component={Apply} />
       <Route path="/privacidad-terminos">
         <Suspense

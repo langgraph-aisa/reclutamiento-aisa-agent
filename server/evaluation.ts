@@ -4,10 +4,24 @@ export type ConfiguredQuestion = {
   hardFail?: boolean;
   acceptedAnswers?: unknown[];
   answerConfig?: { min?: number; max?: number; minMonths?: number; maxMonths?: number };
+  /**
+   * Clave de la respuesta dentro de la postulación. Coincide con `fieldKey`
+   * mientras una sola variante defina esa pregunta; cuando dos formularios de la
+   * misma plaza reutilizan el mismo `fieldKey`, se cualifica con el formulario
+   * para que ninguna respuesta sobrescriba a la otra.
+   */
+  answerKey?: string;
+  /** Pregunta concreta en `form_questions` que originó la respuesta. */
+  questionId?: number;
+  formId?: number | null;
+  formVersion?: number | null;
+  formTitle?: string | null;
 };
 
 export type RuleResult = {
   fieldKey: string;
+  answerKey?: string;
+  questionId?: number;
   passed: boolean;
   hardFail: boolean;
   reason: string;
@@ -31,7 +45,8 @@ function asMonths(value: unknown) {
 
 export function evaluateDeterministic(questions: ConfiguredQuestion[], answers: Record<string, unknown>) {
   const results: RuleResult[] = questions.map(question => {
-    const value = answers[question.fieldKey];
+    const answerKey = question.answerKey ?? question.fieldKey;
+    const value = answers[answerKey];
     const accepted = (question.acceptedAnswers ?? []).map(normalizeText);
     const config = question.answerConfig ?? {};
     let passed = true;
@@ -62,13 +77,19 @@ export function evaluateDeterministic(questions: ConfiguredQuestion[], answers: 
       reason = `La experiencia supera el máximo configurado (${config.maxMonths} meses)`;
     }
 
-    return { fieldKey: question.fieldKey, passed, hardFail: Boolean(question.hardFail), reason };
+    return { fieldKey: question.fieldKey, answerKey, questionId: question.questionId, passed, hardFail: Boolean(question.hardFail), reason };
   });
 
   const hardFail = results.find(result => result.hardFail && !result.passed);
   return {
     passed: !hardFail,
     results,
-    hardFailReason: hardFail ? questions.find(question => question.fieldKey === hardFail.fieldKey)?.label ?? hardFail.reason : null,
+    hardFailReason: hardFail
+      ? (questions.find(question =>
+          hardFail.questionId
+            ? question.questionId === hardFail.questionId
+            : question.fieldKey === hardFail.fieldKey
+        )?.label ?? hardFail.reason)
+      : null,
   };
 }

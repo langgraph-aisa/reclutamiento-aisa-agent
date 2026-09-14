@@ -70,8 +70,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.137");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.137");
+    expect(APP_VERSION).toBe("2.0.138");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.138");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -455,9 +455,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(90);
+    expect(audit.files).toHaveLength(93);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(90);
+    expect(publicCopyAudit.files).toHaveLength(93);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -746,6 +746,85 @@ describe("black-box release contract", () => {
     expect(ontology).toContain("Análisis fenomenológico");
   });
 
+  it("offers one secure link, one switch and one preview per form variant", () => {
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+    const tokens = fs.readFileSync(
+      path.resolve("server/formTokens.ts"),
+      "utf8"
+    );
+    const importer = fs.readFileSync(
+      path.resolve("server/importForms.ts"),
+      "utf8"
+    );
+    const migration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0019_form_public_links.sql"),
+      "utf8"
+    );
+    const schema = fs.readFileSync(path.resolve("drizzle/schema.ts"), "utf8");
+    const apply = fs.readFileSync(
+      path.resolve("client/src/pages/Apply.tsx"),
+      "utf8"
+    );
+    const jobs = fs.readFileSync(
+      path.resolve("client/src/pages/Jobs.tsx"),
+      "utf8"
+    );
+    const formBuilder = fs.readFileSync(
+      path.resolve("client/src/pages/FormBuilder.tsx"),
+      "utf8"
+    );
+    const preview = fs.readFileSync(
+      path.resolve("client/src/components/PublicFormPreview.tsx"),
+      "utf8"
+    );
+    const candidatesPage = fs.readFileSync(
+      path.resolve("client/src/pages/Candidates.tsx"),
+      "utf8"
+    );
+    const evaluator = fs.readFileSync(
+      path.resolve("server/agentEvaluator.ts"),
+      "utf8"
+    );
+    const analysis = fs.readFileSync(
+      path.resolve("docs/ANALISIS_FORMULARIOS_MULTIPLES_2.0.138.md"),
+      "utf8"
+    );
+
+    expect(migration).toContain("ADD COLUMN IF NOT EXISTS public_token");
+    expect(migration).toContain("application_forms_public_token_uq");
+    expect(schema).toContain("publicToken");
+    expect(tokens).toContain("randomBytes(16)");
+    expect(importer).toContain("instrumentSignature");
+    expect(importer).toContain("reusedForm");
+    expect(importer).toContain("form_import_reused");
+    const cleanup = fs.readFileSync(
+      path.resolve("database/004_saneamiento_formularios_duplicados.sql"),
+      "utf8"
+    );
+    expect(cleanup).toContain("duplicate_form_removed");
+    expect(cleanup).toContain("redundante_sin_evidencia_unica");
+    expect(cleanup).toContain("ON COMMIT DROP");
+    expect(routers).toContain("getFormByToken: publicProcedure");
+    expect(routers).toContain("getPreview: adminProcedure");
+    expect(routers).toContain("f.public_token = $1");
+    expect(routers).toContain("publicAnswerConfig");
+    expect(routers).toContain("LEFT JOIN LATERAL");
+    expect(routers).not.toContain("acceptedAnswers: row.accepted_answers");
+    expect(apply).toContain('useRoute("/apply/f/:token")');
+    expect(apply).toContain("formToken");
+    expect(jobs).toContain("/apply/f/");
+    expect(jobs).toContain("<Switch");
+    expect(formBuilder).toContain("formId");
+    expect(preview).toContain("Vista previa pública del formulario");
+    expect(candidatesPage).toContain("Formulario No. {submission.version}");
+    expect(evaluator).toContain("answerKeyFor");
+    expect(evaluator).toContain("questionId: answer.question_id");
+    expect(analysis).toContain("Análisis ontológico");
+    expect(analysis).toContain("Análisis epistemológico");
+    expect(analysis).toContain("Análisis fenomenológico");
+    expect(analysis).toContain("Estrategia de propiedad intelectual");
+  });
+
   it("publishes the academic-commercial README with auditable proportions and references", () => {
     const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
     const academicBody = readme.slice(0, readme.indexOf("## Referencias"));
@@ -754,7 +833,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.137");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.138");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -763,7 +842,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.137");
+    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.138");
     expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.132");
     expect(readme).toContain("ISO/IEC 20000-1:2018");
     expect(readme).toContain("`inboxSync`");
