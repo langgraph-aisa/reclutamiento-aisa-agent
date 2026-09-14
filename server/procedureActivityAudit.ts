@@ -34,6 +34,7 @@ const PAGE_BY_NAMESPACE: Record<string, string> = {
   forms: "/admin/jobs",
   geo: "/admin/config",
   inbox: "/admin/inbox",
+  knowledge: "/admin/mst-eir",
   mstEir: "/admin/mst-eir",
   positions: "/admin/jobs",
   profiles: "/admin/profiles",

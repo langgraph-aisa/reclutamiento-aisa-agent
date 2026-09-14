@@ -1,16 +1,16 @@
-# Gobierno de release JARVI RH 2.0.133
+# Gobierno de release JARVI RH 2.0.134
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.133**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.134**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-### Alcance candidato 2.0.133
+### Alcance candidato 2.0.134
 
-El release candidato retira n8n por completo y concentra la comunicación en ApiChat directo. La bandeja se sincroniza cada segundo mediante el puente `inboxSync`, que consulta `GET /v1/messages` de hasta 50 conversaciones activas, rellena entrantes y salientes con deduplicación por identificador del proveedor, se repliega 60 segundos ante límites de tasa y se detiene en el cierre ordenado. Configuración administra el catálogo de los siete endpoints oficiales con interruptores por endpoint auditados; la bandeja incorpora burbujas con hora y ticks, tarjeta con plaza, teléfono, punteo IA y etiqueta humano/agente, y envío de enlace, ubicación, archivo, nota de voz y borrado de mensajes. El borrado de versiones de prueba exige un código temporal de seis dígitos por correo y la migración `0015` conserva desafío y auditoría. La actividad ISO compone títulos de 11 palabras y resúmenes de 33 por acción y añade el mapa de controles ISO/IEC 20000-1. Las capacidades de 2.0.132 y 2.0.131 permanecen bajo regresión.
+El release candidato convierte MST-EIR en Administrador de Proyectos y añade una base de conocimiento RAG por proyecto para el Agente de IA LangGraph. Cada proyecto administra carpetas y subcarpetas, archivos cargados por arrastre con validación de extensión y peso citando Configuración, visores multimedia dentro del área de arrastre, resumen de IA de 66 palabras y análisis profundo editable de 325 palabras. La migración `0016` conserva proyectos, carpetas, archivos, metadatos de procedencia y análisis; los archivos residen en el directorio configurado con `KNOWLEDGE_STORAGE_DIR` y se sirven mediante rutas autenticadas con soporte de rango para audio y video. El agente incorpora «BASE DE CONOCIMIENTO DEL PROYECTO (RAG)» cuando la plaza evaluada está vinculada a un proyecto. Las capacidades de 2.0.133, 2.0.132 y 2.0.131 permanecen bajo regresión.
 
 El alcance no incluye todavía descarga productiva de medios ApiChat, bucket, antivirus, previsualización de PDF/Word/audio, ejecución adaptativa completa de pruebas, validación psicométrica ni ingestión de despliegues e incidentes para calcular DORA. La actividad administrativa usa sondeo de cinco segundos según la vista, no streaming; la bandeja usa sincronización por sondeo de un segundo sin garantía de entrega exactamente una vez. Los resúmenes de actividad son deterministas aunque exista un selector reservado para un modelo futuro. La recepción ya no depende de un webhook ni de un workflow externo: el historial oficial del proveedor es la fuente que rellena la bandeja.
 
-El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.133 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.134.
+El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.134 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.135.
 
 La versión 2.0.129 convirtió Configuración > WhatsApp en el almacén operativo de ApiChat. `integration_settings` conserva preferencias y secretos cifrados; el cliente recibe únicamente estado y máscara. `cvRequest.ts` obtiene la configuración mediante `getApiChatRuntimeSettings` después de confirmar la transacción y `apichat.ts` ya no consulta el entorno. La ruta genérica de configuración queda limitada al proveedor no secreto `recruitment`.
 
@@ -135,4 +135,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.133.md](PRUEBAS_CAJA_NEGRA_2.0.133.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.134.md](PRUEBAS_CAJA_NEGRA_2.0.134.md).

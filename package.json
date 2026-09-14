@@ -1,6 +1,6 @@
 {
   "name": "reclutamiento-automatizado",
-  "version": "2.0.133",
+  "version": "2.0.134",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -75,11 +75,13 @@
     "jose": "6.1.0",
     "libphonenumber-js": "^1.13.12",
     "lucide-react": "^0.453.0",
+    "mammoth": "^1.12.3",
     "mysql2": "^3.15.0",
     "nanoid": "^5.1.5",
     "next-themes": "^0.4.6",
     "nodemailer": "^9.1.1",
     "openai": "^7.13.0",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.23.0",
     "react": "^19.2.1",
     "react-day-picker": "^9.11.1",

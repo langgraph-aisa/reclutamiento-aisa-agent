@@ -31,7 +31,7 @@ import {
   BrainCircuit,
   BriefcaseBusiness,
   ClipboardList,
-  Globe2,
+  FolderKanban,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -74,7 +74,7 @@ const menuItems = [
     adminOnly: true,
   },
   { icon: BarChart3, label: "Informes", path: "/admin/reports" },
-  { icon: Globe2, label: "MST-EIR", path: "/admin/mst-eir", adminOnly: true },
+  { icon: FolderKanban, label: "Administrador de Proyectos", path: "/admin/mst-eir", adminOnly: true },
   {
     icon: ClipboardList,
     label: "Actividad y control ISO",

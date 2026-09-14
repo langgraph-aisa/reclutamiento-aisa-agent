@@ -70,8 +70,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.133");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.133");
+    expect(APP_VERSION).toBe("2.0.134");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.134");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -455,9 +455,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(87);
+    expect(audit.files).toHaveLength(89);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(87);
+    expect(publicCopyAudit.files).toHaveLength(89);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -610,6 +610,61 @@ describe("black-box release contract", () => {
     expect(page).toContain("Mapa de controles ISO/IEC 20000-1");
   });
 
+  it("administers project knowledge as the RAG learning source for the agent", () => {
+    const migration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0016_project_knowledge.sql"),
+      "utf8"
+    );
+    const knowledge = fs.readFileSync(
+      path.resolve("server/knowledge.ts"),
+      "utf8"
+    );
+    const page = fs.readFileSync(
+      path.resolve("client/src/pages/MstEir.tsx"),
+      "utf8"
+    );
+    const layout = fs.readFileSync(
+      path.resolve("client/src/components/DashboardLayout.tsx"),
+      "utf8"
+    );
+    const evaluator = fs.readFileSync(
+      path.resolve("server/agentEvaluator.ts"),
+      "utf8"
+    );
+    const config = fs.readFileSync(
+      path.resolve("client/src/pages/Config.tsx"),
+      "utf8"
+    );
+    const activity = fs.readFileSync(
+      path.resolve("shared/activityAudit.ts"),
+      "utf8"
+    );
+
+    expect(layout).toContain('label: "Administrador de Proyectos"');
+    expect(layout).not.toContain('label: "MST-EIR"');
+    expect(migration).toContain("knowledge_projects");
+    expect(migration).toContain("knowledge_folders");
+    expect(migration).toContain("knowledge_files");
+    expect(migration).toContain("summary_66");
+    expect(migration).toContain("deep_analysis");
+    expect(knowledge).toContain("KNOWLEDGE_SUMMARY_WORD_LIMIT = 66");
+    expect(knowledge).toContain("KNOWLEDGE_ANALYSIS_WORD_LIMIT = 325");
+    expect(knowledge).toContain("extractPdfText");
+    expect(knowledge).toContain("extractDocxText");
+    expect(knowledge).toContain('"application/pdf"');
+    expect(page).toContain("Administrador de Proyectos");
+    expect(page).toContain("+ Arrastre y Suelte");
+    expect(page).toContain("Descripción de Archivo");
+    expect(page).toContain("Configuración > Conocimiento de proyectos");
+    expect(evaluator).toContain("BASE DE CONOCIMIENTO DEL PROYECTO (RAG)");
+    expect(evaluator).toContain("loadProjectKnowledgeContext");
+    expect(config).toContain("Conocimiento de proyectos (RAG)");
+    expect(config).toContain("Peso máximo por archivo");
+    expect(activity).toContain(
+      '"/admin/mst-eir": "Administrador de Proyectos"'
+    );
+  });
+
   it("publishes the academic-commercial README with auditable proportions and references", () => {
     const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
     const academicBody = readme.slice(0, readme.indexOf("## Referencias"));
@@ -618,7 +673,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.133");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.134");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -627,7 +682,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.133");
+    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.134");
     expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.132");
     expect(readme).toContain("ISO/IEC 20000-1:2018");
     expect(readme).toContain("`inboxSync`");

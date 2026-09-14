@@ -110,6 +110,22 @@ export default function Config() {
       return changed ? next : current;
     });
   }, [endpointCatalog]);
+  const knowledgeSettings = trpc.config.knowledgeSettings.useQuery();
+  const saveKnowledgeSettings = trpc.config.saveKnowledgeSettings.useMutation({
+    onSuccess: async () => {
+      await knowledgeSettings.refetch();
+      toast.success("Configuración de conocimiento guardada correctamente");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const [knowledgeExtensions, setKnowledgeExtensions] = useState<string[]>([]);
+  const [knowledgeMaxSize, setKnowledgeMaxSize] = useState("20");
+
+  useEffect(() => {
+    if (!knowledgeSettings.data) return;
+    setKnowledgeExtensions(knowledgeSettings.data.allowedExtensions);
+    setKnowledgeMaxSize(String(knowledgeSettings.data.maxSizeMb));
+  }, [knowledgeSettings.data]);
   const importCatalog = trpc.geo.importCatalog.useMutation();
   const catalog = trpc.geo.adminCatalog.useQuery();
   const updateItem = trpc.geo.updateItem.useMutation({
@@ -501,6 +517,98 @@ export default function Config() {
                   <Check className="h-4 w-4" /> Guardado
                 </span>
               )}
+            </CardContent>
+          </Card>
+          <Card className="rounded-3xl border-0 shadow-soft">
+            <CardHeader>
+              <CardTitle className="text-xl text-primary">
+                Conocimiento de proyectos (RAG)
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Límites que utiliza Administrador de Proyectos al cargar
+                archivos; las alertas de carga citan estos valores.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-primary">
+                  Extensiones permitidas
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    "jpg",
+                    "jpeg",
+                    "png",
+                    "mp4",
+                    "mp3",
+                    "doc",
+                    "docx",
+                    "xls",
+                    "xlsx",
+                    "csv",
+                    "pdf",
+                  ].map(extension => {
+                    const enabled = knowledgeExtensions.includes(extension);
+                    return (
+                      <button
+                        key={extension}
+                        type="button"
+                        aria-pressed={enabled}
+                        onClick={() =>
+                          setKnowledgeExtensions(current =>
+                            enabled
+                              ? current.filter(item => item !== extension)
+                              : [...current, extension]
+                          )
+                        }
+                        className={`rounded-full border px-3 py-1.5 text-sm transition ${enabled ? "border-emerald-600 bg-emerald-100 font-semibold text-emerald-900" : "border-border bg-muted/40 text-muted-foreground hover:border-primary/40"}`}
+                      >
+                        .{extension}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  La alerta de extensión no permitida cita esta lista como
+                  referencia.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-[220px_1fr]">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-primary">
+                    Peso máximo por archivo (MB)
+                  </Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={knowledgeMaxSize}
+                    onChange={event => setKnowledgeMaxSize(event.target.value)}
+                    className="rounded-xl"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Entre 1 y 30 MB. La alerta de peso cita este valor en el
+                    área de arrastre.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                className="rounded-full"
+                disabled={
+                  saveKnowledgeSettings.isPending ||
+                  !knowledgeExtensions.length
+                }
+                onClick={() =>
+                  saveKnowledgeSettings.mutate({
+                    allowedExtensions: knowledgeExtensions,
+                    maxSizeMb: Number(knowledgeMaxSize),
+                  })
+                }
+              >
+                <Save className="mr-2 h-4 w-4" /> Guardar configuración de
+                conocimiento
+              </Button>
             </CardContent>
           </Card>
           <Card className="rounded-3xl border-0 shadow-soft">

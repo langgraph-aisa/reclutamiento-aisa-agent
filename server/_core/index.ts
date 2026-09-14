@@ -7,6 +7,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter, auditPublishedPublicCopy } from "../routers";
 import { startInboxSyncBridge } from "../inboxSync";
+import { registerKnowledgeRoutes } from "../knowledgeRoutes";
 import { getPool } from "../db";
 import { APP_VERSION } from "../../shared/release";
 import {
@@ -56,6 +57,7 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
+  registerKnowledgeRoutes(app);
 
   // tRPC API
   app.use(

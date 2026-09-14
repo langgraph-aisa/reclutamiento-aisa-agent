@@ -127,7 +127,8 @@ export function applicationStatusForEvaluation(
 
 function buildSystemInstructions(
   settings: Awaited<ReturnType<typeof getAgentRuntimeSettings>>,
-  methodologies: Array<{ display_name: string; content_markdown: string }>
+  methodologies: Array<{ display_name: string; content_markdown: string }>,
+  projectKnowledge: string
 ) {
   const blockGuide = EVALUATION_BLOCKS.map(
     block =>
@@ -162,7 +163,71 @@ INTERPRETACIÓN METODOLÓGICA INSTITUCIONAL
 ${settings.methodologyInterpretation}
 
 DOCUMENTOS DE REFERENCIA
-${references}`;
+${references}
+
+BASE DE CONOCIMIENTO DEL PROYECTO (RAG)
+${projectKnowledge}`;
+}
+
+async function loadProjectKnowledgeContext(
+  pool: Pool,
+  positionId: number | undefined
+) {
+  const fallback = "Sin base de conocimiento de proyecto vinculada a esta plaza.";
+  if (!positionId) return fallback;
+  try {
+    const result = await pool.query(
+      `SELECT p.id AS project_id,p.name AS project_name,p.summary AS project_summary,
+              f.original_name,f.deep_analysis
+         FROM knowledge_projects p
+         LEFT JOIN knowledge_files f
+           ON f.project_id=p.id
+          AND f.analysis_status='analizado'
+          AND COALESCE(f.deep_analysis,'')<>''
+        WHERE p.job_position_id=$1
+        ORDER BY p.id,f.id
+        LIMIT 60`,
+      [positionId]
+    );
+    if (!result.rows.length) return fallback;
+    const projects = new Map<
+      number,
+      { name: string; summary: string; files: string[] }
+    >();
+    for (const row of result.rows) {
+      const projectId = Number(row.project_id);
+      if (!projects.has(projectId)) {
+        projects.set(projectId, {
+          name: String(row.project_name ?? "Proyecto"),
+          summary: String(row.project_summary ?? "").slice(0, 900),
+          files: [],
+        });
+      }
+      if (row.original_name) {
+        projects.get(projectId)!.files.push(
+          `Documento: ${row.original_name}\nAnálisis: ${String(
+            row.deep_analysis
+          ).slice(0, 2_000)}`
+        );
+      }
+    }
+    const blocks = Array.from(projects.values())
+      .map(
+        project =>
+          `Proyecto: ${project.name}\nResumen: ${project.summary}\n${
+            project.files.length
+              ? project.files.slice(0, 10).join("\n\n")
+              : "Sin documentos analizados."
+          }`
+      )
+      .join("\n\n---\n\n");
+    return blocks;
+  } catch (error) {
+    console.warn(
+      `[AgentEvaluator] Project knowledge context unavailable (${error instanceof Error ? error.name : "unknown"}).`
+    );
+    return "Base de conocimiento no disponible en esta versión de la base de datos.";
+  }
 }
 
 function publicEvaluationInput(source: EvaluationSource) {
@@ -516,7 +581,15 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
             )
           ).rows
         : [];
-      const instructions = buildSystemInstructions(settings, methodologies);
+      const projectKnowledge = await loadProjectKnowledgeContext(
+        pool,
+        Number(source.position.id)
+      );
+      const instructions = buildSystemInstructions(
+        settings,
+        methodologies,
+        projectKnowledge
+      );
       let output: AgentModelOutput | null = null;
       let keySlot: "primary" | "backup" = "primary";
       let lastError: unknown;

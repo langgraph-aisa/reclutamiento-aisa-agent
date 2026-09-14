@@ -63,6 +63,22 @@ import {
   saveApiChatSecret,
   verifyApiChatConnection,
 } from "./apiChatSettings";
+import {
+  analyzeKnowledgeDocument,
+  buildStorageKey,
+  countWords,
+  extensionOf,
+  extractKnowledgeText,
+  getKnowledgeSettings,
+  KNOWLEDGE_ANALYSIS_WORD_LIMIT,
+  KNOWLEDGE_SUMMARY_WORD_LIMIT,
+  knowledgeFileKind,
+  knowledgeMimeType,
+  limitWords,
+  removeKnowledgeFile,
+  saveKnowledgeSettings,
+  writeKnowledgeFile,
+} from "./knowledge";
 import { applicationStatuses } from "./policy";
 import {
   APPLICATION_CONSENTS,
@@ -3246,6 +3262,567 @@ export const appRouter = router({
       }),
   }),
 
+  knowledge: router({
+    settings: adminProcedure.query(async () => {
+      return getKnowledgeSettings(await getPool());
+    }),
+    saveSettings: adminProcedure
+      .input(
+        z.object({
+          allowedExtensions: z
+            .array(z.string().trim().min(2).max(8))
+            .min(1)
+            .max(20),
+          maxSizeMb: z.number().int().min(1).max(30),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveKnowledgeSettings(
+            await requirePool(),
+            input,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar la configuración de conocimiento."
+            ),
+          });
+        }
+      }),
+    projects: adminProcedure.query(async () => {
+      const pool = await requirePool();
+      const result = await pool.query(
+        `SELECT p.id,p.name,p.summary,p.job_position_id,p.created_at,p.updated_at,
+                pos.title AS position_title,
+                (SELECT count(*)::int FROM knowledge_files f WHERE f.project_id=p.id) AS file_count,
+                (SELECT count(*)::int FROM knowledge_folders fo WHERE fo.project_id=p.id) AS folder_count
+           FROM knowledge_projects p
+           LEFT JOIN job_positions pos ON pos.id=p.job_position_id
+          ORDER BY lower(p.name)`
+      );
+      return result.rows;
+    }),
+    saveProject: adminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive().optional(),
+          name: z.string().trim().min(1).max(160),
+          summary: z.string().trim().max(2000),
+          jobPositionId: z.number().int().positive().nullable().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          const project = input.id
+            ? (
+                await client.query(
+                  `UPDATE knowledge_projects
+                      SET name=$1,summary=$2,job_position_id=$3,updated_at=now()
+                    WHERE id=$4 RETURNING id`,
+                  [
+                    input.name,
+                    input.summary,
+                    input.jobPositionId ?? null,
+                    input.id,
+                  ]
+                )
+              ).rows[0]
+            : (
+                await client.query(
+                  `INSERT INTO knowledge_projects (name,summary,job_position_id,created_by_user_id)
+                   VALUES ($1,$2,$3,$4) RETURNING id`,
+                  [
+                    input.name,
+                    input.summary,
+                    input.jobPositionId ?? null,
+                    ctx.user.id,
+                  ]
+                )
+              ).rows[0];
+          if (!project) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "El proyecto no existe.",
+            });
+          }
+          await client.query(
+            `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+             VALUES ($1,'knowledge_project',$2,$3,$4::jsonb)`,
+            [
+              ctx.user.id,
+              project.id,
+              input.id ? "project_updated" : "project_created",
+              asJson({
+                name: input.name,
+                jobPositionId: input.jobPositionId ?? null,
+              }),
+            ]
+          );
+          await client.query("COMMIT");
+          return { id: Number(project.id) };
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+      }),
+    deleteProject: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          const keys = await client.query(
+            `SELECT storage_key FROM knowledge_files WHERE project_id=$1`,
+            [input.id]
+          );
+          const deleted = await client.query(
+            `DELETE FROM knowledge_projects WHERE id=$1 RETURNING id`,
+            [input.id]
+          );
+          if (!deleted.rows[0]) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "El proyecto no existe.",
+            });
+          }
+          await client.query(
+            `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action)
+             VALUES ($1,'knowledge_project',$2,'project_deleted')`,
+            [ctx.user.id, input.id]
+          );
+          await client.query("COMMIT");
+          for (const row of keys.rows) {
+            try {
+              await removeKnowledgeFile(String(row.storage_key));
+            } catch {
+              // best effort
+            }
+          }
+          return { deleted: true };
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+      }),
+    folders: adminProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const result = await pool.query(
+          `SELECT f.id,f.project_id,f.parent_id,f.name,f.created_at,
+                  (SELECT count(*)::int FROM knowledge_files kf WHERE kf.folder_id=f.id) AS file_count,
+                  (SELECT count(*)::int FROM knowledge_folders kfo WHERE kfo.parent_id=f.id) AS child_count
+             FROM knowledge_folders f
+            WHERE f.project_id=$1
+            ORDER BY f.parent_id NULLS FIRST, lower(f.name)`,
+          [input.projectId]
+        );
+        return result.rows;
+      }),
+    createFolder: adminProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          parentId: z.number().int().positive().nullable(),
+          name: z.string().trim().min(1).max(160),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const result = await pool.query(
+          `INSERT INTO knowledge_folders (project_id,parent_id,name,created_by_user_id)
+           VALUES ($1,$2,$3,$4) RETURNING id,name,parent_id,created_at`,
+          [input.projectId, input.parentId, input.name, ctx.user.id]
+        );
+        await pool.query(
+          `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+           VALUES ($1,'knowledge_folder',$2,'folder_created',$3::jsonb)`,
+          [
+            ctx.user.id,
+            result.rows[0].id,
+            asJson({ name: input.name, parentId: input.parentId }),
+          ]
+        );
+        return result.rows[0];
+      }),
+    deleteFolder: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const deleted = await pool.query(
+          `DELETE FROM knowledge_folders WHERE id=$1 RETURNING id`,
+          [input.id]
+        );
+        if (!deleted.rows[0]) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "La carpeta no existe.",
+          });
+        }
+        await pool.query(
+          `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action)
+           VALUES ($1,'knowledge_folder',$2,'folder_deleted')`,
+          [ctx.user.id, input.id]
+        );
+        return { deleted: true };
+      }),
+    files: adminProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          folderId: z.number().int().positive().nullable(),
+          kind: z.string().trim().max(16).optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const result = await pool.query(
+          `SELECT f.id,f.project_id,f.folder_id,f.original_name,f.mime_type,f.extension,f.size_bytes,
+                  f.summary_66,f.deep_analysis,f.analysis_status,f.analyzed_model,
+                  f.uploaded_at,f.updated_at,u.name AS uploaded_by_name,u.email AS uploaded_by_email
+             FROM knowledge_files f
+             LEFT JOIN users u ON u.id=f.uploaded_by_user_id
+            WHERE f.project_id=$1
+              AND (($2::int IS NULL AND f.folder_id IS NULL) OR f.folder_id=$2)
+            ORDER BY f.uploaded_at DESC`,
+          [input.projectId, input.folderId]
+        );
+        const wantedKind = input.kind?.trim();
+        const rows = result.rows.filter(
+          row =>
+            !wantedKind ||
+            wantedKind === "todas" ||
+            knowledgeFileKind(String(row.extension)) === wantedKind
+        );
+        return rows;
+      }),
+    upload: adminProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          folderId: z.number().int().positive().nullable(),
+          fileName: z.string().trim().min(1).max(260),
+          base64: z.string().min(1).max(40 * 1024 * 1024),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const settings = await getKnowledgeSettings(pool);
+        const extension = extensionOf(input.fileName);
+        if (!extension || !settings.allowedExtensions.includes(extension)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Extensión no permitida. Habilitadas en Configuración: ${settings.allowedExtensions.join(", ")}.`,
+          });
+        }
+        if (!/^[A-Za-z0-9+/=\r\n]+$/.test(input.base64)) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "El contenido del archivo no es válido.",
+          });
+        }
+        const buffer = Buffer.from(input.base64, "base64");
+        const maxBytes = settings.maxSizeMb * 1024 * 1024;
+        if (buffer.length > maxBytes) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `El archivo supera el peso máximo de ${settings.maxSizeMb} MB definido en Configuración > Conocimiento de proyectos.`,
+          });
+        }
+        const project = await pool.query(
+          `SELECT id FROM knowledge_projects WHERE id=$1 LIMIT 1`,
+          [input.projectId]
+        );
+        if (!project.rows[0]) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "El proyecto no existe.",
+          });
+        }
+        if (input.folderId) {
+          const folder = await pool.query(
+            `SELECT id FROM knowledge_folders WHERE id=$1 AND project_id=$2 LIMIT 1`,
+            [input.folderId, input.projectId]
+          );
+          if (!folder.rows[0]) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "La carpeta no existe.",
+            });
+          }
+        }
+        const storageKey = buildStorageKey(input.projectId, extension);
+        await writeKnowledgeFile(storageKey, buffer);
+        const kind = knowledgeFileKind(extension);
+        let fileId: number;
+        try {
+          const inserted = await pool.query(
+            `INSERT INTO knowledge_files
+               (project_id,folder_id,original_name,storage_key,mime_type,extension,size_bytes,
+                analysis_status,uploaded_by_user_id,uploaded_at,updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,'pendiente',$8,now(),now())
+             RETURNING id`,
+            [
+              input.projectId,
+              input.folderId,
+              input.fileName,
+              storageKey,
+              knowledgeMimeType(extension),
+              extension,
+              buffer.length,
+              ctx.user.id,
+            ]
+          );
+          fileId = Number(inserted.rows[0].id);
+        } catch (error) {
+          try {
+            await removeKnowledgeFile(storageKey);
+          } catch {
+            // best effort
+          }
+          throw error;
+        }
+        await pool.query(
+          `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+           VALUES ($1,'knowledge_file',$2,'file_uploaded',$3::jsonb)`,
+          [
+            ctx.user.id,
+            fileId,
+            asJson({
+              originalName: input.fileName,
+              extension,
+              sizeBytes: buffer.length,
+              projectId: input.projectId,
+            }),
+          ]
+        );
+        let analysisMessage: string;
+        if (kind === "documento" && ["pdf", "docx"].includes(extension)) {
+          try {
+            const text = await extractKnowledgeText(storageKey, extension);
+            if (!text) {
+              await pool.query(
+                `UPDATE knowledge_files SET analysis_status='no_aplica',updated_at=now() WHERE id=$1`,
+                [fileId]
+              );
+              analysisMessage =
+                "El documento no contiene texto extraíble; no se generó un análisis.";
+            } else {
+              const analysis = await analyzeKnowledgeDocument(
+                pool,
+                fileId,
+                text
+              );
+              await pool.query(
+                `UPDATE knowledge_files
+                    SET summary_66=$1,deep_analysis=$2,analysis_status='analizado',
+                        analyzed_model=$3,updated_at=now()
+                  WHERE id=$4`,
+                [
+                  analysis.summary,
+                  analysis.deepAnalysis,
+                  analysis.model,
+                  fileId,
+                ]
+              );
+              analysisMessage = "Análisis de IA generado correctamente.";
+            }
+          } catch (error) {
+            await pool.query(
+              `UPDATE knowledge_files SET analysis_status='error',updated_at=now() WHERE id=$1`,
+              [fileId]
+            );
+            analysisMessage = `El archivo se guardó, pero el análisis no pudo generarse: ${
+              error instanceof Error ? error.message : "error desconocido"
+            }`;
+          }
+        } else {
+          await pool.query(
+            `UPDATE knowledge_files SET analysis_status='no_aplica',updated_at=now() WHERE id=$1`,
+            [fileId]
+          );
+          analysisMessage =
+            "El análisis de IA aplica únicamente a documentos PDF y Word.";
+        }
+        return { id: fileId, analysisMessage };
+      }),
+    analyze: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        const pool = await requirePool();
+        const result = await pool.query(
+          `SELECT id,storage_key,extension FROM knowledge_files WHERE id=$1 LIMIT 1`,
+          [input.id]
+        );
+        const file = result.rows[0];
+        if (!file) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "El archivo no existe.",
+          });
+        }
+        if (!["pdf", "docx"].includes(String(file.extension))) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "El análisis de IA aplica únicamente a documentos PDF y Word.",
+          });
+        }
+        const text = await extractKnowledgeText(
+          String(file.storage_key),
+          String(file.extension)
+        );
+        if (!text) {
+          await pool.query(
+            `UPDATE knowledge_files SET analysis_status='no_aplica',updated_at=now() WHERE id=$1`,
+            [input.id]
+          );
+          return { analysisMessage: "El documento no contiene texto extraíble." };
+        }
+        const analysis = await analyzeKnowledgeDocument(pool, input.id, text);
+        await pool.query(
+          `UPDATE knowledge_files
+              SET summary_66=$1,deep_analysis=$2,analysis_status='analizado',
+                  analyzed_model=$3,updated_at=now()
+            WHERE id=$4`,
+          [analysis.summary, analysis.deepAnalysis, analysis.model, input.id]
+        );
+        return { analysisMessage: "Análisis de IA generado correctamente." };
+      }),
+    saveAnalysis: adminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          deepAnalysis: z.string().trim().max(8_000),
+          summary: z.string().trim().max(1_600).optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        if (countWords(input.deepAnalysis) > KNOWLEDGE_ANALYSIS_WORD_LIMIT) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `El análisis profundo supera el máximo de ${KNOWLEDGE_ANALYSIS_WORD_LIMIT} palabras.`,
+          });
+        }
+        if (
+          input.summary &&
+          countWords(input.summary) > KNOWLEDGE_SUMMARY_WORD_LIMIT
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `El resumen supera el máximo de ${KNOWLEDGE_SUMMARY_WORD_LIMIT} palabras.`,
+          });
+        }
+        const pool = await requirePool();
+        const updated = await pool.query(
+          `UPDATE knowledge_files
+              SET deep_analysis=$1,
+                  summary_66=COALESCE($2,summary_66),
+                  analysis_status=CASE WHEN $1<>'' THEN 'analizado' ELSE analysis_status END,
+                  updated_at=now()
+            WHERE id=$3 RETURNING id`,
+          [
+            limitWords(input.deepAnalysis, KNOWLEDGE_ANALYSIS_WORD_LIMIT),
+            input.summary
+              ? limitWords(input.summary, KNOWLEDGE_SUMMARY_WORD_LIMIT)
+              : null,
+            input.id,
+          ]
+        );
+        if (!updated.rows[0]) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "El archivo no existe.",
+          });
+        }
+        await pool.query(
+          `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action)
+           VALUES ($1,'knowledge_file',$2,'file_analysis_updated')`,
+          [ctx.user.id, input.id]
+        );
+        return { updated: true };
+      }),
+    moveFile: adminProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          folderId: z.number().int().positive().nullable(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const file = await pool.query(
+          `SELECT project_id FROM knowledge_files WHERE id=$1 LIMIT 1`,
+          [input.id]
+        );
+        if (!file.rows[0]) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "El archivo no existe.",
+          });
+        }
+        if (input.folderId) {
+          const folder = await pool.query(
+            `SELECT id FROM knowledge_folders WHERE id=$1 AND project_id=$2 LIMIT 1`,
+            [input.folderId, file.rows[0].project_id]
+          );
+          if (!folder.rows[0]) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "La carpeta no existe en este proyecto.",
+            });
+          }
+        }
+        await pool.query(
+          `UPDATE knowledge_files SET folder_id=$1,updated_at=now() WHERE id=$2`,
+          [input.folderId, input.id]
+        );
+        await pool.query(
+          `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+           VALUES ($1,'knowledge_file',$2,'file_moved',$3::jsonb)`,
+          [ctx.user.id, input.id, asJson({ folderId: input.folderId })]
+        );
+        return { moved: true };
+      }),
+    deleteFile: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const deleted = await pool.query(
+          `DELETE FROM knowledge_files WHERE id=$1 RETURNING storage_key`,
+          [input.id]
+        );
+        if (!deleted.rows[0]) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "El archivo no existe.",
+          });
+        }
+        try {
+          await removeKnowledgeFile(String(deleted.rows[0].storage_key));
+        } catch {
+          // best effort
+        }
+        await pool.query(
+          `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action)
+           VALUES ($1,'knowledge_file',$2,'file_deleted')`,
+          [ctx.user.id, input.id]
+        );
+        return { deleted: true };
+      }),
+  }),
+
   mstEir: router({
     documents: adminProcedure.query(async () => {
       const pool = await requirePool();
@@ -4084,6 +4661,36 @@ export const appRouter = router({
             message: safeIntegrationMessage(
               error,
               "No fue posible guardar el estado de los endpoints."
+            ),
+          });
+        }
+      }),
+    knowledgeSettings: adminProcedure.query(async () => {
+      return getKnowledgeSettings(await getPool());
+    }),
+    saveKnowledgeSettings: adminProcedure
+      .input(
+        z.object({
+          allowedExtensions: z
+            .array(z.string().trim().min(2).max(8))
+            .min(1)
+            .max(20),
+          maxSizeMb: z.number().int().min(1).max(30),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveKnowledgeSettings(
+            await requirePool(),
+            input,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar la configuración de conocimiento."
             ),
           });
         }

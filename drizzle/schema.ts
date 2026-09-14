@@ -983,6 +983,111 @@ export const methodologyDocumentRevisions = pgTable(
   })
 );
 
+export const knowledgeProjects = pgTable(
+  "knowledge_projects",
+  {
+    id: serial("id").primaryKey(),
+    name: varchar("name", { length: 160 }).notNull(),
+    summary: varchar("summary", { length: 2000 }).default("").notNull(),
+    jobPositionId: integer("job_position_id").references(() => jobPositions.id, {
+      onDelete: "set null",
+    }),
+    createdByUserId: integer("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    nameUq: uniqueIndex("knowledge_projects_name_uq").on(
+      sql`lower(${table.name})`
+    ),
+    positionIdx: index("knowledge_projects_position_idx").on(
+      table.jobPositionId
+    ),
+  })
+);
+
+export const knowledgeFolders = pgTable(
+  "knowledge_folders",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .references(() => knowledgeProjects.id, { onDelete: "cascade" })
+      .notNull(),
+    parentId: integer("parent_id"),
+    name: varchar("name", { length: 160 }).notNull(),
+    createdByUserId: integer("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    pathUq: uniqueIndex("knowledge_folders_path_uq").on(
+      table.projectId,
+      sql`COALESCE(${table.parentId},0)`,
+      sql`lower(${table.name})`
+    ),
+    projectParentIdx: index("knowledge_folders_project_parent_idx").on(
+      table.projectId,
+      table.parentId
+    ),
+  })
+);
+
+export const knowledgeFiles = pgTable(
+  "knowledge_files",
+  {
+    id: serial("id").primaryKey(),
+    projectId: integer("project_id")
+      .references(() => knowledgeProjects.id, { onDelete: "cascade" })
+      .notNull(),
+    folderId: integer("folder_id").references(() => knowledgeFolders.id, {
+      onDelete: "set null",
+    }),
+    originalName: varchar("original_name", { length: 260 }).notNull(),
+    storageKey: text("storage_key").notNull(),
+    mimeType: varchar("mime_type", { length: 160 }).notNull(),
+    extension: varchar("extension", { length: 16 }).notNull(),
+    sizeBytes: integer("size_bytes").default(0).notNull(),
+    summary66: varchar("summary_66", { length: 1400 }).default("").notNull(),
+    deepAnalysis: varchar("deep_analysis", { length: 6000 })
+      .default("")
+      .notNull(),
+    analysisStatus: varchar("analysis_status", { length: 32 })
+      .default("pendiente")
+      .notNull(),
+    analyzedModel: varchar("analyzed_model", { length: 80 }),
+    uploadedByUserId: integer("uploaded_by_user_id").references(
+      () => users.id,
+      { onDelete: "set null" }
+    ),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    projectFolderIdx: index("knowledge_files_project_folder_idx").on(
+      table.projectId,
+      table.folderId,
+      table.uploadedAt.desc()
+    ),
+    analysisIdx: index("knowledge_files_analysis_idx").on(
+      table.projectId,
+      table.analysisStatus
+    ),
+  })
+);
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type LoginCodeChallenge = typeof loginCodeChallenges.$inferSelect;
@@ -1003,3 +1108,6 @@ export type AssessmentItem = typeof assessmentItems.$inferSelect;
 export type MethodologyDocument = typeof methodologyDocuments.$inferSelect;
 export type MethodologyDocumentRevision =
   typeof methodologyDocumentRevisions.$inferSelect;
+export type KnowledgeProject = typeof knowledgeProjects.$inferSelect;
+export type KnowledgeFolder = typeof knowledgeFolders.$inferSelect;
+export type KnowledgeFile = typeof knowledgeFiles.$inferSelect;
