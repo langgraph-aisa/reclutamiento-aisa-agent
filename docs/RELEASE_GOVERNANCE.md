@@ -1,10 +1,18 @@
-# Gobierno de release JARVI RH 2.0.138
+# Gobierno de release JARVI RH 2.0.139
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.138**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.139**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-### Alcance candidato 2.0.138
+### Alcance candidato 2.0.139
+
+El alcance de 2.0.139 integra dos frentes verificables. **Gobierno, Observabilidad y Monitoreo** deja Pruebas psicométricas y obtiene entrada propia en el menú administrativo con icono de ojo: las políticas del catálogo se agrupan por categoría con marco de color, resumen propio y la superficie observable de LangGraph que las verifica. La migración `0020_governance_rule_verifications.sql` crea el registro auditable de verificaciones —identificador de política, dominio, origen, identificador de traza, ambiente, versión, actor y fecha— sin almacenar credenciales. Cada política declara «Trazas auditadas No. X» recalculado desde la base y la verificación ejecuta una comprobación real contra Langfuse; la interfaz no publica el número total de criterios y el conteo no depende del estado del navegador. Si la migración no está aplicada, el módulo explica la acción requerida en lugar de mostrar un contador sin fuente.
+
+**ApiChat** recibe una línea base verificable. El endpoint nativo se normaliza a la base oficial desde cualquier operación escrita —`/v1/`, `/v1/sendText` o `/v1/messages`—, de modo que existe una sola fuente de verdad para las rutas derivadas; el host debe pertenecer a `api.apichat.io` y las bases de Chat API (`/instance{client_id}/`) y APIGraph (`/graph/v17/`) se rechazan de forma explícita porque exigen un adaptador dedicado todavía no habilitado. El catálogo publica bajo cada interruptor la ruta real invocada. La migración `0021_apichat_official_endpoints.sql` siembra la base y los siete endpoints oficiales con `ON CONFLICT DO NOTHING`, de modo que no sobrescribe decisiones previas del operador.
+
+La recepción deja de anunciarse sin evidencia. La insignia distingue credenciales disponibles de capacidad comprobada: «Recepción sin verificar» permanece mientras no exista una consulta real satisfactoria al historial. «Verificar recepción» consulta el historial oficial con las credenciales cifradas, sella la marca temporal únicamente cuando el proveedor responde y exige el endpoint de historial encendido como requisito de recepción; sin él la verificación se rechaza y la interfaz advierte que la bandeja no puede sincronizar. Los acoplamientos anteriores quedan corregidos: el interruptor de texto gobierna la ruta que realmente se invoca y el de historial gobierna la consulta de sincronización.
+
+### Alcance de 2.0.138
 
 El release convierte cada formulario en un instrumento con identidad propia: `application_forms.public_token` (migración `0019`) genera una capacidad no predecible de 128 bits con índice único, y el enlace `/apply/f/:token` abre una variante concreta —A, B, C o D— sin enumerar variantes ni revelar su relación con la plaza. Cada formulario conserva su interruptor `published` independiente, su botón de edición, su acceso a preguntas, la copia de su enlace y una vista previa administrativa de solo lectura que reproduce el formulario público sin publicar ni crear registros. La importación desde Excel/CSV (`forms.importSpreadsheet`) genera el mismo token, de modo que el formulario importado queda en borrador con enlace, interruptor y previsualización equivalentes.
 
@@ -16,7 +24,7 @@ La higiene de propiedad intelectual es parte del alcance: el payload público en
 
 El alcance no incluye todavía descarga productiva de medios ApiChat, bucket, antivirus, previsualización de PDF/Word/audio, ejecución adaptativa completa de pruebas, validación psicométrica ni ingestión de despliegues e incidentes para calcular DORA. La asignación de variantes no es aleatoria: la plataforma habilita la comparación A/B/C/D, pero no constituye un ensayo aleatorizado ni calcula significancia estadística, poder o tamaño de muestra. La actividad administrativa usa sondeo de cinco segundos según la vista, no streaming; la bandeja usa sincronización por sondeo de un segundo sin garantía de entrega exactamente una vez. Los resúmenes de actividad son deterministas aunque exista un selector reservado para un modelo futuro. La recepción ya no depende de un webhook ni de un workflow externo: el historial oficial del proveedor es la fuente que rellena la bandeja.
 
-El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.138 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.139.
+El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.139 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.140.
 
 La versión 2.0.137 convirtió «Plazas y formularios» en «Plazas y anuncios» con icono de mundo: una plaza administra múltiples formularios, unos construidos con la herramienta y otros importados desde Excel/CSV (migración `0018`). La importación toma la primera fila como preguntas, exige una columna de teléfono o WhatsApp, reconcilia o crea candidatos con el número como única fuente de relación, registra participaciones en `application_form_submissions` y agrega respuestas sin sobrescribir las existentes. El análisis ontológico, epistemológico y fenomenológico de ese alcance permanece en [ANALISIS_ONTOLOGICO_FORMULARIOS_2.0.137.md](ANALISIS_ONTOLOGICO_FORMULARIOS_2.0.137.md).
 
@@ -24,7 +32,7 @@ La versión 2.0.129 convirtió Configuración > WhatsApp en el almacén operativ
 
 Client ID, token e ID de cuenta se cifran con AES-256-GCM y autenticación antes de persistirse. Cada rotación o eliminación registra clave y estado en `audit_log`, nunca el valor. Una fila histórica en texto plano se rechaza y exige rotación desde el módulo seguro. La verificación nativa ejecuta `GET /v1/status`, no envía mensajes y descarta cualquier contenido QR antes de responder al navegador.
 
-La migración `0013_apichat_credential_vault.sql` es idempotente, inicializa los valores públicos aprobados y reserva filas secretas con `NULL`. Los secretos deben ingresarse desde la UI para garantizar su cifrado; no se entregan como SQL ni se almacenan en el repositorio. El endpoint nativo exige HTTPS, `api.apichat.io` y `/v1/sendText`.
+La migración `0013_apichat_credential_vault.sql` es idempotente, inicializa los valores públicos aprobados y reserva filas secretas con `NULL`. Los secretos deben ingresarse desde la UI para garantizar su cifrado; no se entregan como SQL ni se almacenan en el repositorio. El endpoint nativo exige HTTPS y el dominio `api.apichat.io`; toda operación escrita se normaliza a la base oficial `/v1/` y las bases de Chat API y APIGraph se rechazan con mensaje explícito hasta habilitar su adaptador.
 
 La versión 2.0.128 corrigió el mensaje institucional de la landing a «Plataforma Laboral No.1» y eliminó el sufijo «de Guatemala» introducido en 2.0.127.
 
@@ -62,7 +70,7 @@ Desde 2.0.120, los 20 elementos `h1` usan `--color-heading`, que conserva el ton
 
 `scripts/verify-theme-css.mjs` inspecciona el artefacto minificado y exige tanto el valor blanco del token como la regla global de `h1`; la caja negra confirma su presencia junto con todas las superficies React implicadas. El contraste de blanco sobre el panel grafito `#162333` es 15.88:1, por encima de 4.5:1 para texto normal y 3:1 para texto grande según WCAG 2.2.
 
-Desde 2.0.119, el tratamiento escrito institucional utiliza **usted** en portal público, formularios, administración, validaciones, correo de acceso, WhatsApp y plantillas operativas. `scripts/verify-formal-spanish.mjs` inspecciona los 78 archivos de ejecución vigentes y forma parte de `release:verify`, `test:black-box` y `build`. La migración `0012_dear_lifeguard.sql` homologa únicamente textos históricos predeterminados y conserva contenido libre de administración.
+Desde 2.0.119, el tratamiento escrito institucional utiliza **usted** en portal público, formularios, administración, validaciones, correo de acceso, WhatsApp y plantillas operativas. `scripts/verify-formal-spanish.mjs` inspecciona los 95 archivos de ejecución vigentes y forma parte de `release:verify`, `test:black-box` y `build`. La migración `0012_dear_lifeguard.sql` homologa únicamente textos históricos predeterminados y conserva contenido libre de administración.
 
 Desde 2.0.118, `/privacidad-terminos` funciona como documento interno de referencia, separado del formulario y disponible en una pestaña paralela mediante `target="_blank"` y `rel="noopener noreferrer"`. La ruta identifica a Alternativas Inteligentes, S.A., elimina marcadores editoriales, explica uso y límites de IA, categorías y finalidades de datos, proveedores, seguridad, conservación y solicitudes. Título, descripción y URL canónica se establecen como metadata de la página. El texto distingue compromisos voluntarios y normas aplicables; no presenta una iniciativa legislativa como ley vigente ni equivale a dictamen jurídico.
 
@@ -143,4 +151,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.138.md](PRUEBAS_CAJA_NEGRA_2.0.138.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.139.md](PRUEBAS_CAJA_NEGRA_2.0.139.md).

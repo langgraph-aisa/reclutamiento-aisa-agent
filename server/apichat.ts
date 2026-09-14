@@ -2,6 +2,12 @@ import { withLangfuseObservation } from "./observability/langfuse";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+/** Dominio oficial publicado por el proveedor para la API nativa. */
+export const APICHAT_NATIVE_HOST = "api.apichat.io";
+
+/** Base oficial de la API clásica, confirmada en el panel del proveedor. */
+export const APICHAT_NATIVE_BASE_URL = `https://${APICHAT_NATIVE_HOST}/v1/`;
+
 export const CV_REQUEST_TEMPLATE = `Hola {{nombre}}, muchas gracias por su solicitud de empleo.
 
 Le saludamos de parte de AISA Solar. Dando seguimiento a su solicitud de empleo para la plaza “{{plaza}}”, por este medio agradeceríamos que pudiera enviarnos su CV para que sea evaluado por nuestro equipo de Recursos Humanos.
@@ -83,6 +89,35 @@ function secureUrl(value: string, label: string) {
   return parsed;
 }
 
+/**
+ * Normaliza el endpoint de la API nativa a su base oficial. El operador puede
+ * pegar la base (`/v1/`), una operación concreta (`/v1/sendText`,
+ * `/v1/messages`) o la ruta con barra final: todas producen la misma base y una
+ * sola fuente de verdad para las rutas derivadas. Las bases de Chat API
+ * (`/instance{client_id}/`) y APIGraph (`/graph/v17/`) se rechazan de forma
+ * explícita porque su esquema de mensajes requiere un adaptador dedicado.
+ */
+export function normalizeNativeApiChatEndpoint(value: string) {
+  const parsed = secureUrl(value, "el endpoint");
+  if (parsed.hostname.toLowerCase() !== APICHAT_NATIVE_HOST) {
+    throw new Error(
+      "ApiChat no está configurado: el endpoint debe utilizar el dominio oficial api.apichat.io."
+    );
+  }
+  const pathname = parsed.pathname.replace(/\/+$/, "");
+  if (/^\/instance/i.test(pathname) || /^\/graph\//i.test(pathname)) {
+    throw new Error(
+      "ApiChat no está configurado: esta cuenta utiliza Chat API o APIGraph; esa base exige el adaptador dedicado, todavía no habilitado."
+    );
+  }
+  if (!/^\/v1(\/[A-Za-z]+)?$/.test(pathname)) {
+    throw new Error(
+      "ApiChat no está configurado: la ruta debe pertenecer a /v1/ del dominio oficial, por ejemplo https://api.apichat.io/v1/."
+    );
+  }
+  return APICHAT_NATIVE_BASE_URL;
+}
+
 export function validateApiChatConfig(input: ApiChatConfig): ApiChatConfig {
   const mode = input.mode;
   if (mode !== "native" && mode !== "legacy") {
@@ -90,7 +125,7 @@ export function validateApiChatConfig(input: ApiChatConfig): ApiChatConfig {
       "ApiChat no está configurado: el modo de API no es válido."
     );
   }
-  const endpoint = secureUrl(
+  const endpointUrl = secureUrl(
     required(input.endpoint, "el endpoint"),
     "el endpoint"
   );
@@ -102,20 +137,15 @@ export function validateApiChatConfig(input: ApiChatConfig): ApiChatConfig {
   if (mode === "native" && !clientId) {
     throw new Error("ApiChat no está configurado: falta el Client ID.");
   }
-  if (endpoint.hostname.toLowerCase() !== "api.apichat.io") {
+  if (endpointUrl.hostname.toLowerCase() !== APICHAT_NATIVE_HOST) {
     throw new Error(
       "ApiChat no está configurado: el endpoint debe utilizar el dominio oficial api.apichat.io."
     );
   }
-  if (
-    mode === "native" &&
-    endpoint.pathname.replace(/\/$/, "") !== "/v1/sendText"
-  ) {
-    throw new Error(
-      "ApiChat no está configurado: la API nativa debe utilizar la ruta /v1/sendText."
-    );
-  }
-  if (mode === "legacy" && !accountId) {
+  const endpoint =
+    mode === "native"
+      ? normalizeNativeApiChatEndpoint(endpointUrl.toString())
+      : endpointUrl.toString();  if (mode === "legacy" && !accountId) {
     throw new Error(
       "ApiChat no está configurado: falta el ID de cuenta del modo heredado."
     );
@@ -128,7 +158,7 @@ export function validateApiChatConfig(input: ApiChatConfig): ApiChatConfig {
 
   return {
     mode,
-    endpoint: endpoint.toString(),
+    endpoint,
     token,
     clientId,
     accountId,
@@ -163,7 +193,10 @@ function providerErrorMessage(status: number, payload: unknown) {
 }
 
 function officialActionUrl(config: ApiChatConfig, action: string) {
-  return new URL(`/v1/${action}`, config.endpoint).toString();
+  return new URL(
+    action,
+    `${config.endpoint.replace(/\/+$/, "")}/`
+  ).toString();
 }
 
 function outboundPhoneDigits(phoneInternational: string) {
@@ -504,7 +537,7 @@ async function verifyApiChatInboundEvent(
       "La verificación de mensajes entrantes exige el modo nativo de ApiChat."
     );
   }
-  const url = new URL("/v1/messages", config.endpoint);
+  const url = new URL(officialActionUrl(config, "messages"));
   url.searchParams.set("messageId", input.providerMessageId);
   url.searchParams.set("number", input.phoneInternational.replace(/\D/g, ""));
   url.searchParams.set("fromMe", fromMe ? "true" : "false");

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   APICHAT_OFFICIAL_ENDPOINTS,
+  APICHAT_RECEPTION_VERIFIED_KEY,
   getApiChatConfiguration,
   getApiChatEndpoints,
   getApiChatReceptionReadiness,
@@ -9,6 +10,7 @@ import {
   saveApiChatPreferences,
   saveApiChatSecret,
   verifyApiChatConnection,
+  verifyApiChatReception,
 } from "./apiChatSettings";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -87,7 +89,7 @@ describe("ApiChat credential vault", () => {
     const runtime = await getApiChatRuntimeSettings(pool as never);
     expect(runtime).toMatchObject({
       mode: "native",
-      endpoint: "https://api.apichat.io/v1/sendText",
+      endpoint: "https://api.apichat.io/v1/",
       clientId: "client-safe-3210",
       token: "token-safe-9876",
     });
@@ -166,7 +168,7 @@ describe("ApiChat credential vault", () => {
 });
 
 describe("preparación de envío y recepción", () => {
-  it("reporta listo únicamente con credenciales y webhook HTTPS completos", async () => {
+  it("reporta recepción preparada solo con credenciales nativas e historial habilitado", async () => {
     vi.stubEnv(
       "AGENT_SETTINGS_ENCRYPTION_KEY",
       "test-key-material-with-more-than-thirty-two-characters"
@@ -200,7 +202,78 @@ describe("preparación de envío y recepción", () => {
 
     const sendOnly = await getApiChatReceptionReadiness(pool as never);
     expect(sendOnly.sendReady).toBe(true);
+    expect(sendOnly.historyEnabled).toBe(true);
     expect(sendOnly.receiveReady).toBe(true);
+    expect(sendOnly.receiveVerifiedAt).toBeNull();
+  });
+});
+
+describe("verificación real de recepción", () => {
+  async function readyNativePool() {
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "test-key-material-with-more-than-thirty-two-characters"
+    );
+    const { pool, stored } = memoryPool();
+    stored.set("api_mode", {
+      setting_key: "api_mode",
+      setting_value: "native",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    stored.set("api_endpoint", {
+      setting_key: "api_endpoint",
+      setting_value: "https://api.apichat.io/v1/",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    stored.set("connect_to", {
+      setting_key: "connect_to",
+      setting_value: "apichat.io",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+    await saveApiChatSecret(pool as never, "client_id", "client-safe-3210", 7);
+    await saveApiChatSecret(pool as never, "token", "token-safe-9876", 7);
+    return { pool, stored };
+  }
+
+  it("sella la marca temporal solo cuando el historial responde", async () => {
+    const { pool, stored } = await readyNativePool();
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify([{ id: "message-1" }]), { status: 200 })
+      );
+
+    const result = await verifyApiChatReception(pool as never, fetchImpl);
+    expect(result.sampleCount).toBe(1);
+    expect(String(fetchImpl.mock.calls[0][0])).toContain("/v1/messages");
+    expect(stored.get(APICHAT_RECEPTION_VERIFIED_KEY)?.setting_value).toBe(
+      result.verifiedAt
+    );
+
+    const readiness = await getApiChatReceptionReadiness(pool as never);
+    expect(readiness.receiveReady).toBe(true);
+    expect(readiness.receiveVerifiedAt).toBe(result.verifiedAt);
+  });
+
+  it("no permite verificar si el endpoint de historial está apagado", async () => {
+    const { pool, stored } = await readyNativePool();
+    stored.set("endpoint_enabled:/messagesHistory", {
+      setting_key: "endpoint_enabled:/messagesHistory",
+      setting_value: "false",
+      is_secret: false,
+      updated_at: new Date(),
+    });
+
+    await expect(
+      verifyApiChatReception(pool as never)
+    ).rejects.toThrow("está desactivado");
+
+    const readiness = await getApiChatReceptionReadiness(pool as never);
+    expect(readiness.historyEnabled).toBe(false);
+    expect(readiness.receiveReady).toBe(false);
   });
 });
 
@@ -219,6 +292,15 @@ describe("catálogo oficial de endpoints ApiChat", () => {
       "/sendLocation",
       "/messagesHistory",
       "/deleteMessage",
+    ]);
+    expect(APICHAT_OFFICIAL_ENDPOINTS.map(endpoint => endpoint.route)).toEqual([
+      "sendText",
+      "sendFile",
+      "sendPTT",
+      "sendLink",
+      "sendLocation",
+      "messages",
+      "deleteMessage",
     ]);
 
     const { pool, stored } = memoryPool();

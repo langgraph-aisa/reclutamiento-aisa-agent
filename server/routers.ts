@@ -19,6 +19,10 @@ import {
 import { normalizePhone } from "./phone";
 import { importSpreadsheetForm } from "./importForms";
 import { createFormPublicToken } from "./formTokens";
+import {
+  listGovernanceCoverage,
+  registerGovernanceVerification,
+} from "./governanceObservability";
 import { resolveApplicationLocation } from "./applicationLocation";
 import { COOKIE_NAME } from "@shared/const";
 import { APP_VERSION } from "@shared/release";
@@ -64,6 +68,7 @@ import {
   saveApiChatPreferences,
   saveApiChatSecret,
   verifyApiChatConnection,
+  verifyApiChatReception,
 } from "./apiChatSettings";
 import {
   analyzeKnowledgeDocument,
@@ -115,8 +120,10 @@ import {
   ASSESSMENT_DELETE_CODE_MAX_ATTEMPTS,
   ASSESSMENT_DELETE_CODE_RESEND_SECONDS,
   ASSESSMENT_DELETE_CODE_TTL_MINUTES,
+  ASSESSMENT_GOVERNANCE_DOMAINS,
   ASSESSMENT_GOVERNANCE_RULES,
   ASSESSMENT_LEVELS,
+  GOVERNANCE_MONITORING_NOTICE,
   missingPsychometricEvidenceTerms,
 } from "../shared/assessmentGovernance";
 
@@ -961,6 +968,11 @@ function safeIntegrationMessage(error: unknown, fallback: string) {
   ) {
     return "La tabla de asignación responsable no existe. Aplique la migración 0014_cognitive_governance.sql en la base de datos.";
   }
+  if (
+    message.includes('relation "governance_rule_verifications" does not exist')
+  ) {
+    return "El registro de verificaciones de gobierno no existe. Aplique la migración 0020_governance_rule_verifications.sql en la base de datos.";
+  }
   const allowedMessages = [
     "No existe una fuente estable para cifrar credenciales",
     "No existe una clave dedicada para cifrar credenciales",
@@ -981,7 +993,11 @@ function safeIntegrationMessage(error: unknown, fallback: string) {
     "El procesador de Langfuse",
     "ApiChat no está configurado",
     "ApiChat rechazó la verificación",
+    "ApiChat rechazó la consulta de historial",
     "La verificación integrada de ApiChat",
+    "La verificación de recepción exige el modo de API nativa",
+    "El endpoint /messagesHistory está desactivado",
+    "No fue posible consultar el historial de ApiChat",
     "No fue posible establecer conexión con ApiChat",
     "Postulación no encontrada",
     "Esta postulación ya está siendo evaluada",
@@ -2324,11 +2340,88 @@ export const appRouter = router({
       }),
   }),
 
+  governance: router({
+    catalog: adminProcedure.query(async () => {
+      const pool = await requirePool();
+      const coverage = await listGovernanceCoverage(pool);
+      const coverageByRule = new Map(
+        coverage.rules.map(row => [row.ruleId, row])
+      );
+      const domains = ASSESSMENT_GOVERNANCE_DOMAINS.map(domain => {
+        const rules = ASSESSMENT_GOVERNANCE_RULES.filter(
+          rule => rule.domainCode === domain.code
+        ).map(rule => {
+          const row = coverageByRule.get(rule.id);
+          return {
+            ...rule,
+            verifications: row?.verifications ?? 0,
+            lastVerifiedAt: row?.lastVerifiedAt ?? null,
+            lastTraceId: row?.lastTraceId ?? null,
+          };
+        });
+        return {
+          ...domain,
+          verifications: rules.reduce(
+            (total, rule) => total + rule.verifications,
+            0
+          ),
+          lastVerifiedAt:
+            rules
+              .map(rule => rule.lastVerifiedAt)
+              .filter((value): value is string => Boolean(value))
+              .sort()
+              .at(-1) ?? null,
+          rules,
+        };
+      });
+      return {
+        tableReady: coverage.tableReady,
+        notice: GOVERNANCE_MONITORING_NOTICE,
+        totalVerifications: coverage.totalVerifications,
+        lastVerifiedAt: coverage.lastVerifiedAt,
+        domains,
+      };
+    }),
+    verify: adminProcedure
+      .input(
+        z.object({
+          ruleIds: z
+            .array(z.string().regex(/^[A-Z]{3}-[0-9]{2}$/))
+            .min(1)
+            .max(ASSESSMENT_GOVERNANCE_RULES.length),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const pool = await requirePool();
+        try {
+          const connection = await verifyLangfuseConnection(pool);
+          const registration = await registerGovernanceVerification(pool, {
+            ruleIds: input.ruleIds,
+            traceId: connection.traceId,
+            environment: connection.environment,
+            release: APP_VERSION,
+            actorUserId: ctx.user?.id ?? null,
+            actorEmail: ctx.user?.email ?? null,
+          });
+          return {
+            success: true as const,
+            traceId: connection.traceId,
+            environment: connection.environment,
+            registered: registration.registered,
+          };
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible registrar la verificación de gobierno."
+            ),
+          });
+        }
+      }),
+  }),
+
   assessments: router({
-    governance: roleProcedure.query(() => ({
-      rules: ASSESSMENT_GOVERNANCE_RULES,
-      total: ASSESSMENT_GOVERNANCE_RULES.length,
-    })),
     list: roleProcedure
       .input(
         z
@@ -5238,6 +5331,19 @@ export const appRouter = router({
           message: safeIntegrationMessage(
             error,
             "No fue posible verificar la conexión con ApiChat."
+          ),
+        });
+      }
+    }),
+    verifyApiChatReception: adminProcedure.mutation(async () => {
+      try {
+        return await verifyApiChatReception(await requirePool());
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: safeIntegrationMessage(
+            error,
+            "No fue posible verificar la recepción de ApiChat."
           ),
         });
       }

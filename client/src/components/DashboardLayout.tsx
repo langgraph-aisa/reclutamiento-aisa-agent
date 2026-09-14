@@ -31,6 +31,7 @@ import {
   BrainCircuit,
   BriefcaseBusiness,
   ClipboardList,
+  Eye,
   FolderKanban,
   Globe2,
   KeyRound,
@@ -80,6 +81,12 @@ const menuItems = [
     icon: ClipboardList,
     label: "Actividad y control ISO",
     path: "/admin/activity",
+  },
+  {
+    icon: Eye,
+    label: "Gobierno, Observabilidad y Monitoreo",
+    path: "/admin/governance",
+    adminOnly: true,
   },
   {
     icon: Bot,

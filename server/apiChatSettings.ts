@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import {
+  APICHAT_NATIVE_BASE_URL,
   type ApiChatConfig,
   type ApiChatMode,
   validateApiChatConfig,
@@ -20,6 +21,12 @@ export const APICHAT_SECRET_KEYS = [
 ] as const;
 export type ApiChatSecretKey = (typeof APICHAT_SECRET_KEYS)[number];
 
+/** Ruta oficial que alimenta la recepción y el historial de la bandeja. */
+export const APICHAT_HISTORY_ENDPOINT_PATH = "/messagesHistory";
+
+/** Marca temporal de la última verificación real de recepción. */
+export const APICHAT_RECEPTION_VERIFIED_KEY = "reception_verified_at";
+
 export type ApiChatPreferences = {
   mode: ApiChatMode;
   endpoint: string;
@@ -28,7 +35,7 @@ export type ApiChatPreferences = {
 
 export const DEFAULT_APICHAT_PREFERENCES: ApiChatPreferences = {
   mode: "native",
-  endpoint: "https://api.apichat.io/v1/sendText",
+  endpoint: APICHAT_NATIVE_BASE_URL,
   connectTo: "apichat.io",
 };
 
@@ -166,36 +173,44 @@ export const APICHAT_OFFICIAL_ENDPOINTS = [
   {
     method: "POST",
     path: "/sendMessage",
+    route: "sendText",
     description: "Envío de mensaje de texto a un chat nuevo o existente.",
   },
   {
     method: "POST",
     path: "/sendFile",
+    route: "sendFile",
     description: "Envío de un archivo a un chat nuevo o existente.",
   },
   {
     method: "POST",
     path: "/sendPTT",
+    route: "sendPTT",
     description: "Envío de una nota de voz (PTT) a un chat nuevo o existente.",
   },
   {
     method: "POST",
     path: "/sendLink",
+    route: "sendLink",
     description: "Envío de texto con enlace y vista previa.",
   },
   {
     method: "POST",
     path: "/sendLocation",
+    route: "sendLocation",
     description: "Envío de una ubicación a un chat nuevo o existente.",
   },
   {
     method: "GET",
     path: "/messagesHistory",
-    description: "Listado de mensajes ordenado por tiempo descendente.",
+    route: "messages",
+    description:
+      "Historial de mensajes y recepción de la conversación por tiempo descendente.",
   },
   {
     method: "POST",
     path: "/deleteMessage",
+    route: "deleteMessage",
     description: "Eliminación de un mensaje de WhatsApp.",
   },
 ] as const;
@@ -280,14 +295,94 @@ export async function saveApiChatEndpointStates(
 export async function getApiChatReceptionReadiness(pool: Pool | null) {
   const configuration = await getApiChatConfiguration(pool);
   const secrets = configuration.secrets;
-  const sendReady =
-    configuration.mode === "native"
-      ? Boolean(secrets.client_id.configured && secrets.token.configured)
-      : Boolean(secrets.account_id.configured && secrets.token.configured);
+  const native = configuration.mode === "native";
+  const sendReady = native
+    ? Boolean(secrets.client_id.configured && secrets.token.configured)
+    : Boolean(secrets.account_id.configured && secrets.token.configured);
+  const rows = pool ? await settingRows(pool) : [];
+  const historyEnabled = !endpointStatesFromRows(rows).some(
+    state => state.path === APICHAT_HISTORY_ENDPOINT_PATH && !state.enabled
+  );
+  const receiveVerifiedAt =
+    rows.find(row => row.setting_key === APICHAT_RECEPTION_VERIFIED_KEY)
+      ?.setting_value ?? null;
   return {
     mode: configuration.mode,
     sendReady,
-    receiveReady: sendReady,
+    historyEnabled,
+    receiveReady: native && sendReady && historyEnabled,
+    receiveVerifiedAt,
+  };
+}
+
+/**
+ * Comprueba la recepción con una consulta real al historial oficial. Solo
+ * cuando el proveedor responde bien se sella la marca temporal, de modo que la
+ * interfaz nunca anuncie una capacidad de recepción sin evidencia.
+ */
+export async function verifyApiChatReception(
+  pool: Pool,
+  fetchImpl: typeof fetch = fetch
+) {
+  const settings = await getApiChatRuntimeSettings(pool);
+  if (settings.mode !== "native") {
+    throw new Error(
+      "La verificación de recepción exige el modo de API nativa de ApiChat."
+    );
+  }
+  if (settings.disabledEndpoints?.includes(APICHAT_HISTORY_ENDPOINT_PATH)) {
+    throw new Error(
+      "El endpoint /messagesHistory está desactivado en Configuración > WhatsApp."
+    );
+  }
+  const url = new URL("/v1/messages", settings.endpoint);
+  url.searchParams.set("limit", "1");
+  let response: Response;
+  try {
+    response = await fetchImpl(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "client-id": settings.clientId!,
+        token: settings.token,
+      },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    throw new Error(
+      "No fue posible consultar el historial de ApiChat; verifique la red y la región del servicio."
+    );
+  }
+  if (!response.ok) {
+    throw new Error(
+      `ApiChat rechazó la consulta de historial con código HTTP ${response.status}.`
+    );
+  }
+  const rawBody = await response.text();
+  let payload: unknown = null;
+  if (rawBody) {
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      payload = null;
+    }
+  }
+  const verifiedAt = new Date().toISOString();
+  await pool.query(
+    `INSERT INTO integration_settings
+       (provider,setting_key,setting_value,is_secret,updated_at)
+     VALUES ($1,$2,$3,false,now())
+     ON CONFLICT (provider,setting_key) DO UPDATE
+       SET setting_value=EXCLUDED.setting_value,
+           is_secret=false,
+           updated_at=now()`,
+    [APICHAT_PROVIDER, APICHAT_RECEPTION_VERIFIED_KEY, verifiedAt]
+  );
+  return {
+    ok: true as const,
+    statusCode: response.status,
+    sampleCount: Array.isArray(payload) ? payload.length : 0,
+    verifiedAt,
   };
 }
 

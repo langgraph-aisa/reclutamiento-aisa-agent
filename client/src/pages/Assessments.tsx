@@ -23,7 +23,7 @@ import {
   ASSESSMENT_LEVELS,
   ASSESSMENT_METHODOLOGY_NOTICE,
 } from "@shared/assessmentGovernance";
-import { ArrowDown, ArrowUp, BrainCircuit, CheckCircle2, Pencil, Plus, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, BrainCircuit, CheckCircle2, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -77,7 +77,6 @@ export default function Assessments() {
   const protocols = trpc.assessments.list.useQuery({
     positionId: positionId === "all" ? undefined : Number(positionId),
   });
-  const governance = trpc.assessments.governance.useQuery();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const detail = trpc.assessments.detail.useQuery(
     { id: selectedId ?? 0 },
@@ -363,13 +362,6 @@ export default function Assessments() {
           )}
         </AlertDialogContent>
       </AlertDialog>
-
-      <Card className="rounded-3xl border-0 shadow-soft">
-        <CardHeader><CardTitle className="flex items-center gap-2 text-xl text-primary"><ShieldCheck className="h-5 w-5" /> 64 criterios de gobierno no verificados</CardTitle><p className="text-sm text-muted-foreground">Estos criterios orientan el gobierno y la calidad; no acreditan cumplimiento ni sustituyen un estudio de validez psicométrica.</p></CardHeader>
-        <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {(governance.data?.rules ?? []).map(rule => <div key={rule.id} className="rounded-xl border border-border/70 p-3"><p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">{rule.id} · {rule.domain}</p><p className="mt-1 text-xs leading-5 text-primary">{rule.label}</p></div>)}
-        </CardContent>
-      </Card>
     </div>
   );
 }

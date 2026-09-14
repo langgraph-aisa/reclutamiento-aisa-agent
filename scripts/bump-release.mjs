@@ -38,8 +38,16 @@ const synchronizedFiles = [
 ];
 
 function replaceVersion(relativePath, content) {
+  // La versión dentro de un nombre de archivo (…2.0.138.md) identifica un
+  // documento histórico congelado: reescribirla rompería el enlace. Solo se
+  // sustituyen las versiones que no forman parte de una ruta de documento.
+  const versionPattern = new RegExp(
+    `${currentVersion.replaceAll(".", "\\.")}(?!\\.md)`,
+    "g"
+  );
+  const substitute = value => value.replace(versionPattern, nextVersion);
   if (relativePath !== "README.md") {
-    return content.replaceAll(currentVersion, nextVersion);
+    return substitute(content);
   }
   const startMarker = "<!-- release-history:start -->";
   const endMarker = "<!-- release-history:end -->";
@@ -50,9 +58,9 @@ function replaceVersion(relativePath, content) {
   }
   const historyEnd = end + endMarker.length;
   return [
-    content.slice(0, start).replaceAll(currentVersion, nextVersion),
+    substitute(content.slice(0, start)),
     content.slice(start, historyEnd),
-    content.slice(historyEnd).replaceAll(currentVersion, nextVersion),
+    substitute(content.slice(historyEnd)),
   ].join("");
 }
 

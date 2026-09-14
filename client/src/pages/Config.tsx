@@ -80,6 +80,15 @@ export default function Config() {
   });
   const apiChatReception = trpc.config.apiChatReception.useQuery();
   const reception = apiChatReception.data;
+  const verifyApiChatReception = trpc.config.verifyApiChatReception.useMutation({
+    onSuccess: async result => {
+      await apiChatReception.refetch();
+      toast.success(
+        `Recepción verificada sobre el historial oficial (HTTP ${result.statusCode}, ${result.sampleCount} registro(s) en la muestra).`
+      );
+    },
+    onError: error => toast.error(error.message),
+  });
   const apiChatEndpoints = trpc.config.apiChatEndpoints.useQuery();
   const endpointCatalog = apiChatEndpoints.data;
   const saveApiChatEndpoints = trpc.config.saveApiChatEndpoints.useMutation({
@@ -138,7 +147,7 @@ export default function Config() {
   const [saved, setSaved] = useState(false);
   const [apiChat, setApiChat] = useState({
     mode: "native" as "native" | "legacy",
-    endpoint: "https://api.apichat.io/v1/sendText",
+    endpoint: "https://api.apichat.io/v1/",
     connectTo: "apichat.io",
   });
 
@@ -251,9 +260,11 @@ export default function Config() {
                     variant={reception?.receiveReady ? "default" : "outline"}
                     className="rounded-full"
                   >
-                    {reception?.receiveReady
-                      ? "Recepción lista"
-                      : "Recepción pendiente"}
+                    {!reception?.receiveReady
+                      ? "Recepción pendiente"
+                      : reception?.receiveVerifiedAt
+                        ? "Recepción verificada"
+                        : "Recepción sin verificar"}
                   </Badge>
                 </div>
               </div>
@@ -400,6 +411,9 @@ export default function Config() {
                           <p className="mt-0.5 text-[10px] leading-4 text-muted-foreground">
                             {endpoint.description}
                           </p>
+                          <p className="mt-0.5 break-words font-mono text-[10px] leading-4 text-muted-foreground/80">
+                            {`/v1/${endpoint.route}`}
+                          </p>
                         </div>
                         <Switch
                           checked={enabled}
@@ -422,6 +436,57 @@ export default function Config() {
                     configuradas y el modo sea API nativa.
                   </p>
                 ) : null}
+              </div>
+              <div className="rounded-2xl border border-border/70 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-primary">
+                      Recepción conversacional
+                    </h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      La bandeja se alimenta por sondeo periódico del historial
+                      oficial. El sello temporal solo se escribe cuando el
+                      proveedor responde con el historial. Conservar el
+                      endpoint de historial encendido es requisito de recepción.
+                    </p>
+                    {reception?.receiveVerifiedAt ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Última verificación de recepción:{" "}
+                        {new Intl.DateTimeFormat("es-GT", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                          timeZone: "America/Guatemala",
+                        }).format(new Date(reception.receiveVerifiedAt))}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        Sin verificación registrada.
+                      </p>
+                    )}
+                    {reception && !reception.historyEnabled ? (
+                      <p className="mt-1 text-[11px] text-destructive">
+                        El endpoint de historial está apagado: la recepción no
+                        puede funcionar.
+                      </p>
+                    ) : null}
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="rounded-full"
+                    disabled={
+                      verifyApiChatReception.isPending ||
+                      !reception?.receiveReady
+                    }
+                    onClick={() => verifyApiChatReception.mutate()}
+                  >
+                    {verifyApiChatReception.isPending ? (
+                      <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <ShieldCheck className="mr-2 h-4 w-4" />
+                    )}{" "}
+                    Verificar recepción
+                  </Button>
+                </div>
               </div>
               <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
                 <CredentialField
@@ -448,17 +513,19 @@ export default function Config() {
                   onRemove={() => persistApiChatSecret("token", null)}
                   onVerify={() => verifyApiChat.mutate()}
                 />
-                <CredentialField
-                  label="ID de cuenta"
-                  description="Solo se utiliza en el modo heredado"
-                  placeholder="Ingrese el ID de cuenta"
-                  state={apiChatConfiguration.data?.secrets.account_id}
-                  pending={
-                    saveApiChatSecret.isPending || verifyApiChat.isPending
-                  }
-                  onSave={value => persistApiChatSecret("account_id", value)}
-                  onRemove={() => persistApiChatSecret("account_id", null)}
-                />
+                {apiChat.mode === "legacy" ? (
+                  <CredentialField
+                    label="ID de cuenta"
+                    description="Solo se utiliza en el modo heredado"
+                    placeholder="Ingrese el ID de cuenta"
+                    state={apiChatConfiguration.data?.secrets.account_id}
+                    pending={
+                      saveApiChatSecret.isPending || verifyApiChat.isPending
+                    }
+                    onSave={value => persistApiChatSecret("account_id", value)}
+                    onRemove={() => persistApiChatSecret("account_id", null)}
+                  />
+                ) : null}
               </div>
               <div className="rounded-2xl border border-emerald-400/20 bg-secondary p-4 text-sm leading-6 text-secondary-foreground">
                 <strong className="text-primary">Seguridad:</strong> el servidor

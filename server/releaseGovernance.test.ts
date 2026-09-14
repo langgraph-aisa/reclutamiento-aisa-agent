@@ -70,8 +70,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.138");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.138");
+    expect(APP_VERSION).toBe("2.0.139");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.139");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -455,9 +455,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(93);
+    expect(audit.files).toHaveLength(95);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(93);
+    expect(publicCopyAudit.files).toHaveLength(95);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -833,7 +833,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.138");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.139");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -842,7 +842,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.138");
+    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.139");
     expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.132");
     expect(readme).toContain("ISO/IEC 20000-1:2018");
     expect(readme).toContain("`inboxSync`");

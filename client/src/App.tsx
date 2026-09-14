@@ -14,6 +14,7 @@ import Apply from "./pages/Apply";
 import Candidates from "./pages/Candidates";
 import Config from "./pages/Config";
 import FormBuilder from "./pages/FormBuilder";
+import GovernanceObservability from "./pages/GovernanceObservability";
 import Home from "./pages/Home";
 import Inbox from "./pages/Inbox";
 import Jobs from "./pages/Jobs";
@@ -119,6 +120,11 @@ function Router() {
       <Route path="/admin/activity">
         <AdminShell>
           <ActivityAudit />
+        </AdminShell>
+      </Route>
+      <Route path="/admin/governance">
+        <AdminShell>
+          <GovernanceObservability />
         </AdminShell>
       </Route>
       <Route path="/admin/config">

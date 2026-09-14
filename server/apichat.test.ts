@@ -83,6 +83,39 @@ describe("ApiChat configuration", () => {
       })
     ).toThrow("dominio oficial");
   });
+
+  it("normaliza a la base oficial cualquier operación del mismo dominio", () => {
+    const base = validateApiChatConfig({
+      mode: "native",
+      endpoint: "https://api.apichat.io/v1/",
+      clientId: "client-1",
+      token: "secret",
+    });
+    const operation = validateApiChatConfig({
+      mode: "native",
+      endpoint: "https://api.apichat.io/v1/messages",
+      clientId: "client-1",
+      token: "secret",
+    });
+    expect(base.endpoint).toBe("https://api.apichat.io/v1/");
+    expect(operation.endpoint).toBe(base.endpoint);
+  });
+
+  it("rechaza de forma explícita las bases que exigen adaptador dedicado", () => {
+    for (const endpoint of [
+      "https://api.apichat.io/instance32146/",
+      "https://api.apichat.io/graph/v17/",
+    ]) {
+      expect(() =>
+        validateApiChatConfig({
+          mode: "native",
+          endpoint,
+          clientId: "client-1",
+          token: "secret",
+        })
+      ).toThrow("adaptador");
+    }
+  });
 });
 
 describe("sendApiChatText", () => {
@@ -119,6 +152,27 @@ describe("sendApiChatText", () => {
         }),
         body: JSON.stringify({ number: "50255555555", text: "Mensaje" }),
       })
+    );
+  });
+
+  it("deriva la operación de texto desde la base normalizada", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ id: "provider-2" }), { status: 200 })
+      );
+    await sendApiChatText(
+      { phoneInternational: "+50255555555", message: "Mensaje" },
+      {
+        mode: "native",
+        endpoint: "https://api.apichat.io/v1/",
+        clientId: "client-1",
+        token: "secret",
+      },
+      { fetchImpl }
+    );
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      "https://api.apichat.io/v1/sendText"
     );
   });
 
