@@ -26,6 +26,18 @@ import {
   adjacentReviewResultIndex,
   reviewBlockPageRange,
 } from "../shared/reviewNavigation";
+import {
+  ASSESSMENT_DELETE_CODE_MAX_ATTEMPTS,
+  ASSESSMENT_DELETE_CODE_RESEND_SECONDS,
+  ASSESSMENT_DELETE_CODE_TTL_MINUTES,
+  ASSESSMENT_DELETE_TITLE_WORD_LIMIT,
+  assessmentDeleteAlertTitle,
+} from "../shared/assessmentGovernance";
+import {
+  ACTIVITY_SUMMARY_WORD_LIMIT,
+  ACTIVITY_TITLE_WORD_LIMIT,
+} from "../shared/agentConfig";
+import { countWords } from "../shared/activityAudit";
 import { APPLICATION_STATUS_OPTIONS } from "../shared/applicationStatus";
 import {
   nextAppTheme,
@@ -58,8 +70,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.132");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.132");
+    expect(APP_VERSION).toBe("2.0.133");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.133");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -493,6 +505,111 @@ describe("black-box release contract", () => {
     expect(migration).toContain("'token', NULL, true");
   });
 
+  it("operates ApiChat reception through the inboxSync bridge without n8n", () => {
+    const sync = fs.readFileSync(path.resolve("server/inboxSync.ts"), "utf8");
+    const bootstrap = fs.readFileSync(
+      path.resolve("server/_core/index.ts"),
+      "utf8"
+    );
+    const settings = fs.readFileSync(
+      path.resolve("server/apiChatSettings.ts"),
+      "utf8"
+    );
+    const config = fs.readFileSync(
+      path.resolve("client/src/pages/Config.tsx"),
+      "utf8"
+    );
+    const packageMetadata = JSON.parse(
+      fs.readFileSync(path.resolve("package.json"), "utf8")
+    );
+    const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
+
+    expect(sync).toContain("INBOX_SYNC_INTERVAL_MS = 1_000");
+    expect(sync).toContain("INBOX_SYNC_HISTORY_LIMIT = 10");
+    expect(sync).toContain("INBOX_SYNC_CONVERSATION_REFRESH_MS = 60_000");
+    expect(sync).toContain("INBOX_SYNC_MAX_CONVERSATIONS = 50");
+    expect(sync).toContain("INBOX_SYNC_MIN_GAP_MS = 15_000");
+    expect(sync).toContain("INBOX_SYNC_BACKOFF_MS = 60_000");
+    expect(sync).toContain('new URL("/v1/messages", settings.endpoint)');
+    expect(sync).toContain('"client-id"');
+    expect(sync).toContain('disabledEndpoints?.includes("/messagesHistory")');
+    expect(bootstrap).toContain("startInboxSyncBridge");
+    expect(fs.existsSync(path.resolve("n8n-workflows"))).toBe(false);
+    expect(packageMetadata.scripts.build).not.toContain("n8n");
+    expect(readme).not.toContain("n8n: workflow 04");
+    expect(readme).toContain("n8n quedó retirado");
+    expect(readme).toContain("`inboxSync`");
+    expect(settings).toContain('path: "/sendMessage"');
+    expect(settings).toContain('path: "/sendFile"');
+    expect(settings).toContain('path: "/sendPTT"');
+    expect(settings).toContain('path: "/sendLink"');
+    expect(settings).toContain('path: "/sendLocation"');
+    expect(settings).toContain('path: "/messagesHistory"');
+    expect(settings).toContain('path: "/deleteMessage"');
+    expect(config).toContain("Guardar endpoints");
+    expect(config).toContain("Endpoints oficiales habilitados");
+  });
+
+  it("governs protocol deletion with a temporary six-digit code", () => {
+    const governance = fs.readFileSync(
+      path.resolve("shared/assessmentGovernance.ts"),
+      "utf8"
+    );
+    const routers = fs.readFileSync(
+      path.resolve("server/routers.ts"),
+      "utf8"
+    );
+    const migration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0015_protocol_delete_challenges.sql"),
+      "utf8"
+    );
+
+    expect(ASSESSMENT_DELETE_TITLE_WORD_LIMIT).toBe(11);
+    expect(ASSESSMENT_DELETE_CODE_TTL_MINUTES).toBe(10);
+    expect(ASSESSMENT_DELETE_CODE_MAX_ATTEMPTS).toBe(5);
+    expect(ASSESSMENT_DELETE_CODE_RESEND_SECONDS).toBe(60);
+    const title = assessmentDeleteAlertTitle({
+      name: "Prueba técnica avanzada para instaladores solares",
+      version: 3,
+      status: "borrador",
+      itemCount: 12,
+      activeItemCount: 8,
+    });
+    expect(countWords(title)).toBeLessThanOrEqual(
+      ASSESSMENT_DELETE_TITLE_WORD_LIMIT
+    );
+    expect(title).toContain("Eliminar");
+    expect(title).toContain("por código");
+    expect(governance).toContain("ASSESSMENT_DELETE_CODE_TTL_MINUTES");
+    expect(routers).toContain("requestDeleteCode: adminProcedure");
+    expect(routers).toContain("deleteProtocol: adminProcedure");
+    expect(routers).toContain(
+      "Una versión activa no puede eliminarse; retire primero su activación."
+    );
+    expect(routers).toContain(
+      "La versión tiene sesiones de evaluación vinculadas y no puede eliminarse."
+    );
+    expect(migration).toContain("protocol_delete_challenges");
+  });
+
+  it("composes ISO activity with 11-word titles, 33-word summaries and the 20000-1 map", () => {
+    const activity = fs.readFileSync(
+      path.resolve("shared/activityAudit.ts"),
+      "utf8"
+    );
+    const page = fs.readFileSync(
+      path.resolve("client/src/pages/ActivityAudit.tsx"),
+      "utf8"
+    );
+
+    expect(ACTIVITY_TITLE_WORD_LIMIT).toBe(11);
+    expect(ACTIVITY_SUMMARY_WORD_LIMIT).toBe(33);
+    expect(activity).toContain("Contribución de");
+    expect(activity).toContain("ACTIVITY_TITLE_WORD_LIMIT");
+    expect(activity).toContain("ACTIVITY_SUMMARY_WORD_LIMIT");
+    expect(page).toContain("Mapa de controles ISO/IEC 20000-1");
+  });
+
   it("publishes the academic-commercial README with auditable proportions and references", () => {
     const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
     const academicBody = readme.slice(0, readme.indexOf("## Referencias"));
@@ -501,7 +618,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.132");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.133");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -510,7 +627,12 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.133");
     expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.132");
+    expect(readme).toContain("ISO/IEC 20000-1:2018");
+    expect(readme).toContain("`inboxSync`");
+    expect(readme).not.toContain("n8n: workflow 04");
+    expect(readme).toContain("n8n quedó retirado");
     expect(readme).toContain("### 10SEP2026 · JARVI RH 2.0.129");
     expect(readme).toContain("Vista 360° del Candidato");
     expect(readme).toContain("tres tarjetas en escritorio");

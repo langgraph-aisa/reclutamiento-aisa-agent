@@ -78,7 +78,7 @@ Fuentes oficiales: [transcripción de audio](https://developers.openai.com/api/r
 
 Los selectores `psychometric_model` y `activity_summary_model` quedan preparados.
 La ejecución adaptativa de protocolos todavía no invoca al primero; los títulos
-de 11 palabras y resúmenes de 35 palabras de actividad son deterministas y no
+de 11 palabras y resúmenes de 33 palabras de actividad son deterministas y no
 invocan al segundo. Esta distinción impide presentar una preferencia almacenada
 como funcionalidad productiva terminada.
 

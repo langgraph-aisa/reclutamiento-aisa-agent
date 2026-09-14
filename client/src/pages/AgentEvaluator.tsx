@@ -334,7 +334,7 @@ export default function AgentEvaluator() {
             </div>
             <div className="space-y-2">
               <Label className="font-semibold text-primary">
-                Resumen de actividad de 35 palabras
+                Resumen de actividad de 33 palabras
               </Label>
               <Select
                 value={preferences.activitySummaryModel}

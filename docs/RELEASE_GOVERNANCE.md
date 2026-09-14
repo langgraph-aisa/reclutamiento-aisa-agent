@@ -1,16 +1,16 @@
-# Gobierno de release JARVI RH 2.0.132
+# Gobierno de release JARVI RH 2.0.133
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.132**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.133**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
-### Alcance candidato 2.0.132
+### Alcance candidato 2.0.133
 
-El release candidato incorpora observabilidad en vivo mediante el SDK modular de Langfuse 5.11.1 y OpenTelemetry 0.222.0. La instrumentación cubre evaluación LangGraph, generaciones OpenAI, edición asistida, ApiChat, solicitud de currículum, bandeja y audio; aplica seudonimización, redacción previa a exportación, muestreo, rotación inmediata y cierre ordenado. Las capacidades de 2.0.130 permanecen bajo regresión.
+El release candidato retira n8n por completo y concentra la comunicación en ApiChat directo. La bandeja se sincroniza cada segundo mediante el puente `inboxSync`, que consulta `GET /v1/messages` de hasta 50 conversaciones activas, rellena entrantes y salientes con deduplicación por identificador del proveedor, se repliega 60 segundos ante límites de tasa y se detiene en el cierre ordenado. Configuración administra el catálogo de los siete endpoints oficiales con interruptores por endpoint auditados; la bandeja incorpora burbujas con hora y ticks, tarjeta con plaza, teléfono, punteo IA y etiqueta humano/agente, y envío de enlace, ubicación, archivo, nota de voz y borrado de mensajes. El borrado de versiones de prueba exige un código temporal de seis dígitos por correo y la migración `0015` conserva desafío y auditoría. La actividad ISO compone títulos de 11 palabras y resúmenes de 33 por acción y añade el mapa de controles ISO/IEC 20000-1. Las capacidades de 2.0.132 y 2.0.131 permanecen bajo regresión.
 
-El alcance no incluye todavía descarga productiva de medios ApiChat, bucket, antivirus, previsualización de PDF/Word/audio, ejecución adaptativa completa de pruebas, validación psicométrica ni ingestión de despliegues e incidentes para calcular DORA. La actividad usa sondeo de cuatro o cinco segundos según la vista, no streaming. Los resúmenes de actividad son deterministas aunque exista un selector reservado para un modelo futuro. El workflow 04 debe importarse, recibir su Header Auth interno y activarse antes de que la URL n8n configurada acepte el sobre `messages` de ApiChat.
+El alcance no incluye todavía descarga productiva de medios ApiChat, bucket, antivirus, previsualización de PDF/Word/audio, ejecución adaptativa completa de pruebas, validación psicométrica ni ingestión de despliegues e incidentes para calcular DORA. La actividad administrativa usa sondeo de cinco segundos según la vista, no streaming; la bandeja usa sincronización por sondeo de un segundo sin garantía de entrega exactamente una vez. Los resúmenes de actividad son deterministas aunque exista un selector reservado para un modelo futuro. La recepción ya no depende de un webhook ni de un workflow externo: el historial oficial del proveedor es la fuente que rellena la bandeja.
 
-El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.132.md](OBSERVABILIDAD_LANGFUSE_2.0.132.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.132 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.132.
+El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.133 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.134.
 
 La versión 2.0.129 convirtió Configuración > WhatsApp en el almacén operativo de ApiChat. `integration_settings` conserva preferencias y secretos cifrados; el cliente recibe únicamente estado y máscara. `cvRequest.ts` obtiene la configuración mediante `getApiChatRuntimeSettings` después de confirmar la transacción y `apichat.ts` ya no consulta el entorno. La ruta genérica de configuración queda limitada al proveedor no secreto `recruitment`.
 
@@ -107,6 +107,7 @@ La Responses API crea respuestas de modelo mediante `POST /responses`; el prefij
 - [ISO/IEC 25010:2023](https://www.iso.org/standard/78176.html): modelo de calidad del producto; se usa para trazabilidad de adecuación funcional, usabilidad, compatibilidad, fiabilidad, seguridad y mantenibilidad.
 - [ISO/IEC 27001:2022](https://www.iso.org/standard/27001): referencia para gestión de riesgos de información. El tema se guarda como preferencia no sensible y no se introducen tokens GitHub en cliente.
 - [ISO 22301:2019](https://www.iso.org/standard/75106.html): continuidad del negocio; orienta BIA, objetivos de recuperación, planes, ejercicios y mejora.
+- [ISO/IEC 20000-1:2018](https://www.iso.org/standard/70636.html): gestión de servicios; orienta el mapa de controles de servicio visible en Actividad y control ISO.
 - [ISO/IEC 42001:2023](https://www.iso.org/standard/42001): sistema de gestión de IA; orienta autoridad humana, riesgos, impactos, trazabilidad y mejora.
 - [ISO/IEC/IEEE 29119-1:2022](https://www.iso.org/standard/81291.html): conceptos generales de pruebas; cada caso registra condición, estímulo y resultado observable.
 - [Métricas DORA](https://dora.dev/guides/dora-metrics/): tiempo de entrega del cambio, frecuencia de despliegue, tiempo de recuperación de despliegue fallido, tasa de fallos de cambio y tasa de retrabajo de despliegue.
@@ -134,4 +135,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.132.md](PRUEBAS_CAJA_NEGRA_2.0.132.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.133.md](PRUEBAS_CAJA_NEGRA_2.0.133.md).
