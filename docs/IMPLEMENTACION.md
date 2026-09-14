@@ -154,7 +154,7 @@ El orden recomendado de configuración es el siguiente:
 1. Abrir **Perfiles laborales** y registrar nombre, objetivo, responsabilidades, requisitos obligatorios, habilidades, conocimientos, nivel académico, experiencia, idiomas, licencias, disponibilidad, ubicación, salario, modalidad y criterios IA.
 2. Crear una plaza y anotar su ID.
 3. Asociar el perfil a la plaza desde el campo **IDs de plazas asociadas**.
-4. Abrir **Plazas y formularios → Preguntas**.
+4. Abrir **Plazas y anuncios → Preguntas**.
 5. Usar **Generar preguntas desde perfil** o crear cada pregunta manualmente.
 6. Revisar las opciones mostradas y las respuestas que aprueban; no son el mismo concepto.
 7. Publicar primero el formulario y luego la plaza.

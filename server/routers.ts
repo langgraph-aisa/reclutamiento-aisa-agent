@@ -17,6 +17,7 @@ import {
   verifyLoginCode,
 } from "./localAuth";
 import { normalizePhone } from "./phone";
+import { importSpreadsheetForm } from "./importForms";
 import { resolveApplicationLocation } from "./applicationLocation";
 import { COOKIE_NAME } from "@shared/const";
 import { APP_VERSION } from "@shared/release";
@@ -1587,7 +1588,8 @@ export const appRouter = router({
           const positionResult = await client.query(
             `SELECT p.id, f.id AS form_id FROM job_positions p
              JOIN application_forms f ON f.job_position_id = p.id AND f.published = true
-            WHERE p.public_slug = $1 AND p.published = true LIMIT 1`,
+            WHERE p.public_slug = $1 AND p.published = true
+            ORDER BY f.version DESC LIMIT 1`,
             [input.token]
           );
           if (!positionResult.rows[0])
@@ -1596,19 +1598,6 @@ export const appRouter = router({
               message: "La plaza no está publicada o ya no está disponible.",
             });
           const position = positionResult.rows[0];
-          const duplicate = await client.query(
-            `SELECT a.id FROM applications a JOIN candidates c ON c.id = a.candidate_id
-            WHERE c.phone_international = $1 AND a.job_position_id = $2 LIMIT 1`,
-            [phone.e164, position.id]
-          );
-          if (duplicate.rows[0]) {
-            await client.query("ROLLBACK");
-            return {
-              alreadyApplied: true as const,
-              message:
-                "Esta solicitud ya fue enviada previamente para esta plaza.",
-            };
-          }
           const candidate = await client.query(
             `INSERT INTO candidates (phone_international, phone_country, full_name, email)
            VALUES ($1, $2, $3, $4)
@@ -1616,20 +1605,44 @@ export const appRouter = router({
            RETURNING id`,
             [phone.e164, phone.country, input.fullName, input.email || null]
           );
-          const application = await client.query(
-            `INSERT INTO applications (
-               candidate_id,job_position_id,form_id,
-               location_zone_id,location_department_id,location_municipality_id,status
-             ) VALUES ($1,$2,$3,$4,$5,$6,'en_revision') RETURNING id`,
-            [
-              candidate.rows[0].id,
-              position.id,
-              position.form_id,
-              location.zoneId,
-              location.departmentId,
-              location.municipalityId,
-            ]
+          const candidateId = Number(candidate.rows[0].id);
+          const existingApplication = await client.query(
+            `SELECT id FROM applications WHERE candidate_id=$1 AND job_position_id=$2 LIMIT 1`,
+            [candidateId, position.id]
           );
+          let applicationId: number;
+          if (existingApplication.rows[0]) {
+            applicationId = Number(existingApplication.rows[0].id);
+            const submission = await client.query(
+              `SELECT 1 FROM application_form_submissions
+                WHERE application_id=$1 AND form_id=$2 LIMIT 1`,
+              [applicationId, position.form_id]
+            );
+            if (submission.rows[0]) {
+              await client.query("ROLLBACK");
+              return {
+                alreadyApplied: true as const,
+                message:
+                  "Esta solicitud ya fue enviada previamente para esta plaza.",
+              };
+            }
+          } else {
+            const application = await client.query(
+              `INSERT INTO applications (
+                 candidate_id,job_position_id,form_id,
+                 location_zone_id,location_department_id,location_municipality_id,status
+               ) VALUES ($1,$2,$3,$4,$5,$6,'en_revision') RETURNING id`,
+              [
+                candidateId,
+                position.id,
+                position.form_id,
+                location.zoneId,
+                location.departmentId,
+                location.municipalityId,
+              ]
+            );
+            applicationId = Number(application.rows[0].id);
+          }
           const questions = await client.query(
             `SELECT id,field_key,required,type,answer_config FROM form_questions WHERE form_id = $1 AND active = true`,
             [position.form_id]
@@ -1663,7 +1676,7 @@ export const appRouter = router({
               `INSERT INTO application_answers (application_id, question_id, value_json, normalized_value)
              VALUES ($1, $2, $3::jsonb, $4)`,
               [
-                application.rows[0].id,
+                applicationId,
                 question.id,
                 asJson(input.answers[question.field_key]),
                 String(input.answers[question.field_key] ?? ""),
@@ -1671,11 +1684,17 @@ export const appRouter = router({
             );
           }
           await client.query(
+            `INSERT INTO application_form_submissions (application_id,form_id,source)
+             VALUES ($1,$2,'formulario')
+             ON CONFLICT (application_id,form_id) DO NOTHING`,
+            [applicationId, position.form_id]
+          );
+          await client.query(
             `INSERT INTO audit_log
                (actor_user_id,entity_type,entity_id,action,before_json,after_json,comment)
              VALUES (NULL,'application',$1,'application_consents_confirmed',NULL,$2::jsonb,$3)`,
             [
-              application.rows[0].id,
+              applicationId,
               asJson({
                 version: APPLICATION_CONSENT_VERSION,
                 confirmations: APPLICATION_CONSENTS.map(consent => ({
@@ -1688,7 +1707,6 @@ export const appRouter = router({
             ]
           );
           await client.query("COMMIT");
-          const applicationId = application.rows[0].id as number;
           setImmediate(() => {
             void evaluateApplicationWithAgent(pool, applicationId).catch(
               error => {
@@ -2861,13 +2879,23 @@ export const appRouter = router({
           `SELECT a.id,a.status,a.submitted_at,a.evaluation_at,a.evaluation_reason,
                   a.profile_summary,a.whatsapp_status,c.full_name,c.phone_international,c.email,
                   p.title AS position_title,p.public_slug,gz.name AS location_zone,
-                  gd.name AS location_department,gm.name AS location_municipality
+                  gd.name AS location_department,gm.name AS location_municipality,
+                  COALESCE(answer_set.answers_summary,'') AS answers_summary
              FROM applications a
              JOIN candidates c ON c.id=a.candidate_id
              JOIN job_positions p ON p.id=a.job_position_id
              LEFT JOIN geo_zones gz ON gz.id=a.location_zone_id
              LEFT JOIN geo_departments gd ON gd.id=a.location_department_id
              LEFT JOIN geo_municipalities gm ON gm.id=a.location_municipality_id
+             LEFT JOIN LATERAL (
+               SELECT string_agg(
+                        q.label || ': ' || left(COALESCE(aa.normalized_value,aa.value_json::text),90),
+                        ' · ' ORDER BY q.order_index,q.id
+                      ) AS answers_summary
+                 FROM application_answers aa
+                 JOIN form_questions q ON q.id=aa.question_id
+                WHERE aa.application_id=a.id
+             ) answer_set ON true
              ${where} ORDER BY a.submitted_at DESC LIMIT 200`,
           values
         );
@@ -2957,7 +2985,8 @@ export const appRouter = router({
              e.evaluation_id,e.evaluation_status,e.latest_reason,e.latest_profile_summary,
              e.ai_payload,e.ai_model,e.evaluation_created_at,
              ${scoreExpression} AS evaluation_score,
-             COALESCE(answer_set.answers,'[]'::jsonb) AS answers
+             COALESCE(answer_set.answers,'[]'::jsonb) AS answers,
+             COALESCE(submission_set.submissions,'[]'::jsonb) AS submissions
            FROM applications a
            JOIN candidates c ON c.id=a.candidate_id
            JOIN job_positions p ON p.id=a.job_position_id
@@ -2978,6 +3007,7 @@ export const appRouter = router({
                       jsonb_build_object(
                         'fieldKey',q.field_key,
                         'label',q.label,
+                        'formId',q.form_id,
                         'value',aa.value_json,
                         'normalizedValue',aa.normalized_value,
                         'deterministicResult',aa.deterministic_result
@@ -2987,6 +3017,20 @@ export const appRouter = router({
                JOIN form_questions q ON q.id=aa.question_id
               WHERE aa.application_id=a.id
            ) answer_set ON true
+           LEFT JOIN LATERAL (
+             SELECT jsonb_agg(
+                      jsonb_build_object(
+                        'formId',s.form_id,
+                        'title',f.title,
+                        'version',f.version,
+                        'source',s.source,
+                        'submittedAt',s.submitted_at
+                      ) ORDER BY s.submitted_at DESC,s.id DESC
+                    ) AS submissions
+               FROM application_form_submissions s
+               JOIN application_forms f ON f.id=s.form_id
+              WHERE s.application_id=a.id
+           ) submission_set ON true
            ${where}
            ORDER BY ${sortColumns[sortBy]} ${sortDirection},a.id DESC
            LIMIT 200`,
@@ -3018,7 +3062,15 @@ export const appRouter = router({
             message: "Candidato no encontrado.",
           });
         const answers = await pool.query(
-          `SELECT q.label, q.field_key, aa.value_json, aa.normalized_value, aa.deterministic_result FROM application_answers aa JOIN form_questions q ON q.id=aa.question_id WHERE aa.application_id=$1 ORDER BY q.order_index`,
+          `SELECT q.form_id, q.label, q.field_key, aa.value_json, aa.normalized_value, aa.deterministic_result FROM application_answers aa JOIN form_questions q ON q.id=aa.question_id WHERE aa.application_id=$1 ORDER BY q.form_id, q.order_index`,
+          [input.id]
+        );
+        const submissions = await pool.query(
+          `SELECT s.form_id,s.source,s.submitted_at,f.title,f.version,f.source AS form_source,f.import_meta
+             FROM application_form_submissions s
+             JOIN application_forms f ON f.id=s.form_id
+            WHERE s.application_id=$1
+            ORDER BY s.submitted_at ASC,s.id ASC`,
           [input.id]
         );
         const evaluations = await pool.query(
@@ -3042,6 +3094,7 @@ export const appRouter = router({
         return {
           application: application.rows[0],
           answers: answers.rows,
+          submissions: submissions.rows,
           evaluations: evaluations.rows,
           audit: audit.rows,
           conversation: conversation.rows[0] ?? null,
@@ -4251,6 +4304,90 @@ export const appRouter = router({
           [form.rows[0].id]
         );
         return { ...form.rows[0], questions: questions.rows };
+      }),
+    listByPosition: roleProcedure
+      .input(z.object({ positionId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await getPool();
+        if (!pool) return [];
+        const forms = await pool.query(
+          `SELECT f.id,f.version,f.title,f.intro,f.published,f.source,f.import_meta,f.updated_at,
+                  (SELECT count(*)::int FROM form_questions q WHERE q.form_id=f.id) AS question_count,
+                  (SELECT count(*)::int FROM application_form_submissions s WHERE s.form_id=f.id) AS submission_count
+             FROM application_forms f
+            WHERE f.job_position_id=$1
+            ORDER BY f.version`,
+          [input.positionId]
+        );
+        return forms.rows;
+      }),
+    importSpreadsheet: adminProcedure
+      .input(
+        z.object({
+          positionId: z.number().int().positive(),
+          fileName: z.string().trim().min(1).max(240),
+          base64: z.string().min(1).max(9_000_000),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        if (!/\.(csv|xlsx|xls)$/i.test(input.fileName))
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Importe únicamente archivos CSV o Excel (.csv, .xlsx, .xls).",
+          });
+        let buffer: Buffer;
+        try {
+          buffer = Buffer.from(input.base64, "base64");
+        } catch {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "El archivo recibido no es una codificación base64 válida.",
+          });
+        }
+        if (buffer.length > 5 * 1024 * 1024)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "La hoja supera el peso máximo de 5 MB.",
+          });
+        try {
+          const result = await importSpreadsheetForm(pool, {
+            positionId: input.positionId,
+            fileName: input.fileName,
+            buffer,
+            actorUserId: ctx.user.id,
+          });
+          for (const applicationId of result.affectedApplicationIds) {
+            setImmediate(() => {
+              void evaluateApplicationWithAgent(pool, applicationId).catch(
+                error => {
+                  const message = safeIntegrationMessage(
+                    error,
+                    "No fue posible ejecutar la evaluación automática."
+                  );
+                  if (
+                    !message.includes("no está habilitada") &&
+                    !message.includes("No hay una API key")
+                  ) {
+                    console.warn(
+                      `[Agent] Import ${applicationId}: ${message}`
+                    );
+                  }
+                }
+              );
+            });
+          }
+          return result;
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible importar la hoja de cálculo.",
+          });
+        }
       }),
     upsert: adminProcedure
       .input(

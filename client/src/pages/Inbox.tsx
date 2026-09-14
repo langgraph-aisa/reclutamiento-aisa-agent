@@ -309,6 +309,19 @@ export default function Inbox() {
                     {row.evaluation_score != null ? `${row.evaluation_score}/100` : "Sin puntaje"}
                   </span>
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Punteo IA</span>
+                  {row.form_count ? (
+                    <>
+                      <span className="rounded-lg bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                        {row.form_count} formularios
+                      </span>
+                      <span
+                        className="truncate text-[10px] uppercase tracking-wider text-muted-foreground"
+                        title={row.form_titles ?? ""}
+                      >
+                        {row.form_titles ?? ""}
+                      </span>
+                    </>
+                  ) : null}
                   <Link
                     href={`/admin/candidates?application=${row.application_id}`}
                     onClick={event => event.stopPropagation()}
@@ -332,6 +345,7 @@ export default function Inbox() {
                   <Info label="Prueba actual" value={detail.data?.assessment?.name ?? "Sin prueba activa"} />
                   <Info label="Ubicación" value={[current.location_zone, current.location_municipality, current.location_department].filter(Boolean).join(", ") || "Sin confirmar"} />
                   <Info label="Último contacto" value={current.last_message_at ? new Date(current.last_message_at).toLocaleString("es-GT", { timeZone: "America/Guatemala" }) : "Sin mensajes"} />
+                  <Info label="Formularios y anuncios" value={current.form_count ? `${current.form_count} participaciones · ${current.form_titles ?? ""}` : "Sin formularios registrados"} />
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/70 bg-muted/40 p-3">

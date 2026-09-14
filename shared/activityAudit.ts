@@ -8,7 +8,7 @@ export const ADMIN_PAGE_LABELS: Record<string, string> = {
   "/admin/inbox": "Bandeja de entrada",
   "/admin/human-review": "Revisión Humana",
   "/admin/candidates": "Candidatos",
-  "/admin/jobs": "Plazas y formularios",
+  "/admin/jobs": "Plazas y anuncios",
   "/admin/profiles": "Perfiles laborales",
   "/admin/assessments": "Pruebas psicométricas",
   "/admin/reports": "Informes",

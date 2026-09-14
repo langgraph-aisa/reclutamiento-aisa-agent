@@ -497,17 +497,69 @@ function CandidateDetail({
         )}
         <div className="lg:col-span-2 rounded-2xl bg-white/8 p-4">
           <p className="text-xs uppercase tracking-[.14em] text-white/55">
-            Respuestas
+            Formularios y anuncios · respuestas
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {data.answers.map((answer: any) => (
-              <div key={answer.field_key} className="rounded-xl bg-white/6 p-3">
-                <p className="text-xs text-white/50">{answer.label}</p>
-                <p className="mt-1 text-sm text-white/85">
-                  {String(answer.normalized_value ?? answer.value_json ?? "—")}
-                </p>
-              </div>
-            ))}
+            {(data.submissions ?? []).map((submission: any) => {
+              const formAnswers = (data.answers ?? []).filter(
+                (answer: any) =>
+                  Number(answer.form_id) === Number(submission.form_id)
+              );
+              return (
+                <div
+                  key={submission.form_id}
+                  className="rounded-xl bg-white/6 p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate text-xs font-semibold text-white/80">
+                      {submission.title}
+                    </p>
+                    <Badge className="shrink-0 rounded-full bg-sky-100 text-sky-800">
+                      {submission.source === "importado"
+                        ? "Importado"
+                        : "Anuncio"}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-white/45">
+                    {submission.submitted_at
+                      ? new Date(
+                          submission.submitted_at
+                        ).toLocaleString("es-GT")
+                      : ""}
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {formAnswers.length ? (
+                      formAnswers.map((answer: any) => (
+                        <p
+                          key={answer.field_key}
+                          className="text-xs leading-5 text-white/80"
+                        >
+                          <span className="text-white/45">
+                            {answer.label}:{" "}
+                          </span>
+                          {String(
+                            answer.normalized_value ??
+                              answer.value_json ??
+                              "—"
+                          )}
+                        </p>
+                      ))
+                    ) : (
+                      <p className="text-xs text-white/45">
+                        Sin respuestas registradas.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {!(data.submissions ?? []).length && (
+              <p className="text-sm text-white/60 sm:col-span-2">
+                {data.answers?.length
+                  ? "El formulario de origen no registra participación."
+                  : "Sin respuestas registradas."}
+              </p>
+            )}
           </div>
         </div>
         <div className="lg:col-span-2 grid gap-4 sm:grid-cols-2">
@@ -641,6 +693,11 @@ function CandidateRow({
           <p className="mt-2 line-clamp-1 text-xs text-muted-foreground">
             {candidate.evaluation_reason ?? "Evaluación pendiente"}
           </p>
+          {candidate.answers_summary && (
+            <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+              {candidate.answers_summary}
+            </p>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2">

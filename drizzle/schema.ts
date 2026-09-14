@@ -247,6 +247,10 @@ export const applicationForms = pgTable(
     title: varchar("title", { length: 240 }).notNull(),
     intro: text("intro"),
     published: boolean("published").default(false).notNull(),
+    source: varchar("source", { length: 24 })
+      .default("herramienta")
+      .notNull(),
+    importMeta: jsonb("import_meta"),
     createdByUserId: integer("created_by_user_id").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
@@ -259,6 +263,38 @@ export const applicationForms = pgTable(
     oneVersion: uniqueIndex("application_forms_job_version_uq").on(
       table.jobPositionId,
       table.version
+    ),
+  })
+);
+
+export const applicationFormSubmissions = pgTable(
+  "application_form_submissions",
+  {
+    id: serial("id").primaryKey(),
+    applicationId: integer("application_id")
+      .references(() => applications.id, { onDelete: "cascade" })
+      .notNull(),
+    formId: integer("form_id")
+      .references(() => applicationForms.id, { onDelete: "cascade" })
+      .notNull(),
+    source: varchar("source", { length: 24 })
+      .default("formulario")
+      .notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    createdByUserId: integer("created_by_user_id").references(() => users.id),
+  },
+  table => ({
+    submissionUq: uniqueIndex("application_form_submissions_uq").on(
+      table.applicationId,
+      table.formId
+    ),
+    submissionApplicationIdx: index(
+      "application_form_submissions_application_idx"
+    ).on(table.applicationId, table.submittedAt.desc()),
+    submissionFormIdx: index("application_form_submissions_form_idx").on(
+      table.formId
     ),
   })
 );
@@ -1116,6 +1152,8 @@ export type LoginCodeChallenge = typeof loginCodeChallenges.$inferSelect;
 export type JobPosition = typeof jobPositions.$inferSelect;
 export type JobProfile = typeof jobProfiles.$inferSelect;
 export type ApplicationForm = typeof applicationForms.$inferSelect;
+export type ApplicationFormSubmission =
+  typeof applicationFormSubmissions.$inferSelect;
 export type FormQuestion = typeof formQuestions.$inferSelect;
 export type Candidate = typeof candidates.$inferSelect;
 export type Application = typeof applications.$inferSelect;

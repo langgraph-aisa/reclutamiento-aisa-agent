@@ -178,7 +178,8 @@ export async function listInbox(
             latest.score AS evaluation_score,
             session.status AS assessment_status,protocol.name AS assessment_name,
             message.body AS last_message_body,message.direction AS last_message_direction,
-            message.message_type AS last_message_type
+            message.message_type AS last_message_type,
+            COALESCE(forms.form_count,0) AS form_count,forms.form_titles
        FROM conversations conv
        JOIN applications a ON a.id=conv.application_id
        JOIN candidates c ON c.id=a.candidate_id
@@ -203,6 +204,13 @@ export async function listInbox(
            FROM conversation_messages m WHERE m.conversation_id=conv.id
           ORDER BY m.created_at DESC,m.id DESC LIMIT 1
        ) message ON true
+       LEFT JOIN LATERAL (
+         SELECT count(*)::int AS form_count,
+                string_agg(f.title,' · ' ORDER BY s.submitted_at DESC,s.id DESC) AS form_titles
+           FROM application_form_submissions s
+           JOIN application_forms f ON f.id=s.form_id
+          WHERE s.application_id=a.id
+       ) forms ON true
       ${where}
       ORDER BY COALESCE(conv.last_message_at,conv.updated_at) DESC,conv.id DESC
       LIMIT $${values.length}`,
@@ -221,7 +229,8 @@ export async function inboxDetail(pool: Pool, conversationId: number) {
             a.salary_expectation_gtq,a.salary_expectation_source,
             p.title AS position_title,gz.name AS location_zone,
             gd.name AS location_department,gm.name AS location_municipality,
-            assigned.name AS assigned_user_name,assigned.email AS assigned_user_email
+            assigned.name AS assigned_user_name,assigned.email AS assigned_user_email,
+            COALESCE(forms.form_count,0) AS form_count,forms.form_titles
        FROM conversations conv
        JOIN applications a ON a.id=conv.application_id
        JOIN candidates c ON c.id=a.candidate_id
@@ -230,6 +239,13 @@ export async function inboxDetail(pool: Pool, conversationId: number) {
        LEFT JOIN geo_zones gz ON gz.id=a.location_zone_id
        LEFT JOIN geo_departments gd ON gd.id=a.location_department_id
        LEFT JOIN geo_municipalities gm ON gm.id=a.location_municipality_id
+       LEFT JOIN LATERAL (
+         SELECT count(*)::int AS form_count,
+                string_agg(f.title,' · ' ORDER BY s.submitted_at DESC,s.id DESC) AS form_titles
+           FROM application_form_submissions s
+           JOIN application_forms f ON f.id=s.form_id
+          WHERE s.application_id=a.id
+       ) forms ON true
       WHERE conv.id=$1 LIMIT 1`,
     [conversationId]
   );

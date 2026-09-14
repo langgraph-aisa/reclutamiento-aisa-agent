@@ -18,6 +18,7 @@ import {
   Copy,
   Edit3,
   ExternalLink,
+  FileSpreadsheet,
   FolderKanban,
   Globe2,
   MessageCircle,
@@ -26,6 +27,7 @@ import {
   Search,
   Settings2,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -60,6 +62,7 @@ const blank: Draft = {
 export default function Jobs() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const utils = trpc.useUtils();
   const query = trpc.positions.list.useQuery();
   const upsert = trpc.positions.upsert.useMutation({
     onSuccess: () => {
@@ -92,6 +95,40 @@ export default function Jobs() {
   const [draftProjectIds, setDraftProjectIds] = useState<Set<number>>(
     new Set()
   );
+  const [importPositionId, setImportPositionId] = useState<number | null>(null);
+  const [importFileName, setImportFileName] = useState("");
+  const [importBase64, setImportBase64] = useState("");
+  const [importReading, setImportReading] = useState(false);
+  const importForm = trpc.forms.importSpreadsheet.useMutation({
+    onSuccess: result => {
+      toast.success(
+        `Importación completada: ${result.rowsImported} filas con respuestas, ${result.candidatesCreated} candidatos nuevos, ${result.applicationsCreated} postulaciones nuevas y ${result.answersInserted} respuestas agregadas.`
+      );
+      if (importPositionId)
+        utils.forms.listByPosition.invalidate({ positionId: importPositionId });
+      query.refetch();
+      setImportPositionId(null);
+      setImportFileName("");
+      setImportBase64("");
+    },
+    onError: error =>
+      toast.error(`No fue posible importar el formulario: ${error.message}`),
+  });
+  const onImportFile = (file: File) => {
+    setImportReading(true);
+    setImportFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = String(reader.result ?? "");
+      setImportBase64(raw.includes(",") ? raw.split(",")[1] ?? raw : raw);
+      setImportReading(false);
+    };
+    reader.onerror = () => {
+      toast.error("No fue posible leer el archivo seleccionado.");
+      setImportReading(false);
+    };
+    reader.readAsDataURL(file);
+  };
   const knowledgeProjects = trpc.knowledge.projects.useQuery(undefined, {
     enabled: isAdmin,
   });
@@ -166,11 +203,11 @@ export default function Jobs() {
             {isAdmin ? "Configuración" : "Vista de consulta"}
           </p>
           <h1 className="mt-2 text-4xl font-800 tracking-[-.04em] text-primary">
-            Plazas laborales
+            Plazas y Anuncios
           </h1>
           <p className="mt-2 text-muted-foreground">
             {isAdmin
-              ? "Cada plaza tiene su propio formulario, reglas y agente evaluador."
+              ? "Cada plaza administra sus anuncios, formularios propios e importados, reglas y agente evaluador."
               : "Consulte plazas, estados de publicación y enlaces públicos disponibles."}
           </p>
         </div>
@@ -443,6 +480,29 @@ export default function Jobs() {
                     </div>
                   </div>
                 )}
+                <div className="mt-4 rounded-2xl bg-muted/40 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Formularios y anuncios
+                    </p>
+                    {isAdmin && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => setImportPositionId(Number(job.id))}
+                      >
+                        <Upload className="mr-2 h-3.5 w-3.5" />
+                        Importar Excel/CSV
+                      </Button>
+                    )}
+                  </div>
+                  <PositionForms
+                    positionId={Number(job.id)}
+                    isAdmin={isAdmin}
+                  />
+                </div>
                 <div className="mt-5 flex flex-wrap gap-2">
                   <Link href={`/apply/${job.public_slug}`}>
                     <Button
@@ -619,6 +679,144 @@ export default function Jobs() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={importPositionId !== null}
+        onOpenChange={open => {
+          if (!open) {
+            setImportPositionId(null);
+            setImportFileName("");
+            setImportBase64("");
+          }
+        }}
+      >
+        <DialogContent className="max-h-[80vh] overflow-y-auto rounded-3xl sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-primary">
+              Importar formulario desde Excel o CSV
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              La primera fila define las preguntas (columnas). La columna de
+              teléfono o WhatsApp identifica al candidato: si no está
+              registrado, se crea con ese número como única fuente de
+              relación. Las respuestas alimentan la evaluación y actualizan
+              el punteo.
+            </p>
+          </DialogHeader>
+          <label className="flex cursor-pointer flex-col items-center gap-2 rounded-2xl border border-dashed border-border/70 bg-muted/30 p-8 text-center">
+            <FileSpreadsheet className="h-8 w-8 text-emerald-700" />
+            <span className="text-sm font-semibold text-primary">
+              {importFileName || "Seleccione el archivo .csv, .xlsx o .xls"}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Máximo 5 MB · el WhatsApp es la clave única de cada candidato
+            </span>
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (file) onImportFile(file);
+                event.target.value = "";
+              }}
+            />
+          </label>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">
+              Las respuestas importadas se agregan al análisis del agente sin
+              sobrescribir respuestas existentes.
+            </span>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full"
+                onClick={() => setImportPositionId(null)}
+              >
+                <X className="mr-2 h-4 w-4" /> Cerrar
+              </Button>
+              <Button
+                type="button"
+                className="rounded-full"
+                disabled={
+                  !importBase64 ||
+                  importReading ||
+                  importForm.isPending ||
+                  importPositionId === null
+                }
+                onClick={() =>
+                  importForm.mutate({
+                    positionId: importPositionId!,
+                    fileName: importFileName,
+                    base64: importBase64,
+                  })
+                }
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                {importForm.isPending
+                  ? "Importando…"
+                  : "Importar formulario"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function PositionForms({
+  positionId,
+  isAdmin,
+}: {
+  positionId: number;
+  isAdmin: boolean;
+}) {
+  const forms = trpc.forms.listByPosition.useQuery({ positionId });
+  const rows = forms.data ?? [];
+  if (!forms.data)
+    return <p className="mt-2 text-xs text-muted-foreground">Cargando…</p>;
+  if (rows.length === 0)
+    return (
+      <p className="mt-2 text-xs text-muted-foreground">
+        Sin formularios. {isAdmin ? "Cree o importe uno." : ""}
+      </p>
+    );
+  return (
+    <div className="mt-2 space-y-1.5">
+      {rows.map((form: any) => (
+        <div
+          key={form.id}
+          className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-background px-3 py-2 text-xs"
+        >
+          <span className="font-semibold text-primary">
+            Formulario No. {form.version}
+          </span>
+          <span className="truncate text-muted-foreground">{form.title}</span>
+          <Badge
+            className={
+              form.source === "importado"
+                ? "rounded-full bg-sky-100 text-sky-800"
+                : "rounded-full bg-violet-100 text-violet-800"
+            }
+          >
+            {form.source === "importado" ? "Importado" : "Herramienta"}
+          </Badge>
+          <Badge
+            className={
+              form.published
+                ? "rounded-full bg-emerald-100 text-emerald-800"
+                : "rounded-full bg-amber-100 text-amber-800"
+            }
+          >
+            {form.published ? "habilitada" : "borrador"}
+          </Badge>
+          <span className="text-muted-foreground">
+            {form.question_count} preguntas · {form.submission_count} respuestas
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

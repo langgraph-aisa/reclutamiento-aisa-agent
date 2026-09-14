@@ -60,6 +60,7 @@ type Answer = {
   fieldKey: string;
   label: string;
   value: unknown;
+  formId?: number | null;
   normalizedValue?: string | null;
   deterministicResult?: string | null;
 };
@@ -238,6 +239,11 @@ export default function HumanReview() {
                   {selected?.full_name ?? "Revisión Humana"}
                 </h1>
                 {selected ? <StatusBadge status={selected.status} /> : null}
+                {selected ? (
+                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                    {(selected.submissions ?? []).length} formularios
+                  </span>
+                ) : null}
                 {selected ? (
                   <Link href={`/admin/inbox?application=${selected.id}`}>
                     <Button
@@ -794,6 +800,64 @@ function ViewerPanel({
                 label="Contexto de la plaza"
                 text={`${candidate.position_title} · Ingreso ${formatDate(candidate.submitted_at)}`}
               />
+              <div className="rounded-xl bg-white/8 p-4 md:col-span-2">
+                <p className="text-xs uppercase tracking-[.14em] text-white/50">
+                  Formularios y anuncios · participación
+                </p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {(candidate.submissions ?? []).map((submission: any) => {
+                    const formAnswers = answersFor(candidate).filter(
+                      item => Number(item.formId) === Number(submission.formId)
+                    );
+                    return (
+                      <div
+                        key={submission.formId}
+                        className="rounded-xl border border-white/10 p-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-xs font-semibold text-white/85">
+                            {submission.title}
+                          </p>
+                          <Badge className="shrink-0 rounded-full bg-sky-100 text-sky-800">
+                            {submission.source === "importado"
+                              ? "Importado"
+                              : "Anuncio"}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-[11px] text-white/45">
+                          {submission.submittedAt
+                            ? formatDate(submission.submittedAt)
+                            : ""}
+                        </p>
+                        <div className="mt-2 space-y-1">
+                          {formAnswers.length ? (
+                            formAnswers.map(item => (
+                              <p
+                                key={item.fieldKey}
+                                className="text-xs leading-5 text-white/75"
+                              >
+                                <span className="text-white/40">
+                                  {item.label}:{" "}
+                                </span>
+                                {formatAnswer(item)}
+                              </p>
+                            ))
+                          ) : (
+                            <p className="text-xs text-white/45">
+                              Sin respuestas registradas.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {!(candidate.submissions ?? []).length && (
+                    <p className="text-xs text-white/50 md:col-span-2">
+                      Sin participaciones adicionales registradas.
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
           ) : selection.kind === "reason" ? (
             <ViewerTextCard

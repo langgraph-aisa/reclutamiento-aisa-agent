@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.136</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.137</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.136-0b2d4b" alt="JARVI RH 2.0.136" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.137-0b2d4b" alt="JARVI RH 2.0.137" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse%20SDK-5.11.1-orange" alt="Langfuse SDK 5.11.1" />
@@ -24,7 +24,7 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.136 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.137 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
 Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH integra plazas, formularios y protocolos versionados, evaluación asistida por IA, revisión humana, conversaciones ApiChat, solicitud controlada de currículum y auditoría administrativa. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar, fijar remuneración o atribuir rasgos psicológicos: el personal autorizado conserva la decisión.
@@ -34,6 +34,13 @@ Talento AISA vincula capacidades técnicas con proyectos industriales, energéti
 ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
+
+### 14SEP2026 · JARVI RH 2.0.137
+
+- Plazas y anuncios administra múltiples formularios por plaza, creados o importados desde Excel/CSV; el WhatsApp reconcilia o crea candidatos y las respuestas actualizan el punteo.
+- Ficha del candidato, Revisión Humana y chat resumen las participaciones con sus respuestas. Migración `0018` y análisis ontológico, epistemológico y fenomenológico.
+
+Descripción: formularios y anuncios múltiples por plaza con importación de hoja de cálculo y participaciones del candidato.
 
 ### 14SEP2026 · JARVI RH 2.0.136
 
@@ -210,39 +217,39 @@ flowchart LR
 | Portal público | Expone plazas con perfil completo, normaliza teléfono y exige ubicación catalogada. | `Home.tsx`, `Apply.tsx`, `publicJobs.*`, `geo.*` |
 | Administración | Usuarios y roles, plazas, perfiles, geografía INE, formularios y configuración. | `App.tsx`, `routers.ts` |
 | Evaluación IA | Reglas críticas, política salarial, seis bloques, salida tipada, respaldo de credencial y persistencia. | `agentEvaluator.ts`, `salaryPolicy.ts`, `evaluation.ts` |
-| Revisión 360° | Matriz dinámica, filtros, última evaluación, respuestas, acceso a WhatsApp y decisión humana. | `HumanReview.tsx`, `candidates.reviewWorkspace` |
-| Comunicación | Bandeja completa, sincronización cada segundo, catálogo de siete endpoints, traspaso humano y envío directo con estado local. | `Inbox.tsx`, `inbox.ts`, `inboxSync.ts`, `apiChatSettings.ts` |
-| Protocolos | Administra versiones, preguntas ordenadas, evidencia metodológica y 64 criterios de gobierno sin estado automático de cumplimiento. | `Assessments.tsx`, `assessmentGovernance.ts` |
+| Revisión 360° | Matriz dinámica, filtros, última evaluación, respuestas, WhatsApp y decisión humana. | `HumanReview.tsx`, `candidates.reviewWorkspace` |
+| Comunicación | Bandeja completa, sincronización cada segundo, siete endpoints, traspaso humano y envío directo con estado local. | `Inbox.tsx`, `inbox.ts`, `inboxSync.ts`, `apiChatSettings.ts` |
+| Protocolos | Administra versiones, preguntas ordenadas, evidencia metodológica y 64 criterios de gobierno sin estado automático. | `Assessments.tsx`, `assessmentGovernance.ts` |
 | Conocimiento | Proyectos, carpetas, carga por arrastre, visores, resumen de 66 palabras, análisis de 325 y RAG para el agente. | `MstEir.tsx`, `knowledge.ts`, `knowledgeRoutes.ts` |
-| Audio | Ofrece helpers aislados de cuota, formato, transcripción y TTS con rotación; no existe aún ingesta productiva de medios de candidatos. | `voiceTranscription.ts`, `agentSettings.ts` |
+| Audio | Helpers aislados de cuota, formato, transcripción y TTS con rotación; sin ingesta productiva de medios. | `voiceTranscription.ts`, `agentSettings.ts` |
 | Gobierno | Proyecta actividad por hoja, drilldown anual, release, bitácora y puerta CI. | `activityAudit.ts`, `shared/release.ts`, `.github/workflows/black-box.yml` |
 
-Las dependencias no equivalen a capacidades logradas. LangGraph contiene un grafo lineal `START → evaluate → END`, frontera de orquestación, no agente autónomo con múltiples herramientas. Drizzle tipa entidades; varias consultas operativas usan SQL parametrizado directo. El envío ApiChat usa los siete endpoints oficiales; la recepción la resuelve `inboxSync` con deduplicación por identificador del proveedor. n8n quedó retirado en 2.0.133.
+Las dependencias no equivalen a capacidades logradas. LangGraph es un grafo lineal `START → evaluate → END`, frontera de orquestación, no agente autónomo. Drizzle tipa entidades; varias consultas usan SQL parametrizado directo. El envío ApiChat usa los siete endpoints oficiales; la recepción la resuelve `inboxSync` con deduplicación por identificador. n8n quedó retirado en 2.0.133.
 
 El puente recorre en turnos, refresca cada 60 segundos y se repliega ante límites de tasa; la entrega exactamente una vez sigue sin demostrarse.
 
 ## 3. Proceso funcional y evaluación especializada de IA
 
-1. El administrador relaciona plaza, perfil, versión de formulario y preguntas. Cada pregunta puede definir respuestas aceptadas, rango, criterio, prompt y `hard_fail`.
-2. El postulante envía identidad, zona, departamento, municipio y respuestas; el servidor normaliza el teléfono con `+502`, valida la relación geográfica activa y evita duplicar la misma persona en una plaza.
-3. El evaluador normaliza y ejecuta reglas deterministas. Un incumplimiento indispensable finaliza como `no_calificado` sin consumir el modelo.
-4. Si las reglas pasan, el servidor reúne plaza, perfil, preguntas y respuestas; agrega, si fueron habilitados, los documentos institucionales SIERA y MST-EIR y la base de conocimiento RAG del proyecto vinculado.
+1. El administrador relaciona plaza, perfil, formulario y preguntas; cada pregunta define respuestas aceptadas, rango, criterio, prompt y `hard_fail`.
+2. El postulante envía identidad, zona, departamento, municipio y respuestas; el servidor normaliza el teléfono con `+502`, valida la relación geográfica y evita duplicar la misma persona en una plaza.
+3. El evaluador ejecuta reglas deterministas; un incumplimiento indispensable finaliza `no_calificado` sin consumir el modelo.
+4. Si las reglas pasan, el servidor reúne plaza, perfil, preguntas y respuestas; agrega los documentos SIERA y MST-EIR habilitados y la base de conocimiento RAG del proyecto vinculado.
 5. LangChain solicita a Responses API una estructura validada por Zod: seis bloques únicos, razonamientos, resumen, motivo, evidencia, brechas y posible descalificación crítica. Si falla la clave principal, intenta la de respaldo.
-6. El servidor, no el modelo, calcula el total ponderado: ajuste 10 %, experiencia 20 %, competencias 25 %, disponibilidad 10 %, riesgos/brechas 20 % y dictamen 15 %. Los intervalos son 90–100 prioritario, 80–89 precalificado, 70–79 condicionado, 60–69 revisión humana y 0–59 no precalificado.
-7. Un bloqueo consultivo PostgreSQL impide evaluar simultáneamente la misma postulación. Resultado, payload, modelo, reglas, resumen y evento se guardan en transacción.
-8. Reclutamiento revisa evidencia y modifica el estado con comentario. Solo la transición humana a `calificado` prepara la solicitud de CV. La clave `cv_request:{applicationId}` evita duplicados; un resultado incierto no se reintenta automáticamente.
+6. El servidor, no el modelo, calcula el total ponderado: ajuste 10 %, experiencia 20 %, competencias 25 %, disponibilidad 10 %, riesgos/brechas 20 % y dictamen 15 %. Intervalos: 90–100 prioritario, 80–89 precalificado, 70–79 condicionado, 60–69 revisión humana y 0–59 no precalificado.
+7. Un bloqueo consultivo impide evaluar simultáneamente la misma postulación; resultado, payload, modelo, reglas, resumen y evento se guardan en transacción.
+8. Reclutamiento revisa evidencia y modifica el estado con comentario; solo la transición humana a `calificado` prepara la solicitud de CV. La clave `cv_request:{applicationId}` evita duplicados.
 
-Este diseño combina automatización simbólica y generativa: las reglas son falsables y repetibles; el modelo interpreta evidencia abierta y su salida permanece probabilística. Structured Outputs restringe la forma, no garantiza la verdad; la explicación es justificación auditable, no prueba causal. Por ello la prueba adecuada compara entradas, reglas, salidas y decisiones posteriores, e incluye casos adversos, cambio de modelo y revisión de falsos positivos/negativos.
+Este diseño combina automatización simbólica y generativa: las reglas son falsables y repetibles; el modelo interpreta evidencia abierta y su salida permanece probabilística. Structured Outputs restringe la forma, no garantiza la verdad; la explicación es justificación auditable, no prueba causal. La prueba adecuada compara entradas, reglas, salidas y decisiones posteriores, e incluye casos adversos, cambio de modelo y revisión de falsos positivos/negativos.
 
 ## 4. Ontología, epistemología y fenomenología
 
-**Ontología.** La persona real no es idéntica al registro `candidate`; este representa contacto, mientras `application` representa su participación situada en una plaza. `job_position` expresa la oferta; `job_profile`, el constructo organizacional esperado; `application_form` fija un instrumento y versión; `question` operacionaliza un criterio; `answer` conserva una afirmación; `evaluation` es un juicio derivado y revisable. Esta distinción evita reificar el puntaje como propiedad esencial de la persona. Para Gruber (1993), es una conceptualización local, no una ontología universal del talento.
+**Ontología.** La persona real no es idéntica al registro `candidate`: este es contacto, mientras `application` es su participación situada en una plaza. `job_position` expresa la oferta; `job_profile`, el constructo organizacional; `application_form` fija instrumento y versión; `question` operacionaliza un criterio; `answer` conserva una afirmación; `evaluation` es un juicio revisable. Esta distinción evita reificar el puntaje como propiedad esencial. Para Gruber (1993), es una conceptualización local, no una ontología universal del talento.
 
-**Epistemología.** JARVI conoce únicamente lo persistido y configurado. Una respuesta es testimonio, no verificación de experiencia; una ausencia es brecha, no evidencia negativa. El sistema separa resultado determinista, evidencia citada, inferencia, resumen y decisión humana. Revisar o contradecir el dictamen aproxima racionalidad crítica: una recomendación útil debe poder fallar (Popper, 2002). Sin referencia etiquetada, acuerdo interevaluador, calibración y monitoreo de deriva, el puntaje es apoyo ordinal, no probabilidad científica de desempeño.
+**Epistemología.** JARVI conoce únicamente lo persistido y configurado: una respuesta es testimonio, no verificación; una ausencia es brecha, no evidencia negativa. El sistema separa resultado determinista, evidencia citada, inferencia, resumen y decisión humana. Revisar o contradecir el dictamen aproxima racionalidad crítica: una recomendación útil debe poder fallar (Popper, 2002). Sin referencia etiquetada, acuerdo interevaluador, calibración y monitoreo de deriva, el puntaje es apoyo ordinal, no probabilidad científica.
 
-La interacción escrita adopta **usted** como forma institucional; el tuteo se sustituyó en instrucciones, preguntas, errores, confirmaciones, correo y WhatsApp. El oráculo `scripts/verify-formal-spanish.mjs` detiene el release ante tratamientos informales; la migración `0012_dear_lifeguard.sql` corrige solo valores predeterminados y conserva textos libres.
+La interacción escrita adopta **usted** como forma institucional; el tuteo se sustituyó en instrucciones, preguntas, errores, confirmaciones, correo y WhatsApp. El oráculo `scripts/verify-formal-spanish.mjs` detiene el release ante tratamientos informales; la migración `0012_dear_lifeguard.sql` corrige valores predeterminados y conserva textos libres.
 
-**Fenomenología.** La postulación es también experiencia vivida: la persona interpreta preguntas, expone trayectoria y enfrenta una interfaz que distribuye poder; el puntaje no agota el fenómeno (Husserl, 2012; Moustakas, 1994). Reducirla a seis números puede invisibilizar contexto o desigualdad. La revisión 360° reabre el horizonte con respuesta, pregunta, brecha, motivo e historial. Una práctica responsable añade aviso de uso de IA, accesibilidad y canal de impugnación. La eficiencia comercial es legítima únicamente cuando conserva dignidad, agencia y responsabilidad institucional (UNESCO, 2021).
+**Fenomenología.** La postulación es también experiencia vivida: la persona interpreta preguntas, expone trayectoria y enfrenta una interfaz que distribuye poder; el puntaje no agota el fenómeno (Husserl, 2012; Moustakas, 1994). Reducirla a seis números puede invisibilizar contexto o desigualdad. La revisión 360° reabre el horizonte con respuesta, pregunta, brecha, motivo e historial. Una práctica responsable añade aviso de IA, accesibilidad y canal de impugnación. La eficiencia comercial es legítima solo cuando conserva dignidad, agencia y responsabilidad institucional (UNESCO, 2021).
 
 ## 5. Diseño de datos y procedencia para auditoría
 
@@ -279,25 +286,25 @@ erDiagram
     GEO_ZONES ||--o{ APPLICATIONS : localiza
 ```
 
-La auditoría primaria reside en `audit_log`: actor, entidad, acción, estado anterior/posterior, comentario y tiempo. `admin_activity_events` agrega ruta, resultado, acción y correlación; su representación usa 11 palabras de título y 33 de resumen. `evaluations` conserva ejecuciones múltiples; `conversation_messages` añade una clave local de deduplicación, intentos, proveedor, error y estado. `knowledge_files` conserva nombre, peso, extensión, autor, resumen y análisis de cada carga. Protocolos e ítems preservan versión y orden. Índices por aplicación, estado, plaza y entidad soportan reconstrucción.
+La auditoría primaria reside en `audit_log`: actor, entidad, acción, estado anterior/posterior, comentario y tiempo. `admin_activity_events` agrega ruta, resultado, acción y correlación; su representación usa 11 palabras de título y 33 de resumen. `evaluations` conserva ejecuciones múltiples; `conversation_messages` añade clave de deduplicación, intentos, proveedor, error y estado. `knowledge_files` conserva nombre, peso, extensión, autor, resumen y análisis. Protocolos e ítems preservan versión y orden. Índices por aplicación, estado, plaza y entidad soportan reconstrucción.
 
-Persisten riesgos de procedencia: las respuestas apuntan a preguntas mutables sin instantánea de etiqueta, criterio y prompt. `audit_log` y `admin_activity_events` no son criptográficamente inmutables; las fechas usan reloj de base sin firma y no hay retención ejecutable. La evolución recomendada: snapshots de instrumento y perfil, hash encadenado o WORM, catálogo de base legal y borrado programado.
+Persisten riesgos de procedencia: las respuestas apuntan a preguntas mutables sin instantánea de etiqueta, criterio y prompt. `audit_log` y `admin_activity_events` no son criptográficamente inmutables; las fechas usan reloj de base sin firma ni retención ejecutable. La evolución recomendada: snapshots de instrumento y perfil, hash encadenado o WORM, catálogo de base legal y borrado programado.
 
 ## 6. Matriz de alineación ISO y seguridad
 
 | Marco | Evidencia existente | Brecha o prueba requerida |
 | --- | --- | --- |
-| ISO/IEC 25010:2023 | Separación modular, contratos tipados, cuotas, transacciones, interfaz adaptable y build reproducible. | Definir medidas para las nueve características, SLO, accesibilidad completa, carga, recuperación y mantenibilidad. |
+| ISO/IEC 25010:2023 | Separación modular, contratos tipados, cuotas, transacciones, interfaz adaptable y build reproducible. | Medidas para las nueve características, SLO, accesibilidad, carga, recuperación y mantenibilidad. |
 | ISO/IEC 27001:2022 / 27002:2022 | Roles, SQL parametrizado, OTP scrypt, JWT `httpOnly`, secretos AES-256-GCM, cabeceras de sincronización autenticadas y minimización. | SGSI formal, inventario, evaluación de riesgos, retención, respaldo, incidentes, proveedores y revisión de accesos. |
-| ISO 22301:2019 | Rotación de credenciales, timeouts, deduplicación de mensajes entrantes, fallo cerrado y migración expansiva compatible con rollback de aplicación. | BIA, RTO/RPO aprobados, plan de continuidad, restauración probada, simulacros y modos degradados. |
+| ISO 22301:2019 | Rotación de credenciales, timeouts, deduplicación de mensajes entrantes, fallo cerrado y migración expansiva compatible con rollback. | BIA, RTO/RPO aprobados, plan de continuidad, restauración probada, simulacros y modos degradados. |
 | ISO/IEC 20000-1:2018 | Mapa de controles de gestión del servicio en Actividad y control ISO y cambios de configuración auditados. | SGS formal, catálogo acordado, capacidad/demanda y mejora continua. |
 | ISO/IEC/IEEE 29119-1:2022 | Casos Vitest, caja negra versionada y CI con release, regresión, tipos y build. | Trazabilidad requisito–riesgo–caso, cobertura, seguridad dinámica, E2E y evidencia firmada. |
-| ISO/IEC 42001, 25059 y 23894 / NIST AI RMF | Autoridad humana, modelo y reglas configurables, política salarial, evidencia, límites psicométricos y telemetría minimizada. | AIMS formal, inventario de impactos, benchmark por plaza, sesgo, deriva, apelación, incidentes y retiro seguro del modelo. |
+| ISO/IEC 42001, 25059 y 23894 / NIST AI RMF | Autoridad humana, modelo y reglas configurables, política salarial, evidencia, límites psicométricos y telemetría minimizada. | AIMS formal, inventario de impactos, benchmark por plaza, sesgo, deriva, apelación, incidentes y retiro seguro. |
 | DORA | Versionado, migraciones, pruebas y build como capacidades preparatorias. | Integrar despliegues e incidentes para calcular las cinco métricas; el mapa de contribuciones no las sustituye. |
 
-Esta matriz documenta referencias metodológicas y no constituye certificación, conformidad acreditada ni dictamen independiente de cumplimiento.
+Esta matriz documenta referencias metodológicas y no constituye certificación, conformidad acreditada ni dictamen de cumplimiento.
 
-El acceso usa códigos de seis dígitos de diez minutos, cinco intentos, espera de reenvío y respuesta uniforme. Los secretos del agente y ApiChat se cifran, y el navegador recibe máscaras. Langfuse inicia con OpenTelemetry antes de aceptar tráfico y traza identificadores HMAC, modelo, uso, latencia, puntaje y estado sin nombre, teléfono, correo, CV ni respuestas literales. Todavía faltan rate limiting global, protección CSRF explícita, escaneo de dependencias, cabeceras de seguridad y cobertura configurada. Son hallazgos de riesgo, no evidencia de explotación.
+El acceso usa códigos de seis dígitos de diez minutos, cinco intentos y espera de reenvío. Los secretos del agente y ApiChat se cifran, y el navegador recibe máscaras. Langfuse inicia con OpenTelemetry antes de aceptar tráfico y traza identificadores HMAC, modelo, uso, latencia, puntaje y estado sin nombre, teléfono, correo, CV ni respuestas. Todavía faltan rate limiting global, protección CSRF explícita, escaneo de dependencias, cabeceras de seguridad y cobertura configurada. Son hallazgos de riesgo, no evidencia de explotación.
 
 ## 7. Verificación, despliegue y reproducibilidad
 
@@ -310,7 +317,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión. Cada push a `main` incrementa exactamente un release; GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y `AGENT_SETTINGS_ENCRYPTION_KEY`. Las credenciales de ApiChat y del agente se administran cifradas desde la interfaz. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.136](docs/PRUEBAS_CAJA_NEGRA_2.0.136.md).
+`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.137](docs/PRUEBAS_CAJA_NEGRA_2.0.137.md).
 
 ## 8. Capa cognitiva, resiliencia y alcance verificable
 
@@ -398,7 +405,7 @@ Las páginas técnicas evolutivas se consultaron el 14 de septiembre de 2026. La
 - ApiChat. (s. f.). _OpenAPI oficial de la API de mensajería_. https://panel.apichat.io/docs/swagger
 - International Organization for Standardization. (2018). _ISO/IEC 20000-1:2018: Service management system requirements_. https://www.iso.org/standard/70636.html
 
-### Fuentes primarias incorporadas en 2.0.136
+### Fuentes primarias incorporadas en 2.0.137
 
 - pdf-parse. (s. f.). _Pure JavaScript PDF parsing_. https://www.npmjs.com/package/pdf-parse
 - Mammoth. (s. f.). _Convert .docx documents to HTML_. https://www.npmjs.com/package/mammoth

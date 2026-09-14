@@ -32,6 +32,7 @@ import {
   BriefcaseBusiness,
   ClipboardList,
   FolderKanban,
+  Globe2,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -57,8 +58,8 @@ const menuItems = [
   { icon: Search, label: "Revisión Humana", path: "/admin/human-review" },
   { icon: Users, label: "Candidatos", path: "/admin/candidates" },
   {
-    icon: BriefcaseBusiness,
-    label: "Plazas y formularios",
+    icon: Globe2,
+    label: "Plazas y anuncios",
     path: "/admin/jobs",
   },
   {

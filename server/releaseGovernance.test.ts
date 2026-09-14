@@ -70,8 +70,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.136");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.136");
+    expect(APP_VERSION).toBe("2.0.137");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.137");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -455,9 +455,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(89);
+    expect(audit.files).toHaveLength(90);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(89);
+    expect(publicCopyAudit.files).toHaveLength(90);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -674,6 +674,78 @@ describe("black-box release contract", () => {
     expect(positionsSlot).toBeGreaterThan(summarySlot);
   });
 
+  it("operates multiple forms and announcements per position with spreadsheet import", () => {
+    const layout = fs.readFileSync(
+      path.resolve("client/src/components/DashboardLayout.tsx"),
+      "utf8"
+    );
+    const activity = fs.readFileSync(
+      path.resolve("shared/activityAudit.ts"),
+      "utf8"
+    );
+    const routers = fs.readFileSync(
+      path.resolve("server/routers.ts"),
+      "utf8"
+    );
+    const importer = fs.readFileSync(
+      path.resolve("server/importForms.ts"),
+      "utf8"
+    );
+    const migration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0018_form_imports.sql"),
+      "utf8"
+    );
+    const jobs = fs.readFileSync(
+      path.resolve("client/src/pages/Jobs.tsx"),
+      "utf8"
+    );
+    const candidatesPage = fs.readFileSync(
+      path.resolve("client/src/pages/Candidates.tsx"),
+      "utf8"
+    );
+    const humanReview = fs.readFileSync(
+      path.resolve("client/src/pages/HumanReview.tsx"),
+      "utf8"
+    );
+    const inbox = fs.readFileSync(
+      path.resolve("client/src/pages/Inbox.tsx"),
+      "utf8"
+    );
+    const ontology = fs.readFileSync(
+      path.resolve("docs/ANALISIS_ONTOLOGICO_FORMULARIOS_2.0.137.md"),
+      "utf8"
+    );
+
+    expect(layout).toContain('label: "Plazas y anuncios"');
+    expect(layout).not.toContain('label: "Plazas y formularios"');
+    expect(layout).toContain("Globe2");
+    expect(activity).toContain('"/admin/jobs": "Plazas y anuncios"');
+    expect(migration).toContain("application_form_submissions");
+    expect(migration).toContain("ADD COLUMN IF NOT EXISTS source");
+    expect(migration).toContain("ADD COLUMN IF NOT EXISTS import_meta");
+    expect(migration).toContain("ON CONFLICT (application_id, form_id)");
+    expect(importer).toContain("importSpreadsheetForm");
+    expect(importer).toContain("derivePhoneColumn");
+    expect(importer).toContain("isValidInternationalPhone");
+    expect(importer).toContain(
+      "INSERT INTO application_form_submissions"
+    );
+    expect(routers).toContain("listByPosition: roleProcedure");
+    expect(routers).toContain("importSpreadsheet: adminProcedure");
+    expect(routers).toContain("'formulario'");
+    expect(jobs).toContain("Plazas y Anuncios");
+    expect(jobs).toContain("Importar Excel/CSV");
+    expect(jobs).toContain("Formularios y anuncios");
+    expect(candidatesPage).toContain("Formularios y anuncios · respuestas");
+    expect(candidatesPage).toContain("answers_summary");
+    expect(humanReview).toContain("Formularios y anuncios · participación");
+    expect(humanReview).toContain("submissions");
+    expect(inbox).toContain("form_count");
+    expect(ontology).toContain("Análisis ontológico");
+    expect(ontology).toContain("Análisis epistemológico");
+    expect(ontology).toContain("Análisis fenomenológico");
+  });
+
   it("publishes the academic-commercial README with auditable proportions and references", () => {
     const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
     const academicBody = readme.slice(0, readme.indexOf("## Referencias"));
@@ -682,7 +754,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.136");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.137");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -691,7 +763,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.136");
+    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.137");
     expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.132");
     expect(readme).toContain("ISO/IEC 20000-1:2018");
     expect(readme).toContain("`inboxSync`");
