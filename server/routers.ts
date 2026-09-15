@@ -37,6 +37,7 @@ import {
 import {
   deliverCvRequestMessage,
   ensureCvRequestMessage,
+  requestCvForApplication,
   type CvRequestDelivery,
 } from "./cvRequest";
 import {
@@ -1854,6 +1855,17 @@ export const appRouter = router({
           );
           await client.query("COMMIT");
           setImmediate(() => {
+            // Toda postulación registrada solicita el CV de inmediato y sin
+            // excepción. Se prepara y despacha fuera de la transacción para que
+            // un fallo del proveedor nunca revierta la postulación.
+            void requestCvForApplication(pool, applicationId).catch(error => {
+              console.warn(
+                `[cvRequest] Application ${applicationId}: ${safeIntegrationMessage(
+                  error,
+                  "No fue posible solicitar el CV automáticamente."
+                )}`
+              );
+            });
             void evaluateApplicationWithAgent(pool, applicationId).catch(
               error => {
                 const message = safeIntegrationMessage(

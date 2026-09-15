@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ensureCvRequestMessage } from "./cvRequest";
+import { ensureCvRequestMessage, requestCvForApplication } from "./cvRequest";
 
 const application = {
   id: 17,
@@ -56,5 +56,38 @@ describe("política salarial en mensajería automática", () => {
     expect(String(query.mock.calls[2]?.[0])).toContain(
       "INSERT INTO conversation_messages"
     );
+  });
+});
+
+describe("solicitud automática de CV", () => {
+  it("se prepara y despacha sin exigir el estado calificado", async () => {
+    const query = vi.fn(async (sql: string) => {
+      const text = String(sql);
+      if (text.includes("JOIN candidates c ON c.id=a.candidate_id"))
+        return { rows: [{ ...application, status: "en_revision" }] };
+      if (text.includes("INSERT INTO conversations"))
+        return { rows: [{ id: 4 }] };
+      if (text.includes("INSERT INTO conversation_messages"))
+        return { rows: [{ id: 31, delivery_status: "pending" }] };
+      return { rows: [] };
+    });
+    const client = { query, release: vi.fn() };
+    const pool = { query, connect: vi.fn().mockResolvedValue(client) };
+
+    const result = await requestCvForApplication(pool as never, 17);
+
+    const contactCall = query.mock.calls.find(call =>
+      String(call[0]).includes("JOIN candidates c ON c.id=a.candidate_id")
+    );
+    expect(contactCall).toBeDefined();
+    expect(contactCall?.[1]).toEqual([17]);
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes(
+          "UPDATE applications SET whatsapp_status='pendiente'"
+        )
+      )
+    ).toBe(true);
+    expect(result).toEqual({ status: "in_progress" });
   });
 });

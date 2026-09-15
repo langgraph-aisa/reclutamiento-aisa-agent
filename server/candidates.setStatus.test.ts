@@ -1,13 +1,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TrpcContext } from "./_core/context";
 
-const { getPool, ensureCvRequestMessage, deliverCvRequestMessage } = vi.hoisted(
-  () => ({
-    getPool: vi.fn(),
-    ensureCvRequestMessage: vi.fn(),
-    deliverCvRequestMessage: vi.fn(),
-  })
-);
+const {
+  getPool,
+  ensureCvRequestMessage,
+  deliverCvRequestMessage,
+  requestCvForApplication,
+} = vi.hoisted(() => ({
+  getPool: vi.fn(),
+  ensureCvRequestMessage: vi.fn(),
+  deliverCvRequestMessage: vi.fn(),
+  requestCvForApplication: vi.fn().mockResolvedValue(null),
+}));
 
 vi.mock("./db", () => ({
   getPool,
@@ -18,6 +22,7 @@ vi.mock("./db", () => ({
 vi.mock("./cvRequest", () => ({
   ensureCvRequestMessage,
   deliverCvRequestMessage,
+  requestCvForApplication,
 }));
 
 import { appRouter } from "./routers";

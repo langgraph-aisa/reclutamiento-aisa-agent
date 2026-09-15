@@ -15,7 +15,18 @@ vi.mock("./db", () => ({
 vi.mock("./cvRequest", () => ({
   ensureCvRequestMessage: vi.fn(),
   deliverCvRequestMessage: vi.fn(),
+  requestCvForApplication: vi.fn().mockResolvedValue(null),
 }));
+
+// La evaluación con IA se sustituye para que la prueba observe solo el
+// despacho de la solicitud de CV, sin llamadas reales al modelo.
+vi.mock("./agentEvaluator", async importOriginal => {
+  const actual = await importOriginal<typeof import("./agentEvaluator")>();
+  return {
+    ...actual,
+    evaluateApplicationWithAgent: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 vi.mock("./profileEditorial", () => ({
   normalizePublicCopy,
@@ -746,5 +757,74 @@ describe("geo.zones", () => {
     expect(sql).toContain("c.iso2='GT'");
     expect(sql).toContain("z.active=true");
     expect(sql).toContain("ORDER BY z.code::integer");
+  });
+});
+
+describe("publicJobs.submit solicitud automática de CV", () => {
+  const submission = {
+    token: "ventas-8-abcd1234",
+    fullName: "Ana Pérez",
+    email: "",
+    phone: "55555555",
+    location: { zoneId: 1, departmentId: 1, municipalityId: 1 },
+    consents: {
+      adultConfirmed: true,
+      informationTruthful: true,
+      privacyAccepted: true,
+    },
+    answers: {},
+  };
+
+  function submissionPool() {
+    const query = vi.fn(async (sql: string) => {
+      const text = String(sql);
+      if (text.includes("FROM geo_zones z"))
+        return {
+          rows: [
+            {
+              zone_id: 1,
+              zone_name: "Zona 1",
+              department_id: 1,
+              department_name: "Guatemala",
+              municipality_id: 1,
+              municipality_name: "Guatemala",
+            },
+          ],
+        };
+      if (text.includes("public_slug")) return { rows: [{ id: 8, form_id: 21 }] };
+      if (text.includes("INSERT INTO candidates"))
+        return { rows: [{ id: 501 }] };
+      if (text.includes("SELECT id FROM applications")) return { rows: [] };
+      if (text.includes("INSERT INTO applications"))
+        return { rows: [{ id: 900 }] };
+      if (text.includes("FROM form_questions")) return { rows: [] };
+      return { rows: [] };
+    });
+    const client = { query, release: vi.fn() };
+    const pool = { query, connect: vi.fn().mockResolvedValue(client) };
+    return { pool, query };
+  }
+
+  it("despacha la solicitud de CV a toda postulación registrada", async () => {
+    const { requestCvForApplication } = await import("./cvRequest");
+    const { pool, query } = submissionPool();
+    getPool.mockResolvedValue(pool);
+
+    const result = await appRouter
+      .createCaller(createPublicContext())
+      .publicJobs.submit(submission as never);
+
+    expect(result).toMatchObject({ alreadyApplied: false, applicationId: 900 });
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("application_form_submissions")
+      )
+    ).toBe(true);
+
+    // El despacho se ejecuta después de confirmar la postulación.
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(requestCvForApplication).toHaveBeenCalledTimes(1);
+    expect(requestCvForApplication).toHaveBeenCalledWith(pool, 900);
   });
 });

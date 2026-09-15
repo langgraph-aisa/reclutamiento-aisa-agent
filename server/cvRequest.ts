@@ -117,6 +117,55 @@ export async function ensureCvRequestMessage(
   );
 }
 
+const cvRequestContactSql = `SELECT a.id,a.status,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message,
+        (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message
+   FROM applications a
+   JOIN candidates c ON c.id=a.candidate_id
+   JOIN job_positions p ON p.id=a.job_position_id
+  WHERE a.id=$1`;
+
+/**
+ * Prepara y despacha la solicitud de CV de una postulación recién registrada.
+ *
+ * Se ejecuta en su propia transacción, fuera de la postulación pública, para
+ * que un fallo del proveedor o del texto nunca impida registrar al candidato.
+ * La marca `cv_request:<id>` mantiene el envío idempotente ante cualquier
+ * repetición del formulario o de una variante distinta de la misma plaza.
+ */
+export async function requestCvForApplication(
+  pool: Pool,
+  applicationId: number
+): Promise<CvRequestDelivery | null> {
+  const client = await pool.connect();
+  let messageId: number | null = null;
+  try {
+    await client.query("BEGIN");
+    const contactResult = await client.query(cvRequestContactSql, [
+      applicationId,
+    ]);
+    const application = contactResult.rows[0] as ApplicationContact | undefined;
+    if (!application) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+    const message = await ensureCvRequestMessage(client, application);
+    if (message) {
+      messageId = message.id;
+      await client.query(
+        `UPDATE applications SET whatsapp_status='pendiente',last_whatsapp_error=NULL,updated_at=now() WHERE id=$1`,
+        [applicationId]
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  return messageId ? deliverCvRequestMessage(pool, messageId) : null;
+}
+
 function safeDeliveryError(error: unknown) {
   return (
     error instanceof Error

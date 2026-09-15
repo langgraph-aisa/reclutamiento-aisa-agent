@@ -12,6 +12,7 @@ vi.mock("./db", () => ({
 vi.mock("./cvRequest", () => ({
   ensureCvRequestMessage: vi.fn(),
   deliverCvRequestMessage: vi.fn(),
+  requestCvForApplication: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("./profileEditorial", () => ({
