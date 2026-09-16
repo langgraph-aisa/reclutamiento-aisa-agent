@@ -8,6 +8,7 @@ import { EVALUATION_BLOCKS, SCORE_BANDS } from "../shared/agentConfig";
 import { APP_VERSION } from "../shared/release";
 import { evaluateDeterministic, type ConfiguredQuestion } from "./evaluation";
 import { getAgentRuntimeSettings, type AgentSecretKey } from "./agentSettings";
+import { loadPositionKnowledgeContext } from "./knowledgeContext";
 import {
   createLangfuseCallbackHandler,
   verifyLangfuseConnectionFromDatabase,
@@ -169,66 +170,16 @@ BASE DE CONOCIMIENTO DEL PROYECTO (RAG)
 ${projectKnowledge}`;
 }
 
+/**
+ * El evaluador comparte la proyección del RAG con el agente conversacional para
+ * que el marco epistemológico de ambos sea idéntico y auditable por huella.
+ */
 async function loadProjectKnowledgeContext(
   pool: Pool,
   positionId: number | undefined
 ) {
-  const fallback = "Sin base de conocimiento de proyecto vinculada a esta plaza.";
-  if (!positionId) return fallback;
-  try {
-    const result = await pool.query(
-      `SELECT p.id AS project_id,p.name AS project_name,p.summary AS project_summary,
-              f.original_name,f.deep_analysis
-         FROM knowledge_projects p
-         JOIN knowledge_project_positions link ON link.project_id=p.id
-         LEFT JOIN knowledge_files f
-           ON f.project_id=p.id
-          AND f.analysis_status='analizado'
-          AND COALESCE(f.deep_analysis,'')<>''
-        WHERE link.position_id=$1
-        ORDER BY p.id,f.id
-        LIMIT 60`,
-      [positionId]
-    );
-    if (!result.rows.length) return fallback;
-    const projects = new Map<
-      number,
-      { name: string; summary: string; files: string[] }
-    >();
-    for (const row of result.rows) {
-      const projectId = Number(row.project_id);
-      if (!projects.has(projectId)) {
-        projects.set(projectId, {
-          name: String(row.project_name ?? "Proyecto"),
-          summary: String(row.project_summary ?? "").slice(0, 900),
-          files: [],
-        });
-      }
-      if (row.original_name) {
-        projects.get(projectId)!.files.push(
-          `Documento: ${row.original_name}\nAnálisis: ${String(
-            row.deep_analysis
-          ).slice(0, 2_000)}`
-        );
-      }
-    }
-    const blocks = Array.from(projects.values())
-      .map(
-        project =>
-          `Proyecto: ${project.name}\nResumen: ${project.summary}\n${
-            project.files.length
-              ? project.files.slice(0, 10).join("\n\n")
-              : "Sin documentos analizados."
-          }`
-      )
-      .join("\n\n---\n\n");
-    return blocks;
-  } catch (error) {
-    console.warn(
-      `[AgentEvaluator] Project knowledge context unavailable (${error instanceof Error ? error.name : "unknown"}).`
-    );
-    return "Base de conocimiento no disponible en esta versión de la base de datos.";
-  }
+  const context = await loadPositionKnowledgeContext(pool, positionId ?? null);
+  return context.rendered;
 }
 
 function publicEvaluationInput(source: EvaluationSource) {
@@ -612,14 +563,14 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
             )
           ).rows
         : [];
-      const projectKnowledge = await loadProjectKnowledgeContext(
+      const knowledgeContext = await loadPositionKnowledgeContext(
         pool,
         Number(source.position.id)
       );
       const instructions = buildSystemInstructions(
         settings,
         methodologies,
-        projectKnowledge
+        knowledgeContext.rendered
       );
       let output: AgentModelOutput | null = null;
       let keySlot: "primary" | "backup" = "primary";
@@ -754,6 +705,10 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
                   ...result,
                   framework: "LangGraph",
                   api: "Responses",
+                  knowledgeFingerprint: knowledgeContext.fingerprint,
+                  knowledgeFileCount: knowledgeContext.fileCount,
+                  knowledgeCharacters: knowledgeContext.characters,
+                  knowledgeDegraded: knowledgeContext.degraded,
                 }),
                 settings.model,
               ]

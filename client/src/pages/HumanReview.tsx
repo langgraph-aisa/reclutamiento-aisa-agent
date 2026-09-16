@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ReviewEvidencePanels } from "@/components/review/ReviewEvidencePanels";
 import { VerticalNavigator } from "@/components/VerticalNavigator";
 import {
   Select,
@@ -25,11 +26,13 @@ import {
 import {
   ArrowDown,
   ArrowUp,
+  Banknote,
   Bot,
   Check,
   Eye,
   FilterX,
   Loader2,
+  MapPin,
   MessageCircle,
   MessageSquareText,
   Phone,
@@ -262,6 +265,26 @@ export default function HumanReview() {
                   ? `${selected.position_title} · ${selected.phone_international}`
                   : "Visión 360° para decisiones humanas trazables"}
               </p>
+              {selected ? (
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  <span
+                    className="inline-flex min-w-0 items-center gap-1 text-muted-foreground"
+                    title="Ubicación declarada por la persona"
+                  >
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-sky-700" />
+                    <span className="truncate">
+                      {declaredLocationLabel(selected)}
+                    </span>
+                  </span>
+                  <span
+                    className={`inline-flex min-w-0 items-center gap-1 ${salaryLabel(selected).declared ? "font-semibold text-emerald-800" : "text-muted-foreground"}`}
+                    title="Expectativa de remuneración registrada únicamente con evidencia literal"
+                  >
+                    <Banknote className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{salaryLabel(selected).text}</span>
+                  </span>
+                </div>
+              ) : null}
               <button
                 type="button"
                 disabled={!selected}
@@ -315,6 +338,15 @@ export default function HumanReview() {
         selection={viewer}
         onSelect={setViewer}
       />
+
+      {selected ? (
+        <ReviewEvidencePanels
+          key={`conversation-evidence:${selected.id}`}
+          applicationId={selected.id}
+          positionId={selected.position_id ?? null}
+          candidateName={selected.full_name ?? null}
+        />
+      ) : null}
 
       <section className="shrink-0 rounded-2xl border border-border/60 bg-card p-2 shadow-soft sm:p-3">
         <div className="human-review-filter-grid">
@@ -1174,6 +1206,44 @@ function formatDate(value: string | Date | null | undefined) {
     dateStyle: "short",
     timeStyle: "short",
   }).format(date);
+}
+
+/** Ubicación declarada: zona, municipio, departamento y país. */
+function declaredLocationLabel(candidate: any) {
+  const parts = [
+    candidate.location_zone,
+    candidate.location_municipality,
+    candidate.location_department,
+    candidate.location_country,
+  ].filter((value: unknown) => Boolean(String(value ?? "").trim()));
+  return parts.length ? parts.join(" · ") : "Ubicación sin confirmar";
+}
+
+const SALARY_SOURCE_LABELS: Record<string, string> = {
+  message: "mensaje de la persona",
+  cv: "CV recibido",
+  human: "registro humano",
+};
+
+/** Expectativa de remuneración: solo se muestra con evidencia literal. */
+function salaryLabel(candidate: any) {
+  const amount = Number(candidate?.salary_expectation_gtq ?? 0);
+  const source = String(candidate?.salary_expectation_source ?? "no_declarada");
+  const declared = amount > 0 && source !== "no_declarada";
+  if (!declared) {
+    return { declared, text: "Expectativa salarial: no declarada" };
+  }
+  const formatted = new Intl.NumberFormat("es-GT", {
+    style: "currency",
+    currency: "GTQ",
+    minimumFractionDigits: 2,
+  }).format(amount);
+  return {
+    declared,
+    text: `Expectativa salarial: ${formatted} · ${
+      SALARY_SOURCE_LABELS[source] ?? source
+    }`,
+  };
 }
 
 function blockLabel(value: string) {

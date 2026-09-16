@@ -117,6 +117,9 @@ import {
   sendInboxText,
   setInboxAutomation,
 } from "./inbox";
+import { conversationPanelState } from "./conversationPanel";
+import { runConversationTurn } from "./conversationEngine";
+import { dispatchQueuedReplies } from "./conversationOutbox";
 import {
   ASSESSMENT_DELETE_CODE_MAX_ATTEMPTS,
   ASSESSMENT_DELETE_CODE_RESEND_SECONDS,
@@ -2352,6 +2355,44 @@ export const appRouter = router({
       }),
   }),
 
+  conversation: router({
+    state: roleProcedure
+      .input(z.object({ applicationId: z.number().int().positive() }))
+      .query(async ({ input }) =>
+        conversationPanelState(await requirePool(), input.applicationId)
+      ),
+    runNow: roleProcedure
+      .input(z.object({ conversationId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        try {
+          return await runConversationTurn(await requirePool(), {
+            conversationId: input.conversationId,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible ejecutar el turno conversacional."
+            ),
+          });
+        }
+      }),
+    dispatch: adminProcedure.mutation(async () => {
+      try {
+        return await dispatchQueuedReplies(await requirePool());
+      } catch (error) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: safeIntegrationMessage(
+            error,
+            "No fue posible despachar la cola conversacional."
+          ),
+        });
+      }
+    }),
+  }),
+
   governance: router({
     catalog: adminProcedure.query(async () => {
       const pool = await requirePool();
@@ -3232,7 +3273,9 @@ export const appRouter = router({
              a.profile_summary,a.whatsapp_status,c.full_name,c.phone_international,
              c.email,p.id AS position_id,p.title AS position_title,p.public_slug,
              gz.name AS location_zone,gd.name AS location_department,
-             gm.name AS location_municipality,
+             gm.name AS location_municipality,co.name AS location_country,
+             a.salary_expectation_gtq,a.salary_expectation_source,
+             a.salary_expectation_captured_at,
              e.evaluation_id,e.evaluation_status,e.latest_reason,e.latest_profile_summary,
              e.ai_payload,e.ai_model,e.evaluation_created_at,
              ${scoreExpression} AS evaluation_score,
@@ -3244,6 +3287,7 @@ export const appRouter = router({
            LEFT JOIN geo_zones gz ON gz.id=a.location_zone_id
            LEFT JOIN geo_departments gd ON gd.id=a.location_department_id
            LEFT JOIN geo_municipalities gm ON gm.id=a.location_municipality_id
+           LEFT JOIN countries co ON co.id=gd.country_id
            LEFT JOIN LATERAL (
              SELECT ev.id AS evaluation_id,ev.status AS evaluation_status,
                     ev.reason AS latest_reason,ev.profile_summary AS latest_profile_summary,
