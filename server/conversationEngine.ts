@@ -26,6 +26,7 @@ import {
   type ConversationGap,
 } from "./conversationContext";
 import { enqueueAgentReply } from "./conversationOutbox";
+import { assertCapability } from "./conversationRuntime";
 import { observeOpenAIClient, withLangfuseObservation } from "./observability/langfuse";
 import {
   assertNoAutomatedSalaryOffer,
@@ -343,6 +344,7 @@ export async function runConversationTurn(
     now?: Date;
   }
 ): Promise<ConversationTurnOutcome> {
+  assertCapability("reason");
   const state = await loadConversationState(pool, input.conversationId);
   if (!state) return { status: "skipped", reason: "La conversación no existe." };
   if (!state.agent_enabled || state.human_takeover)

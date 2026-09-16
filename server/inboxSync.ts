@@ -1,5 +1,6 @@
 import type { Pool } from "pg";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
+import { assertCapability } from "./conversationRuntime";
 import {
   recordNormalizedInboundLink,
   recordNormalizedInboundLocation,
@@ -108,6 +109,7 @@ export async function syncInboxConversation(
   conversation: SyncConversation,
   dependencies: InboxSyncDependencies = {}
 ): Promise<{ processed: number; inserted: number; skipped: number }> {
+  assertCapability("receive");
   const settings = await (dependencies.settings ??
     getApiChatRuntimeSettings)(pool);
   if (settings.mode !== "native") {

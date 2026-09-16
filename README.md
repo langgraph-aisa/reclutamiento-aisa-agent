@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.141</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.142</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.141-0b2d4b" alt="JARVI RH 2.0.141" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.142-0b2d4b" alt="JARVI RH 2.0.142" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse%20SDK-5.11.1-orange" alt="Langfuse SDK 5.11.1" />
@@ -24,7 +24,7 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.141 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.142 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
 Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH integra plazas, formularios y protocolos versionados, evaluación asistida por IA, revisión humana, conversaciones ApiChat, solicitud controlada de currículum y auditoría administrativa. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar, fijar remuneración o atribuir rasgos psicológicos: el personal autorizado conserva la decisión.
@@ -35,13 +35,17 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
 
+### 16SEP2026 · JARVI RH 2.0.142
+
+- El servicio conversacional se despliega separado por capacidad: recepción, razonamiento y envío, cada uno con credencial propia y ciclo propio.
+- La cola `conversation_outbox` reclama cada respuesta con `FOR UPDATE SKIP LOCKED` y el proceso que declara una capacidad no puede ejecutar otra.
+- La migración `0023` crea la cola, tres esquemas de privilegio mínimo, tres roles sin contraseña y la vista de reconciliación; sin ella se conserva el modo integrado.
+
 ### 16SEP2026 · JARVI RH 2.0.141
 
-- JARVI HR conversa con hilo propio en PostgreSQL: OpenAI se consume sin estado y la retención y el borrado siguen siendo verificables.
-- El contexto se compone de cuatro capas: marco epistemológico del proyecto, RAG personal del candidato, comparación plaza-declaración y memoria conversacional.
-- Cada respuesta se autoriza solo después de verificar la conducta y el guardarraíl de remuneración; el motor nunca envía y el emisor nunca recibe.
-- Revisión Humana muestra ubicación declarada, expectativa salarial con monto y, bajo la matriz IA, el hilo con el conocimiento vigente.
-- La migración `0022_conversational_agent.sql` agrega turnos, resúmenes, ciclos, bitácora de eventos y RAG personal.
+- JARVI HR conversa con hilo propio en PostgreSQL; OpenAI se consume sin estado y el contexto suma cuatro capas: marco del proyecto, RAG personal, comparación plaza-declaración y memoria.
+- Cada respuesta se autoriza tras verificar conducta y remuneración; el motor nunca envía y el emisor nunca recibe.
+- Revisión Humana muestra ubicación, expectativa salarial con monto y, bajo la matriz IA, el hilo con el conocimiento vigente; la migración `0022` agrega turnos, ciclos y RAG personal.
 
 ### 14SEP2026 · JARVI RH 2.0.140
 
@@ -55,8 +59,7 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 ### 14SEP2026 · JARVI RH 2.0.138
 
-- Cada formulario recibe un enlace propio con interruptor, edición, preguntas, copia y vista previa de solo lectura; la migración `0019` añade su token único.
-- El mismo WhatsApp conserva un candidato y una postulación al completar dos variantes; la evaluación traza el formulario de cada respuesta y el payload público omite respuestas aceptadas, requisitos y criterios del agente.
+- Cada formulario recibe un enlace propio con interruptor, preguntas y vista previa; el mismo WhatsApp conserva un candidato y una postulación al completar variantes.
 
 ### 14SEP2026 · JARVI RH 2.0.137
 
@@ -79,7 +82,6 @@ ACTUALIZACIÓN DE LA VERSIÓN
 - n8n queda retirado; el puente `inboxSync` rellena la bandeja cada segundo desde el historial del proveedor con deduplicación por identificador.
 - Configuración administra los siete endpoints oficiales ApiChat con interruptores auditados; la bandeja añade burbujas con hora y ticks, punteo IA y etiqueta humano/agente.
 - Borrar una versión de prueba exige un código temporal de seis dígitos por correo; la migración `0015` conserva desafío y auditoría.
-- La actividad ISO compone títulos de 11 palabras y resúmenes de 33, con mapa ISO/IEC 20000-1.
 
 ### 11SEP2026 · JARVI RH 2.0.132
 
@@ -318,7 +320,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.141](docs/PRUEBAS_CAJA_NEGRA_2.0.139.md).
+`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md) y [caja negra 2.0.142](docs/PRUEBAS_CAJA_NEGRA_2.0.139.md).
 
 ## 8. Capa cognitiva, resiliencia y alcance verificable
 
@@ -406,7 +408,7 @@ Las páginas técnicas evolutivas se consultaron el 14 de septiembre de 2026. La
 - ApiChat. (s. f.). _OpenAPI oficial de la API de mensajería_. https://panel.apichat.io/docs/swagger
 - International Organization for Standardization. (2018). _ISO/IEC 20000-1:2018: Service management system requirements_. https://www.iso.org/standard/70636.html
 
-### Fuentes primarias incorporadas en 2.0.141
+### Fuentes primarias incorporadas en 2.0.142
 
 - pdf-parse. (s. f.). _Pure JavaScript PDF parsing_. https://www.npmjs.com/package/pdf-parse
 - Mammoth. (s. f.). _Convert .docx documents to HTML_. https://www.npmjs.com/package/mammoth

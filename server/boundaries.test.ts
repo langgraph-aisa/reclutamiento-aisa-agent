@@ -96,4 +96,36 @@ describe("fronteras conversacionales verificables", () => {
     expect(outbox).toContain("AGENT_OUTBOX_MAX_ATTEMPTS");
     expect(outbox).toContain("WHERE id=$1 AND delivery_status=$3");
   });
+
+  it("materializa el servicio separado con cola dedicada y credenciales por capacidad", () => {
+    const split = read("drizzle/migrations/0023_conversation_service_split.sql");
+    const runtime = read("server/conversationRuntime.ts");
+    const receiverService = read("server/services/receiver.ts");
+    const engineService = read("server/services/engine.ts");
+    const senderService = read("server/services/sender.ts");
+
+    expect(split).toContain("CREATE TABLE IF NOT EXISTS conversation_outbox");
+    expect(split).toContain("conversation_outbox_message_uq");
+    expect(split).toContain("CREATE SCHEMA IF NOT EXISTS wa_receiver");
+    expect(split).toContain("CREATE SCHEMA IF NOT EXISTS wa_sender");
+    expect(split).toContain("CREATE SCHEMA IF NOT EXISTS wa_engine");
+    expect(split).toContain("conversation_reconciliation");
+    expect(split).toContain("jarvi_receptor");
+    expect(split).toContain("jarvi_emisor");
+    expect(split).toContain("jarvi_motor");
+    expect(split).not.toContain("PASSWORD '");
+
+    expect(runtime).toContain("CONVERSATION_SERVICE_MODE");
+    expect(runtime).toContain("DATABASE_URL_RECEIVER");
+    expect(runtime).toContain("DATABASE_URL_SENDER");
+
+    expect(receiverService).toContain('startCapabilityService("receive"');
+    expect(engineService).toContain('startCapabilityService("reason"');
+    expect(senderService).toContain('startCapabilityService("send"');
+    expect(outbox).toContain("FOR UPDATE OF o SKIP LOCKED");
+    expect(worker).toContain("runConversationReasoning");
+    expect(worker).toContain('assertCapability("send")');
+    expect(read("server/inboxSync.ts")).toContain('assertCapability("receive")');
+    expect(engine).toContain('assertCapability("reason")');
+  });
 });
