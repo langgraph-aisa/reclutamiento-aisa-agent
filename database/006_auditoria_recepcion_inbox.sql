@@ -1,25 +1,25 @@
 -- ============================================================================
--- JARVI RH 2.0.147 · Auditoría de recepción ApiChat/WhatsApp (solo lectura)
+-- JARVI RH 2.0.149 · Auditoría de recepción ApiChat/WhatsApp (solo lectura)
 -- database/006_auditoria_recepcion_inbox.sql
 --
 -- Propósito: dictaminar POR QUÉ la bandeja no recibe mensajes entrantes.
 -- Método: cada bloque reproduce una condición del código fuente y la evalúa
 -- contra la base real. Ninguna consulta modifica datos.
 --
--- Fuentes primarias referenciadas (líneas de la versión 2.0.147):
---   F1  server/inboxSync.ts L136-139  syncInboxConversation retorna sin procesar
---       cuando settings.mode != 'native' (api_mode en integration_settings).
---   F2  server/inboxSync.ts L141-143  retorna sin procesar cuando el endpoint
---       /messagesHistory está desactivado (endpoint_enabled:/messagesHistory).
---   F3  server/apiChatSettings.ts L87-97 encryptedSecret lanza si el secreto no
+-- Fuentes primarias referenciadas (funciones de la versión 2.0.149):
+--   F1  syncInboxOnce (server/inboxSync.ts) detiene la ronda cuando el modo
+--       no es 'native' (api_mode en integration_settings) y lo advierte.
+--   F2  syncInboxOnce detiene la ronda cuando el endpoint /messagesHistory
+--       está desactivado (endpoint_enabled:/messagesHistory) y lo advierte.
+--   F3  encryptedSecret (server/apiChatSettings.ts) lanza si el secreto no
 --       está cifrado; el puente registra [InboxSync] cada segundo.
---   F4  server/inboxSync.ts L158-161  si la API responde !ok se lanza (HTTP 429
---       pausa 60 s; HTTP 401/403 indican token/cliente rechazado).
---   F5  server/inboxSync.ts L162-165  payload no arreglo -> retorno silencioso.
---   F6  server/inboxSync.ts L82-86   el catálogo solo incluye provider='apichat'
---       y status IN ('pendiente','activo').
---   F7  server/inbox.ts L731+        registro entrante; falla si la asociación
---       teléfono<->conversación no es única o si falta la migración 0022 (42P01).
+--   F4  syncInboxOnce lanza si la API responde !ok (HTTP 429 pausa 60 s;
+--       HTTP 401/403 indican token/cliente rechazado).
+--   F5  syncInboxOnce advierte y retorna cuando el payload no es una lista.
+--   F6  listSyncConversations solo incluye provider='apichat' y status IN
+--       ('pendiente','activo'); el feed global se distribuye por número.
+--   F7  recordNormalizedInboundEventInternal (server/inbox.ts) reconcilia por
+--       provider_message_id; un fallo se respalda en conversation_events.
 --
 -- Uso: ejecutar en dbgate/EasyPanel contra la base de producción del ambiente.
 -- ============================================================================

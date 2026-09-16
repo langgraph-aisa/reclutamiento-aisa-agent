@@ -178,7 +178,7 @@ El backend rechaza una pregunta de selección sin opciones y una regla de descar
 
 ## 9. ApiChat directo para envío y recepción
 
-El backend aplica reglas, llama a OpenAI, persiste la evaluación y envía la solicitud de CV directamente contra la API de ApiChat. No existe una espera operativa de 30 segundos ni cancelación diferida, y no hay ningún intermediario de reenvío: la recepción se obtiene con la regla de sincronización de un segundo (`server/inboxSync.ts`), que consulta `GET /v1/messages` por conversación activa y rellena entradas y salidas con deduplicación por `providerMessageId`.
+El backend aplica reglas, llama a OpenAI, persiste la evaluación y envía la solicitud de CV directamente contra la API de ApiChat. No existe una espera operativa de 30 segundos ni cancelación diferida, y no hay ningún intermediario de reenvío: la recepción se obtiene con la regla de sincronización de un segundo (`server/inboxSync.ts`), que lee el feed global `GET /v1/messages` una vez por ciclo de quince segundos, distribuye los registros por número contra el catálogo local, clasifica la dirección por reconciliación con los envíos propios y deduplica por `providerMessageId`, con respaldo de registros fallidos en `conversation_events`.
 
 La bandeja envía además enlaces (`/v1/sendLink`), ubicaciones (`/v1/sendLocation`), archivos por URL HTTPS (`/v1/sendFile`), notas de voz por URL HTTPS (`/v1/sendPTT`) y puede eliminar mensajes del proveedor (`/v1/deleteMessage`). Los medios entrantes (audio, PDF, Word) permanecen excluidos por política hasta completar el pipeline seguro. Nunca incorpore Client ID o token en archivos versionados; las credenciales viven cifradas en PostgreSQL y se administran desde Configuración > WhatsApp.
 

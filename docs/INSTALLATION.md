@@ -45,7 +45,7 @@ Langfuse tampoco requiere claves en EasyPanel. Conserve únicamente la raíz est
 
 ## Recepción directa
 
-La recepción no requiere importar artefactos ni registrar URLs de reenvío: el puente `inboxSync` consulta el historial oficial `GET /v1/messages` cada segundo por conversación activa y rellena la bandeja con deduplicación por `providerMessageId`. Ante HTTP 429, el puente se pausa y retoma con espaciamiento automático.
+La recepción no requiere importar artefactos ni registrar URLs de reenvío: el puente `inboxSync` lee el feed global `GET /v1/messages` una vez por ciclo de quince segundos, distribuye cada registro por número contra el catálogo local, clasifica por reconciliación con los envíos propios y deduplica por `providerMessageId`; un registro fallido se respalda en `conversation_events`. Ante HTTP 429, el puente se pausa y retoma con espaciamiento automático.
 
 ## Publicación de la aplicación
 

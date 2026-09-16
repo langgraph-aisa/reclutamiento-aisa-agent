@@ -56,7 +56,7 @@ No existe una espera operativa de 30 segundos: el envío se inicia desde el back
 
 La bandeja se sincroniza con una regla de un segundo: el servidor recorre las conversaciones activas por turnos y rellena desde `GET /v1/messages` los mensajes entrantes y salientes que el webhook no hubiera registrado; el cliente además refresca la lista y el detalle cada segundo.
 
-El estado **Calificado por AISA** (`calificado_aisa`) no envía mensajes. La recepción no depende de ninguna URL de reenvío: el puente `inboxSync` consulta `GET /v1/messages` cada segundo por conversación activa y registra los mensajes entrantes y salientes que falten, con deduplicación por `providerMessageId`. Un teléfono sin postulación se registra en `inbound_message_quarantine` solo como huellas HMAC, sin conservar número ni mensaje.
+El estado **Calificado por AISA** (`calificado_aisa`) no envía mensajes. La recepción no depende de ninguna URL de reenvío: el puente `inboxSync` lee el **feed global** `GET /v1/messages` una vez por ciclo de quince segundos, distribuye cada registro por número contra el catálogo local y clasifica la dirección por **reconciliación** —un identificador ya registrado como saliente es envío propio; todo lo demás es entrante del candidato, aunque el proveedor lo marque como propio—, con deduplicación por `providerMessageId`. Un registro que no puede persistirse se respalda en `conversation_events`. Un teléfono sin postulación se registra en `inbound_message_quarantine` solo como huellas HMAC, sin conservar número ni mensaje.
 
 El puente de sincronización admite tres tipos normalizados del historial oficial: `text`, `link` y `location`. Los medios (audio, PDF, Word) permanecen excluidos por política hasta completar el pipeline seguro.
 
