@@ -147,7 +147,7 @@ export function classifyFeedDirection(
     : "inbound";
 }
 
-async function knownOutboundIdsFor(
+export async function knownOutboundIdsFor(
   pool: Pool,
   conversationId: number
 ): Promise<Set<string>> {
