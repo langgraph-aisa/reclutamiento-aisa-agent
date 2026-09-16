@@ -70,8 +70,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.143");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.143");
+    expect(APP_VERSION).toBe("2.0.144");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.144");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -455,9 +455,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(108);
+    expect(audit.files).toHaveLength(109);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(108);
+    expect(publicCopyAudit.files).toHaveLength(109);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -833,7 +833,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.143");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.144");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -841,7 +841,12 @@ describe("black-box release contract", () => {
     expect(wordCount).toBeLessThanOrEqual(4_200);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
-    expect(readme).toContain("<!-- release-history:start -->");    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.140");
+    expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.144");
+    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");
+    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.142");
+    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.141");
+    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.140");
     expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.132");
     expect(readme).toContain("ISO/IEC 20000-1:2018");
     expect(readme).toContain("`inboxSync`");
@@ -952,7 +957,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.143");
+    expect(governance).toContain("Alcance candidato 2.0.144");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -1000,4 +1005,56 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_outbox_message_uq");
     expect(guide).toContain("DATABASE_URL_RECEIVER");
     expect(guide).toContain("CONVERSATION_SERVICE_CAPABILITY");
-  });});
+  });
+
+  it("activa el servicio conversacional desde el panel sin variables de entorno", () => {
+    const activation = fs.readFileSync(
+      path.resolve("server/conversationActivation.ts"),
+      "utf8"
+    );
+    const migration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0024_conversation_activation.sql"),
+      "utf8"
+    );
+    const config = fs.readFileSync(
+      path.resolve("client/src/pages/Config.tsx"),
+      "utf8"
+    );
+    const serviceRuntime = fs.readFileSync(
+      path.resolve("server/services/serviceRuntime.ts"),
+      "utf8"
+    );
+    const blackBox = fs.readFileSync(
+      path.resolve(`docs/PRUEBAS_CAJA_NEGRA_${APP_VERSION}.md`),
+      "utf8"
+    );
+    const guide = fs.readFileSync(
+      path.resolve("docs/GUIA_EASYPANEL_CONVERSACION_2.0.142.md"),
+      "utf8"
+    );
+
+    // Preactivación sembrada por la migración.
+    expect(migration).toContain("ON CONFLICT (provider, setting_key) DO NOTHING");
+    expect(migration).toContain("'conversation', 'agent_enabled'");
+    expect(migration).toContain("'conversation', 'service_mode'");
+
+    // Activación gobernada por el panel con valores de fábrica encendidos.
+    expect(activation).toContain("DEFAULT_CONVERSATION_ACTIVATION");
+    expect(activation).toContain("agentEnabled: true");
+    expect(activation).toContain("saveConversationActivation");
+    expect(activation).toContain("activation_updated");
+    expect(activation).toContain("conversationActivationAdvisories");
+
+    // La capacidad es intrínseca al punto de entrada.
+    expect(serviceRuntime).toContain("intrínseca al punto de entrada");
+    expect(serviceRuntime).toContain("Desactivado por configuración");
+    expect(serviceRuntime).not.toContain("CONVERSATION_SERVICE_MODE=split");
+
+    // Panel y documentos.
+    expect(config).toContain("Activación del servicio conversacional");
+    expect(config).toContain("saveConversationActivation");
+    expect(blackBox).toContain("BN-ACT-01");
+    expect(blackBox).toContain("BN-ACT-12");
+    expect(guide).toContain("No se requiere ninguna variable de entorno nueva");
+  });
+});

@@ -18,8 +18,9 @@ Se aplican con el ejecutor SQL de EasyPanel, en este orden estricto:
 
 1. `drizzle/migrations/0022_conversational_agent.sql`
 2. `drizzle/migrations/0023_conversation_service_split.sql`
+3. `drizzle/migrations/0024_conversation_activation.sql`
 
-Ambas son idempotentes: repetir su ejecución no duplica objetos ni pierde datos. Ninguna contiene credenciales.
+Las tres son idempotentes: repetir su ejecución no duplica objetos ni pierde datos. Ninguna contiene credenciales. La tercera **preactiva** el servicio conversacional en el panel de configuración, de modo que no hace falta agregar ninguna variable de entorno.
 
 ## 3. Contraseñas de los roles
 
@@ -78,56 +79,66 @@ El barrido integrado ejecuta razonamiento y envío en el mismo proceso, con las 
 
 ## 6. Modo separado (tres servicios)
 
-Cada servicio se despliega como App independiente en EasyPanel, con el mismo repositorio y distinto comando de arranque. La tabla indica qué variable corresponde a cada servicio.
+**No se requiere ninguna variable de entorno nueva.** La activación vive en `Configuración › WhatsApp` y la migración `0024` la deja encendida; la capacidad es intrínseca al punto de entrada, de modo que el servicio `sender.ts` atiende el envío, `engine.ts` el razonamiento y `receiver.ts` la recepción. Cada servicio se despliega como App independiente en EasyPanel con el mismo repositorio, el mismo `DATABASE_URL` que ya usa la aplicación y su comando de arranque.
 
-| Variable | `jarvi-receptor` | `jarvi-motor` | `jarvi-emisor` | Para qué sirve |
-| --- | --- | --- | --- | --- |
-| `CONVERSATION_SERVICE_MODE` | `split` | `split` | `split` | Declara el despliegue separado; sin este valor el servicio se niega a arrancar |
-| `CONVERSATION_SERVICE_CAPABILITY` | `receive` | `reason` | `send` | Declara la única capacidad que ese proceso puede ejecutar |
-| `DATABASE_URL_RECEIVER` | obligatoria | — | — | Conexión con el rol `jarvi_receptor` |
-| `DATABASE_URL_ENGINE` | — | obligatoria | — | Conexión con el rol `jarvi_motor` |
-| `DATABASE_URL_SENDER` | — | — | obligatoria | Conexión con el rol `jarvi_emisor` |
-| `DATABASE_URL` | recomendada | recomendada | recomendada | Respaldo y lectura del resto del esquema cuando no hay conexión dedicada |
-| `AGENT_SETTINGS_ENCRYPTION_KEY` | — | obligatoria | obligatoria | Descifra la credencial de OpenAI (motor) y de ApiChat (emisor) |
-| `CONVERSATION_SERVICE_INTERVAL_MS` | opcional (2000) | opcional (2000) | opcional (2000) | Frecuencia del ciclo de trabajo, en milisegundos |
-| Dominio público | no asignar | no asignar | no asignar | Son procesos de trabajo; no reciben tráfico web |
+| Elemento | `jarvi-receptor` | `jarvi-motor` | `jarvi-emisor` |
+| --- | --- | --- | --- |
+| Comando de arranque | `npx tsx server/services/receiver.ts` | `npx tsx server/services/engine.ts` | `npx tsx server/services/sender.ts` |
+| Capacidad que atiende | recepción | razonamiento | envío |
+| Variable obligatoria | `DATABASE_URL` | `DATABASE_URL` y `AGENT_SETTINGS_ENCRYPTION_KEY` | `DATABASE_URL` y `AGENT_SETTINGS_ENCRYPTION_KEY` |
+| Dominio público | no asignar | no asignar | no asignar |
+| Interruptor en el panel | «Capacidad de recepción» | «Capacidad de razonamiento» | «Capacidad de envío» |
 
-Cadenas de conexión de ejemplo (sustituya host, base y clave):
+`DATABASE_URL` y `AGENT_SETTINGS_ENCRYPTION_KEY` ya existen en el servicio actual: no hay nada nuevo que agregar. Para separar el tráfico, cambie «Despliegue» a **Separado por capacidad** en el panel; con **Integrado en la aplicación** el barrido corre dentro de la aplicación y los servicios dedicados permanecen inactivos.
 
-```text
-DATABASE_URL_RECEIVER=postgres://jarvi_receptor:CLAVE_RECEPTOR@HOST:5432/BASE
-DATABASE_URL_ENGINE=postgres://jarvi_motor:CLAVE_MOTOR@HOST:5432/BASE
-DATABASE_URL_SENDER=postgres://jarvi_emisor:CLAVE_EMISOR@HOST:5432/BASE
-```
+### Variables opcionales de endurecimiento (avanzado)
 
-## 6.1 Variables completas por servicio (texto para copiar)
+Solo si el operador decide aislar privilegios por servicio. No son necesarias para operar:
+
+| Variable | Efecto |
+| --- | --- |
+| `DATABASE_URL_RECEIVER` | Usa el rol `jarvi_receptor` en lugar de la conexión principal |
+| `DATABASE_URL_ENGINE` | Usa el rol `jarvi_motor` |
+| `DATABASE_URL_SENDER` | Usa el rol `jarvi_emisor` |
+| `CONVERSATION_SERVICE_MODE` | Fuerza el modo declarado (anula el panel; el aviso lo indica) |
+| `CONVERSATION_SERVICE_CAPABILITY` | Restringe el proceso a una sola capacidad |
+
+## 6.1 Qué debe llevar cada servicio
 
 ```text
 # Servicio 1 · recepción
-CONVERSATION_SERVICE_MODE=split
-CONVERSATION_SERVICE_CAPABILITY=receive
-DATABASE_URL_RECEIVER=postgres://jarvi_receptor:<clave>@<host>:5432/<base>
+DATABASE_URL=<la misma que usa la aplicación>
+# Comando: npx tsx server/services/receiver.ts
 
 # Servicio 2 · razonamiento
-CONVERSATION_SERVICE_MODE=split
-CONVERSATION_SERVICE_CAPABILITY=reason
-DATABASE_URL_ENGINE=postgres://jarvi_motor:<clave>@<host>:5432/<base>
+DATABASE_URL=<la misma que usa la aplicación>
+AGENT_SETTINGS_ENCRYPTION_KEY=<la misma que usa la aplicación>
+# Comando: npx tsx server/services/engine.ts
 
 # Servicio 3 · envío
-CONVERSATION_SERVICE_MODE=split
-CONVERSATION_SERVICE_CAPABILITY=send
-DATABASE_URL_SENDER=postgres://jarvi_emisor:<clave>@<host>:5432/<base>
+DATABASE_URL=<la misma que usa la aplicación>
+AGENT_SETTINGS_ENCRYPTION_KEY=<la misma que usa la aplicación>
+# Comando: npx tsx server/services/sender.ts
 ```
 
-Comandos de arranque:
+La capacidad de cada proceso es intrínseca al archivo que se ejecuta: no se declara con variables. Si el panel apaga una capacidad, el proceso permanece vivo pero inactivo y lo registra en la bitácora. Si el operador define una conexión dedicada (`DATABASE_URL_RECEIVER`, `DATABASE_URL_ENGINE` o `DATABASE_URL_SENDER`), el servicio la utiliza en lugar de la principal.
 
-```text
-npx tsx server/services/receiver.ts
-npx tsx server/services/engine.ts
-npx tsx server/services/sender.ts
-```
+## 6.2 Activación en el panel de configuración
 
-Si una variable dedicada falta, el servicio utiliza `DATABASE_URL`. Si el modo no es `split`, el servicio aislado se niega a arrancar en lugar de operar con las tres capacidades.
+`Configuración › WhatsApp › Activación del servicio conversacional` gobierna el servicio sin variables de entorno:
+
+| Interruptor | Estado inicial | Efecto |
+| --- | --- | --- |
+| Agente JARVI HR | encendido | Genera respuestas y cierra ciclos de información |
+| Despacho de la cola | encendido | Entrega por WhatsApp lo autorizado |
+| Capacidad de recepción | encendido | Registra lo que la persona escribe |
+| Capacidad de razonamiento | encendido | Compone el expediente y verifica la conducta |
+| Capacidad de envío | encendido | Despacha al proveedor |
+| Despliegue | Integrado | Integrado en la aplicación o separado por capacidad |
+| Historial recordado | 12 turnos | Memoria rehidratada en cada turno |
+| Límite de palabras | 90 | Extensión máxima de cada respuesta |
+
+Cada cambio se audita en `audit_log` con el asunto `activation_updated`. El botón «Restaurar valores de fábrica» rellena el formulario con los valores preactivados.
 
 ## 7. Verificación después del despliegue
 
@@ -189,6 +200,12 @@ WITH controles AS (
            CASE WHEN to_regclass('public.conversation_turns') IS NULL THEN 'SELECT 0 AS c'
                 ELSE 'SELECT count(*) AS c FROM conversation_turns' END,
            false, true, '')))[1]::text, '0')
+  UNION ALL
+  SELECT 10, 'Migracion 0024 - activacion preactivada en el panel', '8',
+         COALESCE((xpath('/row/c/text()', query_to_xml(
+           CASE WHEN to_regclass('public.integration_settings') IS NULL THEN 'SELECT 0 AS c'
+                ELSE 'SELECT count(*) AS c FROM integration_settings WHERE provider = ''conversation''' END,
+           false, true, '')))[1]::text, '0')
 )
 SELECT orden, control, esperado, obtenido,
        CASE WHEN orden = 9 THEN 'INFORMATIVO'
@@ -197,17 +214,20 @@ SELECT orden, control, esperado, obtenido,
   FROM controles
 UNION ALL
 SELECT 999, 'GATE GLOBAL', 'sin pendientes',
-       (SELECT count(*)::text || ' control(es) pendiente(s)' FROM controles WHERE orden <= 8 AND obtenido <> esperado),
-       CASE WHEN (SELECT count(*) FROM controles WHERE orden <= 8 AND obtenido <> esperado) = 0
+       (SELECT count(*)::text || ' control(es) pendiente(s)' FROM controles
+         WHERE (orden <= 8 OR orden = 10) AND obtenido <> esperado),
+       CASE WHEN (SELECT count(*) FROM controles
+                   WHERE (orden <= 8 OR orden = 10) AND obtenido <> esperado) = 0
             THEN 'OK' ELSE 'PENDIENTE' END
  ORDER BY orden;
 ```
 
 Lectura del resultado:
 
-- **Filas 1 a 6 en `OK`** ⇒ esquema conversacional completo. Si la fila 5 aparece en `OK` con 0, los roles existen pero sin contraseña asignada: es lo esperado hasta que el operador las defina.
-- **Fila 7** ⇒ mensajes esperando entrega; en régimen estable debe ser `0`.
-- **Fila 8** ⇒ envíos sin confirmación del proveedor; exigen revisión humana, nunca reintento automático.
+- **Filas 1 a 6 y 10 en `OK`** ⇒ esquema conversacional completo y **activación preactivada**. La fila 10 debe mostrar `8` (los ocho interruptores del servicio).
+- **Fila 5** ⇒ si aparece en `OK`, los roles existen aunque todavía no tengan contraseña asignada: es lo esperado hasta que el operador las defina.
+- **Filas 7 y 8** ⇒ cola pendiente y envíos desconocidos; en régimen estable deben ser `0`.
+- **Fila 9** ⇒ informativo: turnos registrados.
 - **Fila 999** ⇒ dictamen. `OK` habilita el despliegue; `PENDIENTE` indica que falta aplicar una migración.
 
 ## 9. Reversión

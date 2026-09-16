@@ -1,4 +1,5 @@
 import { APP_VERSION } from "../../shared/release";
+import { getConversationActivation } from "../conversationActivation";
 import { initializeLangfuseFromDatabase, shutdownLangfuse } from "../observability/langfuse";
 import {
   assertCapability,
@@ -10,9 +11,12 @@ import {
 /**
  * Arranque común de un servicio conversacional aislado.
  *
- * Cada servicio declara su capacidad, abre su propia conexión —con credencial
- * dedicada si el operador la definió en EasyPanel— y ejecuta un único ciclo de
- * trabajo. La capacidad declarada prohibe ejecutar cualquier otra.
+ * La capacidad es **intrínseca al punto de entrada**: `sender.ts` atiende el
+ * envío, `engine.ts` el razonamiento y `receiver.ts` la recepción. No requiere
+ * variables de entorno: la activación se gobierna desde
+ * `Configuración › WhatsApp`, donde la migración `0024` la deja preactivada.
+ * Si el panel apaga el servicio, el proceso permanece vivo pero inactivo y lo
+ * declara en la bitácora.
  */
 type CapabilityPool = NonNullable<ReturnType<typeof createCapabilityPool>>;
 
@@ -27,29 +31,37 @@ export async function startCapabilityService(
   } = {}
 ) {
   assertCapability(capability);
-  const runtime = describeConversationRuntime();
-  if (runtime.mode !== "split") {
-    throw new Error(
-      "El servicio aislado requiere CONVERSATION_SERVICE_MODE=split; sin ese modo la ejecución integrada conserva las tres capacidades."
-    );
-  }
   const pool = createCapabilityPool(capability);
   if (!pool) {
     throw new Error(
-      "Falta la cadena de conexión del servicio conversacional: defina la variable dedicada o DATABASE_URL."
+      "Falta la cadena de conexión: configure DATABASE_URL en el servicio."
     );
   }
   const observability = await initializeLangfuseFromDatabase(pool, {
     release: APP_VERSION,
   });
+  const runtime = describeConversationRuntime();
+  const activation = await getConversationActivation(pool);
+  const active =
+    activation.agentEnabled && activation.capabilities[capability];
   console.log(
-    `[${capability}] JARVI RH ${APP_VERSION} · langfuse=${observability.state} · conexión ${
-      runtime.usesDedicatedConnection ? "dedicada" : "principal"
-    }.`
+    [
+      `[${capability}] JARVI RH ${APP_VERSION}`,
+      `langfuse=${observability.state}`,
+      `conexión=${runtime.usesDedicatedConnection ? "dedicada" : "principal"}`,
+      `panel=${activation.panelReady ? "configurado" : "valores de fábrica"}`,
+      `modo=${activation.serviceMode}`,
+      `estado=${active ? "activo" : "inactivo por configuración"}`,
+    ].join(" · ") + "."
   );
+  if (!active) {
+    console.warn(
+      `[${capability}] Desactivado por configuración; el proceso permanece a la espera.`
+    );
+  }
 
   let stopped = false;
-  if (options.onStart) await options.onStart(pool);
+  if (active && options.onStart) await options.onStart(pool);
 
   const intervalMs = options.intervalMs ?? 2_000;
   let running = false;
@@ -67,7 +79,8 @@ export async function startCapabilityService(
     }
   };
 
-  const timer = options.tick ? setInterval(runOnce, intervalMs) : null;
+  const timer =
+    active && options.tick ? setInterval(runOnce, intervalMs) : null;
   if (timer) void runOnce();
 
   const shutdown = async (signal: NodeJS.Signals) => {
@@ -82,5 +95,5 @@ export async function startCapabilityService(
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
-  return { pool, runOnce, stop: () => shutdown("SIGTERM") };
+  return { pool, runOnce, active, stop: () => shutdown("SIGTERM") };
 }

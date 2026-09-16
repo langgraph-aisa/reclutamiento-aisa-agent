@@ -121,6 +121,12 @@ import { conversationPanelState } from "./conversationPanel";
 import { runConversationTurn } from "./conversationEngine";
 import { dispatchQueuedReplies } from "./conversationOutbox";
 import {
+  conversationActivationAdvisories,
+  DEFAULT_CONVERSATION_ACTIVATION,
+  getConversationActivation,
+  saveConversationActivation,
+} from "./conversationActivation";
+import {
   ASSESSMENT_DELETE_CODE_MAX_ATTEMPTS,
   ASSESSMENT_DELETE_CODE_RESEND_SECONDS,
   ASSESSMENT_DELETE_CODE_TTL_MINUTES,
@@ -5267,6 +5273,44 @@ export const appRouter = router({
     apiChatEndpoints: adminProcedure.query(async () => {
       return getApiChatEndpoints(await getPool());
     }),
+    conversationActivation: adminProcedure.query(async () => {
+      const activation = await getConversationActivation(await getPool());
+      return {
+        ...activation,
+        advisories: conversationActivationAdvisories(activation),
+        defaults: DEFAULT_CONVERSATION_ACTIVATION,
+      };
+    }),
+    saveConversationActivation: adminProcedure
+      .input(
+        z.object({
+          agentEnabled: z.boolean(),
+          serviceMode: z.enum(["single", "split"]),
+          capabilityReceive: z.boolean(),
+          capabilityReason: z.boolean(),
+          capabilitySend: z.boolean(),
+          outboxDispatchEnabled: z.boolean(),
+          memoryTurns: z.number().int().min(4).max(40),
+          responseWordLimit: z.number().int().min(30).max(200),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveConversationActivation(
+            await requirePool(),
+            input,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar la activación del servicio conversacional."
+            ),
+          });
+        }
+      }),
     saveApiChatEndpoints: adminProcedure
       .input(
         z.object({

@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { ApiChatDeliveryUnknownError, sendApiChatText } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
 import { assertCapability } from "./conversationRuntime";
+import { getConversationActivation } from "./conversationActivation";
 import { isUndefinedTableError } from "./governanceObservability";
 import { withLangfuseObservation } from "./observability/langfuse";
 
@@ -36,6 +37,11 @@ export async function enqueueAgentReply(
   }
 ) {
   assertCapability("reason");
+  const activation = await getConversationActivation(pool);
+  if (!activation.capabilities.reason)
+    throw new Error(
+      "La capacidad de razonamiento está desactivada por configuración."
+    );
   const text = input.text.trim();
   if (!text) throw new Error("La respuesta del agente está vacía.");
   if (text.length > 3_000)
@@ -126,6 +132,9 @@ export async function dispatchQueuedReplies(
   options: { limit?: number; dependencies?: OutboxDependencies } = {}
 ) {
   assertCapability("send");
+  const activation = await getConversationActivation(pool);
+  if (!activation.agentEnabled || !activation.outboxDispatchEnabled) return [];
+  if (!activation.capabilities.send) return [];
   const limit = Math.min(
     Math.max(1, options.limit ?? AGENT_OUTBOX_BATCH_LIMIT),
     AGENT_OUTBOX_BATCH_LIMIT

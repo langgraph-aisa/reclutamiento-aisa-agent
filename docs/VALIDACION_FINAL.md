@@ -1,10 +1,10 @@
-# Validación final · JARVI RH 2.0.143
+# Validación final · JARVI RH 2.0.144
 
 Fecha de ejecución: 2026-09-14. Rama objetivo: `main`.
 
 ## Alcance verificado
 
-Esta hoja registra el **administrador de endpoints por capacidad conversacional** y, bajo regresión, el despliegue separado por capacidad, la memoria conversacional con doble RAG, la **solicitud automática de CV**, el módulo **Gobierno, Observabilidad y Monitoreo** y la línea base verificable de **ApiChat**. Cada endpoint del catálogo oficial declara la capacidad que atiende (`receive`, `send`, `moderation`), sus consumidores (`recepcion`, `bandeja`, `agente`, `moderacion`), si es indispensable para el agente y el efecto operativo literal de apagarlo; `computeApiChatCapabilityReadiness` publica la preparación por capacidad —Recepción, Razonamiento y Envío— con el endpoint exigido y el modo declarado, y `apiChatCapabilityAdvisories` emite avisos en tratamiento formal. El razonamiento declara que no consume endpoints del proveedor: apagar un endpoint de envío no lo detiene, pero impide entregar lo que encole. No hay cambio de esquema y los interruptores guardados conservan su valor.
+Esta hoja registra la **activación del servicio conversacional en el panel de configuración** —preactivada por la migración `0024`, sin variables de entorno nuevas y con auditoría en `audit_log`— y, bajo regresión, el administrador de endpoints por capacidad, el despliegue separado, la memoria conversacional con doble RAG, la **solicitud automática de CV**, el módulo **Gobierno, Observabilidad y Monitoreo** y la línea base verificable de **ApiChat**. Cada endpoint del catálogo oficial declara la capacidad que atiende (`receive`, `send`, `moderation`), sus consumidores (`recepcion`, `bandeja`, `agente`, `moderacion`), si es indispensable para el agente y el efecto operativo literal de apagarlo; `computeApiChatCapabilityReadiness` publica la preparación por capacidad —Recepción, Razonamiento y Envío— con el endpoint exigido y el modo declarado, y `apiChatCapabilityAdvisories` emite avisos en tratamiento formal. El razonamiento declara que no consume endpoints del proveedor: apagar un endpoint de envío no lo detiene, pero impide entregar lo que encole. No hay cambio de esquema y los interruptores guardados conservan su valor.
 
 Se conserva bajo regresión el alcance de 2.0.142: la cola `conversation_outbox` con reclamo `FOR UPDATE SKIP LOCKED`, los esquemas de capacidad, los roles sin contraseña y la vista `conversation_reconciliation`; y el de 2.0.141: hilo propio en PostgreSQL, contexto de cuatro capas y conducta verificable antes de cualquier envío. La guía [GUIA_EASYPANEL_CONVERSACION_2.0.142.md](GUIA_EASYPANEL_CONVERSACION_2.0.142.md) incorpora la consulta única de verificación de la base y las variables por servicio.
 
@@ -14,18 +14,19 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.143` |
-| Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 108 archivos       |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.144` |
+| Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 109 archivos       |
 | Despacho automático de CV (`server/publicJobs.test.ts`) | Aprobado · 18 de 18 pruebas |
 | Servicio conversacional (`server/conversationOutbox.test.ts`) | Aprobado · 7 de 7 pruebas |
+| Activación por panel (`server/conversationActivation.test.ts`) | Aprobado · 7 de 7 pruebas |
 | Modo de ejecución (`server/conversationRuntime.test.ts`) | Aprobado · 4 de 4 pruebas |
 | Catálogo de endpoints (`server/apiChatSettings.test.ts`) | Aprobado · 16 de 16 pruebas |
 | Fronteras por capacidad (`server/boundaries.test.ts`) | Aprobado · 11 de 11 pruebas |
 | Contexto y conducta (`server/conversationContext.test.ts`, `server/conversationPersona.test.ts`) | Aprobado · 13 de 13 pruebas |
 | Proyección única del RAG (`server/knowledgeContext.test.ts`) | Aprobado · 5 de 5 pruebas |
-| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.143 → 2.0.144` |
-| Caja negra (`pnpm test:black-box`)                 | Aprobado · 19 de 19 pruebas   |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 279 de 279 pruebas |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.144 → 2.0.145` |
+| Caja negra (`pnpm test:black-box`)                 | Aprobado · 20 de 20 pruebas   |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 287 de 287 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |
 | Migración conversacional (`0022_conversational_agent.sql`) | Aprobado · idempotente, sin secretos ni datos personales |

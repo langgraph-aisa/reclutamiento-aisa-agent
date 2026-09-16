@@ -117,6 +117,44 @@ export default function Config() {
     Record<string, boolean>
   >({});
 
+  const conversationActivation = trpc.config.conversationActivation.useQuery();
+  const saveConversationActivation =
+    trpc.config.saveConversationActivation.useMutation({
+      onSuccess: async () => {
+        await Promise.all([
+          conversationActivation.refetch(),
+          apiChatEndpoints.refetch(),
+        ]);
+        toast.success("Activación del servicio conversacional guardada");
+      },
+      onError: error => toast.error(error.message),
+    });
+  const [activationDraft, setActivationDraft] = useState<{
+    agentEnabled: boolean;
+    serviceMode: "single" | "split";
+    capabilityReceive: boolean;
+    capabilityReason: boolean;
+    capabilitySend: boolean;
+    outboxDispatchEnabled: boolean;
+    memoryTurns: number;
+    responseWordLimit: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const current = conversationActivation.data;
+    if (!current) return;
+    setActivationDraft({
+      agentEnabled: current.agentEnabled,
+      serviceMode: current.serviceMode,
+      capabilityReceive: current.capabilities.receive,
+      capabilityReason: current.capabilities.reason,
+      capabilitySend: current.capabilities.send,
+      outboxDispatchEnabled: current.outboxDispatchEnabled,
+      memoryTurns: current.memoryTurns,
+      responseWordLimit: current.responseWordLimit,
+    });
+  }, [conversationActivation.data]);
+
   useEffect(() => {
     if (!endpointCatalog) return;
     const next: Record<string, boolean> = {};
@@ -541,6 +579,236 @@ export default function Config() {
                     configuradas y el modo sea API nativa.
                   </p>
                 ) : null}
+                <div className="mt-3 rounded-2xl border border-border/70 bg-muted/30 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-xs font-semibold text-primary">
+                      Activación del servicio conversacional
+                    </h4>
+                    <Badge
+                      variant="outline"
+                      className="rounded-full text-[10px]"
+                    >
+                      {conversationActivation.data?.panelReady
+                        ? "Configurado en el panel"
+                        : "Preactivado por valores de fábrica"}
+                    </Badge>
+                    {conversationActivation.data?.environmentOverride ? (
+                      <Badge
+                        variant="outline"
+                        className="rounded-full border-amber-300 text-[10px] text-amber-900"
+                      >
+                        Anulación por variable de entorno
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                    La activación vive en esta configuración y no en variables de
+                    entorno: la migración de la versión la deja encendida y cada
+                    cambio queda auditado.
+                  </p>
+                  {activationDraft ? (
+                    <>
+                      <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                        <ActivationToggle
+                          label="Agente JARVI HR"
+                          description="Genera respuestas y cierra ciclos de información."
+                          checked={activationDraft.agentEnabled}
+                          onCheckedChange={value =>
+                            setActivationDraft(current =>
+                              current ? { ...current, agentEnabled: value } : current
+                            )
+                          }
+                        />
+                        <ActivationToggle
+                          label="Despacho de la cola"
+                          description="Despacha por WhatsApp las respuestas autorizadas."
+                          checked={activationDraft.outboxDispatchEnabled}
+                          onCheckedChange={value =>
+                            setActivationDraft(current =>
+                              current
+                                ? { ...current, outboxDispatchEnabled: value }
+                                : current
+                            )
+                          }
+                        />
+                        <ActivationToggle
+                          label="Capacidad de recepción"
+                          description="Registra lo que la persona escribe por el canal."
+                          checked={activationDraft.capabilityReceive}
+                          onCheckedChange={value =>
+                            setActivationDraft(current =>
+                              current
+                                ? { ...current, capabilityReceive: value }
+                                : current
+                            )
+                          }
+                        />
+                        <ActivationToggle
+                          label="Capacidad de razonamiento"
+                          description="Compone el expediente y verifica la conducta."
+                          checked={activationDraft.capabilityReason}
+                          onCheckedChange={value =>
+                            setActivationDraft(current =>
+                              current
+                                ? { ...current, capabilityReason: value }
+                                : current
+                            )
+                          }
+                        />
+                        <ActivationToggle
+                          label="Capacidad de envío"
+                          description="Despacha al proveedor lo que el motor encola."
+                          checked={activationDraft.capabilitySend}
+                          onCheckedChange={value =>
+                            setActivationDraft(current =>
+                              current
+                                ? { ...current, capabilitySend: value }
+                                : current
+                            )
+                          }
+                        />
+                        <div className="rounded-xl border border-border/70 bg-card p-2.5">
+                          <p className="text-xs font-semibold text-primary">
+                            Despliegue
+                          </p>
+                          <Select
+                            value={activationDraft.serviceMode}
+                            onValueChange={value =>
+                              setActivationDraft(current =>
+                                current
+                                  ? {
+                                      ...current,
+                                      serviceMode: value as "single" | "split",
+                                    }
+                                  : current
+                              )
+                            }
+                          >
+                            <SelectTrigger className="mt-1 h-8 rounded-lg text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="single">
+                                Integrado en la aplicación
+                              </SelectItem>
+                              <SelectItem value="split">
+                                Separado por capacidad
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                            En modo separado el barrido integrado se detiene y
+                            los servicios dedicados atienden cada capacidad.
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-border/70 bg-card p-2.5">
+                          <Label className="text-xs font-semibold text-primary">
+                            Historial recordado (turnos)
+                          </Label>
+                          <Input
+                            type="number"
+                            min={4}
+                            max={40}
+                            value={activationDraft.memoryTurns}
+                            onChange={event =>
+                              setActivationDraft(current =>
+                                current
+                                  ? {
+                                      ...current,
+                                      memoryTurns: Number(event.target.value),
+                                    }
+                                  : current
+                              )
+                            }
+                            className="mt-1 h-8 rounded-lg text-xs"
+                          />
+                        </div>
+                        <div className="rounded-xl border border-border/70 bg-card p-2.5">
+                          <Label className="text-xs font-semibold text-primary">
+                            Límite de palabras por respuesta
+                          </Label>
+                          <Input
+                            type="number"
+                            min={30}
+                            max={200}
+                            value={activationDraft.responseWordLimit}
+                            onChange={event =>
+                              setActivationDraft(current =>
+                                current
+                                  ? {
+                                      ...current,
+                                      responseWordLimit: Number(event.target.value),
+                                    }
+                                  : current
+                              )
+                            }
+                            className="mt-1 h-8 rounded-lg text-xs"
+                          />
+                        </div>
+                      </div>
+                      {(conversationActivation.data?.advisories ?? []).length ? (
+                        <ul className="mt-2 space-y-1">
+                          {(conversationActivation.data?.advisories ?? []).map(
+                            advisory => (
+                              <li
+                                key={advisory}
+                                className="text-[11px] leading-4 text-amber-900"
+                              >
+                                · {advisory}
+                              </li>
+                            )
+                          )}
+                        </ul>
+                      ) : null}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="rounded-full"
+                          disabled={
+                            saveConversationActivation.isPending ||
+                            conversationActivation.isLoading
+                          }
+                          onClick={() =>
+                            saveConversationActivation.mutate(activationDraft)
+                          }
+                        >
+                          {saveConversationActivation.isPending ? (
+                            <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="mr-2 h-4 w-4" />
+                          )}
+                          Guardar activación
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="rounded-full"
+                          onClick={() => {
+                            const defaults = conversationActivation.data?.defaults;
+                            if (!defaults) return;
+                            setActivationDraft({
+                              agentEnabled: defaults.agentEnabled,
+                              serviceMode: defaults.serviceMode,
+                              capabilityReceive: defaults.capabilityReceive,
+                              capabilityReason: defaults.capabilityReason,
+                              capabilitySend: defaults.capabilitySend,
+                              outboxDispatchEnabled:
+                                defaults.outboxDispatchEnabled,
+                              memoryTurns: defaults.memoryTurns,
+                              responseWordLimit: defaults.responseWordLimit,
+                            });
+                          }}
+                        >
+                          Restaurar valores de fábrica
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Cargando la activación vigente.
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="rounded-2xl border border-border/70 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1220,6 +1488,34 @@ function Role({
         <p className="font-semibold text-primary">{title}</p>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">{text}</p>
       </div>
+    </div>
+  );
+}
+
+function ActivationToggle({
+  label,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-border/70 bg-card p-2.5">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-primary">{label}</p>
+        <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+          {description}
+        </p>
+      </div>
+      <Switch
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        aria-label={label}
+      />
     </div>
   );
 }

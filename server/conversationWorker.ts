@@ -1,7 +1,8 @@
 import type { Pool } from "pg";
 import { runConversationTurn } from "./conversationEngine";
 import { dispatchQueuedReplies } from "./conversationOutbox";
-import { assertCapability, conversationServiceMode } from "./conversationRuntime";
+import { assertCapability } from "./conversationRuntime";
+import { getConversationActivation } from "./conversationActivation";
 
 /**
  * Barrido conversacional.
@@ -88,14 +89,6 @@ export function startConversationWorker(
   poolProvider: () => Promise<Pool | null>,
   options: { intervalMs?: number } = {}
 ) {
-  // En despliegue separado el razonamiento y el envío los ejecutan los
-  // servicios dedicados; el proceso integrado no duplica el barrido.
-  if (conversationServiceMode() === "split") {
-    console.log(
-      "[ConversationWorker] Modo separado: el barrido lo ejecutan los servicios por capacidad."
-    );
-    return () => undefined;
-  }
   const intervalMs = options.intervalMs ?? CONVERSATION_WORKER_INTERVAL_MS;
   const timer = setInterval(async () => {
     if (running) return;
@@ -103,6 +96,10 @@ export function startConversationWorker(
     try {
       const pool = await poolProvider();
       if (!pool) return;
+      const activation = await getConversationActivation(pool);
+      // En modo separado el razonamiento y el envío los ejecutan los servicios
+      // dedicados; el proceso integrado no duplica el barrido.
+      if (activation.serviceMode === "split") return;
       await runConversationSweep(pool);
     } catch (error) {
       console.warn(

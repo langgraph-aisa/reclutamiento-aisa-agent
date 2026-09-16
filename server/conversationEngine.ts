@@ -27,6 +27,7 @@ import {
 } from "./conversationContext";
 import { enqueueAgentReply } from "./conversationOutbox";
 import { assertCapability } from "./conversationRuntime";
+import { getConversationActivation } from "./conversationActivation";
 import { observeOpenAIClient, withLangfuseObservation } from "./observability/langfuse";
 import {
   assertNoAutomatedSalaryOffer,
@@ -345,6 +346,17 @@ export async function runConversationTurn(
   }
 ): Promise<ConversationTurnOutcome> {
   assertCapability("reason");
+  const activation = await getConversationActivation(pool);
+  if (!activation.agentEnabled)
+    return {
+      status: "skipped",
+      reason: "El agente conversacional está desactivado por configuración.",
+    };
+  if (!activation.capabilities.reason)
+    return {
+      status: "skipped",
+      reason: "La capacidad de razonamiento está desactivada por configuración.",
+    };
   const state = await loadConversationState(pool, input.conversationId);
   if (!state) return { status: "skipped", reason: "La conversación no existe." };
   if (!state.agent_enabled || state.human_takeover)
