@@ -19,8 +19,3 @@ VALUES
   ('conversation', 'memory_turns',             '12',     false, now()),
   ('conversation', 'response_word_limit',      '90',     false, now())
 ON CONFLICT (provider, setting_key) DO NOTHING;
-
--- El catálogo queda declarado para la interfaz: los valores anteriores son los
--- únicos interruptores del servicio conversacional y todos nacen encendidos.
-COMMENT ON TABLE integration_settings IS
-  'Preferencias y secretos por proveedor. El proveedor conversation conserva la activación preactivada del servicio conversacional.';

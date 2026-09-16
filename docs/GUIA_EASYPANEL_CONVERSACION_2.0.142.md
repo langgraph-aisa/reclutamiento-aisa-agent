@@ -14,13 +14,17 @@ Esta guía describe el **esquema final** del servicio conversacional y los pasos
 
 ## 2. Orden de migraciones
 
-Se aplican con el ejecutor SQL de EasyPanel, en este orden estricto:
+**Un solo archivo deja todo listo:** `database/005_servicio_conversacional_listo.sql`. Reúne las migraciones `0022`, `0023` y `0024`, es idempotente y termina con la verificación autocertificada; se genera con `pnpm deploy:sql` y se validó en PostgreSQL 17 desde cero con `GATE GLOBAL OK`.
+
+Procedimiento: abra el archivo, copie todo su contenido y pégelo en el ejecutor SQL (dbgate o EasyPanel); ejecútelo una vez y lea el dictamen final. Todas las filas deben quedar en `OK` y el `GATE GLOBAL` en `OK`.
+
+Si prefiere aplicarlo por partes, el orden estricto es:
 
 1. `drizzle/migrations/0022_conversational_agent.sql`
 2. `drizzle/migrations/0023_conversation_service_split.sql`
 3. `drizzle/migrations/0024_conversation_activation.sql`
 
-Las tres son idempotentes: repetir su ejecución no duplica objetos ni pierde datos. Ninguna contiene credenciales. La tercera **preactiva** el servicio conversacional en el panel de configuración, de modo que no hace falta agregar ninguna variable de entorno.
+Las tres son idempotentes y ninguna contiene credenciales. La tercera **preactiva** el servicio conversacional en el panel de configuración, de modo que no hace falta agregar ninguna variable de entorno.
 
 ## 3. Contraseñas de los roles
 

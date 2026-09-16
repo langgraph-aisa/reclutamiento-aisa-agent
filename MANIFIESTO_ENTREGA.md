@@ -7,7 +7,7 @@
 
 1. Cargar este ZIP como servicio App en EasyPanel con el contenido ubicado en la raíz.
 2. Configurar las variables descritas en `docs/IMPLEMENTACION.md`.
-3. Ejecutar las migraciones `0000` a `0024` en orden.
+3. Ejecutar `database/005_servicio_conversacional_listo.sql` (reúne `0022`, `0023` y `0024` y verifica al final).
 4. Ejecutar `database/001_functions.sql`, `database/002_ine_catalog_seed.sql` y `database/002_local_admin.sql`.
 5. Configurar `pnpm install --frozen-lockfile`, `pnpm build` y `pnpm start`.
 6. Ingresar con `adminit@aisa.com.gt` solicitando el código de correo.
@@ -34,6 +34,10 @@ La migración `0022_conversational_agent.sql` habilita la memoria del agente JAR
 ## Despliegue separado 2.0.142
 
 La migración `0023_conversation_service_split.sql` crea la cola `conversation_outbox`, los esquemas `wa_receiver`, `wa_sender` y `wa_engine`, los roles `jarvi_receptor`, `jarvi_emisor` y `jarvi_motor` sin contraseña, y la vista `conversation_reconciliation`. El despliegue separado se elige en el panel de configuración y no exige variables nuevas: solo `DATABASE_URL` y la clave de cifrado del agente. El procedimiento completo está en [docs/GUIA_EASYPANEL_CONVERSACION_2.0.142.md](docs/GUIA_EASYPANEL_CONVERSACION_2.0.142.md), con la **consulta única de verificación** de la base; sin `0023` el despliegue conserva el modo integrado.
+
+## Despliegue en un solo paso 2.0.145
+
+`database/005_servicio_conversacional_listo.sql` reúne las migraciones `0022`, `0023` y `0024` y termina con la verificación autocertificada: se pega una sola vez en el ejecutor SQL y todas las filas deben quedar en `OK`. Es idempotente y se genera con `pnpm deploy:sql`. Validado en PostgreSQL 17 desde cero con `GATE GLOBAL OK`.
 
 ## Activación por configuración 2.0.144
 

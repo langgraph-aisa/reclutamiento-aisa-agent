@@ -5,6 +5,7 @@ import { auditFormalSpanish } from "../scripts/verify-formal-spanish.mjs";
 import { auditPublicCopyControls } from "../scripts/verify-public-copy.mjs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -70,8 +71,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.144");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.144");
+    expect(APP_VERSION).toBe("2.0.145");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.145");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -833,7 +834,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.144");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.145");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -842,7 +843,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.144");
+    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.145");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.142");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.141");
@@ -957,7 +958,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.144");
+    expect(governance).toContain("Alcance candidato 2.0.145");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -1056,5 +1057,51 @@ describe("black-box release contract", () => {
     expect(blackBox).toContain("BN-ACT-01");
     expect(blackBox).toContain("BN-ACT-12");
     expect(guide).toContain("No se requiere ninguna variable de entorno nueva");
+  });
+
+  it("publica el script único de despliegue sincronizado con las migraciones", () => {
+    // El generador falla si el artefacto quedó desactualizado.
+    expect(() =>
+      execFileSync(
+        "node",
+        ["scripts/build-conversation-deployment-sql.mjs", "--check"],
+        { cwd: path.resolve("."), stdio: "pipe" }
+      )
+    ).not.toThrow();
+
+    const deploy = fs.readFileSync(
+      path.resolve("database/005_servicio_conversacional_listo.sql"),
+      "utf8"
+    );
+    const blackBox = fs.readFileSync(
+      path.resolve(`docs/PRUEBAS_CAJA_NEGRA_${APP_VERSION}.md`),
+      "utf8"
+    );
+    const guide = fs.readFileSync(
+      path.resolve("docs/GUIA_EASYPANEL_CONVERSACION_2.0.142.md"),
+      "utf8"
+    );
+    const manifest = fs.readFileSync(
+      path.resolve("MANIFIESTO_ENTREGA.md"),
+      "utf8"
+    );
+
+    // Las tres migraciones y la verificación autocertificada viajan juntas.
+    expect(deploy).toContain("Origen: drizzle/migrations/0022_conversational_agent.sql");
+    expect(deploy).toContain("Origen: drizzle/migrations/0023_conversation_service_split.sql");
+    expect(deploy).toContain("Origen: drizzle/migrations/0024_conversation_activation.sql");
+    expect(deploy).toContain("CREATE TABLE IF NOT EXISTS conversation_outbox");
+    expect(deploy).toContain("INSERT INTO integration_settings");
+    expect(deploy).toContain("WITH controles AS (");
+    expect(deploy).toContain("GATE GLOBAL");
+    expect(deploy).toContain("PASSWORD NULL");
+    expect(deploy).not.toContain("PASSWORD '");
+    expect(deploy).toContain("insufficient_privilege");
+
+    // Los documentos apuntan al script único.
+    expect(blackBox).toContain("BN-READY-01");
+    expect(blackBox).toContain("005_servicio_conversacional_listo.sql");
+    expect(guide).toContain("005_servicio_conversacional_listo.sql");
+    expect(manifest).toContain("005_servicio_conversacional_listo.sql");
   });
 });

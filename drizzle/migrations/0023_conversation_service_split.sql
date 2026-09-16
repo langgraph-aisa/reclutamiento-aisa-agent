@@ -175,48 +175,56 @@ SELECT conv.id AS conversation_id,
   ) cycles ON true;
 
 -- 5) Roles de privilegio mínimo. La contraseña la asigna el operador en EasyPanel.
-DO $$
+--    El bloque tolera un usuario de base sin privilegio de administración: en ese
+--    caso advierte y continúa, de modo que el despliegue nunca queda a medias.
+DO $grants$
+DECLARE
+  stmt text;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jarvi_receptor') THEN
-    CREATE ROLE jarvi_receptor LOGIN PASSWORD NULL;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jarvi_emisor') THEN
-    CREATE ROLE jarvi_emisor LOGIN PASSWORD NULL;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jarvi_motor') THEN
-    CREATE ROLE jarvi_motor LOGIN PASSWORD NULL;
-  END IF;
-END $$;
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jarvi_receptor') THEN
+      EXECUTE 'CREATE ROLE jarvi_receptor LOGIN PASSWORD NULL';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jarvi_emisor') THEN
+      EXECUTE 'CREATE ROLE jarvi_emisor LOGIN PASSWORD NULL';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jarvi_motor') THEN
+      EXECUTE 'CREATE ROLE jarvi_motor LOGIN PASSWORD NULL';
+    END IF;
+  EXCEPTION WHEN insufficient_privilege THEN
+    RAISE WARNING 'JARVI RH: sin privilegio para crear los roles por capacidad; el servicio opera con la conexión principal.';
+  END;
 
-GRANT USAGE ON SCHEMA wa_receiver TO jarvi_receptor;
-GRANT USAGE ON SCHEMA wa_sender TO jarvi_emisor;
-GRANT USAGE ON SCHEMA wa_engine TO jarvi_motor;
-
--- La recepción lee su superficie y escribe únicamente mensajes entrantes.
-GRANT SELECT ON wa_receiver.inbound_conversations TO jarvi_receptor;
-GRANT SELECT, INSERT ON conversation_messages TO jarvi_receptor;
-GRANT SELECT, INSERT, UPDATE ON conversation_events TO jarvi_receptor;
-GRANT INSERT ON inbound_message_quarantine TO jarvi_receptor;
-
--- El emisor administra exclusivamente la cola de salida y la confirmación.
-GRANT SELECT ON wa_sender.pending_outbox TO jarvi_emisor;
-GRANT SELECT, INSERT, UPDATE ON conversation_outbox TO jarvi_emisor;
-GRANT SELECT, UPDATE ON conversation_messages TO jarvi_emisor;
-GRANT SELECT, UPDATE ON conversations TO jarvi_emisor;
-GRANT SELECT ON applications, candidates TO jarvi_emisor;
-
--- El motor lee contexto y memoria, y registra turnos y ciclos.
-GRANT SELECT ON wa_engine.conversation_context,
-                wa_engine.open_cycles,
-                wa_engine.personal_knowledge TO jarvi_motor;
-GRANT SELECT, INSERT, UPDATE ON conversation_turns TO jarvi_motor;
-GRANT SELECT, INSERT, UPDATE ON conversation_cycles TO jarvi_motor;
-GRANT SELECT, INSERT, UPDATE ON conversation_summaries TO jarvi_motor;
-GRANT SELECT, INSERT ON candidate_knowledge_notes TO jarvi_motor;
-GRANT SELECT, INSERT ON conversation_outbox TO jarvi_motor;
-GRANT SELECT, INSERT ON conversation_messages TO jarvi_motor;
-GRANT SELECT, UPDATE ON conversations TO jarvi_motor;
-GRANT SELECT ON applications, candidates, job_positions TO jarvi_motor;
-
--- La reconciliación es de lectura para operación y auditoría.
-GRANT SELECT ON conversation_reconciliation TO jarvi_motor, jarvi_emisor;
+  FOREACH stmt IN ARRAY ARRAY[
+    'GRANT USAGE ON SCHEMA wa_receiver TO jarvi_receptor',
+    'GRANT USAGE ON SCHEMA wa_sender TO jarvi_emisor',
+    'GRANT USAGE ON SCHEMA wa_engine TO jarvi_motor',
+    'GRANT SELECT ON wa_receiver.inbound_conversations TO jarvi_receptor',
+    'GRANT SELECT, INSERT ON conversation_messages TO jarvi_receptor',
+    'GRANT SELECT, INSERT, UPDATE ON conversation_events TO jarvi_receptor',
+    'GRANT INSERT ON inbound_message_quarantine TO jarvi_receptor',
+    'GRANT SELECT ON wa_sender.pending_outbox TO jarvi_emisor',
+    'GRANT SELECT, INSERT, UPDATE ON conversation_outbox TO jarvi_emisor',
+    'GRANT SELECT, UPDATE ON conversation_messages TO jarvi_emisor',
+    'GRANT SELECT, UPDATE ON conversations TO jarvi_emisor',
+    'GRANT SELECT ON applications, candidates TO jarvi_emisor',
+    'GRANT SELECT ON wa_engine.conversation_context, wa_engine.open_cycles, wa_engine.personal_knowledge TO jarvi_motor',
+    'GRANT SELECT, INSERT, UPDATE ON conversation_turns TO jarvi_motor',
+    'GRANT SELECT, INSERT, UPDATE ON conversation_cycles TO jarvi_motor',
+    'GRANT SELECT, INSERT, UPDATE ON conversation_summaries TO jarvi_motor',
+    'GRANT SELECT, INSERT ON candidate_knowledge_notes TO jarvi_motor',
+    'GRANT SELECT, INSERT ON conversation_outbox TO jarvi_motor',
+    'GRANT SELECT, INSERT ON conversation_messages TO jarvi_motor',
+    'GRANT SELECT, UPDATE ON conversations TO jarvi_motor',
+    'GRANT SELECT ON applications, candidates, job_positions TO jarvi_motor',
+    'GRANT SELECT ON conversation_reconciliation TO jarvi_motor, jarvi_emisor'
+  ]
+  LOOP
+    BEGIN
+      EXECUTE stmt;
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE WARNING 'JARVI RH: privilegio insuficiente para ejecutar %.', stmt;
+    END;
+  END LOOP;
+END
+$grants$;
