@@ -78,7 +78,29 @@ El barrido integrado ejecuta razonamiento y envío en el mismo proceso, con las 
 
 ## 6. Modo separado (tres servicios)
 
-Cada servicio se despliega como App independiente en EasyPanel, con el mismo repositorio y distinto comando de arranque.
+Cada servicio se despliega como App independiente en EasyPanel, con el mismo repositorio y distinto comando de arranque. La tabla indica qué variable corresponde a cada servicio.
+
+| Variable | `jarvi-receptor` | `jarvi-motor` | `jarvi-emisor` | Para qué sirve |
+| --- | --- | --- | --- | --- |
+| `CONVERSATION_SERVICE_MODE` | `split` | `split` | `split` | Declara el despliegue separado; sin este valor el servicio se niega a arrancar |
+| `CONVERSATION_SERVICE_CAPABILITY` | `receive` | `reason` | `send` | Declara la única capacidad que ese proceso puede ejecutar |
+| `DATABASE_URL_RECEIVER` | obligatoria | — | — | Conexión con el rol `jarvi_receptor` |
+| `DATABASE_URL_ENGINE` | — | obligatoria | — | Conexión con el rol `jarvi_motor` |
+| `DATABASE_URL_SENDER` | — | — | obligatoria | Conexión con el rol `jarvi_emisor` |
+| `DATABASE_URL` | recomendada | recomendada | recomendada | Respaldo y lectura del resto del esquema cuando no hay conexión dedicada |
+| `AGENT_SETTINGS_ENCRYPTION_KEY` | — | obligatoria | obligatoria | Descifra la credencial de OpenAI (motor) y de ApiChat (emisor) |
+| `CONVERSATION_SERVICE_INTERVAL_MS` | opcional (2000) | opcional (2000) | opcional (2000) | Frecuencia del ciclo de trabajo, en milisegundos |
+| Dominio público | no asignar | no asignar | no asignar | Son procesos de trabajo; no reciben tráfico web |
+
+Cadenas de conexión de ejemplo (sustituya host, base y clave):
+
+```text
+DATABASE_URL_RECEIVER=postgres://jarvi_receptor:CLAVE_RECEPTOR@HOST:5432/BASE
+DATABASE_URL_ENGINE=postgres://jarvi_motor:CLAVE_MOTOR@HOST:5432/BASE
+DATABASE_URL_SENDER=postgres://jarvi_emisor:CLAVE_EMISOR@HOST:5432/BASE
+```
+
+## 6.1 Variables completas por servicio (texto para copiar)
 
 ```text
 # Servicio 1 · recepción
@@ -116,7 +138,79 @@ Si una variable dedicada falta, el servicio utiliza `DATABASE_URL`. Si el modo n
 5. Detener el servicio de envío y comprobar que la recepción y el razonamiento continúan; la cola se acumula sin pérdida.
 6. Detener el servicio de razonamiento y comprobar que la recepción continúa registrando y el envío entrega lo ya encolado.
 
-## 8. Reversión
+## 8. Consulta única de verificación (DB gate)
+
+Una sola consulta comprueba el estado de la base conversacional. Devuelve una fila por control con `OK` o `PENDIENTE`, y una fila final con el dictamen. Se puede ejecutar antes y después de aplicar las migraciones, incluso si ninguna está aplicada.
+
+```sql
+WITH controles AS (
+  SELECT 1 AS orden, 'Migracion 0022 - tablas del agente' AS control, '6' AS esperado,
+         (SELECT count(*)::text FROM (VALUES ('conversation_turns'),('conversation_summaries'),('conversation_cycles'),('conversation_events'),('candidate_knowledge_notes'),('conversation_outbox')) AS t(nombre)
+           WHERE to_regclass('public.'||t.nombre) IS NOT NULL) AS obtenido
+  UNION ALL
+  SELECT 2, 'Migracion 0022 - columnas de conversations', '4',
+         (SELECT count(*)::text FROM (VALUES ('conversation_stage'),('last_agent_turn_at'),('last_agent_error'),('agent_turn_count')) AS c(nombre)
+           WHERE EXISTS (SELECT 1 FROM information_schema.columns col
+                          WHERE col.table_schema='public' AND col.table_name='conversations' AND col.column_name=c.nombre))
+  UNION ALL
+  SELECT 3, 'Migracion 0023 - esquemas por capacidad', '3',
+         (SELECT count(*)::text FROM information_schema.schemata
+           WHERE schema_name IN ('wa_receiver','wa_sender','wa_engine'))
+  UNION ALL
+  SELECT 4, 'Migracion 0023 - vistas de capacidad y reconciliacion', '6',
+         (SELECT count(*)::text FROM information_schema.views
+           WHERE (table_schema='wa_receiver' AND table_name='inbound_conversations')
+              OR (table_schema='wa_sender' AND table_name='pending_outbox')
+              OR (table_schema='wa_engine' AND table_name IN ('conversation_context','open_cycles','personal_knowledge'))
+              OR (table_schema='public' AND table_name='conversation_reconciliation'))
+  UNION ALL
+  SELECT 5, 'Migracion 0023 - roles de capacidad', '3',
+         (SELECT count(*)::text FROM pg_roles
+           WHERE rolname IN ('jarvi_receptor','jarvi_emisor','jarvi_motor'))
+  UNION ALL
+  SELECT 6, 'Indices de idempotencia y de cola', '3',
+         (SELECT count(*)::text FROM pg_indexes
+           WHERE schemaname='public' AND indexname IN ('conversation_events_event_uq','conversation_outbox_message_uq','conversation_summaries_version_uq'))
+  UNION ALL
+  SELECT 7, 'Cola pendiente de entrega (requiere 0023)', '0',
+         COALESCE((xpath('/row/c/text()', query_to_xml(
+           CASE WHEN to_regclass('public.conversation_outbox') IS NULL THEN 'SELECT 0 AS c'
+                ELSE 'SELECT count(*) AS c FROM conversation_outbox WHERE status IN (''queued'',''sending'')' END,
+           false, true, '')))[1]::text, '0')
+  UNION ALL
+  SELECT 8, 'Envios desconocidos con revision pendiente (requiere 0023)', '0',
+         COALESCE((xpath('/row/c/text()', query_to_xml(
+           CASE WHEN to_regclass('public.conversation_outbox') IS NULL THEN 'SELECT 0 AS c'
+                ELSE 'SELECT count(*) AS c FROM conversation_outbox WHERE status = ''unknown''' END,
+           false, true, '')))[1]::text, '0')
+  UNION ALL
+  SELECT 9, 'Turnos registrados con huella de contexto (informativo)', 'informativo',
+         COALESCE((xpath('/row/c/text()', query_to_xml(
+           CASE WHEN to_regclass('public.conversation_turns') IS NULL THEN 'SELECT 0 AS c'
+                ELSE 'SELECT count(*) AS c FROM conversation_turns' END,
+           false, true, '')))[1]::text, '0')
+)
+SELECT orden, control, esperado, obtenido,
+       CASE WHEN orden = 9 THEN 'INFORMATIVO'
+            WHEN obtenido = esperado THEN 'OK'
+            ELSE 'PENDIENTE' END AS estado
+  FROM controles
+UNION ALL
+SELECT 999, 'GATE GLOBAL', 'sin pendientes',
+       (SELECT count(*)::text || ' control(es) pendiente(s)' FROM controles WHERE orden <= 8 AND obtenido <> esperado),
+       CASE WHEN (SELECT count(*) FROM controles WHERE orden <= 8 AND obtenido <> esperado) = 0
+            THEN 'OK' ELSE 'PENDIENTE' END
+ ORDER BY orden;
+```
+
+Lectura del resultado:
+
+- **Filas 1 a 6 en `OK`** ⇒ esquema conversacional completo. Si la fila 5 aparece en `OK` con 0, los roles existen pero sin contraseña asignada: es lo esperado hasta que el operador las defina.
+- **Fila 7** ⇒ mensajes esperando entrega; en régimen estable debe ser `0`.
+- **Fila 8** ⇒ envíos sin confirmación del proveedor; exigen revisión humana, nunca reintento automático.
+- **Fila 999** ⇒ dictamen. `OK` habilita el despliegue; `PENDIENTE` indica que falta aplicar una migración.
+
+## 9. Reversión
 
 ```sql
 -- Volver al recorrido integrado sin perder evidencia.
@@ -132,7 +226,7 @@ DROP ROLE IF EXISTS jarvi_motor;
 
 Con la cola conservada, el modo integrado de 2.0.142 sigue reconociendo los mensajes pendientes. Para volver a 2.0.141 basta con desplegar la versión anterior: los mensajes en `queued` los localiza el recorrido sobre `conversation_messages`.
 
-## 9. Límites declarados
+## 10. Límites declarados
 
 - La separación por capacidad es una frontera de privilegio y de proceso, no una garantía de entrega exactamente una vez: un envío sin confirmación del proveedor se marca como desconocido y exige revisión humana.
 - El modo separado exige que las tres capacidades estén activas; si el servicio de razonamiento está detenido, la conversación no avanza aunque la recepción y el envío funcionen.

@@ -34,10 +34,21 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-type ApiChatSecretKey =
-  | "client_id"
-  | "token"
-  | "account_id";
+type ApiChatSecretKey = "client_id" | "token" | "account_id";
+
+/** Etiquetas operativas del catálogo de endpoints conversacionales. */
+const ENDPOINT_CAPABILITY_LABELS: Record<string, string> = {
+  receive: "Recepción",
+  send: "Envío",
+  moderation: "Moderación",
+};
+
+const ENDPOINT_CONSUMER_LABELS: Record<string, string> = {
+  recepcion: "Recepción",
+  bandeja: "Bandeja humana",
+  agente: "Agente JARVI HR",
+  moderacion: "Moderación",
+};
 
 const defaultMessage = `Hola {{nombre}}, muchas gracias por su solicitud de empleo.
 
@@ -245,8 +256,10 @@ export default function Config() {
                     ApiChat / WhatsApp
                   </CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    El backend envía directamente la solicitud de CV cuando se
-                    selecciona “Solicitar CV por WhatsApp”.
+                    El servicio conversacional recibe por el historial oficial,
+                    razona con el expediente y la base de conocimiento, y
+                    responde por el canal autorizado. El agente JARVI HR no
+                    ofrece remuneración ni decide contratación.
                   </p>
                 </div>
                 <div className="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
@@ -411,6 +424,34 @@ export default function Config() {
                           <p className="mt-0.5 text-[10px] leading-4 text-muted-foreground">
                             {endpoint.description}
                           </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                              {ENDPOINT_CAPABILITY_LABELS[
+                                endpoint.capability
+                              ] ?? endpoint.capability}
+                            </span>
+                            {endpoint.requiredForAgent ? (
+                              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900">
+                                Requerido por el agente
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-muted/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                                Opcional
+                              </span>
+                            )}
+                            <span className="text-[10px] text-muted-foreground">
+                              {(endpoint.consumers ?? [])
+                                .map(
+                                  consumer =>
+                                    ENDPOINT_CONSUMER_LABELS[consumer] ??
+                                    consumer
+                                )
+                                .join(" · ")}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[10px] leading-4 text-muted-foreground/80">
+                            {endpoint.conversationUse}
+                          </p>
                           <p className="mt-0.5 break-words font-mono text-[10px] leading-4 text-muted-foreground/80">
                             {`/v1/${endpoint.route}`}
                           </p>
@@ -429,6 +470,70 @@ export default function Config() {
                       </div>
                     );
                   })}
+                </div>
+                <div className="mt-3 rounded-2xl border border-border/70 bg-muted/30 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-xs font-semibold text-primary">
+                      Capacidad del servicio conversacional
+                    </h4>
+                    <Badge
+                      variant="outline"
+                      className="rounded-full text-[10px]"
+                    >
+                      {endpointCatalog?.conversationMode === "split"
+                        ? "Despliegue separado por capacidad"
+                        : "Despliegue integrado"}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                    Cada capacidad declara lo que realmente puede ejecutar. El
+                    razonamiento no consume endpoints del proveedor; la
+                    recepción y el envío sí dependen de sus rutas oficiales.
+                  </p>
+                  <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+                    {(endpointCatalog?.capabilities ?? []).map(capability => (
+                      <div
+                        key={capability.capability}
+                        className="rounded-xl border border-border/70 bg-card p-2.5"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-1">
+                          <p className="text-xs font-semibold text-primary">
+                            {capability.label}
+                          </p>
+                          <Badge
+                            variant={capability.ready ? "default" : "outline"}
+                            className="rounded-full text-[10px]"
+                          >
+                            {capability.ready ? "Listo" : "Pendiente"}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                          {capability.description}
+                        </p>
+                        <p className="mt-1 font-mono text-[10px] text-muted-foreground/80">
+                          {capability.requirement}
+                        </p>
+                        {capability.disabledRequiredPaths.length ? (
+                          <p className="mt-1 text-[11px] text-destructive">
+                            Requiere encender{" "}
+                            {capability.disabledRequiredPaths.join(", ")}.
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                  {(endpointCatalog?.advisories ?? []).length ? (
+                    <ul className="mt-2 space-y-1">
+                      {(endpointCatalog?.advisories ?? []).map(advisory => (
+                        <li
+                          key={advisory}
+                          className="text-[11px] leading-4 text-amber-900"
+                        >
+                          · {advisory}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
                 {endpointCatalog && !endpointCatalog.enabled ? (
                   <p className="mt-2 text-xs text-muted-foreground">

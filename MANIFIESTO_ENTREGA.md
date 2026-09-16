@@ -17,8 +17,9 @@
 | Control | Resultado |
 |---|---|
 | TypeScript | Aprobado |
-| Vitest | 264/264 |
-| Caja negra | 17/17 |
+| Vitest | 279/279 |
+| Caja negra | 19/19 |
+| Catálogo de endpoints por capacidad | Aprobado · 16 de 16 |
 | Fronteras conversacionales | Aprobado · 11 de 11 |
 | Build | Aprobado |
 | Retiro de n8n | Confirmado |
@@ -32,4 +33,8 @@ La migración `0022_conversational_agent.sql` habilita la memoria del agente JAR
 
 ## Despliegue separado 2.0.142
 
-La migración `0023_conversation_service_split.sql` crea la cola `conversation_outbox`, los esquemas `wa_receiver`, `wa_sender` y `wa_engine`, los roles `jarvi_receptor`, `jarvi_emisor` y `jarvi_motor` sin contraseña, y la vista `conversation_reconciliation`. El operador asigna las contraseñas en EasyPanel y define `CONVERSATION_SERVICE_MODE=split` con `CONVERSATION_SERVICE_CAPABILITY` en cada servicio. El procedimiento completo está en [docs/GUIA_EASYPANEL_CONVERSACION_2.0.142.md](docs/GUIA_EASYPANEL_CONVERSACION_2.0.142.md); sin `0023` el despliegue conserva el modo integrado.
+La migración `0023_conversation_service_split.sql` crea la cola `conversation_outbox`, los esquemas `wa_receiver`, `wa_sender` y `wa_engine`, los roles `jarvi_receptor`, `jarvi_emisor` y `jarvi_motor` sin contraseña, y la vista `conversation_reconciliation`. El operador asigna las contraseñas en EasyPanel y define `CONVERSATION_SERVICE_MODE=split` con `CONVERSATION_SERVICE_CAPABILITY` en cada servicio. El procedimiento completo está en [docs/GUIA_EASYPANEL_CONVERSACION_2.0.142.md](docs/GUIA_EASYPANEL_CONVERSACION_2.0.142.md); sin `0023` el despliegue conserva el modo integrado. Esa guía incluye la **consulta única de verificación** de la base conversacional y la tabla de variables por servicio.
+
+## Administrador de endpoints por capacidad
+
+El catálogo de `Configuración › WhatsApp` declara por interruptor la capacidad que atiende, los consumidores y si es indispensable para el agente, además del efecto operativo de apagarlo; la preparación por capacidad publica Recepción, Razonamiento y Envío con su endpoint exigido, el modo declarado y los avisos en tratamiento formal.

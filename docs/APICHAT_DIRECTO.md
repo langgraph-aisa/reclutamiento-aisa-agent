@@ -68,6 +68,24 @@ ApiChat publica, según su OpenAPI nativo, un objeto `messages` cuyos elementos 
 
 No existe ningún intermediario de reenvío: la frontera pública del proveedor se consulta con los encabezados oficiales `client-id` y `token` desde el backend.
 
+## Administrador de endpoints y capacidad conversacional
+
+El catálogo oficial declara, para cada ruta, la capacidad que la consume dentro del servicio conversacional, su carácter indispensable y el efecto operativo de apagarla. La lectura del contrato es la siguiente.
+
+| Endpoint | Capacidad | Consumo | Requerido por el agente | Efecto de apagarlo |
+| --- | --- | --- | --- | --- |
+| `/v1/sendText` (`/sendMessage`) | Envío | Bandeja humana · Agente JARVI HR | Sí | El agente no puede responder ni solicitar el CV |
+| `/v1/sendFile` (`/sendFile`) | Envío | Bandeja humana · Agente JARVI HR | No | No se entregan documentos solicitados |
+| `/v1/sendPTT` (`/sendPTT`) | Envío | Bandeja humana | No | Quedan fuera las notas de voz del equipo humano |
+| `/v1/sendLink` (`/sendLink`) | Envío | Bandeja humana | No | No se comparte el enlace de la plaza o del formulario |
+| `/v1/sendLocation` (`/sendLocation`) | Envío | Bandeja humana | No | No se comparte la ubicación de la entrevista |
+| `/v1/messages` (`/messagesHistory`) | Recepción | Recepción | Sí | La conversación no se alimenta ni se rehidrata |
+| `/v1/deleteMessage` (`/deleteMessage`) | Moderación | Moderación | No | El retiro de mensajes queda deshabilitado |
+
+La interfaz administrativa presenta tres capacidades con su estado: **Recepción** (depende del historial), **Razonamiento** (no consume ningún endpoint del proveedor, porque compone el expediente y encola la respuesta) y **Envío** (depende del envío de texto). Cada tarjeta indica si está lista, su requisito vigente y la lista de rutas que deben encenderse. Los avisos derivados del catálogo se enuncian en texto explícito en lugar de dejar la operación sin diagnóstico.
+
+Además, la interfaz distingue el **despliegue integrado** del **despliegue separado por capacidad**: en el segundo, la recepción, el razonamiento y el envío se ejecutan en procesos distintos con credenciales propias, y el catálogo lo declara en cada capacidad. El detalle operativo y el SQL están en [GUIA_EASYPANEL_CONVERSACION_2.0.142.md](GUIA_EASYPANEL_CONVERSACION_2.0.142.md).
+
 La recepción de audio, PDF, Word y otros medios **no está conectada** en esta versión: existen tablas y cuotas preparatorias, pero faltan descarga autenticada, detección de tipo por contenido, análisis antimalware, bucket, retención y visualización.
 
 ## Controles de seguridad

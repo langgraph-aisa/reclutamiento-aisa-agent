@@ -12,6 +12,7 @@ import {
   isEncryptedAgentSecret,
   maskAgentSecret,
 } from "./agentSettings";
+import { conversationServiceMode } from "./conversationRuntime";
 
 export const APICHAT_PROVIDER = "apichat";
 export const APICHAT_SECRET_KEYS = [
@@ -169,36 +170,87 @@ export async function getApiChatRuntimeSettings(
   return { ...validated, disabledEndpoints };
 }
 
+export const APICHAT_ENDPOINT_CAPABILITIES = [
+  "receive",
+  "send",
+  "moderation",
+] as const;
+
+export type ApiChatEndpointCapability =
+  (typeof APICHAT_ENDPOINT_CAPABILITIES)[number];
+
+export const APICHAT_ENDPOINT_CONSUMERS = [
+  "recepcion",
+  "bandeja",
+  "agente",
+  "moderacion",
+] as const;
+
+export type ApiChatEndpointConsumer = (typeof APICHAT_ENDPOINT_CONSUMERS)[number];
+
+/**
+ * Catálogo oficial de endpoints con su capacidad conversacional declarada.
+ *
+ * `capability` indica quién consume el endpoint dentro del servicio
+ * conversacional, `requiredForAgent` distingue lo indispensable para que el
+ * agente JARVI HR pueda recibir y responder, y `conversationUse` explica el
+ * efecto operativo de apagarlo.
+ */
 export const APICHAT_OFFICIAL_ENDPOINTS = [
   {
     method: "POST",
     path: "/sendMessage",
     route: "sendText",
     description: "Envío de mensaje de texto a un chat nuevo o existente.",
+    capability: "send",
+    consumers: ["bandeja", "agente"],
+    requiredForAgent: true,
+    conversationUse:
+      "Respuesta del agente y solicitud de CV: sin este endpoint el agente no puede contestar.",
   },
   {
     method: "POST",
     path: "/sendFile",
     route: "sendFile",
     description: "Envío de un archivo a un chat nuevo o existente.",
+    capability: "send",
+    consumers: ["bandeja", "agente"],
+    requiredForAgent: false,
+    conversationUse:
+      "Despacho de documentos solicitados por la persona, por ejemplo plantillas institucionales.",
   },
   {
     method: "POST",
     path: "/sendPTT",
     route: "sendPTT",
     description: "Envío de una nota de voz (PTT) a un chat nuevo o existente.",
+    capability: "send",
+    consumers: ["bandeja"],
+    requiredForAgent: false,
+    conversationUse:
+      "Nota de voz del equipo humano; el agente conversacional no la utiliza.",
   },
   {
     method: "POST",
     path: "/sendLink",
     route: "sendLink",
     description: "Envío de texto con enlace y vista previa.",
+    capability: "send",
+    consumers: ["bandeja"],
+    requiredForAgent: false,
+    conversationUse:
+      "Enlace público de la plaza o del formulario cuando la persona lo solicita.",
   },
   {
     method: "POST",
     path: "/sendLocation",
     route: "sendLocation",
     description: "Envío de una ubicación a un chat nuevo o existente.",
+    capability: "send",
+    consumers: ["bandeja"],
+    requiredForAgent: false,
+    conversationUse:
+      "Ubicación de la entrevista o del centro de trabajo cuando corresponde.",
   },
   {
     method: "GET",
@@ -206,29 +258,166 @@ export const APICHAT_OFFICIAL_ENDPOINTS = [
     route: "messages",
     description:
       "Historial de mensajes y recepción de la conversación por tiempo descendente.",
+    capability: "receive",
+    consumers: ["recepcion"],
+    requiredForAgent: true,
+    conversationUse:
+      "Fuente de recepción sana: sin este endpoint la conversación no se alimenta ni se rehidrata.",
   },
   {
     method: "POST",
     path: "/deleteMessage",
     route: "deleteMessage",
     description: "Eliminación de un mensaje de WhatsApp.",
+    capability: "moderation",
+    consumers: ["moderacion"],
+    requiredForAgent: false,
+    conversationUse:
+      "Retiro controlado de un mensaje con trazabilidad de auditoría.",
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  method: "GET" | "POST";
+  path: string;
+  route: string;
+  description: string;
+  capability: ApiChatEndpointCapability;
+  consumers: readonly ApiChatEndpointConsumer[];
+  requiredForAgent: boolean;
+  conversationUse: string;
+}>;
+
+export type ApiChatCapabilityReadiness = {
+  capability: ApiChatEndpointCapability | "reason";
+  label: string;
+  description: string;
+  ready: boolean;
+  requirement: string;
+  disabledRequiredPaths: string[];
+};
+
+/**
+ * Preparación por capacidad conversacional. La recepción y el envío dependen
+ * de endpoints del proveedor; el razonamiento no consume ningún endpoint de
+ * ApiChat y solo exige credenciales del agente.
+ */
+export function computeApiChatCapabilityReadiness(input: {
+  baseEnabled: boolean;
+  endpoints: ReadonlyArray<{ path: string; enabled: boolean }>;
+  conversationMode: "single" | "split";
+}): ApiChatCapabilityReadiness[] {
+  const enabledPaths = new Set(
+    input.endpoints.filter(endpoint => endpoint.enabled).map(endpoint => endpoint.path)
+  );
+  const requiredPaths = (capability: ApiChatEndpointCapability) =>
+    APICHAT_OFFICIAL_ENDPOINTS.filter(
+      endpoint => endpoint.capability === capability && endpoint.requiredForAgent
+    ).map(endpoint => endpoint.path);
+  const disabledRequired = (capability: ApiChatEndpointCapability) =>
+    requiredPaths(capability).filter(path => !enabledPaths.has(path));
+  const readyFor = (capability: ApiChatEndpointCapability) =>
+    input.baseEnabled && disabledRequired(capability).length === 0;
+  const modeLabel =
+    input.conversationMode === "split" ? "modo separado" : "modo integrado";
+
+  return [
+    {
+      capability: "receive",
+      label: "Recepción",
+      description:
+        "Registra cada mensaje de la persona desde el historial oficial del proveedor.",
+      ready: readyFor("receive"),
+      requirement: `/v1/messages · ${modeLabel}`,
+      disabledRequiredPaths: disabledRequired("receive"),
+    },
+    {
+      capability: "reason",
+      label: "Razonamiento",
+      description:
+        "Compone el expediente, verifica la conducta y encola la respuesta sin consumir endpoints de ApiChat.",
+      ready: input.baseEnabled,
+      requirement: `Sin endpoint de proveedor · ${modeLabel}`,
+      disabledRequiredPaths: [],
+    },
+    {
+      capability: "send",
+      label: "Envío",
+      description:
+        "Despacho de la respuesta autorizada y de la solicitud de CV por el canal oficial.",
+      ready: readyFor("send"),
+      requirement: `/v1/sendText · ${modeLabel}`,
+      disabledRequiredPaths: disabledRequired("send"),
+    },
+  ];
+}
+
+/** Avisos operativos derivados del catálogo vigente, en tratamiento formal. */
+export function apiChatCapabilityAdvisories(input: {
+  baseEnabled: boolean;
+  endpoints: ReadonlyArray<{ path: string; enabled: boolean }>;
+  readiness: ApiChatCapabilityReadiness[];
+}) {
+  const advisories: string[] = [];
+  const disabled = new Set(
+    input.endpoints.filter(endpoint => !endpoint.enabled).map(endpoint => endpoint.path)
+  );
+  if (!input.baseEnabled) {
+    advisories.push(
+      "Configure las credenciales y el modo API nativa para habilitar los interruptores."
+    );
+    return advisories;
+  }
+  const receive = input.readiness.find(item => item.capability === "receive");
+  if (receive && !receive.ready) {
+    advisories.push(
+      "La recepción conversacional no puede operar mientras el historial oficial permanezca apagado."
+    );
+  }
+  const send = input.readiness.find(item => item.capability === "send");
+  if (send && !send.ready) {
+    advisories.push(
+      "El agente JARVI HR no puede responder ni solicitar el CV mientras el envío de texto permanezca apagado."
+    );
+  }
+  if (disabled.has("/sendPTT")) {
+    advisories.push(
+      "Las notas de voz quedan fuera del alcance del equipo humano mientras el endpoint permanezca apagado."
+    );
+  }
+  if (disabled.has("/deleteMessage")) {
+    advisories.push(
+      "El retiro de mensajes queda deshabilitado y exige habilitar el endpoint de eliminación."
+    );
+  }
+  return advisories;
+}
 
 export async function getApiChatEndpoints(pool: Pool | null) {
   const readiness = await getApiChatReceptionReadiness(pool);
   const baseEnabled = readiness.sendReady && readiness.mode === "native";
   const rows = pool ? await settingRows(pool) : [];
   const states = endpointStatesFromRows(rows);
+  const endpoints = APICHAT_OFFICIAL_ENDPOINTS.map(endpoint => ({
+    ...endpoint,
+    enabled:
+      baseEnabled &&
+      (states.find(state => state.path === endpoint.path)?.enabled ?? true),
+  }));
+  const capabilities = computeApiChatCapabilityReadiness({
+    baseEnabled,
+    endpoints,
+    conversationMode: conversationServiceMode(),
+  });
   return {
     mode: readiness.mode,
     enabled: baseEnabled && states.every(state => state.enabled),
-    endpoints: APICHAT_OFFICIAL_ENDPOINTS.map(endpoint => ({
-      ...endpoint,
-      enabled:
-        baseEnabled &&
-        (states.find(state => state.path === endpoint.path)?.enabled ?? true),
-    })),
+    conversationMode: conversationServiceMode(),
+    endpoints,
+    capabilities,
+    advisories: apiChatCapabilityAdvisories({
+      baseEnabled,
+      endpoints,
+      readiness: capabilities,
+    }),
   };
 }
 

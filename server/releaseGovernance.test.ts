@@ -70,8 +70,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.142");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.142");
+    expect(APP_VERSION).toBe("2.0.143");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.143");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -833,7 +833,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.142");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.143");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -841,8 +841,7 @@ describe("black-box release contract", () => {
     expect(wordCount).toBeLessThanOrEqual(4_200);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
-    expect(readme).toContain("<!-- release-history:start -->");    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.142");    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.142");
-    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.140");
+    expect(readme).toContain("<!-- release-history:start -->");    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");    expect(readme).toContain("### 14SEP2026 · JARVI RH 2.0.140");
     expect(readme).toContain("### 11SEP2026 · JARVI RH 2.0.132");
     expect(readme).toContain("ISO/IEC 20000-1:2018");
     expect(readme).toContain("`inboxSync`");
@@ -953,8 +952,52 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.142");
+    expect(governance).toContain("Alcance candidato 2.0.143");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
-});
+  it("administra los endpoints de ApiChat por capacidad conversacional", () => {
+    const settings = fs.readFileSync(
+      path.resolve("server/apiChatSettings.ts"),
+      "utf8"
+    );
+    const config = fs.readFileSync(path.resolve("client/src/pages/Config.tsx"), "utf8");
+    const blackBox = fs.readFileSync(
+      path.resolve(`docs/PRUEBAS_CAJA_NEGRA_${APP_VERSION}.md`),
+      "utf8"
+    );
+    const guide = fs.readFileSync(
+      path.resolve("docs/GUIA_EASYPANEL_CONVERSACION_2.0.142.md"),
+      "utf8"
+    );
+
+    // El catálogo declara capacidad, consumidores e indispensable para el agente.
+    expect(settings).toContain("APICHAT_ENDPOINT_CAPABILITIES");
+    expect(settings).toContain("APICHAT_ENDPOINT_CONSUMERS");
+    expect(settings).toContain("requiredForAgent");
+    expect(settings).toContain("conversationUse");
+    expect(settings).toContain("computeApiChatCapabilityReadiness");
+    expect(settings).toContain("apiChatCapabilityAdvisories");
+    expect(settings).toContain("no consume ningún endpoint");
+    expect(settings).toContain(
+      "sin este endpoint la conversación no se alimenta ni se rehidrata"
+    );
+    expect(settings).toContain(
+      "sin este endpoint el agente no puede contestar"
+    );
+
+    // La pantalla muestra la capacidad, los consumidores y los avisos.
+    expect(config).toContain("ENDPOINT_CAPABILITY_LABELS");
+    expect(config).toContain("ENDPOINT_CONSUMER_LABELS");
+    expect(config).toContain("conversationMode");
+    expect(config).toContain("advisories");
+    expect(config).toContain("capabilities");
+
+    // Caja negra y guía publican los casos y la consulta única de verificación.
+    expect(blackBox).toContain("BN-EP-01");
+    expect(blackBox).toContain("BN-EP-09");
+    expect(guide).toContain("GATE GLOBAL");
+    expect(guide).toContain("conversation_outbox_message_uq");
+    expect(guide).toContain("DATABASE_URL_RECEIVER");
+    expect(guide).toContain("CONVERSATION_SERVICE_CAPABILITY");
+  });});

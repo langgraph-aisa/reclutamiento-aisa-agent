@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   APICHAT_OFFICIAL_ENDPOINTS,
   APICHAT_RECEPTION_VERIFIED_KEY,
+  apiChatCapabilityAdvisories,
+  computeApiChatCapabilityReadiness,
   getApiChatConfiguration,
   getApiChatEndpoints,
   getApiChatReceptionReadiness,
@@ -398,5 +400,148 @@ describe("catálogo oficial de endpoints ApiChat", () => {
         7
       )
     ).rejects.toThrow("catálogo oficial");
+  });
+});
+
+describe("capacidad conversacional del catálogo de endpoints", () => {
+  const allEnabled = APICHAT_OFFICIAL_ENDPOINTS.map(endpoint => ({
+    path: endpoint.path,
+    enabled: true,
+  }));
+
+  it("declara la capacidad y el consumo de cada endpoint oficial", () => {
+    const sendMessage = APICHAT_OFFICIAL_ENDPOINTS.find(
+      endpoint => endpoint.path === "/sendMessage"
+    );
+    const history = APICHAT_OFFICIAL_ENDPOINTS.find(
+      endpoint => endpoint.path === "/messagesHistory"
+    );
+    const deleteMessage = APICHAT_OFFICIAL_ENDPOINTS.find(
+      endpoint => endpoint.path === "/deleteMessage"
+    );
+    expect(sendMessage?.capability).toBe("send");
+    expect(sendMessage?.requiredForAgent).toBe(true);
+    expect(sendMessage?.consumers).toContain("agente");
+    expect(history?.capability).toBe("receive");
+    expect(history?.requiredForAgent).toBe(true);
+    expect(deleteMessage?.capability).toBe("moderation");
+    expect(deleteMessage?.requiredForAgent).toBe(false);
+  });
+
+  it("considera listas las tres capacidades con el catálogo encendido", () => {
+    const readiness = computeApiChatCapabilityReadiness({
+      baseEnabled: true,
+      endpoints: allEnabled,
+      conversationMode: "single",
+    });
+    expect(readiness.map(item => item.capability)).toEqual([
+      "receive",
+      "reason",
+      "send",
+    ]);
+    expect(readiness.every(item => item.ready)).toBe(true);
+    expect(readiness[1]!.requirement).toContain("Sin endpoint de proveedor");
+    expect(
+      apiChatCapabilityAdvisories({
+        baseEnabled: true,
+        endpoints: allEnabled,
+        readiness,
+      })
+    ).toEqual([]);
+  });
+
+  it("degrada la recepción y advierte cuando el historial está apagado", () => {
+    const endpoints = allEnabled.map(endpoint =>
+      endpoint.path === "/messagesHistory"
+        ? { ...endpoint, enabled: false }
+        : endpoint
+    );
+    const readiness = computeApiChatCapabilityReadiness({
+      baseEnabled: true,
+      endpoints,
+      conversationMode: "split",
+    });
+    const receive = readiness.find(item => item.capability === "receive");
+    expect(receive?.ready).toBe(false);
+    expect(receive?.disabledRequiredPaths).toEqual(["/messagesHistory"]);
+    expect(receive?.requirement).toContain("modo separado");
+    expect(
+      apiChatCapabilityAdvisories({
+        baseEnabled: true,
+        endpoints,
+        readiness,
+      }).join(" ")
+    ).toContain("La recepción conversacional no puede operar");
+  });
+
+  it("degrada el envío y advierte cuando el texto está apagado", () => {
+    const endpoints = allEnabled.map(endpoint =>
+      endpoint.path === "/sendMessage"
+        ? { ...endpoint, enabled: false }
+        : endpoint
+    );
+    const readiness = computeApiChatCapabilityReadiness({
+      baseEnabled: true,
+      endpoints,
+      conversationMode: "single",
+    });
+    const send = readiness.find(item => item.capability === "send");
+    expect(send?.ready).toBe(false);
+    expect(
+      apiChatCapabilityAdvisories({
+        baseEnabled: true,
+        endpoints,
+        readiness,
+      }).join(" ")
+    ).toContain("El agente JARVI HR no puede responder");
+  });
+
+  it("explica el requisito de credenciales cuando la base está deshabilitada", () => {
+    const readiness = computeApiChatCapabilityReadiness({
+      baseEnabled: false,
+      endpoints: allEnabled,
+      conversationMode: "single",
+    });
+    expect(readiness.find(item => item.capability === "reason")?.ready).toBe(
+      false
+    );
+    expect(
+      apiChatCapabilityAdvisories({
+        baseEnabled: false,
+        endpoints: allEnabled,
+        readiness,
+      })
+    ).toEqual([
+      "Configure las credenciales y el modo API nativa para habilitar los interruptores.",
+    ]);
+  });
+
+  it("expone la capacidad en la consulta de endpoints", async () => {
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "test-key-material-with-more-than-thirty-two-characters"
+    );
+    const { pool } = memoryPool();
+    await saveApiChatPreferences(
+      pool as never,
+      {
+        mode: "native",
+        endpoint: "https://api.apichat.io/v1/",
+        connectTo: "apichat.io",
+      },
+      4
+    );
+    await saveApiChatSecret(pool as never, "client_id", "cliente", 4);
+    await saveApiChatSecret(pool as never, "token", "secreto", 4);
+    const catalog = await getApiChatEndpoints(pool as never);
+    expect(catalog.conversationMode).toBe("single");
+    expect(catalog.capabilities.map(item => item.label)).toEqual([
+      "Recepción",
+      "Razonamiento",
+      "Envío",
+    ]);
+    expect(catalog.endpoints.every(endpoint => "conversationUse" in endpoint)).toBe(
+      true
+    );
   });
 });
