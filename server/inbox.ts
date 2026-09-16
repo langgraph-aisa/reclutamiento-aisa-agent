@@ -10,6 +10,7 @@ import {
   sendApiChatText,
 } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
+import { isUndefinedTableError } from "./governanceObservability";
 import { withLangfuseObservation } from "./observability/langfuse";
 import {
   assertNoAutomatedSalaryOffer,
@@ -135,6 +136,8 @@ export async function listInbox(
     automationState?: InboxAutomationState;
     timeRange?: "hour" | "all";
     limit?: number;
+    /** Operador que consulta; alimenta el conteo de mensajes no leídos. */
+    userId?: number;
   }
 ) {
   const values: unknown[] = [];
@@ -162,6 +165,23 @@ export async function listInbox(
       `COALESCE(conv.last_message_at,conv.updated_at) >= now() - interval '1 hour'`
     );
   }
+  const unreadLateral =
+    input.userId == null
+      ? `LEFT JOIN LATERAL (
+           SELECT 0::int AS unread_inbound WHERE false
+         ) unread ON true`
+      : `LEFT JOIN LATERAL (
+           SELECT count(*)::int AS unread_inbound
+             FROM conversation_messages m2
+            WHERE m2.conversation_id=conv.id
+              AND m2.direction='inbound'
+              AND NOT EXISTS (
+                SELECT 1 FROM conversation_read_state rs
+                 WHERE rs.conversation_id=conv.id AND rs.user_id=$${values.length + 1}
+                   AND m2.created_at <= rs.last_read_at
+              )
+         ) unread ON true`;
+  if (input.userId) values.push(input.userId);
   const defaultLimit = (input.timeRange ?? "hour") === "hour" ? 10 : 100;
   values.push(Math.max(1, Math.min(input.limit ?? defaultLimit, 200)));
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
@@ -211,6 +231,7 @@ export async function listInbox(
            JOIN application_forms f ON f.id=s.form_id
           WHERE s.application_id=a.id
        ) forms ON true
+      ${unreadLateral}
       ${where}
       ORDER BY COALESCE(conv.last_message_at,conv.updated_at) DESC,conv.id DESC
       LIMIT $${values.length}`,
@@ -220,6 +241,28 @@ export async function listInbox(
     ...row,
     traffic_light: trafficLight(row.automation_state),
   }));
+}
+
+/** Marca como leída una conversación para un operador (asiento de la bandeja). */
+export async function markInboxRead(
+  pool: Pool,
+  conversationId: number,
+  userId: number
+) {
+  try {
+    await pool.query(
+      `INSERT INTO conversation_read_state (conversation_id,user_id,last_read_at)
+       VALUES ($1,$2,now())
+       ON CONFLICT (conversation_id,user_id)
+       DO UPDATE SET last_read_at=now()`,
+      [conversationId, userId]
+    );
+    return { ok: true as const };
+  } catch (error) {
+    if (isUndefinedTableError(error))
+      return { ok: true as const, skipped: "sin-migracion" };
+    throw error;
+  }
 }
 
 export async function inboxDetail(pool: Pool, conversationId: number) {

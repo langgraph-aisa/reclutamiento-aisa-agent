@@ -3,6 +3,7 @@ import { ApiChatDeliveryUnknownError } from "./apichat";
 import {
   deleteInboxMessage,
   listInbox,
+  markInboxRead,
   recordNormalizedInboundText,
   recordNormalizedOutboundText,
   sendInboxLink,
@@ -17,6 +18,37 @@ function poolDouble() {
 }
 
 describe("bandeja de entrada", () => {
+  it("marca como leída una conversación para el operador", async () => {
+    const { pool, query } = poolDouble();
+    const result = await markInboxRead(pool, 5, 7);
+    expect(result).toEqual({ ok: true });
+    expect(String(query.mock.calls[0]?.[0])).toContain(
+      "INSERT INTO conversation_read_state"
+    );
+    expect(query.mock.calls[0]?.[1]).toEqual([5, 7]);
+  });
+
+  it("tolera la marca de lectura sin la migración aplicada", async () => {
+    const query = vi.fn(async () => {
+      const error = new Error("relación inexistente") as Error & {
+        code: string;
+      };
+      error.code = "42P01";
+      throw error;
+    });
+    const pool = { query } as never;
+    const result = await markInboxRead(pool, 5, 7);
+    expect(result).toEqual({ ok: true, skipped: "sin-migracion" });
+  });
+
+  it("alimenta el conteo de no leídos cuando el operador consulta la lista", async () => {
+    const { pool, query } = poolDouble();
+    await listInbox(pool, { userId: 7 });
+    const sql = String(query.mock.calls[0]?.[0]);
+    expect(sql).toContain("unread_inbound");
+    expect(sql).toContain("conversation_read_state");
+  });
+
   it("registra la referencia al mensaje citado con su texto resuelto", async () => {
     const calls: Array<[string, unknown[] | undefined]> = [];
     const clientQuery = vi.fn(async (sql: string, params?: unknown[]) => {

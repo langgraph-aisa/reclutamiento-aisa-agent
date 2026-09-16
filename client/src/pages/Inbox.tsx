@@ -101,6 +101,12 @@ export default function Inbox() {
     },
     onError: error => toast.error(error.message),
   });
+  const markRead = trpc.inbox.markRead.useMutation({
+    onSuccess: async () => {
+      await conversations.refetch();
+    },
+    onError: () => {},
+  });
   const send = trpc.inbox.sendText.useMutation({
     onSuccess: async () => {
       setMessage("");
@@ -306,7 +312,12 @@ export default function Inbox() {
               <button
                 key={row.id}
                 type="button"
-                onClick={() => setSelectedId(row.id)}
+                onClick={() => {
+                  setSelectedId(row.id);
+                  if (row.unread_inbound > 0) {
+                    markRead.mutate({ conversationId: row.id });
+                  }
+                }}
                 aria-pressed={selectedId === row.id}
                 className={`w-full rounded-2xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedId === row.id ? "border-primary bg-primary/5" : "border-transparent bg-muted/45 hover:border-border"}`}
               >
@@ -317,7 +328,17 @@ export default function Inbox() {
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
                       <strong className="truncate text-sm text-primary">{row.full_name ?? "Sin nombre"}</strong>
-                      {automationBadge(row.automation_state)}
+                      <span className="flex shrink-0 items-center gap-1.5">
+                        {row.unread_inbound > 0 ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800"
+                            title="Mensajes nuevos sin abrir"
+                          >
+                            ⚠ {row.unread_inbound}
+                          </span>
+                        ) : null}
+                        {automationBadge(row.automation_state)}
+                      </span>
                     </span>
                     <span className="mt-0.5 block truncate text-xs text-muted-foreground">{row.position_title ?? "Plaza sin nombre"}</span>
                     <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">

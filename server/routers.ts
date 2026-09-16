@@ -118,6 +118,7 @@ import {
   setInboxAutomation,
 } from "./inbox";
 import { manualInboxSync } from "./inboxSync";
+import { markInboxRead } from "./inbox";
 import { conversationPanelState } from "./conversationPanel";
 import { runConversationTurn } from "./conversationEngine";
 import { dispatchQueuedReplies } from "./conversationOutbox";
@@ -2170,6 +2171,11 @@ export const appRouter = router({
   }),
 
   inbox: router({
+    markRead: roleProcedure
+      .input(z.object({ conversationId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) =>
+        markInboxRead(await requirePool(), input.conversationId, ctx.user.id)
+      ),
     syncNow: roleProcedure.mutation(async ({ ctx }) => {
       try {
         const pool = await requirePool();
@@ -2215,7 +2221,9 @@ export const appRouter = router({
           })
           .optional()
       )
-      .query(async ({ input }) => listInbox(await requirePool(), input ?? {})),
+      .query(async ({ input, ctx }) =>
+        listInbox(await requirePool(), { ...(input ?? {}), userId: ctx.user.id })
+      ),
     detail: roleProcedure
       .input(z.object({ conversationId: z.number().int().positive() }))
       .query(async ({ input }) =>
