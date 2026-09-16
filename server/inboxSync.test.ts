@@ -126,7 +126,7 @@ describe("regla de sincronización de la bandeja cada segundo", () => {
     const url = new URL(String(fetchImpl.mock.calls[0]?.[0]));
     expect(url.pathname).toBe("/v1/messages");
     expect(url.searchParams.get("number")).toBe("50255555555");
-    expect(url.searchParams.get("limit")).toBe("10");
+    expect(url.searchParams.get("limit")).toBe("50");
     expect(query).toHaveBeenCalledTimes(1);
   });
 
@@ -216,5 +216,138 @@ describe("regla de sincronización de la bandeja cada segundo", () => {
     stop();
     await vi.advanceTimersByTimeAsync(5_000);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("cobertura del puente de recepción", () => {
+  it("trata como saliente el indicador del proveedor en número o texto", async () => {
+    const { pool } = poolWithConversations();
+    const recorder = recorderSpies();
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify([
+          {
+            from_me: 1,
+            message: {
+              id: "sync.n-1",
+              number: "50255555555",
+              type: "text",
+              text: "Respuesta uno",
+            },
+          },
+          {
+            from_me: "true",
+            message: {
+              id: "sync.s-1",
+              number: "50255555555",
+              type: "text",
+              text: "Respuesta dos",
+            },
+          },
+        ]),
+        { status: 200 }
+      )
+    );
+
+    const result = await syncInboxOnce(pool, emptyInboxSyncState(), {
+      settings: vi.fn(async () => nativeSettings),
+      fetchImpl,
+      recorder,
+    });
+
+    expect(result).toMatchObject({ processed: 2, skipped: 0 });
+    expect(recorder.inboundText).not.toHaveBeenCalled();
+    expect(recorder.outboundText).toHaveBeenCalledTimes(2);
+  });
+
+  it("recorre el catálogo por páginas cuando supera una página", async () => {
+    const rows = Array.from({ length: 205 }, (_, index) => ({
+      conversation_id: 1000 + index,
+      application_id: 2000 + index,
+      phone_international: `+502${String(70000000 + index)}`,
+    }));
+    const queries: Array<[string, unknown[] | undefined]> = [];
+    const pool = {
+      query: vi.fn(async (sql: string, parameters?: unknown[]) => {
+        queries.push([sql, parameters]);
+        if (sql.includes("conv.provider='apichat'")) {
+          const offset = Number(parameters?.[1] ?? 0);
+          const limit = Number(parameters?.[0] ?? 200);
+          return { rows: rows.slice(offset, offset + limit) };
+        }
+        return { rows: [] };
+      }),
+    } as never;
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify([]), { status: 200 })
+    );
+    const recorder = recorderSpies();
+    const state = emptyInboxSyncState();
+
+    await syncInboxOnce(pool, state, {
+      settings: vi.fn(async () => nativeSettings),
+      fetchImpl,
+      recorder,
+    });
+    expect(state.conversations).toHaveLength(200);
+    expect(
+      new URL(String(fetchImpl.mock.calls[0]?.[0])).searchParams.get("number")
+    ).toBe("50270000000");
+
+    state.refreshedAt = 0;
+    await syncInboxOnce(pool, state, {
+      settings: vi.fn(async () => nativeSettings),
+      fetchImpl,
+      recorder,
+    });
+    expect(state.conversations).toHaveLength(5);
+    expect(
+      new URL(String(fetchImpl.mock.calls[1]?.[0])).searchParams.get("number")
+    ).toBe("50270000200");
+    expect(
+      queries.some(
+        ([sql, params]) => sql.includes("OFFSET $2") && params?.[1] === 200
+      )
+    ).toBe(true);
+  });
+
+  it("informa los mensajes descartados en lugar de silenciarlos", async () => {
+    const { pool } = poolWithConversations();
+    const recorder = recorderSpies();
+    recorder.inboundText.mockRejectedValueOnce(new Error("columna ausente"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify([
+          {
+            from_me: false,
+            message: {
+              id: "sync.fail-1",
+              number: "50255555555",
+              type: "text",
+              text: "Presente",
+            },
+          },
+        ]),
+        { status: 200 }
+      )
+    );
+
+    const result = await syncInboxOnce(pool, emptyInboxSyncState(), {
+      settings: vi.fn(async () => nativeSettings),
+      fetchImpl,
+      recorder,
+    });
+
+    expect(result).toMatchObject({
+      processed: 0,
+      inserted: 0,
+      skipped: 1,
+      failures: 1,
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("Se descartaron un mensaje")
+    );
+    warn.mockRestore();
   });
 });

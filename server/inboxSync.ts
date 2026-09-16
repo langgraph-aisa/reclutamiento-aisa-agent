@@ -11,9 +11,12 @@ import {
 } from "./inbox";
 
 export const INBOX_SYNC_INTERVAL_MS = 1_000;
-export const INBOX_SYNC_HISTORY_LIMIT = 10;
+export const INBOX_SYNC_HISTORY_LIMIT = 50;
 export const INBOX_SYNC_CONVERSATION_REFRESH_MS = 60_000;
-export const INBOX_SYNC_MAX_CONVERSATIONS = 50;
+/** Tamaño de página del catálogo: cada ronda recorre una página distinta. */
+export const INBOX_SYNC_CATALOG_PAGE_SIZE = 200;
+/** Techo de recorrido antes de reiniciar la ronda desde la página inicial. */
+export const INBOX_SYNC_CATALOG_SCAN_LIMIT = 2_000;
 export const INBOX_SYNC_MIN_GAP_MS = 15_000;
 export const INBOX_SYNC_BACKOFF_MS = 60_000;
 
@@ -29,6 +32,8 @@ export type InboxSyncState = {
   cursor: number;
   refreshedAt: number;
   pausedUntil: number;
+  /** Página del catálogo en curso; avanza en cada refresco y reinicia al agotarse. */
+  catalogOffset: number;
 };
 
 export type InboxSyncRecorder = {
@@ -56,10 +61,20 @@ type InboxSyncDependencies = {
 };
 
 export function emptyInboxSyncState(): InboxSyncState {
-  return { conversations: [], cursor: 0, refreshedAt: 0, pausedUntil: 0 };
+  return {
+    conversations: [],
+    cursor: 0,
+    refreshedAt: 0,
+    pausedUntil: 0,
+    catalogOffset: 0,
+  };
 }
 
-async function listSyncConversations(pool: Pool): Promise<SyncConversation[]> {
+async function listSyncConversations(
+  pool: Pool,
+  limit: number,
+  offset: number
+): Promise<SyncConversation[]> {
   const result = await pool.query(
     `SELECT conv.id AS conversation_id,conv.application_id,c.phone_international
        FROM conversations conv
@@ -67,8 +82,8 @@ async function listSyncConversations(pool: Pool): Promise<SyncConversation[]> {
        JOIN candidates c ON c.id=a.candidate_id
       WHERE conv.provider='apichat' AND conv.status IN ('pendiente','activo')
       ORDER BY COALESCE(conv.last_message_at,conv.updated_at) DESC
-      LIMIT $1`,
-    [INBOX_SYNC_MAX_CONVERSATIONS]
+      LIMIT $1 OFFSET $2`,
+    [limit, offset]
   );
   return result.rows.map(row => ({
     conversationId: Number(row.conversation_id),
@@ -95,7 +110,9 @@ function providerFromMe(record: unknown): boolean {
     container.message && typeof container.message === "object"
       ? (container.message as Record<string, unknown>)
       : container;
-  return (message.from_me ?? container.from_me) === true;
+  const raw = message.from_me ?? container.from_me;
+  // El proveedor puede entregar el indicador como booleano, número o texto.
+  return raw === true || raw === 1 || raw === "1" || raw === "true";
 }
 
 /**
@@ -108,15 +125,20 @@ export async function syncInboxConversation(
   pool: Pool,
   conversation: SyncConversation,
   dependencies: InboxSyncDependencies = {}
-): Promise<{ processed: number; inserted: number; skipped: number }> {
+): Promise<{
+  processed: number;
+  inserted: number;
+  skipped: number;
+  failures: number;
+}> {
   assertCapability("receive");
   const settings = await (dependencies.settings ??
     getApiChatRuntimeSettings)(pool);
   if (settings.mode !== "native") {
-    return { processed: 0, inserted: 0, skipped: 0 };
+    return { processed: 0, inserted: 0, skipped: 0, failures: 0 };
   }
   if (settings.disabledEndpoints?.includes("/messagesHistory")) {
-    return { processed: 0, inserted: 0, skipped: 0 };
+    return { processed: 0, inserted: 0, skipped: 0, failures: 0 };
   }
   const url = new URL("/v1/messages", settings.endpoint);
   url.searchParams.set(
@@ -140,12 +162,14 @@ export async function syncInboxConversation(
   }
   const payload = (await response.json().catch(() => null)) as unknown;
   if (!Array.isArray(payload)) {
-    return { processed: 0, inserted: 0, skipped: 0 };
+    return { processed: 0, inserted: 0, skipped: 0, failures: 0 };
   }
   const recorder = dependencies.recorder ?? defaultRecorder;
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
+  let failures = 0;
+  let lastFailure: unknown = null;
   for (const record of payload) {
     const message = providerMessage(record);
     const id = String(message?.id ?? "").trim();
@@ -251,11 +275,19 @@ export async function syncInboxConversation(
         continue;
       }
       skipped += 1;
-    } catch {
+    } catch (error) {
       skipped += 1;
+      failures += 1;
+      lastFailure = error;
     }
   }
-  return { processed, inserted, skipped };
+  if (failures > 0) {
+    const cantidad = failures === 1 ? "un mensaje" : `${failures} mensajes`;
+    console.warn(
+      `[InboxSync] Se descartaron ${cantidad} del historial de la conversación ${conversation.conversationId} (${lastFailure instanceof Error ? lastFailure.message : "error desconocido"}).`
+    );
+  }
+  return { processed, inserted, skipped, failures };
 }
 
 /**
@@ -274,9 +306,25 @@ export async function syncInboxOnce(
     return { processed: 0, inserted: 0, skipped: 0, conversations: 0 };
   }
   if (now - state.refreshedAt > INBOX_SYNC_CONVERSATION_REFRESH_MS) {
-    state.conversations = await listSyncConversations(pool);
+    const page = await listSyncConversations(
+      pool,
+      INBOX_SYNC_CATALOG_PAGE_SIZE,
+      state.catalogOffset
+    );
+    state.conversations = page;
     state.refreshedAt = now;
     state.cursor = 0;
+    if (page.length >= INBOX_SYNC_CATALOG_PAGE_SIZE) {
+      state.catalogOffset += INBOX_SYNC_CATALOG_PAGE_SIZE;
+      if (state.catalogOffset >= INBOX_SYNC_CATALOG_SCAN_LIMIT) {
+        console.warn(
+          `[InboxSync] El catálogo supera ${INBOX_SYNC_CATALOG_SCAN_LIMIT} conversaciones; la ronda reinicia el recorrido desde la primera página.`
+        );
+        state.catalogOffset = 0;
+      }
+    } else {
+      state.catalogOffset = 0;
+    }
   }
   if (!state.conversations.length) {
     return { processed: 0, inserted: 0, skipped: 0, conversations: 0 };

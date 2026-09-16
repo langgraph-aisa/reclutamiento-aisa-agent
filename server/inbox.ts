@@ -756,20 +756,23 @@ async function recordNormalizedInboundEventInternal(
           AND conv.provider='apichat'
           AND conv.status IN ('pendiente','activo')
         ORDER BY conv.id
-        LIMIT 2
+        LIMIT 20
         FOR UPDATE OF conv`,
       [input.phoneInternational]
     );
-    const matched = existingConversation.rows;
-    const conversationId = matched[0]?.conversation_id;
-    if (
-      matched.length !== 1 ||
-      conversationId !== input.conversationId ||
-      matched[0]?.application_id !== input.applicationId
-    )
+    // El mismo teléfono puede conservar más de una conversación activa por
+    // saneamientos históricos: el evento se registra en aquella que coincide
+    // con la aplicación y la conversación recibidas.
+    const coincidentes = existingConversation.rows.filter(
+      row =>
+        Number(row.conversation_id) === input.conversationId &&
+        Number(row.application_id) === input.applicationId
+    );
+    if (coincidentes.length !== 1)
       throw new Error(
         "La asociación entre teléfono y conversación cambió antes de registrar el mensaje."
       );
+    const conversationId = input.conversationId;
     const inserted = await client.query(
       `INSERT INTO conversation_messages
          (conversation_id,direction,message_type,body,provider_message_id,message_key,delivery_status)
