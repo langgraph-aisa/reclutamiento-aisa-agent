@@ -10,6 +10,7 @@ import {
   sendApiChatText,
 } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
+import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
 import { isUndefinedTableError } from "./governanceObservability";
 import { withLangfuseObservation } from "./observability/langfuse";
 import {
@@ -738,13 +739,64 @@ export function sendInboxFile(
   pool: Pool,
   input: {
     conversationId: number;
-    fileUrl: string;
+    fileUrl?: string;
+    /** Alternativa de arrastre: contenido del archivo en base64. */
+    dataBase64?: string;
     fileName?: string;
     caption?: string;
     actorUserId: number;
+    /** Base pública del servicio para construir la URL de entrega. */
+    publicBaseUrl?: string;
   },
   dependencies: InboxSendDependencies = {}
 ) {
+  if (input.dataBase64) {
+    const safeName = (input.fileName ?? "Adjunto")
+      .replace(/[^\w.\- ]/g, "_")
+      .slice(0, 180) || "Adjunto";
+    const key = buildInboxFileKey("out", input.conversationId);
+    const resolved = async () => {
+      const data = Buffer.from(input.dataBase64!, "base64");
+      if (data.length > 20_000_000)
+        throw new Error("El archivo supera el límite de 20 MB.");
+      await writeInboxFile(key, data);
+      const base = (input.publicBaseUrl ?? "").replace(/\/$/, "");
+      if (!base)
+        throw new Error(
+          "No fue posible resolver la dirección pública del servicio."
+        );
+      return `${base}/api/inbox/files/${key}`;
+    };
+    const wrapped = async (): Promise<{
+      fileUrl: string;
+      fileName: string;
+    }> => {
+      const fileUrl = await resolved();
+      return { fileUrl, fileName: safeName };
+    };
+    const draftPromise = wrapped();
+    const sendDraft = async () => {
+      const { fileUrl, fileName } = await draftPromise;
+      return sendInboxMessage(
+        pool,
+        {
+          conversationId: input.conversationId,
+          actorUserId: input.actorUserId,
+          draft: {
+            type: "file",
+            fileUrl,
+            fileName,
+            caption: input.caption,
+          },
+        },
+        dependencies
+      );
+    };
+    return sendDraft();
+  }
+  if (!input.fileUrl) {
+    throw new Error("Indique la URL del archivo o adjunte el contenido.");
+  }
   return sendInboxMessage(
     pool,
     {
@@ -790,11 +842,12 @@ async function recordNormalizedInboundEventInternal(
     conversationId: number;
     providerMessageId: string;
     phoneInternational: string;
-    messageType: "text" | "link" | "location";
+    messageType: "text" | "link" | "location" | "file";
     body: string;
     text?: string;
     direction: "inbound" | "outbound";
     quotedMessageId?: string;
+    mediaMetadata?: Record<string, unknown> | null;
   }
 ) {
   const client = await pool.connect();
@@ -881,11 +934,19 @@ async function recordNormalizedInboundEventInternal(
         input.providerMessageId.slice(0, 180),
         apichatMessageKey(input.providerMessageId),
         input.direction === "outbound" ? "sent" : "received",
-        input.quotedMessageId
-          ? JSON.stringify({
-              quoted: { messageId: input.quotedMessageId, text: quotedText },
-            })
-          : null,
+        (() => {
+          const metadata: Record<string, unknown> = {};
+          if (input.quotedMessageId) {
+            metadata.quoted = {
+              messageId: input.quotedMessageId,
+              text: quotedText,
+            };
+          }
+          if (input.mediaMetadata) {
+            Object.assign(metadata, input.mediaMetadata);
+          }
+          return Object.keys(metadata).length ? JSON.stringify(metadata) : null;
+        })(),
       ]
     );
     if (inserted.rows[0]) {
@@ -942,12 +1003,14 @@ type InboundEventInput = {
   conversationId: number;
   providerMessageId: string;
   phoneInternational: string;
-  messageType: "text" | "link" | "location";
+  messageType: "text" | "link" | "location" | "file";
   body: string;
   text?: string;
   direction: "inbound" | "outbound";
   /** Identificador del mensaje citado cuando el candidato responde con cita. */
   quotedMessageId?: string;
+  /** Metadatos adicionales del adjunto cuando el mensaje es un archivo. */
+  mediaMetadata?: Record<string, unknown> | null;
 };
 
 async function recordNormalizedInboundEvent(
@@ -999,6 +1062,44 @@ export function recordNormalizedInboundText(
     body: text,
     text,
     direction: "inbound",
+  });
+}
+
+/** Registra un adjunto entrante del candidato con su metadata de visor. */
+export function recordNormalizedInboundFile(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    conversationId: number;
+    providerMessageId: string;
+    phoneInternational: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: number;
+    storageKey: string;
+    caption?: string;
+    quotedMessageId?: string;
+  }
+) {
+  return recordNormalizedInboundEvent(pool, {
+    applicationId: input.applicationId,
+    conversationId: input.conversationId,
+    providerMessageId: input.providerMessageId,
+    phoneInternational: input.phoneInternational,
+    messageType: "file",
+    body: input.caption
+      ? `${input.fileName}\n${input.caption}`
+      : input.fileName,
+    direction: "inbound",
+    quotedMessageId: input.quotedMessageId,
+    mediaMetadata: {
+      media: {
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        sizeBytes: input.sizeBytes,
+        storageKey: input.storageKey,
+      },
+    },
   });
 }
 

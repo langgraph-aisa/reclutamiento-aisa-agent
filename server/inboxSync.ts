@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
 import { assertCapability } from "./conversationRuntime";
 import {
+  recordNormalizedInboundFile,
   recordNormalizedInboundLink,
   recordNormalizedInboundLocation,
   recordNormalizedInboundText,
@@ -9,6 +10,7 @@ import {
   recordNormalizedOutboundLocation,
   recordNormalizedOutboundText,
 } from "./inbox";
+import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
 
 export const INBOX_SYNC_INTERVAL_MS = 1_000;
 export const INBOX_SYNC_HISTORY_LIMIT = 50;
@@ -46,6 +48,7 @@ export type InboxSyncRecorder = {
   outboundLink: typeof recordNormalizedOutboundLink;
   inboundLocation: typeof recordNormalizedInboundLocation;
   outboundLocation: typeof recordNormalizedOutboundLocation;
+  inboundFile: typeof recordNormalizedInboundFile;
 };
 
 const defaultRecorder: InboxSyncRecorder = {
@@ -55,6 +58,7 @@ const defaultRecorder: InboxSyncRecorder = {
   outboundLink: recordNormalizedOutboundLink,
   inboundLocation: recordNormalizedInboundLocation,
   outboundLocation: recordNormalizedOutboundLocation,
+  inboundFile: recordNormalizedInboundFile,
 };
 
 type InboxSyncDependencies = {
@@ -307,6 +311,46 @@ async function processFeedRecord(
             longitude,
             address: address || undefined,
           });
+    return { processed: true, inserted: result.inserted };
+  }
+  if (type === "file") {
+    const fileName = String(message?.filename ?? "archivo").slice(0, 260);
+    const rawUrl = String(message?.url ?? "").trim();
+    if (!rawUrl) return { processed: false, inserted: false };
+    let data: Buffer;
+    let mimeType = String(message?.mime_type ?? "").trim();
+    if (rawUrl.startsWith("data:")) {
+      const separator = rawUrl.indexOf(",");
+      if (separator < 0) return { processed: false, inserted: false };
+      if (!mimeType) {
+        const declared = /^data:([^;]+)/.exec(rawUrl.slice(0, separator));
+        if (declared) mimeType = declared[1];
+      }
+      data = Buffer.from(rawUrl.slice(separator + 1), "base64");
+    } else if (/^https:\/\//.test(rawUrl)) {
+      const response = await fetch(rawUrl, {
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) return { processed: false, inserted: false };
+      data = Buffer.from(await response.arrayBuffer());
+    } else {
+      return { processed: false, inserted: false };
+    }
+    if (data.byteLength === 0 || data.byteLength > 50 * 1024 * 1024) {
+      return { processed: false, inserted: false };
+    }
+    const storageKey = buildInboxFileKey("in", conversation.conversationId);
+    await writeInboxFile(storageKey, data);
+    const result = await recorder.inboundFile(pool, {
+      applicationId: conversation.applicationId,
+      conversationId: conversation.conversationId,
+      providerMessageId: id,
+      phoneInternational: conversation.phoneInternational,
+      fileName,
+      mimeType: mimeType || "application/octet-stream",
+      sizeBytes: data.byteLength,
+      storageKey,
+    });
     return { processed: true, inserted: result.inserted };
   }
   return { processed: false, inserted: false };

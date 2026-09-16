@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { trpc } from "@/lib/trpc";
-import { Bot, CheckCircle2, Clock3, FileText, Link2, MapPin, Phone, Search, Send, ShieldAlert, Trash2, UserRound, Volume2 } from "lucide-react";
+import { Bot, CheckCircle2, Clock3, ExternalLink, FileText, Link2, MapPin, Phone, Search, Send, ShieldAlert, Trash2, UserRound, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
@@ -447,6 +447,20 @@ export default function Inbox() {
                               <FileText className="h-3 w-3" />{" "}
                               {item.original_file_name}
                             </p>
+                          ) : null}
+                          {item.media_storage_key ? (
+                            <a
+                              href={`/api/inbox/files/${item.media_storage_key}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mb-0.5 flex items-center gap-1 rounded bg-black/25 px-1.5 py-0.5 text-xs font-semibold text-white/90 hover:bg-black/40"
+                            >
+                              <FileText className="h-3 w-3" />
+                              {item.media_file_name ??
+                                item.original_file_name ??
+                                "Adjunto"}
+                              <ExternalLink className="h-3 w-3 text-white/70" />
+                            </a>
                           ) : null}
                           <p className="whitespace-pre-wrap break-words">
                             {item.body || item.transcript || "Adjunto recibido"}

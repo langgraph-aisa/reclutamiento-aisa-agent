@@ -9,6 +9,7 @@ import { appRouter, auditPublishedPublicCopy } from "../routers";
 import { startInboxSyncBridge } from "../inboxSync";
 import { startConversationWorker } from "../conversationWorker";
 import { registerApiChatWebhook } from "../apiChatWebhook";
+import { registerInboxFileRoutes } from "../inboxFiles";
 import { registerKnowledgeRoutes } from "../knowledgeRoutes";
 import { getPool } from "../db";
 import { APP_VERSION } from "../../shared/release";
@@ -62,6 +63,7 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerApiChatWebhook(app, () => getPool());
+  registerInboxFileRoutes(app);
   registerKnowledgeRoutes(app);
 
   // tRPC API

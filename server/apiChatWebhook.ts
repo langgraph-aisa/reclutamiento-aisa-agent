@@ -2,10 +2,12 @@ import type { Express, Request, Response } from "express";
 import type { Pool } from "pg";
 import { knownOutboundIdsFor } from "./inboxSync";
 import {
+  recordNormalizedInboundFile,
   recordNormalizedInboundLink,
   recordNormalizedInboundLocation,
   recordNormalizedInboundText,
 } from "./inbox";
+import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
 
 /**
  * Receptor del webhook de ApiChat (canal push en tiempo real).
@@ -24,6 +26,9 @@ export type ApiChatWebhookMessage = {
   type: string;
   text?: string;
   from_me?: unknown;
+  filename?: string;
+  url?: string;
+  mime_type?: string;
   quotedMessageId?: string;
 };
 
@@ -72,6 +77,15 @@ export function normalizeApiChatWebhookPayload(
     type: String(message.type ?? container.type ?? ""),
     text: typeof message.text === "string" ? message.text : undefined,
     from_me: message.from_me ?? container.from_me,
+    filename:
+      typeof message.filename === "string"
+        ? message.filename
+        : typeof message.file_name === "string"
+          ? message.file_name
+          : undefined,
+    url: typeof message.url === "string" ? message.url : undefined,
+    mime_type:
+      typeof message.mime_type === "string" ? message.mime_type : undefined,
     quotedMessageId,
   };
 }
@@ -141,6 +155,48 @@ export async function processApiChatWebhook(
       providerMessageId: message.id,
       phoneInternational: conversation.phoneInternational,
       link,
+      caption: message.text?.trim() || undefined,
+      quotedMessageId: message.quotedMessageId,
+    });
+    return { ok: true, registered: true };
+  }
+  if (message.type === "file") {
+    const fileName = (message.filename ?? "archivo").slice(0, 260);
+    const rawUrl = (message.url ?? "").trim();
+    if (!rawUrl) return { ok: true, skipped: "archivo-sin-contenido" };
+    let data: Buffer;
+    let mimeType = message.mime_type ?? "";
+    if (rawUrl.startsWith("data:")) {
+      const separator = rawUrl.indexOf(",");
+      if (separator < 0) return { ok: true, skipped: "archivo-sin-contenido" };
+      if (!mimeType) {
+        const declared = /^data:([^;]+)/.exec(rawUrl.slice(0, separator));
+        if (declared) mimeType = declared[1];
+      }
+      data = Buffer.from(rawUrl.slice(separator + 1), "base64");
+    } else if (/^https:\/\//.test(rawUrl)) {
+      const response = await fetch(rawUrl, {
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) return { ok: true, skipped: "archivo-no-descargable" };
+      data = Buffer.from(await response.arrayBuffer());
+    } else {
+      return { ok: true, skipped: "archivo-sin-contenido" };
+    }
+    if (data.byteLength === 0 || data.byteLength > 50 * 1024 * 1024) {
+      return { ok: true, skipped: "archivo-fuera-de-rango" };
+    }
+    const storageKey = buildInboxFileKey("in", conversation.conversationId);
+    await writeInboxFile(storageKey, data);
+    await recordNormalizedInboundFile(pool, {
+      applicationId: conversation.applicationId,
+      conversationId: conversation.conversationId,
+      providerMessageId: message.id,
+      phoneInternational: conversation.phoneInternational,
+      fileName,
+      mimeType: mimeType || "application/octet-stream",
+      sizeBytes: data.byteLength,
+      storageKey,
       caption: message.text?.trim() || undefined,
       quotedMessageId: message.quotedMessageId,
     });

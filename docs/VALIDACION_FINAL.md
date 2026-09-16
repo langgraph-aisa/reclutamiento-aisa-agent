@@ -1,10 +1,10 @@
-# Validación final · JARVI RH 2.0.153
+# Validación final · JARVI RH 2.0.154
 
 Fecha de ejecución: 2026-09-16. Rama objetivo: `main`.
 
 ## Alcance verificado
 
-Esta hoja registra la **alerta de mensajes sin abrir** —migración `0025_inbox_read_state.sql`, conteo `unread_inbound` por operador en la lista, marca de lectura idempotente al abrir la conversación y tarjeta con «⚠ N»— y, bajo regresión, el control visual de citas (2.0.152), la recepción push por webhook (2.0.151), la sincronización manual con auditoría ISO (2.0.150), la corrección de la recepción con evidencia de producción (feed global, clasificación por reconciliación, respaldo en `conversation_events`), la auditoría de recepción de solo lectura (2.0.148), la eliminación de duplicados (clave canónica `apichat:sha256`), el despliegue en un solo archivo autocertificado (`database/005_servicio_conversacional_listo.sql`), la activación en el panel preactivada por la migración `0024`, el administrador de endpoints por capacidad, el despliegue separado, la memoria conversacional con doble RAG, la **solicitud automática de CV**, el módulo **Gobierno, Observabilidad y Monitoreo** y la línea base verificable de **ApiChat**. Cada endpoint del catálogo oficial declara la capacidad que atiende (`receive`, `send`, `moderation`), sus consumidores (`recepcion`, `bandeja`, `agente`, `moderacion`), si es indispensable para el agente y el efecto operativo literal de apagarlo; `computeApiChatCapabilityReadiness` publica la preparación por capacidad —Recepción, Razonamiento y Envío— con el endpoint exigido y el modo declarado, y `apiChatCapabilityAdvisories` emite avisos en tratamiento formal. El razonamiento declara que no consume endpoints del proveedor: apagar un endpoint de envío no lo detiene, pero impide entregar lo que encole. No hay cambio de esquema y los interruptores guardados conservan su valor.
+Esta hoja registra la **cadena de adjuntos de la bandeja** —recepción de `type: file` con decodificación del contenido, almacenamiento en el volumen del RAG, metadata `media`, visor `GET /api/inbox/files/:key` con rango de bytes restringido a administración y burbuja con enlace— y, bajo regresión, la alerta de no leídos (2.0.153), el control visual de citas (2.0.152), la recepción push por webhook (2.0.151), la sincronización manual con auditoría ISO (2.0.150), la corrección de la recepción con evidencia de producción (feed global, clasificación por reconciliación, respaldo en `conversation_events`), la auditoría de recepción de solo lectura (2.0.148), la eliminación de duplicados (clave canónica `apichat:sha256`), el despliegue en un solo archivo autocertificado (`database/005_servicio_conversacional_listo.sql`), la activación en el panel preactivada por la migración `0024`, el administrador de endpoints por capacidad, el despliegue separado, la memoria conversacional con doble RAG, la **solicitud automática de CV**, el módulo **Gobierno, Observabilidad y Monitoreo** y la línea base verificable de **ApiChat**. Cada endpoint del catálogo oficial declara la capacidad que atiende (`receive`, `send`, `moderation`), sus consumidores (`recepcion`, `bandeja`, `agente`, `moderacion`), si es indispensable para el agente y el efecto operativo literal de apagarlo; `computeApiChatCapabilityReadiness` publica la preparación por capacidad —Recepción, Razonamiento y Envío— con el endpoint exigido y el modo declarado, y `apiChatCapabilityAdvisories` emite avisos en tratamiento formal. El razonamiento declara que no consume endpoints del proveedor: apagar un endpoint de envío no lo detiene, pero impide entregar lo que encole. No hay cambio de esquema y los interruptores guardados conservan su valor.
 
 Se conserva bajo regresión el alcance de 2.0.142: la cola `conversation_outbox` con reclamo `FOR UPDATE SKIP LOCKED`, los esquemas de capacidad, los roles sin contraseña y la vista `conversation_reconciliation`; y el de 2.0.141: hilo propio en PostgreSQL, contexto de cuatro capas y conducta verificable antes de cualquier envío. La guía [GUIA_EASYPANEL_CONVERSACION_2.0.142.md](GUIA_EASYPANEL_CONVERSACION_2.0.142.md) incorpora la consulta única de verificación de la base y las variables por servicio.
 
@@ -14,8 +14,8 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.153` |
-| Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 110 archivos       |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.154` |
+| Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 111 archivos       |
 | Auditoría de recepción (`database/auditoria_recepcion_inbox.sql`) | Aprobado · 7 bloques de solo lectura, sin efectos sobre los datos |
 | Feed global con reconciliación (`server/inboxSync.test.ts`) | Aprobado · 10 de 10 pruebas |
 | Sincronización manual (`inbox.syncNow`, asiento `inbox_sync_manual`) | Aprobado · contrato verificado en gobernanza y caja negra BN-MANUAL-* |
@@ -23,6 +23,7 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Migración de estado de lectura (`0025_inbox_read_state.sql`) | Aprobado · idempotente, sin secretos ni datos personales |
 | Referencias citadas (`server/inbox.test.ts`, `server/inboxSync.test.ts`, `server/apiChatWebhook.test.ts`) | Aprobado · 34 de 34 pruebas |
 | Alerta de no leídos (`server/inbox.test.ts`) | Aprobado · 18 de 18 pruebas |
+| Adjuntos de la bandeja (`server/inboxSync.test.ts`, `server/apiChatWebhook.test.ts`) | Aprobado · 39 de 39 pruebas |
 | Puente de recepción (`server/inboxSync.test.ts`, `server/inbox.test.ts`) | Aprobado · 22 de 22 pruebas |
 | Reconciliación de duplicados (`server/inbox.test.ts`, `server/conversationOutbox.test.ts`) | Aprobado · 21 de 21 pruebas |
 | Despacho automático de CV (`server/publicJobs.test.ts`) | Aprobado · 18 de 18 pruebas |
@@ -33,9 +34,9 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Fronteras por capacidad (`server/boundaries.test.ts`) | Aprobado · 11 de 11 pruebas |
 | Contexto y conducta (`server/conversationContext.test.ts`, `server/conversationPersona.test.ts`) | Aprobado · 13 de 13 pruebas |
 | Proyección única del RAG (`server/knowledgeContext.test.ts`) | Aprobado · 5 de 5 pruebas |
-| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.153 → 2.0.154` |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.154 → 2.0.155` |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 21 de 21 pruebas   |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 308 de 308 pruebas |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 310 de 310 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |
 | Migración conversacional (`0022_conversational_agent.sql`) | Aprobado · idempotente, sin secretos ni datos personales |

@@ -9,6 +9,12 @@ import {
   type InboxSyncRecorder,
 } from "./inboxSync";
 
+vi.mock("./inboxFiles", () => ({
+  buildInboxFileKey: vi.fn(() => "in-12/abcdef1234567890abcdef"),
+  writeInboxFile: vi.fn(async () => {}),
+  inboxFilesDirectory: () => "/tmp",
+}));
+
 const nativeSettings = {
   mode: "native" as const,
   endpoint: "https://api.apichat.io/v1/sendText",
@@ -58,6 +64,7 @@ function recorderSpies() {
       inserted: true,
       conversationId: 12,
     })),
+    inboundFile: vi.fn(async () => ({ inserted: true, conversationId: 12 })),
   } satisfies InboxSyncRecorder;
 }
 
@@ -479,5 +486,43 @@ describe("cobertura del puente de recepción", () => {
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ processed: 0, conversations: 2 });
+  });
+
+  it("descarga y registra un adjunto del feed con su metadata de visor", async () => {
+    const { pool } = poolWithConversations();
+    const recorder = recorderSpies();
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify([
+          {
+            from_me: false,
+            message: {
+              id: "sync.file-1",
+              number: "50255555555",
+              type: "file",
+              filename: "curriculum.pdf",
+              url: "data:application/pdf;base64,JVBERi0xLjQ=",
+              mime_type: "application/pdf",
+            },
+          },
+        ]),
+        { status: 200 }
+      )
+    );
+
+    const result = await syncInboxOnce(pool, emptyInboxSyncState(), {
+      settings: vi.fn(async () => nativeSettings),
+      fetchImpl,
+      recorder,
+    });
+
+    expect(result).toMatchObject({ processed: 1, inserted: 1 });
+    expect(recorder.inboundFile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        fileName: "curriculum.pdf",
+        mimeType: "application/pdf",
+      })
+    );
   });
 });

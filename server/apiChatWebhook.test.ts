@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import {
+  recordNormalizedInboundFile,
   recordNormalizedInboundLink,
   recordNormalizedInboundText,
 } from "./inbox";
@@ -8,6 +9,12 @@ import {
   normalizeApiChatWebhookPayload,
   processApiChatWebhook,
 } from "./apiChatWebhook";
+
+vi.mock("./inboxFiles", () => ({
+  buildInboxFileKey: vi.fn(() => "in-5/abcdef1234567890abcdef"),
+  writeInboxFile: vi.fn(async () => {}),
+  inboxFilesDirectory: () => "/tmp",
+}));
 
 vi.mock("./inbox", () => ({
   recordNormalizedInboundText: vi.fn(async () => ({
@@ -31,6 +38,10 @@ vi.mock("./inbox", () => ({
     conversationId: 5,
   })),
   recordNormalizedOutboundLocation: vi.fn(async () => ({
+    inserted: true,
+    conversationId: 5,
+  })),
+  recordNormalizedInboundFile: vi.fn(async () => ({
     inserted: true,
     conversationId: 5,
   })),
@@ -182,6 +193,37 @@ describe("webhook de ApiChat", () => {
       from_me: false,
     });
     expect(outcome).toEqual({ ok: true, skipped: "sin-conversacion" });
+  });
+
+  it("registra un adjunto entrante con su metadata de visor", async () => {
+    const { pool } = webhookPool({
+      conversations: [
+        {
+          conversation_id: 5,
+          application_id: 41,
+          phone_international: "+50230939134",
+        },
+      ],
+      outbound: [],
+    });
+    const outcome = await processApiChatWebhook(pool, {
+      message: {
+        id: "3EB0FILE",
+        number: "50230939134",
+        type: "file",
+        filename: "hoja.docx",
+        url: "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsFBg==",
+      },
+      from_me: false,
+    });
+    expect(outcome).toEqual({ ok: true, registered: true });
+    expect(recordNormalizedInboundFile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        conversationId: 5,
+        fileName: "hoja.docx",
+      })
+    );
   });
 
   it("acusa recibo de tipos sin pipeline", async () => {
