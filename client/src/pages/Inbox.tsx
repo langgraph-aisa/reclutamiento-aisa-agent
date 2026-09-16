@@ -109,6 +109,15 @@ export default function Inbox() {
     },
     onError: error => toast.error(error.message),
   });
+  const syncNow = trpc.inbox.syncNow.useMutation({
+    onSuccess: async result => {
+      await Promise.all([detail.refetch(), conversations.refetch()]);
+      toast.success(
+        `Sincronización manual: ${result.inserted} mensaje(s) nuevo(s), ${result.processed} procesado(s), ${result.failures} con respaldo.`
+      );
+    },
+    onError: error => toast.error(error.message),
+  });
   const refreshAfterSend = async () => {
     await Promise.all([detail.refetch(), conversations.refetch()]);
   };
@@ -231,10 +240,23 @@ export default function Inbox() {
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-5 pb-10">
-      <header>
-        <p className="text-sm font-semibold uppercase tracking-[.18em] text-emerald-700">Comunicación operativa</p>
-        <h1 className="mt-2 text-4xl font-800 tracking-[-.04em] text-primary">Bandeja de entrada</h1>
-        <p className="mt-2 text-muted-foreground">Conversaciones ApiChat / WhatsApp, evaluación y control humano en una sola vista trazable.</p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[.18em] text-emerald-700">Comunicación operativa</p>
+          <h1 className="mt-2 text-4xl font-800 tracking-[-.04em] text-primary">Bandeja de entrada</h1>
+          <p className="mt-2 text-muted-foreground">Conversaciones ApiChat / WhatsApp, evaluación y control humano en una sola vista trazable.</p>
+        </div>
+        {/* Icono de conejo: OpenMoji 1F407 (CC BY-SA 4.0, https://openmoji.org). */}
+        <Button
+          variant="outline"
+          className="rounded-full gap-2"
+          onClick={() => syncNow.mutate()}
+          disabled={syncNow.isPending}
+          title="Traer ahora los mensajes del proveedor; la acción queda registrada en la auditoría ISO"
+        >
+          <img src="/rabbit.png" alt="Conejo" className="h-5 w-5" />
+          {syncNow.isPending ? "Trayendo mensajes…" : "Sincronizar bandeja"}
+        </Button>
       </header>
 
       <section className="grid gap-3 rounded-2xl border border-border/70 bg-card p-3 sm:grid-cols-2 xl:grid-cols-[1fr_220px_220px_210px]">

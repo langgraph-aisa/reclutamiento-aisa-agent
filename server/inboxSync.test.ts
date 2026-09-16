@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   emptyInboxSyncState,
+  inboxSyncState,
   INBOX_SYNC_INTERVAL_MS,
+  manualInboxSync,
   startInboxSyncBridge,
   syncInboxOnce,
   type InboxSyncRecorder,
@@ -61,6 +63,7 @@ function recorderSpies() {
 
 afterEach(() => {
   vi.useRealTimers();
+  Object.assign(inboxSyncState, emptyInboxSyncState());
 });
 
 describe("regla de sincronización de la bandeja cada segundo", () => {
@@ -419,5 +422,22 @@ describe("cobertura del puente de recepción", () => {
       expect.stringContaining("sin forma de lista")
     );
     warn.mockRestore();
+  });
+
+  it("fuerza una ronda manual ignorando la cadencia del feed", async () => {
+    const { pool } = poolWithConversations();
+    inboxSyncState.feedAt = Date.now();
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify([]), { status: 200 })
+    );
+
+    const result = await manualInboxSync(pool, {
+      settings: vi.fn(async () => nativeSettings),
+      fetchImpl,
+      recorder: recorderSpies(),
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ processed: 0, conversations: 2 });
   });
 });

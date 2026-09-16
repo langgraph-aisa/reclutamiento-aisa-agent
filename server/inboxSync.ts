@@ -74,6 +74,22 @@ export function emptyInboxSyncState(): InboxSyncState {
   };
 }
 
+/** Estado único compartido por el puente periódico y la sincronización manual. */
+export const inboxSyncState: InboxSyncState = emptyInboxSyncState();
+
+/**
+ * Sincronización manual para la bandeja: fuerza una ronda inmediata ignorando
+ * la cadencia del feed y comparte el estado con el puente periódico, de modo
+ * que una pulsación del botón no compite con la siguiente ronda programada.
+ */
+export async function manualInboxSync(
+  pool: Pool,
+  dependencies: InboxSyncDependencies = {}
+) {
+  inboxSyncState.feedAt = 0;
+  return syncInboxOnce(pool, inboxSyncState, dependencies);
+}
+
 async function listSyncConversations(
   pool: Pool,
   limit: number,
@@ -459,7 +475,7 @@ export function startInboxSyncBridge(
   } = {}
 ) {
   const intervalMs = options.intervalMs ?? INBOX_SYNC_INTERVAL_MS;
-  const state = emptyInboxSyncState();
+  const state = inboxSyncState;
   let running = false;
   let backoffLogged = false;
   const timer = setInterval(() => {

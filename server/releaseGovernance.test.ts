@@ -71,8 +71,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.149");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.149");
+    expect(APP_VERSION).toBe("2.0.150");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.150");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -524,6 +524,7 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
     const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
 
     expect(sync).toContain("INBOX_SYNC_INTERVAL_MS = 1_000");
     expect(sync).toContain("INBOX_SYNC_HISTORY_LIMIT = 50");
@@ -534,6 +535,8 @@ describe("black-box release contract", () => {
     expect(sync).toContain('new URL("/v1/messages", settings.endpoint)');
     expect(sync).toContain('"client-id"');
     expect(sync).toContain('disabledEndpoints?.includes("/messagesHistory")');
+    expect(routers).toContain("inbox_sync_manual");
+    expect(routers).toContain("manualInboxSync");
     expect(bootstrap).toContain("startInboxSyncBridge");
     expect(fs.existsSync(path.resolve("n8n-workflows"))).toBe(false);
     expect(packageMetadata.scripts.build).not.toContain("n8n");
@@ -834,7 +837,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.149");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.150");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -843,7 +846,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.149");
+    expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.150");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.142");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.141");
@@ -958,7 +961,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.149");
+    expect(governance).toContain("Alcance candidato 2.0.150");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });

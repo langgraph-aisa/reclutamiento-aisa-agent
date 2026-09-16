@@ -117,6 +117,7 @@ import {
   sendInboxText,
   setInboxAutomation,
 } from "./inbox";
+import { manualInboxSync } from "./inboxSync";
 import { conversationPanelState } from "./conversationPanel";
 import { runConversationTurn } from "./conversationEngine";
 import { dispatchQueuedReplies } from "./conversationOutbox";
@@ -2169,6 +2170,36 @@ export const appRouter = router({
   }),
 
   inbox: router({
+    syncNow: roleProcedure.mutation(async ({ ctx }) => {
+      try {
+        const pool = await requirePool();
+        const result = await manualInboxSync(pool);
+        await pool.query(
+          `INSERT INTO audit_log
+             (actor_user_id,entity_type,entity_id,action,after_json)
+           VALUES ($1,'conversation',NULL,'inbox_sync_manual',$2::jsonb)`,
+          [
+            ctx.user.id,
+            JSON.stringify({
+              processed: result.processed,
+              inserted: result.inserted,
+              skipped: result.skipped,
+              failures: result.failures,
+              conversations: result.conversations,
+            }),
+          ]
+        );
+        return result;
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: safeIntegrationMessage(
+            error,
+            "No fue posible sincronizar la bandeja con el proveedor."
+          ),
+        });
+      }
+    }),
     list: roleProcedure
       .input(
         z
