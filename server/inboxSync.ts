@@ -17,23 +17,26 @@ export const INBOX_SYNC_CONVERSATION_REFRESH_MS = 60_000;
 export const INBOX_SYNC_CATALOG_PAGE_SIZE = 200;
 /** Techo de recorrido antes de reiniciar la ronda desde la página inicial. */
 export const INBOX_SYNC_CATALOG_SCAN_LIMIT = 2_000;
-export const INBOX_SYNC_MIN_GAP_MS = 15_000;
+/** Cadencia mínima entre lecturas del feed del proveedor (consumo único). */
+export const INBOX_SYNC_FEED_GAP_MS = 15_000;
 export const INBOX_SYNC_BACKOFF_MS = 60_000;
 
 export type SyncConversation = {
   conversationId: number;
   applicationId: number;
   phoneInternational: string;
-  lastSyncedAt: number;
 };
 
 export type InboxSyncState = {
   conversations: SyncConversation[];
-  cursor: number;
   refreshedAt: number;
   pausedUntil: number;
   /** Página del catálogo en curso; avanza en cada refresco y reinicia al agotarse. */
   catalogOffset: number;
+  /** Última lectura del feed del proveedor; protege contra lecturas solapadas. */
+  feedAt: number;
+  /** Última advertencia de configuración; evita llenar la bitácora cada segundo. */
+  configWarnAt: number;
 };
 
 export type InboxSyncRecorder = {
@@ -63,10 +66,11 @@ type InboxSyncDependencies = {
 export function emptyInboxSyncState(): InboxSyncState {
   return {
     conversations: [],
-    cursor: 0,
     refreshedAt: 0,
     pausedUntil: 0,
     catalogOffset: 0,
+    feedAt: 0,
+    configWarnAt: 0,
   };
 }
 
@@ -89,7 +93,6 @@ async function listSyncConversations(
     conversationId: Number(row.conversation_id),
     applicationId: Number(row.application_id),
     phoneInternational: String(row.phone_international),
-    lastSyncedAt: 0,
   }));
 }
 
@@ -103,48 +106,247 @@ function providerMessage(record: unknown): Record<string, unknown> | null {
   return message;
 }
 
-function providerFromMe(record: unknown): boolean {
-  if (!record || typeof record !== "object") return false;
+/** Dígitos normalizados del chat al que pertenece el registro del feed. */
+function providerNumber(record: unknown): string {
+  if (!record || typeof record !== "object") return "";
   const container = record as Record<string, unknown>;
-  const message =
-    container.message && typeof container.message === "object"
-      ? (container.message as Record<string, unknown>)
-      : container;
-  const raw = message.from_me ?? container.from_me;
-  // El proveedor puede entregar el indicador como booleano, número o texto.
-  return raw === true || raw === 1 || raw === "1" || raw === "true";
+  const message = providerMessage(record);
+  const raw = message?.number ?? container.number;
+  return String(raw ?? "").replace(/\D/g, "");
 }
 
 /**
- * Sincroniza una conversación contra el historial oficial del proveedor.
- * Rellena la bandeja con mensajes entrantes y salientes que el webhook no
- * hubiera registrado; la deduplicación por identificador del proveedor impide
- * duplicados.
+ * Clasifica la dirección de un registro del feed por reconciliación, no por
+ * el indicador `from_me` del proveedor: un identificador que ya fue registrado
+ * como saliente en la conversación es un envío propio; todo lo demás que
+ * entregue el feed es un mensaje entrante del candidato. La regla es inmune a
+ * un proveedor que marque todo el chat como propio.
  */
-export async function syncInboxConversation(
+export function classifyFeedDirection(
+  providerMessageId: string,
+  knownOutboundIds: ReadonlySet<string>
+): "inbound" | "outbound" {
+  return providerMessageId && knownOutboundIds.has(providerMessageId)
+    ? "outbound"
+    : "inbound";
+}
+
+async function knownOutboundIdsFor(
+  pool: Pool,
+  conversationId: number
+): Promise<Set<string>> {
+  const result = await pool.query(
+    `SELECT provider_message_id
+       FROM conversation_messages
+      WHERE conversation_id=$1
+        AND direction='outbound'
+        AND provider_message_id IS NOT NULL`,
+    [conversationId]
+  );
+  return new Set(
+    result.rows.map(row => String(row.provider_message_id).trim())
+  );
+}
+
+/**
+ * Respalda un registro que no pudo persistirse en la bitácora de eventos de la
+ * conversación (migración 0022). El feed del proveedor es de consumo único, de
+ * modo que un fallo de registro sin respaldo equivaldría a una pérdida
+ * definitiva. El respaldo no bloquea la ronda.
+ */
+async function backupFailedRecord(
+  pool: Pool,
+  conversationId: number,
+  providerMessageId: string,
+  record: unknown,
+  reason: string
+) {
+  try {
+    await pool.query(
+      `INSERT INTO conversation_events
+         (conversation_id,event_id,event_type,source,status,payload,last_error)
+       VALUES ($1,$2,'message_received','history','error',$3::jsonb,$4)
+       ON CONFLICT (conversation_id,event_id)
+       DO UPDATE SET attempt_count=conversation_events.attempt_count+1,
+                     last_error=EXCLUDED.last_error,
+                     payload=EXCLUDED.payload`,
+      [
+        conversationId,
+        `apichat:${providerMessageId.slice(0, 172)}`,
+        JSON.stringify(record),
+        reason.slice(0, 1_000),
+      ]
+    );
+  } catch {
+    // La auditoría no debe interrumpir la ronda.
+  }
+}
+
+type ProcessedRecord = { processed: boolean; inserted: boolean };
+
+async function processFeedRecord(
   pool: Pool,
   conversation: SyncConversation,
+  record: unknown,
+  direction: "inbound" | "outbound",
+  recorder: InboxSyncRecorder
+): Promise<ProcessedRecord> {
+  const message = providerMessage(record);
+  const id = String(message?.id ?? "").trim();
+  const type = String(message?.type ?? "");
+  if (type === "text") {
+    const text = String(message?.text ?? "").trim();
+    if (!text || text.length > 10_000) return { processed: false, inserted: false };
+    const result =
+      direction === "outbound"
+        ? await recorder.outboundText(pool, {
+            applicationId: conversation.applicationId,
+            conversationId: conversation.conversationId,
+            providerMessageId: id,
+            phoneInternational: conversation.phoneInternational,
+            text,
+          })
+        : await recorder.inboundText(pool, {
+            applicationId: conversation.applicationId,
+            conversationId: conversation.conversationId,
+            providerMessageId: id,
+            phoneInternational: conversation.phoneInternational,
+            text,
+          });
+    return { processed: true, inserted: result.inserted };
+  }
+  if (type === "link") {
+    const link = String(message?.link ?? "").trim();
+    if (!/^https:\/\/[^\s]{1,1988}$/.test(link))
+      return { processed: false, inserted: false };
+    const caption = String(message?.text ?? "").trim();
+    const result =
+      direction === "outbound"
+        ? await recorder.outboundLink(pool, {
+            applicationId: conversation.applicationId,
+            conversationId: conversation.conversationId,
+            providerMessageId: id,
+            phoneInternational: conversation.phoneInternational,
+            link,
+            caption: caption || undefined,
+          })
+        : await recorder.inboundLink(pool, {
+            applicationId: conversation.applicationId,
+            conversationId: conversation.conversationId,
+            providerMessageId: id,
+            phoneInternational: conversation.phoneInternational,
+            link,
+            caption: caption || undefined,
+          });
+    return { processed: true, inserted: result.inserted };
+  }
+  if (type === "location") {
+    const latitude = Number(message?.latitude);
+    const longitude = Number(message?.longitude);
+    if (
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180
+    )
+      return { processed: false, inserted: false };
+    const address = String(message?.address ?? "").trim();
+    const result =
+      direction === "outbound"
+        ? await recorder.outboundLocation(pool, {
+            applicationId: conversation.applicationId,
+            conversationId: conversation.conversationId,
+            providerMessageId: id,
+            phoneInternational: conversation.phoneInternational,
+            latitude,
+            longitude,
+            address: address || undefined,
+          })
+        : await recorder.inboundLocation(pool, {
+            applicationId: conversation.applicationId,
+            conversationId: conversation.conversationId,
+            providerMessageId: id,
+            phoneInternational: conversation.phoneInternational,
+            latitude,
+            longitude,
+            address: address || undefined,
+          });
+    return { processed: true, inserted: result.inserted };
+  }
+  return { processed: false, inserted: false };
+}
+
+/**
+ * Ronda de sincronización. Lee el feed global del proveedor una sola vez
+ * (el endpoint es de consumo único), distribuye cada registro al catálogo
+ * local por número y clasifica la dirección por reconciliación con los envíos
+ * propios conocidos. Un registro que no puede persistirse se respalda en
+ * `conversation_events` para que ninguna lectura consuma un mensaje sin
+ * dejar evidencia.
+ */
+export async function syncInboxOnce(
+  pool: Pool,
+  state: InboxSyncState,
   dependencies: InboxSyncDependencies = {}
-): Promise<{
-  processed: number;
-  inserted: number;
-  skipped: number;
-  failures: number;
-}> {
+) {
+  const now = Date.now();
+  const zeros = () => ({
+    processed: 0,
+    inserted: 0,
+    skipped: 0,
+    failures: 0,
+    conversations: state.conversations.length,
+  });
+  if (state.pausedUntil > now) return zeros();
+  if (now - state.refreshedAt > INBOX_SYNC_CONVERSATION_REFRESH_MS) {
+    const page = await listSyncConversations(
+      pool,
+      INBOX_SYNC_CATALOG_PAGE_SIZE,
+      state.catalogOffset
+    );
+    state.conversations = page;
+    state.refreshedAt = now;
+    if (page.length >= INBOX_SYNC_CATALOG_PAGE_SIZE) {
+      state.catalogOffset += INBOX_SYNC_CATALOG_PAGE_SIZE;
+      if (state.catalogOffset >= INBOX_SYNC_CATALOG_SCAN_LIMIT) {
+        console.warn(
+          `[InboxSync] El catálogo supera ${INBOX_SYNC_CATALOG_SCAN_LIMIT} conversaciones; la ronda reinicia el recorrido desde la primera página.`
+        );
+        state.catalogOffset = 0;
+      }
+    } else {
+      state.catalogOffset = 0;
+    }
+  }
+  if (!state.conversations.length) return zeros();
+  if (now - state.feedAt < INBOX_SYNC_FEED_GAP_MS) return zeros();
+  state.feedAt = now;
+
   assertCapability("receive");
   const settings = await (dependencies.settings ??
     getApiChatRuntimeSettings)(pool);
   if (settings.mode !== "native") {
-    return { processed: 0, inserted: 0, skipped: 0, failures: 0 };
+    if (now - state.configWarnAt > INBOX_SYNC_CONVERSATION_REFRESH_MS) {
+      state.configWarnAt = now;
+      console.warn(
+        "[InboxSync] Recepción detenida por configuración: el modo del proveedor no es nativo."
+      );
+    }
+    return zeros();
   }
   if (settings.disabledEndpoints?.includes("/messagesHistory")) {
-    return { processed: 0, inserted: 0, skipped: 0, failures: 0 };
+    if (now - state.configWarnAt > INBOX_SYNC_CONVERSATION_REFRESH_MS) {
+      state.configWarnAt = now;
+      console.warn(
+        "[InboxSync] Recepción detenida por configuración: el endpoint /messagesHistory está apagado."
+      );
+    }
+    return zeros();
   }
+
   const url = new URL("/v1/messages", settings.endpoint);
-  url.searchParams.set(
-    "number",
-    conversation.phoneInternational.replace(/\D/g, "")
-  );
   url.searchParams.set("limit", String(INBOX_SYNC_HISTORY_LIMIT));
   const response = await (dependencies.fetchImpl ?? fetch)(url, {
     method: "GET",
@@ -162,9 +364,24 @@ export async function syncInboxConversation(
   }
   const payload = (await response.json().catch(() => null)) as unknown;
   if (!Array.isArray(payload)) {
-    return { processed: 0, inserted: 0, skipped: 0, failures: 0 };
+    if (now - state.configWarnAt > INBOX_SYNC_CONVERSATION_REFRESH_MS) {
+      state.configWarnAt = now;
+      console.warn(
+        "[InboxSync] El proveedor entregó una respuesta sin forma de lista; la ronda no registró mensajes."
+      );
+    }
+    return zeros();
   }
+
   const recorder = dependencies.recorder ?? defaultRecorder;
+  const byNumber = new Map<string, SyncConversation>();
+  for (const conversation of state.conversations) {
+    byNumber.set(
+      conversation.phoneInternational.replace(/\D/g, ""),
+      conversation
+    );
+  }
+  const knownIdsCache = new Map<number, Set<string>>();
   let processed = 0;
   let inserted = 0;
   let skipped = 0;
@@ -173,181 +390,63 @@ export async function syncInboxConversation(
   for (const record of payload) {
     const message = providerMessage(record);
     const id = String(message?.id ?? "").trim();
-    const type = String(message?.type ?? "");
     if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,179}$/.test(id)) {
       skipped += 1;
       continue;
     }
-    const direction = providerFromMe(record) ? "outbound" : "inbound";
-    try {
-      if (type === "text") {
-        const text = String(message?.text ?? "").trim();
-        if (!text || text.length > 10_000) {
-          skipped += 1;
-          continue;
-        }
-        const result =
-          direction === "outbound"
-            ? await recorder.outboundText(pool, {
-                applicationId: conversation.applicationId,
-                conversationId: conversation.conversationId,
-                providerMessageId: id,
-                phoneInternational: conversation.phoneInternational,
-                text,
-              })
-            : await recorder.inboundText(pool, {
-                applicationId: conversation.applicationId,
-                conversationId: conversation.conversationId,
-                providerMessageId: id,
-                phoneInternational: conversation.phoneInternational,
-                text,
-              });
-        processed += 1;
-        if (result.inserted) inserted += 1;
-        continue;
-      }
-      if (type === "link") {
-        const link = String(message?.link ?? "").trim();
-        if (!/^https:\/\/[^\s]{1,1988}$/.test(link)) {
-          skipped += 1;
-          continue;
-        }
-        const caption = String(message?.text ?? "").trim();
-        const result =
-          direction === "outbound"
-            ? await recorder.outboundLink(pool, {
-                applicationId: conversation.applicationId,
-                conversationId: conversation.conversationId,
-                providerMessageId: id,
-                phoneInternational: conversation.phoneInternational,
-                link,
-                caption: caption || undefined,
-              })
-            : await recorder.inboundLink(pool, {
-                applicationId: conversation.applicationId,
-                conversationId: conversation.conversationId,
-                providerMessageId: id,
-                phoneInternational: conversation.phoneInternational,
-                link,
-                caption: caption || undefined,
-              });
-        processed += 1;
-        if (result.inserted) inserted += 1;
-        continue;
-      }
-      if (type === "location") {
-        const latitude = Number(message?.latitude);
-        const longitude = Number(message?.longitude);
-        if (
-          !Number.isFinite(latitude) ||
-          latitude < -90 ||
-          latitude > 90 ||
-          !Number.isFinite(longitude) ||
-          longitude < -180 ||
-          longitude > 180
-        ) {
-          skipped += 1;
-          continue;
-        }
-        const address = String(message?.address ?? "").trim();
-        const result =
-          direction === "outbound"
-            ? await recorder.outboundLocation(pool, {
-                applicationId: conversation.applicationId,
-                conversationId: conversation.conversationId,
-                providerMessageId: id,
-                phoneInternational: conversation.phoneInternational,
-                latitude,
-                longitude,
-                address: address || undefined,
-              })
-            : await recorder.inboundLocation(pool, {
-                applicationId: conversation.applicationId,
-                conversationId: conversation.conversationId,
-                providerMessageId: id,
-                phoneInternational: conversation.phoneInternational,
-                latitude,
-                longitude,
-                address: address || undefined,
-              });
-        processed += 1;
-        if (result.inserted) inserted += 1;
-        continue;
-      }
+    const conversation = byNumber.get(providerNumber(record));
+    if (!conversation) {
+      // Mensaje de un chat sin conversación en el catálogo: se omite sin
+      // conservar contenido.
       skipped += 1;
+      continue;
+    }
+    let knownIds = knownIdsCache.get(conversation.conversationId);
+    if (!knownIds) {
+      knownIds = await knownOutboundIdsFor(pool, conversation.conversationId);
+      knownIdsCache.set(conversation.conversationId, knownIds);
+    }
+    const direction = classifyFeedDirection(id, knownIds);
+    try {
+      const outcome = await processFeedRecord(
+        pool,
+        conversation,
+        record,
+        direction,
+        recorder
+      );
+      if (outcome.processed) {
+        processed += 1;
+        if (outcome.inserted) inserted += 1;
+      } else {
+        skipped += 1;
+      }
     } catch (error) {
       skipped += 1;
       failures += 1;
       lastFailure = error;
+      await backupFailedRecord(
+        pool,
+        conversation.conversationId,
+        id,
+        record,
+        error instanceof Error ? error.message : "error desconocido"
+      );
     }
   }
   if (failures > 0) {
     const cantidad = failures === 1 ? "un mensaje" : `${failures} mensajes`;
     console.warn(
-      `[InboxSync] Se descartaron ${cantidad} del historial de la conversación ${conversation.conversationId} (${lastFailure instanceof Error ? lastFailure.message : "error desconocido"}).`
+      `[InboxSync] Se descartaron ${cantidad} del historial con respaldo en conversation_events (${lastFailure instanceof Error ? lastFailure.message : "error desconocido"}).`
     );
   }
-  return { processed, inserted, skipped, failures };
-}
-
-/**
- * Regla de sincronización: cada segundo valida si existen mensajes nuevos y
- * rellena la bandeja desde el historial del proveedor. Las conversaciones se
- * recorren en turnos para no saturar la API; el catálogo se refresca cada
- * sesenta segundos.
- */
-export async function syncInboxOnce(
-  pool: Pool,
-  state: InboxSyncState,
-  dependencies: InboxSyncDependencies = {}
-) {
-  const now = Date.now();
-  if (state.pausedUntil > now) {
-    return { processed: 0, inserted: 0, skipped: 0, conversations: 0 };
-  }
-  if (now - state.refreshedAt > INBOX_SYNC_CONVERSATION_REFRESH_MS) {
-    const page = await listSyncConversations(
-      pool,
-      INBOX_SYNC_CATALOG_PAGE_SIZE,
-      state.catalogOffset
-    );
-    state.conversations = page;
-    state.refreshedAt = now;
-    state.cursor = 0;
-    if (page.length >= INBOX_SYNC_CATALOG_PAGE_SIZE) {
-      state.catalogOffset += INBOX_SYNC_CATALOG_PAGE_SIZE;
-      if (state.catalogOffset >= INBOX_SYNC_CATALOG_SCAN_LIMIT) {
-        console.warn(
-          `[InboxSync] El catálogo supera ${INBOX_SYNC_CATALOG_SCAN_LIMIT} conversaciones; la ronda reinicia el recorrido desde la primera página.`
-        );
-        state.catalogOffset = 0;
-      }
-    } else {
-      state.catalogOffset = 0;
-    }
-  }
-  if (!state.conversations.length) {
-    return { processed: 0, inserted: 0, skipped: 0, conversations: 0 };
-  }
-  let selected = -1;
-  for (let offset = 0; offset < state.conversations.length; offset += 1) {
-    const index = (state.cursor + offset) % state.conversations.length;
-    if (
-      now - state.conversations[index].lastSyncedAt >=
-      INBOX_SYNC_MIN_GAP_MS
-    ) {
-      selected = index;
-      break;
-    }
-  }
-  if (selected < 0) {
-    return { processed: 0, inserted: 0, skipped: 0, conversations: state.conversations.length };
-  }
-  const conversation = state.conversations[selected];
-  state.cursor = (selected + 1) % state.conversations.length;
-  const result = await syncInboxConversation(pool, conversation, dependencies);
-  conversation.lastSyncedAt = Date.now();
-  return { ...result, conversations: state.conversations.length };
+  return {
+    processed,
+    inserted,
+    skipped,
+    failures,
+    conversations: state.conversations.length,
+  };
 }
 
 export function startInboxSyncBridge(

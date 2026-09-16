@@ -34,6 +34,9 @@ function poolWithConversations() {
     if (sql.includes("conv.provider='apichat'")) {
       return { rows: conversationRows() };
     }
+    if (sql.includes("direction='outbound'")) {
+      return { rows: [] };
+    }
     return { rows: [] };
   });
   return { pool: { query } as never, query };
@@ -61,8 +64,17 @@ afterEach(() => {
 });
 
 describe("regla de sincronización de la bandeja cada segundo", () => {
-  it("rellena la bandeja con entrantes y salientes del historial del proveedor", async () => {
-    const { pool, query } = poolWithConversations();
+  it("rellena la bandeja desde el feed global con clasificación por reconciliación", async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes("conv.provider='apichat'")) {
+        return { rows: conversationRows() };
+      }
+      if (sql.includes("direction='outbound'")) {
+        return { rows: [{ provider_message_id: "sync.out-1" }] };
+      }
+      return { rows: [] };
+    });
+    const pool = { query } as never;
     const recorder = recorderSpies();
     const fetchImpl = vi.fn(async () =>
       new Response(
@@ -89,6 +101,15 @@ describe("regla de sincronización de la bandeja cada segundo", () => {
             from_me: false,
             message: { id: "sync.audio-1", number: "50255555555", type: "audio" },
           },
+          {
+            from_me: true,
+            message: {
+              id: "sync.ambiguous-1",
+              number: "50255555555",
+              type: "text",
+              text: "hola",
+            },
+          },
         ]),
         { status: 200 }
       )
@@ -101,8 +122,8 @@ describe("regla de sincronización de la bandeja cada segundo", () => {
     });
 
     expect(result).toMatchObject({
-      processed: 2,
-      inserted: 1,
+      processed: 3,
+      inserted: 2,
       skipped: 1,
       conversations: 2,
     });
@@ -123,14 +144,23 @@ describe("regla de sincronización de la bandeja cada segundo", () => {
         text: "A la orden",
       })
     );
+    // Un mensaje marcado como propio por el proveedor pero sin correspondencia
+    // de envío registrada se clasifica como entrante del candidato.
+    expect(recorder.inboundText).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        providerMessageId: "sync.ambiguous-1",
+        text: "hola",
+      })
+    );
     const url = new URL(String(fetchImpl.mock.calls[0]?.[0]));
     expect(url.pathname).toBe("/v1/messages");
-    expect(url.searchParams.get("number")).toBe("50255555555");
+    expect(url.searchParams.get("number")).toBeNull();
     expect(url.searchParams.get("limit")).toBe("50");
-    expect(query).toHaveBeenCalledTimes(1);
   });
 
-  it("recorre las conversaciones por turnos en cada segundo", async () => {
+  it("espacia las lecturas del feed para no competir con el consumo único", async () => {
+    vi.useFakeTimers();
     const { pool } = poolWithConversations();
     const recorder = recorderSpies();
     const fetchImpl = vi.fn(async () =>
@@ -143,18 +173,22 @@ describe("regla de sincronización de la bandeja cada segundo", () => {
       fetchImpl,
       recorder,
     });
-    const firstNumber = new URL(String(fetchImpl.mock.calls[0]?.[0]))
-      .searchParams.get("number");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
     await syncInboxOnce(pool, state, {
       settings: vi.fn(async () => nativeSettings),
       fetchImpl,
       recorder,
     });
-    const secondNumber = new URL(String(fetchImpl.mock.calls[1]?.[0]))
-      .searchParams.get("number");
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
 
-    expect(firstNumber).toBe("50255555555");
-    expect(secondNumber).toBe("50266666666");
+    await vi.advanceTimersByTimeAsync(16_000);
+    await syncInboxOnce(pool, state, {
+      settings: vi.fn(async () => nativeSettings),
+      fetchImpl,
+      recorder,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("no consulta al proveedor sin conversaciones activas ni en modo heredado", async () => {
@@ -195,7 +229,7 @@ describe("regla de sincronización de la bandeja cada segundo", () => {
     ).rejects.toThrow("HTTP 401");
   });
 
-  it("arranca el puente con la regla de un segundo y se detiene limpiamente", async () => {
+  it("arranca el puente con la regla de un segundo y respeta la cadencia del feed", async () => {
     vi.useFakeTimers();
     const { pool } = poolWithConversations();
     const recorder = recorderSpies();
@@ -211,6 +245,9 @@ describe("regla de sincronización de la bandeja cada segundo", () => {
 
     await vi.advanceTimersByTimeAsync(1_000);
     await vi.advanceTimersByTimeAsync(1_000);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(16_000);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
 
     stop();
@@ -220,8 +257,17 @@ describe("regla de sincronización de la bandeja cada segundo", () => {
 });
 
 describe("cobertura del puente de recepción", () => {
-  it("trata como saliente el indicador del proveedor en número o texto", async () => {
-    const { pool } = poolWithConversations();
+  it("clasifica por reconciliación: el id registrado como saliente domina sobre from_me", async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes("conv.provider='apichat'")) {
+        return { rows: conversationRows() };
+      }
+      if (sql.includes("direction='outbound'")) {
+        return { rows: [{ provider_message_id: "sync.n-1" }] };
+      }
+      return { rows: [] };
+    });
+    const pool = { query } as never;
     const recorder = recorderSpies();
     const fetchImpl = vi.fn(async () =>
       new Response(
@@ -256,8 +302,8 @@ describe("cobertura del puente de recepción", () => {
     });
 
     expect(result).toMatchObject({ processed: 2, skipped: 0 });
-    expect(recorder.inboundText).not.toHaveBeenCalled();
-    expect(recorder.outboundText).toHaveBeenCalledTimes(2);
+    expect(recorder.outboundText).toHaveBeenCalledTimes(1);
+    expect(recorder.inboundText).toHaveBeenCalledTimes(1);
   });
 
   it("recorre el catálogo por páginas cuando supera una página", async () => {
@@ -290,9 +336,6 @@ describe("cobertura del puente de recepción", () => {
       recorder,
     });
     expect(state.conversations).toHaveLength(200);
-    expect(
-      new URL(String(fetchImpl.mock.calls[0]?.[0])).searchParams.get("number")
-    ).toBe("50270000000");
 
     state.refreshedAt = 0;
     await syncInboxOnce(pool, state, {
@@ -302,17 +345,17 @@ describe("cobertura del puente de recepción", () => {
     });
     expect(state.conversations).toHaveLength(5);
     expect(
-      new URL(String(fetchImpl.mock.calls[1]?.[0])).searchParams.get("number")
-    ).toBe("50270000200");
-    expect(
       queries.some(
         ([sql, params]) => sql.includes("OFFSET $2") && params?.[1] === 200
       )
     ).toBe(true);
+    for (const call of fetchImpl.mock.calls) {
+      expect(new URL(String(call[0])).searchParams.get("number")).toBeNull();
+    }
   });
 
   it("informa los mensajes descartados en lugar de silenciarlos", async () => {
-    const { pool } = poolWithConversations();
+    const { pool, query } = poolWithConversations();
     const recorder = recorderSpies();
     recorder.inboundText.mockRejectedValueOnce(new Error("columna ausente"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -346,7 +389,34 @@ describe("cobertura del puente de recepción", () => {
       failures: 1,
     });
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("Se descartaron un mensaje")
+      expect.stringContaining("Se descartaron un mensaje del historial con respaldo")
+    );
+    expect(
+      query.mock.calls.some(
+        ([sql]) =>
+          sql.includes("INSERT INTO conversation_events") &&
+          sql.includes("'history'")
+      )
+    ).toBe(true);
+    warn.mockRestore();
+  });
+
+  it("advierte cuando el proveedor entrega una respuesta sin forma de lista", async () => {
+    const { pool } = poolWithConversations();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ messages: [], success: true }), {
+        status: 200,
+      })
+    );
+    const result = await syncInboxOnce(pool, emptyInboxSyncState(), {
+      settings: vi.fn(async () => nativeSettings),
+      fetchImpl,
+      recorder: recorderSpies(),
+    });
+    expect(result).toMatchObject({ processed: 0, conversations: 2 });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("sin forma de lista")
     );
     warn.mockRestore();
   });
