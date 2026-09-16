@@ -24,6 +24,7 @@ export type ApiChatWebhookMessage = {
   type: string;
   text?: string;
   from_me?: unknown;
+  quotedMessageId?: string;
 };
 
 /** Extrae el mensaje del cuerpo admitido por el proveedor (jsonrpc/params o directo). */
@@ -56,12 +57,22 @@ export function normalizeApiChatWebhookPayload(
     .replace(/\D/g, "")
     .slice(-12);
   if (!id || !number) return null;
+  const quoted = message.quote_msg ?? container.quote_msg;
+  const quotedMessageId =
+    quoted && typeof quoted === "object"
+      ? String(
+          (quoted as Record<string, unknown>).msg_id ??
+            (quoted as Record<string, unknown>).id ??
+            ""
+        ).trim() || undefined
+      : undefined;
   return {
     id,
     number,
     type: String(message.type ?? container.type ?? ""),
     text: typeof message.text === "string" ? message.text : undefined,
     from_me: message.from_me ?? container.from_me,
+    quotedMessageId,
   };
 }
 
@@ -114,6 +125,7 @@ export async function processApiChatWebhook(
       providerMessageId: message.id,
       phoneInternational: conversation.phoneInternational,
       text,
+      quotedMessageId: message.quotedMessageId,
     });
     return { ok: true, registered: true };
   }
@@ -130,6 +142,7 @@ export async function processApiChatWebhook(
       phoneInternational: conversation.phoneInternational,
       link,
       caption: message.text?.trim() || undefined,
+      quotedMessageId: message.quotedMessageId,
     });
     return { ok: true, registered: true };
   }

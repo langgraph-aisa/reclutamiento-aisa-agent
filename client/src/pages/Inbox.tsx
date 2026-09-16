@@ -430,6 +430,11 @@ export default function Inbox() {
                           <p className="whitespace-pre-wrap break-words">
                             {item.body || item.transcript || "Adjunto recibido"}
                           </p>
+                          {item.quoted_text ? (
+                            <p className="mt-0.5 rounded bg-black/25 px-1.5 py-0.5 text-[11px] italic leading-tight text-white/75">
+                              ↩ «{item.quoted_text}»
+                            </p>
+                          ) : null}
                           <p className="mt-0.5 flex items-center justify-end gap-1 text-[10px] leading-none text-white/60">
                             {new Date(item.created_at).toLocaleTimeString(
                               "es-GT",

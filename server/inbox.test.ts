@@ -17,6 +17,46 @@ function poolDouble() {
 }
 
 describe("bandeja de entrada", () => {
+  it("registra la referencia al mensaje citado con su texto resuelto", async () => {
+    const calls: Array<[string, unknown[] | undefined]> = [];
+    const clientQuery = vi.fn(async (sql: string, params?: unknown[]) => {
+      calls.push([sql, params]);
+      if (sql.includes("FOR UPDATE OF conv")) {
+        return { rows: [{ application_id: 41, conversation_id: 5 }] };
+      }
+      if (sql.includes("left(body,140)")) {
+        return { rows: [{ texto: "Hola Jose soy JARVI" }] };
+      }
+      if (sql.includes("SELECT id,delivery_status FROM conversation_messages")) {
+        return { rows: [] };
+      }
+      if (sql.includes("INSERT INTO conversation_messages")) {
+        return { rows: [{ id: 99 }] };
+      }
+      return { rows: [] };
+    });
+    const pool = {
+      connect: vi.fn(async () => ({ query: clientQuery, release: vi.fn() })),
+      query: vi.fn(async () => ({ rows: [] })),
+    } as never;
+
+    await recordNormalizedInboundText(pool, {
+      applicationId: 41,
+      conversationId: 5,
+      providerMessageId: "Q1",
+      phoneInternational: "+50255555555",
+      text: "Recibido",
+      quotedMessageId: "3EB0ORIG",
+    });
+
+    const insert = calls.find(([sql]) =>
+      sql.includes("INSERT INTO conversation_messages")
+    )!;
+    expect(JSON.parse(String(insert[1]?.[7]))).toEqual({
+      quoted: { messageId: "3EB0ORIG", text: "Hola Jose soy JARVI" },
+    });
+  });
+
   it("no duplica un saliente ya registrado cuando el historial lo rehidrata", async () => {
     const calls: Array<[string, unknown[] | undefined]> = [];
     const clientQuery = vi.fn(async (sql: string, params?: unknown[]) => {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
 import {
   recordNormalizedInboundLink,
@@ -86,6 +86,27 @@ describe("webhook de ApiChat", () => {
       type: "text",
       text: "hola",
       from_me: false,
+    });
+  });
+
+  it("normaliza la referencia al mensaje citado", () => {
+    const message = normalizeApiChatWebhookPayload({
+      message: {
+        id: "Q1",
+        number: "50230939134",
+        type: "text",
+        text: "Recibido",
+        quote_msg: { msg_id: "3EB0ORIG" },
+      },
+      from_me: true,
+    });
+    expect(message).toEqual({
+      id: "Q1",
+      number: "50230939134",
+      type: "text",
+      text: "Recibido",
+      from_me: true,
+      quotedMessageId: "3EB0ORIG",
     });
   });
 

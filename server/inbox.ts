@@ -253,7 +253,9 @@ export async function inboxDetail(pool: Pool, conversationId: number) {
   const [messages, attachments, assessment] = await Promise.all([
     pool.query(
       `SELECT id,direction,message_type,body,delivery_status,sent_at,created_at,
-              original_file_name,mime_type,size_bytes,transcript
+              original_file_name,mime_type,size_bytes,transcript,
+              metadata->'quoted'->>'messageId' AS quoted_message_id,
+              metadata->'quoted'->>'text' AS quoted_text
          FROM conversation_messages WHERE conversation_id=$1
         ORDER BY created_at,id LIMIT 500`,
       [conversationId]
@@ -749,6 +751,7 @@ async function recordNormalizedInboundEventInternal(
     body: string;
     text?: string;
     direction: "inbound" | "outbound";
+    quotedMessageId?: string;
   }
 ) {
   const client = await pool.connect();
@@ -783,6 +786,19 @@ async function recordNormalizedInboundEventInternal(
         "La asociación entre teléfono y conversación cambió antes de registrar el mensaje."
       );
     const conversationId = input.conversationId;
+    // Referencia visual: cuando el candidato responde citando un mensaje, el
+    // proveedor entrega `quote_msg.msg_id`; se resuelve el texto citado contra
+    // los mensajes registrados de la conversación para la bandeja.
+    let quotedText: string | null = null;
+    if (input.quotedMessageId) {
+      const quoted = await client.query(
+        `SELECT left(body,140) AS texto FROM conversation_messages
+          WHERE conversation_id=$1 AND provider_message_id=$2
+          ORDER BY id LIMIT 1`,
+        [conversationId, input.quotedMessageId]
+      );
+      quotedText = quoted.rows[0]?.texto ?? null;
+    }
     // Reconciliación: cuando el historial del proveedor entrega un mensaje que
     // ya fue registrado por otra vía —envío humano, del agente o webhook— la
     // fila existente se actualiza en lugar de duplicarse en la bandeja.
@@ -811,8 +827,8 @@ async function recordNormalizedInboundEventInternal(
     }
     const inserted = await client.query(
       `INSERT INTO conversation_messages
-         (conversation_id,direction,message_type,body,provider_message_id,message_key,delivery_status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
+         (conversation_id,direction,message_type,body,provider_message_id,message_key,delivery_status,metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
        ON CONFLICT (message_key) DO NOTHING RETURNING id`,
       [
         conversationId,
@@ -822,6 +838,11 @@ async function recordNormalizedInboundEventInternal(
         input.providerMessageId.slice(0, 180),
         apichatMessageKey(input.providerMessageId),
         input.direction === "outbound" ? "sent" : "received",
+        input.quotedMessageId
+          ? JSON.stringify({
+              quoted: { messageId: input.quotedMessageId, text: quotedText },
+            })
+          : null,
       ]
     );
     if (inserted.rows[0]) {
@@ -882,6 +903,8 @@ type InboundEventInput = {
   body: string;
   text?: string;
   direction: "inbound" | "outbound";
+  /** Identificador del mensaje citado cuando el candidato responde con cita. */
+  quotedMessageId?: string;
 };
 
 async function recordNormalizedInboundEvent(
@@ -923,6 +946,7 @@ export function recordNormalizedInboundText(
     providerMessageId: string;
     phoneInternational: string;
     text: string;
+    quotedMessageId?: string;
   }
 ) {
   const text = input.text.trim();
@@ -964,6 +988,7 @@ export function recordNormalizedInboundLink(
     phoneInternational: string;
     link: string;
     caption?: string;
+    quotedMessageId?: string;
   }
 ) {
   const caption = input.caption?.trim();
@@ -1005,6 +1030,7 @@ export function recordNormalizedInboundLocation(
     latitude: number;
     longitude: number;
     address?: string;
+    quotedMessageId?: string;
   }
 ) {
   return recordNormalizedInboundEvent(pool, {

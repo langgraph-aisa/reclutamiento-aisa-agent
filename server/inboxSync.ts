@@ -131,6 +131,21 @@ function providerNumber(record: unknown): string {
   return String(raw ?? "").replace(/\D/g, "");
 }
 
+/** Identificador del mensaje citado cuando el candidato responde con cita. */
+function providerQuotedMessageId(record: unknown): string | null {
+  if (!record || typeof record !== "object") return null;
+  const container = record as Record<string, unknown>;
+  const message = providerMessage(record);
+  const quoted = message?.quote_msg ?? container.quote_msg;
+  if (!quoted || typeof quoted !== "object") return null;
+  const id = String(
+    (quoted as Record<string, unknown>).msg_id ??
+      (quoted as Record<string, unknown>).id ??
+      ""
+  ).trim();
+  return id || null;
+}
+
 /**
  * Clasifica la dirección de un registro del feed por reconciliación, no por
  * el indicador `from_me` del proveedor: un identificador que ya fue registrado
@@ -210,6 +225,7 @@ async function processFeedRecord(
   const message = providerMessage(record);
   const id = String(message?.id ?? "").trim();
   const type = String(message?.type ?? "");
+  const quotedMessageId = providerQuotedMessageId(record);
   if (type === "text") {
     const text = String(message?.text ?? "").trim();
     if (!text || text.length > 10_000) return { processed: false, inserted: false };
@@ -228,6 +244,7 @@ async function processFeedRecord(
             providerMessageId: id,
             phoneInternational: conversation.phoneInternational,
             text,
+            quotedMessageId: quotedMessageId ?? undefined,
           });
     return { processed: true, inserted: result.inserted };
   }
@@ -253,6 +270,7 @@ async function processFeedRecord(
             phoneInternational: conversation.phoneInternational,
             link,
             caption: caption || undefined,
+            quotedMessageId: quotedMessageId ?? undefined,
           });
     return { processed: true, inserted: result.inserted };
   }

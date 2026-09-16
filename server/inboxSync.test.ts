@@ -424,6 +424,46 @@ describe("cobertura del puente de recepción", () => {
     warn.mockRestore();
   });
 
+  it("propaga la referencia del mensaje citado al registro", async () => {
+    const { pool } = poolWithConversations();
+    const recorder = recorderSpies();
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify([
+          {
+            from_me: true,
+            message: {
+              id: "sync.q-1",
+              number: "50255555555",
+              type: "text",
+              text: "Recibido",
+              quote_msg: {
+                from_me: true,
+                number: "50255555555",
+                msg_id: "3EB0ORIG",
+              },
+            },
+          },
+        ]),
+        { status: 200 }
+      )
+    );
+
+    await syncInboxOnce(pool, emptyInboxSyncState(), {
+      settings: vi.fn(async () => nativeSettings),
+      fetchImpl,
+      recorder,
+    });
+
+    expect(recorder.inboundText).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        providerMessageId: "sync.q-1",
+        quotedMessageId: "3EB0ORIG",
+      })
+    );
+  });
+
   it("fuerza una ronda manual ignorando la cadencia del feed", async () => {
     const { pool } = poolWithConversations();
     inboxSyncState.feedAt = Date.now();
