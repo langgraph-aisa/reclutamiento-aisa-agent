@@ -542,13 +542,17 @@ async function sendInboxMessageInternal(
     const confirmedMessage = await confirmation.query(
       `UPDATE conversation_messages
           SET delivery_status='sent',provider_message_id=$1,last_error=NULL,
-              sent_at=now(),metadata=metadata || $2::jsonb,updated_at=now()
+              sent_at=now(),message_key=COALESCE($4,message_key),
+              metadata=metadata || $2::jsonb,updated_at=now()
         WHERE id=$3
         RETURNING id`,
       [
         result.providerMessageId,
         JSON.stringify({ statusCode: result.statusCode }),
         messageId,
+        result.providerMessageId
+          ? apichatMessageKey(result.providerMessageId)
+          : null,
       ]
     );
     if (!confirmedMessage.rows[0]) {
@@ -728,6 +732,12 @@ export function sendInboxPtt(
   );
 }
 
+export function apichatMessageKey(providerMessageId: string) {
+  return `apichat:${createHash("sha256")
+    .update(providerMessageId)
+    .digest("hex")}`;
+}
+
 async function recordNormalizedInboundEventInternal(
   pool: Pool,
   input: {
@@ -773,6 +783,32 @@ async function recordNormalizedInboundEventInternal(
         "La asociación entre teléfono y conversación cambió antes de registrar el mensaje."
       );
     const conversationId = input.conversationId;
+    // Reconciliación: cuando el historial del proveedor entrega un mensaje que
+    // ya fue registrado por otra vía —envío humano, del agente o webhook— la
+    // fila existente se actualiza en lugar de duplicarse en la bandeja.
+    const existing = await client.query(
+      `SELECT id,delivery_status FROM conversation_messages
+        WHERE conversation_id=$1 AND provider_message_id=$2
+        ORDER BY id
+        LIMIT 1`,
+      [conversationId, input.providerMessageId.slice(0, 180)]
+    );
+    if (existing.rows[0]) {
+      if (
+        input.direction === "outbound" &&
+        existing.rows[0].delivery_status !== "sent"
+      ) {
+        await client.query(
+          `UPDATE conversation_messages
+              SET delivery_status='sent',last_error=NULL,
+                  sent_at=COALESCE(sent_at,now()),updated_at=now()
+            WHERE id=$1`,
+          [existing.rows[0].id]
+        );
+      }
+      await client.query("COMMIT");
+      return { inserted: false, conversationId };
+    }
     const inserted = await client.query(
       `INSERT INTO conversation_messages
          (conversation_id,direction,message_type,body,provider_message_id,message_key,delivery_status)
@@ -784,9 +820,7 @@ async function recordNormalizedInboundEventInternal(
         input.messageType,
         input.body,
         input.providerMessageId.slice(0, 180),
-        `apichat:${createHash("sha256")
-          .update(input.providerMessageId)
-          .digest("hex")}`,
+        apichatMessageKey(input.providerMessageId),
         input.direction === "outbound" ? "sent" : "received",
       ]
     );

@@ -109,7 +109,9 @@ describe("buzón de salida del agente", () => {
       { phoneInternational: "+50241234567", message: "¿Cuál es su disponibilidad?" },
       {}
     );
-    expect(calls.some(call => call.text.includes(confirmSentMarker))).toBe(true);
+    const confirm = calls.find(call => call.text.includes(confirmSentMarker))!;
+    expect(confirm.text).toContain("message_key=COALESCE($3,message_key)");
+    expect(confirm.params[2]).toMatch(/^apichat:[0-9a-f]{64}$/);
   });
 
   it("devuelve el mensaje a la cola mientras queden intentos", async () => {

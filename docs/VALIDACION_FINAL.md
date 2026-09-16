@@ -1,10 +1,10 @@
-# Validación final · JARVI RH 2.0.146
+# Validación final · JARVI RH 2.0.147
 
 Fecha de ejecución: 2026-09-16. Rama objetivo: `main`.
 
 ## Alcance verificado
 
-Esta hoja registra la **corrección del puente de recepción** —catálogo recorrido por páginas de 200 con techo de 2.000, indicador del emisor reconocido en booleano, número o texto, historial de 50 registros por conversación y evento entrante anclado a la conversación y la aplicación recibidas, con descartes informados en la bitácora— y, bajo regresión, el despliegue en un solo archivo autocertificado (`database/005_servicio_conversacional_listo.sql`, validado en PostgreSQL 17 desde cero con `GATE GLOBAL OK`), la activación en el panel preactivada por la migración `0024`, el administrador de endpoints por capacidad, el despliegue separado, la memoria conversacional con doble RAG, la **solicitud automática de CV**, el módulo **Gobierno, Observabilidad y Monitoreo** y la línea base verificable de **ApiChat**. Cada endpoint del catálogo oficial declara la capacidad que atiende (`receive`, `send`, `moderation`), sus consumidores (`recepcion`, `bandeja`, `agente`, `moderacion`), si es indispensable para el agente y el efecto operativo literal de apagarlo; `computeApiChatCapabilityReadiness` publica la preparación por capacidad —Recepción, Razonamiento y Envío— con el endpoint exigido y el modo declarado, y `apiChatCapabilityAdvisories` emite avisos en tratamiento formal. El razonamiento declara que no consume endpoints del proveedor: apagar un endpoint de envío no lo detiene, pero impide entregar lo que encole. No hay cambio de esquema y los interruptores guardados conservan su valor.
+Esta hoja registra la **eliminación de duplicados de la bandeja** —reconciliación por identificador del proveedor dentro de la conversación, clave canónica `apichat:sha256` adoptada al confirmar los envíos humano, del agente y de la solicitud de currículum, y una sola copia por mensaje entrante— y, bajo regresión, la corrección del puente de recepción (catálogo paginado de 200 con techo de 2.000, indicador del emisor en booleano, número o texto, historial de 50 registros y evento anclado a la aplicación recibida), el despliegue en un solo archivo autocertificado (`database/005_servicio_conversacional_listo.sql`, validado en PostgreSQL 17 desde cero con `GATE GLOBAL OK`), la activación en el panel preactivada por la migración `0024`, el administrador de endpoints por capacidad, el despliegue separado, la memoria conversacional con doble RAG, la **solicitud automática de CV**, el módulo **Gobierno, Observabilidad y Monitoreo** y la línea base verificable de **ApiChat**. Cada endpoint del catálogo oficial declara la capacidad que atiende (`receive`, `send`, `moderation`), sus consumidores (`recepcion`, `bandeja`, `agente`, `moderacion`), si es indispensable para el agente y el efecto operativo literal de apagarlo; `computeApiChatCapabilityReadiness` publica la preparación por capacidad —Recepción, Razonamiento y Envío— con el endpoint exigido y el modo declarado, y `apiChatCapabilityAdvisories` emite avisos en tratamiento formal. El razonamiento declara que no consume endpoints del proveedor: apagar un endpoint de envío no lo detiene, pero impide entregar lo que encole. No hay cambio de esquema y los interruptores guardados conservan su valor.
 
 Se conserva bajo regresión el alcance de 2.0.142: la cola `conversation_outbox` con reclamo `FOR UPDATE SKIP LOCKED`, los esquemas de capacidad, los roles sin contraseña y la vista `conversation_reconciliation`; y el de 2.0.141: hilo propio en PostgreSQL, contexto de cuatro capas y conducta verificable antes de cualquier envío. La guía [GUIA_EASYPANEL_CONVERSACION_2.0.142.md](GUIA_EASYPANEL_CONVERSACION_2.0.142.md) incorpora la consulta única de verificación de la base y las variables por servicio.
 
@@ -14,9 +14,10 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.146` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.147` |
 | Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 109 archivos       |
-| Puente de recepción (`server/inboxSync.test.ts`, `server/inbox.test.ts`) | Aprobado · 20 de 20 pruebas |
+| Puente de recepción (`server/inboxSync.test.ts`, `server/inbox.test.ts`) | Aprobado · 22 de 22 pruebas |
+| Reconciliación de duplicados (`server/inbox.test.ts`, `server/conversationOutbox.test.ts`) | Aprobado · 21 de 21 pruebas |
 | Despacho automático de CV (`server/publicJobs.test.ts`) | Aprobado · 18 de 18 pruebas |
 | Servicio conversacional (`server/conversationOutbox.test.ts`) | Aprobado · 7 de 7 pruebas |
 | Activación por panel (`server/conversationActivation.test.ts`) | Aprobado · 7 de 7 pruebas |
@@ -25,9 +26,9 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Fronteras por capacidad (`server/boundaries.test.ts`) | Aprobado · 11 de 11 pruebas |
 | Contexto y conducta (`server/conversationContext.test.ts`, `server/conversationPersona.test.ts`) | Aprobado · 13 de 13 pruebas |
 | Proyección única del RAG (`server/knowledgeContext.test.ts`) | Aprobado · 5 de 5 pruebas |
-| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.146 → 2.0.147` |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.147 → 2.0.148` |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 21 de 21 pruebas   |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 291 de 291 pruebas |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 293 de 293 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |
 | Migración conversacional (`0022_conversational_agent.sql`) | Aprobado · idempotente, sin secretos ni datos personales |

@@ -3,6 +3,8 @@ import { ApiChatDeliveryUnknownError } from "./apichat";
 import {
   deleteInboxMessage,
   listInbox,
+  recordNormalizedInboundText,
+  recordNormalizedOutboundText,
   sendInboxLink,
   sendInboxLocation,
   sendInboxText,
@@ -15,6 +17,75 @@ function poolDouble() {
 }
 
 describe("bandeja de entrada", () => {
+  it("no duplica un saliente ya registrado cuando el historial lo rehidrata", async () => {
+    const calls: Array<[string, unknown[] | undefined]> = [];
+    const clientQuery = vi.fn(async (sql: string, params?: unknown[]) => {
+      calls.push([sql, params]);
+      if (sql.includes("FOR UPDATE OF conv")) {
+        return { rows: [{ application_id: 41, conversation_id: 5 }] };
+      }
+      if (sql.includes("provider_message_id=$2")) {
+        return { rows: [{ id: 91, delivery_status: "sending" }] };
+      }
+      return { rows: [] };
+    });
+    const pool = {
+      connect: vi.fn(async () => ({ query: clientQuery, release: vi.fn() })),
+      query: vi.fn(async () => ({ rows: [] })),
+    } as never;
+
+    const result = await recordNormalizedOutboundText(pool, {
+      applicationId: 41,
+      conversationId: 5,
+      providerMessageId: "ABC123",
+      phoneInternational: "+50255555555",
+      text: "Hola Jose soy JARVI",
+    });
+
+    expect(result).toEqual({ inserted: false, conversationId: 5 });
+    expect(
+      calls.some(([sql]) => sql.includes("INSERT INTO conversation_messages"))
+    ).toBe(false);
+    const updates = calls.filter(([sql]) =>
+      sql.includes("SET delivery_status='sent',last_error=NULL")
+    );
+    expect(updates).toHaveLength(1);
+  });
+
+  it("no duplica un entrante ya registrado", async () => {
+    const calls: Array<[string, unknown[] | undefined]> = [];
+    const clientQuery = vi.fn(async (sql: string, params?: unknown[]) => {
+      calls.push([sql, params]);
+      if (sql.includes("FOR UPDATE OF conv")) {
+        return { rows: [{ application_id: 41, conversation_id: 5 }] };
+      }
+      if (sql.includes("provider_message_id=$2")) {
+        return { rows: [{ id: 90, delivery_status: "received" }] };
+      }
+      return { rows: [] };
+    });
+    const pool = {
+      connect: vi.fn(async () => ({ query: clientQuery, release: vi.fn() })),
+      query: vi.fn(async () => ({ rows: [] })),
+    } as never;
+
+    const result = await recordNormalizedInboundText(pool, {
+      applicationId: 41,
+      conversationId: 5,
+      providerMessageId: "XYZ789",
+      phoneInternational: "+50255555555",
+      text: "hola",
+    });
+
+    expect(result).toEqual({ inserted: false, conversationId: 5 });
+    expect(
+      calls.some(([sql]) => sql.includes("INSERT INTO conversation_messages"))
+    ).toBe(false);
+    expect(
+      calls.some(([sql]) => sql.includes("SET delivery_status='sent'"))
+    ).toBe(false);
+  });
+
   it("limita la vista operativa a diez conversaciones de la última hora", async () => {
     const { pool, query } = poolDouble();
 
