@@ -381,8 +381,10 @@ function DashboardLayoutContent({
           </div>
         )}
         <main className="min-w-0 flex-1 overflow-x-clip p-4">
-          <ActivityAuditBar />
           {children}
+          {/* El resumen de actividad y control ISO cierra cada hoja: informa lo
+              último registrado en la ruta sin desplazar el contenido de trabajo. */}
+          <ActivityAuditBar />
         </main>
       </SidebarInset>
     </>

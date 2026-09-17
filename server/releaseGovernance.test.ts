@@ -72,8 +72,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.157");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.157");
+    expect(APP_VERSION).toBe("2.0.158");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.158");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -1116,27 +1116,73 @@ describe("black-box release contract", () => {
     expect(conversation).toContain("exclusiva de la persona en estudio");
   });
 
+  it("closes every administrative sheet with the activity summary", () => {
+    const layout = fs.readFileSync(
+      path.resolve("client/src/components/DashboardLayout.tsx"),
+      "utf8"
+    );
+    const bar = fs.readFileSync(
+      path.resolve("client/src/components/ActivityAuditBar.tsx"),
+      "utf8"
+    );
+
+    // El aviso se monta una sola vez en el layout, de modo que aparece en todas
+    // las hojas administrativas por construcción, no por repetición.
+    expect(layout.match(/<ActivityAuditBar \/>/g)).toHaveLength(1);
+
+    // Cierra la hoja: va después del contenido y separa por arriba.
+    const children = layout.indexOf("{children}");
+    const barSlot = layout.indexOf("<ActivityAuditBar />");
+    expect(children).toBeGreaterThan(-1);
+    expect(barSlot).toBeGreaterThan(children);
+    expect(bar).toContain("mt-4 rounded-2xl");
+    expect(bar).not.toContain("mb-4 rounded-2xl");
+
+    // El registro de la vista y su consulta no dependen de la posición.
+    expect(bar).toContain("page_opened");
+    expect(bar).toContain("activity.overview");
+    expect(bar).toContain("Ver control ISO");
+  });
+
   it("publishes the academic-commercial README with auditable proportions and references", () => {
     const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
     const academicBody = readme.slice(0, readme.indexOf("## Referencias"));
-    const wordCount = academicBody.trim().split(/\s+/).length;
+    const historyStart = academicBody.indexOf("<!-- release-history:start -->");
+    const historyEnd =
+      academicBody.indexOf("<!-- release-history:end -->") +
+      "<!-- release-history:end -->".length;
+    // La auditoría mide la PROSA, no el registro de versiones. El registro es un
+    // apéndice append-only que crece una entrada por release: incluirlo en el
+    // techo obligaba a recortar texto académico en cada versión, con lo que la
+    // medida dejaba de describir el cuerpo del documento. El registro conserva
+    // su propio límite para que tampoco crezca sin control.
+    const prose = (
+      academicBody.slice(0, historyStart) + academicBody.slice(historyEnd)
+    ).trim();
+    const proseWordCount = prose.split(/\s+/).length;
+    const historyWordCount = academicBody
+      .slice(historyStart, historyEnd)
+      .trim()
+      .split(/\s+/).length;
     const bibliography = readme
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.157");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.158");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
-    // El cuerpo académico creció con la sección 10 (marco DORA y concepto
-    // estratégico del artefacto), que antes solo existía en documentos de
-    // `docs/`. Se admite ese incremento y se conserva un techo explícito para
-    // impedir que el README derive en un documento sin límite.
-    expect(wordCount).toBeGreaterThanOrEqual(2_400);
-    expect(wordCount).toBeLessThanOrEqual(4_400);
+    expect(historyStart).toBeGreaterThan(-1);
+    expect(historyEnd).toBeGreaterThan(historyStart);
+    // La prosa académica se conserva acotada; el registro histórico mantiene su
+    // lugar y un techo propio.
+    expect(proseWordCount).toBeGreaterThanOrEqual(2_400);
+    expect(proseWordCount).toBeLessThanOrEqual(2_900);
+    expect(historyWordCount).toBeLessThanOrEqual(2_600);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.158");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1254,7 +1300,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.157");
+    expect(governance).toContain("Alcance candidato 2.0.158");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });

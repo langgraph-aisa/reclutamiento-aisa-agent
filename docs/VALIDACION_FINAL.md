@@ -1,4 +1,4 @@
-# Validación final · JARVI RH 2.0.157
+# Validación final · JARVI RH 2.0.158
 
 Fecha de ejecución: 2026-09-17. Rama objetivo: `main`.
 
@@ -14,7 +14,7 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.157` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.158` |
 | Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 116 archivos       |
 | Auditoría de recepción (`database/auditoria_recepcion_inbox.sql`) | Aprobado · 7 bloques de solo lectura, sin efectos sobre los datos |
 | Feed global con reconciliación (`server/inboxSync.test.ts`) | Aprobado · 10 de 10 pruebas |
@@ -40,12 +40,13 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Diagnóstico de volumen (`knowledge.storageHealth`, `database/diagnostico_visor_rag.sql`) | Aprobado · compara catálogo y volumen, informa ausentes y directorio resuelto |
 | RAG Personal del candidato (`server/candidateKnowledge.test.ts`) | Aprobado · 14 de 14 pruebas · namespace aislado, política compartida, huella sin duplicados y árbol de documentos |
 | Bandeja de WhatsApp del candidato (`CandidateConversationPanel.tsx`) | Aprobado · consume los mismos procedimientos que la bandeja general (`inbox.list`, `detail`, `setAutomation`, `markRead`, `syncNow`, `sendText`, `sendLink`, `sendLocation`, `sendFile`, `sendPtt`, `deleteMessage`) con historial completo acotado por postulación |
+| Resumen de actividad al pie (`DashboardLayout.tsx`, `ActivityAuditBar.tsx`) | Aprobado · un solo montaje en el layout, posterior al contenido, con separación superior; el registro de `page_opened` y el acceso a «Ver control ISO» se conservan |
 | Migración del RAG del candidato (`0026_candidate_knowledge.sql`) | Aprobado · expansiva e idempotente · no altera `knowledge_files` ni `knowledge_projects` |
 | Migración `0026` en PostgreSQL 17 real | Aprobado · aplicada sobre esquema existente con y sin `candidate_knowledge_notes`; dos ejecuciones consecutivas sin error; los seis bloques de verificación en `OK` o `no aplica` || Restricciones del expediente en PostgreSQL 17 real | Aprobado · carpeta duplicada, procedencia inválida, huella no hexadecimal, referencia de almacenamiento duplicada y carpeta inexistente se rechazan; borrar la postulación elimina el expediente en cascada y el RAG de proyectos permanece intacto |
-| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.157 → 2.0.157` |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.158 → 2.0.158` |
 | Identidad y versión (`server/releaseGovernance.test.ts`) | Aprobado · la etiqueta visible bajo el usuario, el README, la caja negra y `package.json` declaran la misma versión; ninguna superficie administrativa escribe el literal a mano |
-| Caja negra (`pnpm test:black-box`)                 | Aprobado · 25 de 25 pruebas   |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 372 de 372 pruebas |
+| Caja negra (`pnpm test:black-box`)                 | Aprobado · 26 de 26 pruebas   |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 373 de 373 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |
 | Migración conversacional (`0022_conversational_agent.sql`) | Aprobado · idempotente, sin secretos ni datos personales |

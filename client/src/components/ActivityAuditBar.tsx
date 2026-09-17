@@ -65,7 +65,7 @@ export function ActivityAuditBar() {
   return (
     <section
       aria-label="Resumen de actividad y control ISO"
-      className="mb-4 rounded-2xl border border-border/70 bg-card px-3 py-3 shadow-sm sm:px-4"
+      className="mt-4 rounded-2xl border border-border/70 bg-card px-3 py-3 shadow-sm sm:px-4"
     >
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
         <div className="flex min-w-0 flex-1 items-start gap-3">
