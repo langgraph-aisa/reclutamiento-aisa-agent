@@ -258,21 +258,43 @@ function CandidateDetail({
                 : "Evaluar con agente IA"}
           </Button>
         </div>
-        <div className="rounded-2xl bg-card p-5 text-card-foreground shadow-sm">
-          <p className="text-sm font-semibold">
-            Solicitud de CV por WhatsApp
+        <div className="rounded-2xl bg-white/8 p-4">
+          <p className="text-xs uppercase tracking-[.14em] text-white/55">
+            Bitácora
           </p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            La decisión se registra en el encabezado de esta hoja. Al pasar la
-            postulación a «Calificado», Talento AISA solicita el CV
-            directamente por ApiChat, una sola vez por postulación; desde aquí
-            puede reenviarse cuando el envío falló.
-          </p>
-          <div className="mt-4 space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Estado registrado: {statusLabel(data.application.status)}
+          {data.audit?.length ? (
+            <div className="mt-3 space-y-2">
+              {data.audit.slice(0, 5).map((event: any) => (
+                <div key={event.id} className="rounded-xl bg-white/6 p-3">
+                  <p className="text-sm font-semibold text-white/85">
+                    {event.action === "comment_added"
+                      ? "Comentario agregado"
+                      : "Estado actualizado"}
+                  </p>
+                  {event.before_json?.status !== event.after_json?.status && (
+                    <p className="mt-1 text-xs text-white/65">
+                      {statusLabel(event.before_json?.status)} →{" "}
+                      {statusLabel(event.after_json?.status)}
+                    </p>
+                  )}
+                  <p className="mt-2 text-sm text-white/80">
+                    {event.comment || "Sin comentario"}
+                  </p>
+                  <p className="mt-1 text-xs text-white/50">
+                    {event.actor_name ?? "Sistema"}
+                    {event.created_at
+                      ? ` · ${new Date(event.created_at).toLocaleString()}`
+                      : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-white/60">
+              Sin cambios registrados.
             </p>
-            {data.application.status === "calificado" &&
+          )}
+          {data.application.status === "calificado" &&
               data.application.whatsapp_status !== "enviado" && (
                 <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
                   <p className="font-semibold">
@@ -318,7 +340,6 @@ function CandidateDetail({
                   )}
                 </div>
               )}
-          </div>
         </div>
         <div className="lg:col-span-2 rounded-2xl bg-white/8 p-4">
           <p className="text-xs uppercase tracking-[.14em] text-white/55">
@@ -388,83 +409,6 @@ function CandidateDetail({
                 {data.answers?.length
                   ? "El formulario de origen no registra participación."
                   : "Sin respuestas registradas."}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="lg:col-span-2 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl bg-white/8 p-4">
-            <p className="text-xs uppercase tracking-[.14em] text-white/55">
-              Conversación WhatsApp
-            </p>
-            {data.messages?.length ? (
-              <div className="mt-3 space-y-2">
-                {data.messages.slice(-5).map((message: any) => (
-                  <div
-                    key={message.id}
-                    className="rounded-xl bg-white/6 p-3 text-sm text-white/80"
-                  >
-                    <span className="mr-2 text-xs text-white/45">
-                      {message.direction === "outbound"
-                        ? message.delivery_status === "failed"
-                          ? "Fallido"
-                          : message.delivery_status === "unknown"
-                            ? "Por confirmar"
-                            : message.delivery_status === "pending" ||
-                                message.delivery_status === "sending"
-                              ? "Pendiente"
-                              : "Enviado"
-                        : "Recibido"}
-                    </span>
-                    {message.body ?? "Mensaje sin texto"}
-                    {message.last_error && (
-                      <p className="mt-2 text-xs text-red-200">
-                        {message.last_error}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-white/60">
-                Aún no hay mensajes asociados.
-              </p>
-            )}
-          </div>
-          <div className="rounded-2xl bg-white/8 p-4">
-            <p className="text-xs uppercase tracking-[.14em] text-white/55">
-              Bitácora
-            </p>
-            {data.audit?.length ? (
-              <div className="mt-3 space-y-2">
-                {data.audit.slice(0, 5).map((event: any) => (
-                  <div key={event.id} className="rounded-xl bg-white/6 p-3">
-                    <p className="text-sm font-semibold text-white/85">
-                      {event.action === "comment_added"
-                        ? "Comentario agregado"
-                        : "Estado actualizado"}
-                    </p>
-                    {event.before_json?.status !== event.after_json?.status && (
-                      <p className="mt-1 text-xs text-white/65">
-                        {statusLabel(event.before_json?.status)} →{" "}
-                        {statusLabel(event.after_json?.status)}
-                      </p>
-                    )}
-                    <p className="mt-2 text-sm text-white/80">
-                      {event.comment || "Sin comentario"}
-                    </p>
-                    <p className="mt-1 text-xs text-white/50">
-                      {event.actor_name ?? "Sistema"}
-                      {event.created_at
-                        ? ` · ${new Date(event.created_at).toLocaleString()}`
-                        : ""}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-white/60">
-                Sin cambios registrados.
               </p>
             )}
           </div>

@@ -1,8 +1,20 @@
-# Gobierno de release JARVI RH 2.0.162
+# Gobierno de release JARVI RH 2.0.163
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.162**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.163**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.163
+
+El release **retira de la ficha las dos cajas que la reingeniería de hojas dejó sin contenido y la ordena en torno a la evidencia**. La caja «Solicitud de CV por WhatsApp» existía desde 2.0.160 como resto del bloque de decisión anterior: con la decisión en el encabezado y el pedido de CV automático al postular, su cuerpo se reducía a una leyenda de estado. En su lugar la ficha monta la **bitácora**, que estaba al pie compartiendo columna con un resumen de conversación vacío; ese resumen se retira porque la conversación ya tiene su módulo propio, con su icono y su capacidad completa, bajo la ficha.
+
+**La bitácora sube al lugar de la decisión.** El bloque conserva su contenido —los últimos cinco asientos con su acción, el cambio de estado, el comentario, el actor y la marca temporal— y pasa a la columna derecha del cuerpo, frente al resumen de perfil y al motivo. La ficha queda así: encabezado de identidad, Vista 360° del Candidato, resumen de perfil y motivo a la izquierda, bitácora a la derecha, respuestas de formularios a ancho completo y, debajo, el expediente documental y la conversación.
+
+**Sin pérdida operativa.** El reenvío manual de la solicitud de CV —la única acción que quedaba en la caja retirada— no desaparece: viaja con la bitácora y se dibuja **únicamente cuando es accionable**, esto es, cuando la postulación está calificada y el envío no consta como enviado, con su causa y su estado. Un caso sin incidencia no vuelve a mostrar un panel vacío; un caso con envío fallido conserva el reintento y la advertencia de verificar la conversación antes de un segundo intento.
+
+**Gobierno.** La puerta de release blinda el orden y la ausencia: la ficha monta el panel de Vista 360° antes del resumen de perfil y de la bitácora, y ya no contiene la caja de solicitud ni el resumen de conversación.
+
+Sin migración: el alcance es de interfaz.
 
 ### Alcance candidato 2.0.162
 
