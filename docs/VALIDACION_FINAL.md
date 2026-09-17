@@ -37,8 +37,9 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Transporte base64 (`server/base64Transport.test.ts`) | Aprobado · 26 de 26 pruebas |
 | Vale de acceso al visor (`server/viewerAccess.test.ts`) | Aprobado · 8 de 8 pruebas |
 | Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.155 → 2.0.156` |
-| Caja negra (`pnpm test:black-box`)                 | Aprobado · 22 de 22 pruebas   |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 345 de 345 pruebas |
+| Identidad y versión (`server/releaseGovernance.test.ts`) | Aprobado · la etiqueta visible bajo el usuario, el README, la caja negra y `package.json` declaran la misma versión; ninguna superficie administrativa escribe el literal a mano |
+| Caja negra (`pnpm test:black-box`)                 | Aprobado · 23 de 23 pruebas   |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 346 de 346 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |
 | Migración conversacional (`0022_conversational_agent.sql`) | Aprobado · idempotente, sin secretos ni datos personales |

@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   APP_VERSION,
   AUDITED_RUNTIME,
+  PRODUCT_NAME,
   QUALITY_REFERENCES,
   RELEASE_LABEL,
   nextReleaseVersion,
@@ -99,6 +100,67 @@ describe("black-box release contract", () => {
     );
     expect(nextReleaseVersion("2.0.999")).toBe("2.1.0");
     expect(() => nextReleaseVersion("2.0")).toThrow(/inválida/);
+  });
+
+  it("documents the release version beside the signed-in user identity", () => {
+    const layout = fs.readFileSync(
+      path.resolve("client/src/components/DashboardLayout.tsx"),
+      "utf8"
+    );
+    const release = fs.readFileSync(path.resolve("shared/release.ts"), "utf8");
+    const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
+
+    // La versión visible se deriva de package.json: no se escribe a mano.
+    expect(release).toContain('import packageMetadata from "../package.json"');
+    expect(release).toContain(
+      "export const APP_VERSION = packageMetadata.version"
+    );
+    expect(release).toContain(
+      "export const RELEASE_LABEL = `${PRODUCT_NAME} ${APP_VERSION}`"
+    );
+
+    // La etiqueta visible, el registro del README, la caja negra y el paquete
+    // deben apuntar a la misma versión. Una actualización parcial —subir el
+    // paquete sin publicar la documentación, o al revés— se detiene aquí.
+    const declared = `${PRODUCT_NAME} ${APP_VERSION}`;
+    expect(RELEASE_LABEL).toBe(declared);
+    expect(readme).toContain(`Talento AISA · ${declared}`);
+    expect(
+      fs.existsSync(path.resolve(`docs/PRUEBAS_CAJA_NEGRA_${APP_VERSION}.md`))
+    ).toBe(true);
+    expect(
+      JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")).version
+    ).toBe(APP_VERSION);
+
+    // El pie del menú presenta la etiqueta inmediatamente bajo la identidad
+    // de la sesión, de modo que la versión publicada sea atribuible a quien
+    // opera el artefacto.
+    const identity = layout.indexOf('{user?.name || "-"}');
+    const label = layout.indexOf("{RELEASE_LABEL}");
+    expect(identity).toBeGreaterThan(-1);
+    expect(label).toBeGreaterThan(identity);
+    expect(label - identity).toBeLessThan(400);
+    expect(layout.match(/\{RELEASE_LABEL\}/g)).toHaveLength(1);
+
+    // Ninguna superficie administrativa escribe el producto y la versión a
+    // mano: un literal desincronizado pasaría inadvertido para esta puerta.
+    const hardcoded = ["client/src/pages", "client/src/components"]
+      .flatMap(directory =>
+        fs
+          .readdirSync(path.resolve(directory))
+          .filter(file => file.endsWith(".tsx"))
+          .map(file => `${directory}/${file}`)
+      )
+      .filter(relative =>
+        fs.readFileSync(path.resolve(relative), "utf8").includes("JARVI RH 2.")
+      );
+    expect(hardcoded).toEqual([]);
+
+    // El hash corto y la rama del pie también provienen del build, no del
+    // código: el artefacto declara qué se compiló y desde dónde.
+    const viteConfig = fs.readFileSync(path.resolve("vite.config.ts"), "utf8");
+    expect(viteConfig).toContain("import.meta.env.VITE_BUILD_COMMIT");
+    expect(viteConfig).toContain("import.meta.env.VITE_BUILD_BRANCH");
   });
 
   it("persists only supported visual themes and cycles deterministically", () => {
