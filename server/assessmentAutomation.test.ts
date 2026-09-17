@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  ASSESSMENT_AUTOMATION_KEY,
   ASSESSMENT_START_DELAY_SECONDS,
   assessmentAutomationDefaults,
   assessmentExecutionScore,
@@ -9,6 +10,7 @@ import {
   judgeAssessmentAnswer,
   planAssessmentCycle,
   planAssessmentStep,
+  saveAssessmentAutomation,
 } from "./assessmentAutomation";
 
 const submittedAt = new Date("2026-09-17T15:00:00.000Z");
@@ -227,5 +229,35 @@ describe("continuidad declarada de la tarea programada", () => {
     });
     expect(stepAfterResume.itemIndex).toBe(2);
     expect(stepAfterResume.action).toBe("esperar");
+  });
+});
+
+describe("registro del interruptor en la auditoría", () => {
+  it("identifica el asiento con un entero y conserva la clave en el detalle", async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (String(sql).includes("INSERT INTO integration_settings")) {
+        return { rows: [{ updated_at: new Date() }] };
+      }
+      return { rows: [] };
+    });
+    await saveAssessmentAutomation({ query } as never, {
+      enabled: true,
+      actorUserId: 7,
+    });
+    const audit = query.mock.calls.find(([sql]) =>
+      String(sql).includes("INSERT INTO audit_log")
+    );
+    expect(audit).toBeDefined();
+    const [sql, values] = audit as [string, unknown[]];
+    // `audit_log.entity_id` es entero: la clave de configuración no puede
+    // ocupar su lugar, porque produce un error de sintaxis en la base.
+    expect(String(sql)).toContain("'integration_setting',0,");
+    expect(String(sql)).not.toContain("'integration_setting',$");
+    const detail = JSON.parse(String(values[1])) as {
+      setting: string;
+      enabled: boolean;
+    };
+    expect(detail.setting).toBe(ASSESSMENT_AUTOMATION_KEY);
+    expect(detail.enabled).toBe(true);
   });
 });

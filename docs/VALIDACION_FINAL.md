@@ -1,4 +1,4 @@
-# Validación final · JARVI RH 2.0.168
+# Validación final · JARVI RH 2.0.169
 
 Fecha de ejecución: 2026-09-17. Rama objetivo: `main`.
 
@@ -14,7 +14,7 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.168` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.169` |
 | Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 121 archivos       |
 | Auditoría de recepción (`database/auditoria_recepcion_inbox.sql`) | Aprobado · 7 bloques de solo lectura, sin efectos sobre los datos |
 | Feed global con reconciliación (`server/inboxSync.test.ts`) | Aprobado · 10 de 10 pruebas |
@@ -60,10 +60,11 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Migración `0029` en PostgreSQL 17 | Aprobado · dos columnas del cierre evaluado, autocertificación exacta y reaplicación sin error |
 | Migración del RAG del candidato (`0026_candidate_knowledge.sql`) | Aprobado · expansiva e idempotente · no altera `knowledge_files` ni `knowledge_projects` |
 | Migración `0026` en PostgreSQL 17 real | Aprobado · aplicada sobre esquema existente con y sin `candidate_knowledge_notes`; dos ejecuciones consecutivas sin error; los seis bloques de verificación en `OK` o `no aplica` || Restricciones del expediente en PostgreSQL 17 real | Aprobado · carpeta duplicada, procedencia inválida, huella no hexadecimal, referencia de almacenamiento duplicada y carpeta inexistente se rechazan; borrar la postulación elimina el expediente en cascada y el RAG de proyectos permanece intacto |
-| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.169` |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.170` |
+| Asiento de auditoría del interruptor (`server/assessmentAutomation.ts`, `server/assessmentAutomation.test.ts`) | Aprobado · el identificador es un literal entero y la clave viaja dentro del detalle; se revisaron las sesenta y una inserciones de auditoría del artefacto y ninguna otra superficie de configuración repite el defecto |
 | Identidad y versión (`server/releaseGovernance.test.ts`) | Aprobado · la etiqueta visible bajo el usuario, el README, la caja negra y `package.json` declaran la misma versión; ninguna superficie administrativa escribe el literal a mano |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 29 de 29 pruebas   |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 403 de 403 pruebas |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 404 de 404 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |
 | Migración conversacional (`0022_conversational_agent.sql`) | Aprobado · idempotente, sin secretos ni datos personales |

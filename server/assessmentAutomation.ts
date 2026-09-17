@@ -103,13 +103,19 @@ export async function saveAssessmentAutomation(
       input.enabled ? "true" : "false",
     ]
   );
+  // `audit_log.entity_id` es entero: la clave de configuración no puede ocupar
+  // su lugar —eso produce «invalid input syntax for type integer»—, de modo que
+  // el asiento usa el identificador convencional de los ajustes y la clave
+  // viaja dentro del detalle. Es la misma forma que ya usa el RAG de proyectos.
   await pool.query(
     `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
-     VALUES ($1,'integration_setting',$2,'assessment_automation_updated',$3::jsonb)`,
+     VALUES ($1,'integration_setting',0,'assessment_automation_updated',$2::jsonb)`,
     [
       input.actorUserId,
-      ASSESSMENT_AUTOMATION_KEY,
-      JSON.stringify({ enabled: input.enabled }),
+      JSON.stringify({
+        setting: ASSESSMENT_AUTOMATION_KEY,
+        enabled: input.enabled,
+      }),
     ]
   );
   return {

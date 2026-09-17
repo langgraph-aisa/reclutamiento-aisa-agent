@@ -1,12 +1,22 @@
-# Gobierno de release JARVI RH 2.0.168
+# Gobierno de release JARVI RH 2.0.169
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.168**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.169**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.169
+
+El release **corrige el defecto que impedía encender el ciclo automático de pruebas psicométricas**. El asiento de auditoría del interruptor entregaba la clave de configuración (`psychometric_autostart`) a `audit_log.entity_id`, que es entero **no nulo**: PostgreSQL rechazaba la operación con `invalid input syntax for type integer` y el interruptor **no podía encenderse desde el panel**. El módulo quedaba declarado y era inalcanzable —la ventana de treinta segundos, el saludo del protocolo, el ciclo por ítem y la re-evaluación automática no llegaban a ejecutarse—.
+
+**La causa y su alcance.** La convención del proyecto es asentar los cambios de configuración con el identificador `0` y la clave dentro del detalle (`after_json`); así lo hacen las cuatro superficies de ajustes —conversación, ApiChat, RAG de proyectos y endpoints de capacidad—. La auditoría del interruptor de pruebas fue **la única** que colocó la clave en el lugar del identificador. Se revisaron las sesenta y una inserciones de auditoría del artefacto: ninguna otra presenta el defecto.
+
+**La corrección y su guardia.** El asiento pasa a usar el identificador convencional y conserva la clave dentro del detalle, de modo que la trazabilidad no se pierde. Se agrega la prueba que lo habría detectado: comprueba que el identificador es un literal numérico y que la clave viaja en el detalle. El fallo no era de lógica sino de forma del asiento, y por eso las veintidós pruebas de las decisiones puras nunca lo habrían visto.
+
+**Sin cambio de esquema.** No hay migración: el defecto estaba en el asiento, no en la estructura.
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.168 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.169 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -38,7 +48,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.168.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.169.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 
