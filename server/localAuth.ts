@@ -207,3 +207,59 @@ export async function sendDeleteCode(payload: {
     html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#0b2f53"><h1 style="font-size:22px">Talento AISA</h1><p>Utilice el siguiente código para confirmar la eliminación de la versión <strong>v${payload.version}</strong> (${status}) de ${name}:</p><p style="font-size:34px;letter-spacing:8px;font-weight:700;margin:28px 0">${payload.code}</p><p>El código expira en <strong>${expiresInMinutes} minutos</strong> y solo puede utilizarse una vez.</p><p style="color:#64748b;font-size:13px">Si usted no solicitó este borrado, ignore este mensaje.</p></div>`,
   });
 }
+
+/**
+ * Código que autoriza encender o apagar el ciclo de evaluación automática.
+ *
+ * El correo transporta el código, el estado solicitado y los conteos del
+ * momento. No transporta nombre, teléfono, correo ni contenido de ninguna
+ * postulación: la confirmación es un acto institucional sobre el servicio, no
+ * sobre las personas evaluadas.
+ */
+export async function sendEvaluationAutomationCode(payload: {
+  email: string;
+  code: string;
+  expiresInMinutes?: number;
+  targetState: "encendido" | "apagado";
+  processed: number;
+  pending: number;
+}) {
+  const { from, transporter } = await createSmtpTransporter();
+  const expiresInMinutes = payload.expiresInMinutes ?? LOGIN_CODE_TTL_MINUTES;
+  const action = payload.targetState === "encendido" ? "encender" : "apagar";
+  await transporter.sendMail({
+    from,
+    to: payload.email,
+    subject: `Código para ${action} la evaluación automática · Talento AISA`,
+    text: `Su código es ${payload.code}. Al ingresarlo se confirma ${action} el ciclo de evaluación automática. Al momento de la solicitud hay ${payload.processed} postulaciones con nota y ${payload.pending} pendientes en cola. El código expira en ${expiresInMinutes} minutos y solo puede utilizarse una vez. Si usted no solicitó este cambio, ignore este mensaje.`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#0b2f53"><h1 style="font-size:22px">Talento AISA</h1><p>Utilice el siguiente código para confirmar que se va a <strong>${action}</strong> el ciclo de evaluación automática:</p><p style="font-size:34px;letter-spacing:8px;font-weight:700;margin:28px 0">${payload.code}</p><p>Al momento de la solicitud hay <strong>${payload.processed}</strong> postulaciones con nota y <strong>${payload.pending}</strong> pendientes en cola.</p><p>El código expira en <strong>${expiresInMinutes} minutos</strong> y solo puede utilizarse una vez.</p><p style="color:#64748b;font-size:13px">Si usted no solicitó este cambio, ignore este mensaje.</p></div>`,
+  });
+}
+
+/**
+ * Aviso del cambio ya consumado. El apagado se avisa cuando la parada se
+ * consuma —entre unidades, nunca a mitad de una evaluación—, de modo que el
+ * correo describe un hecho y no una intención.
+ */
+export async function sendEvaluationAutomationNotice(payload: {
+  email: string;
+  state: "encendido" | "apagado";
+  processed: number;
+  pending: number;
+}) {
+  const { from, transporter } = await createSmtpTransporter();
+  const encendido = payload.state === "encendido";
+  const subject = encendido
+    ? "Evaluación automática encendida · Talento AISA"
+    : "Evaluación automática detenida · Talento AISA";
+  const estados = encendido
+    ? "El ciclo quedó encendido y continuará con la postulación más antigua sin evaluar."
+    : "El ciclo quedó detenido. La evaluación en curso terminó antes de la parada y ninguna postulación se perdió: las pendientes conservan su lugar en la cola.";
+  await transporter.sendMail({
+    from,
+    to: payload.email,
+    subject,
+    text: `${estados} Al momento del aviso hay ${payload.processed} postulaciones con nota y ${payload.pending} pendientes en cola. Las demás formas de evaluación no resultan afectadas.`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#0b2f53"><h1 style="font-size:22px">Talento AISA</h1><p>${estados}</p><p>Al momento del aviso hay <strong>${payload.processed}</strong> postulaciones con nota y <strong>${payload.pending}</strong> pendientes en cola.</p><p style="color:#64748b;font-size:13px">Las demás formas de evaluación no resultan afectadas.</p></div>`,
+  });
+}

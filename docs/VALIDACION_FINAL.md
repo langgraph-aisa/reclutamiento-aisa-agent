@@ -1,4 +1,4 @@
-# Validación final · JARVI RH 2.0.169
+# Validación final · JARVI RH 2.0.170
 
 Fecha de ejecución: 2026-09-17. Rama objetivo: `main`.
 
@@ -14,8 +14,8 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.169` |
-| Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 121 archivos       |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.170` |
+| Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 123 archivos       |
 | Auditoría de recepción (`database/auditoria_recepcion_inbox.sql`) | Aprobado · 7 bloques de solo lectura, sin efectos sobre los datos |
 | Feed global con reconciliación (`server/inboxSync.test.ts`) | Aprobado · 10 de 10 pruebas |
 | Sincronización manual (`inbox.syncNow`, asiento `inbox_sync_manual`) | Aprobado · contrato verificado en gobernanza y caja negra BN-MANUAL-* |
@@ -60,16 +60,21 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Migración `0029` en PostgreSQL 17 | Aprobado · dos columnas del cierre evaluado, autocertificación exacta y reaplicación sin error |
 | Migración del RAG del candidato (`0026_candidate_knowledge.sql`) | Aprobado · expansiva e idempotente · no altera `knowledge_files` ni `knowledge_projects` |
 | Migración `0026` en PostgreSQL 17 real | Aprobado · aplicada sobre esquema existente con y sin `candidate_knowledge_notes`; dos ejecuciones consecutivas sin error; los seis bloques de verificación en `OK` o `no aplica` || Restricciones del expediente en PostgreSQL 17 real | Aprobado · carpeta duplicada, procedencia inválida, huella no hexadecimal, referencia de almacenamiento duplicada y carpeta inexistente se rechazan; borrar la postulación elimina el expediente en cascada y el RAG de proyectos permanece intacto |
-| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.170` |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.171` |
+| Ciclo de evaluación automática (`server/automaticEvaluation.ts`, `server/automaticEvaluation.test.ts`) | Aprobado · doce pruebas de la decisión pura y de la cadena: apagado, deteniéndose, pausa de treinta segundos, cola sin pendientes, nota persistida como criterio de éxito y fallo asentado sin marcar la postulación |
+| Contadores derivados en PostgreSQL 17 | Aprobado · con una postulación evaluada, una admisible y una con tres intentos agotados, los contadores dan 1 procesada, 1 pendiente y 1 no evaluable, y la toma devuelve la más antigua admisible |
+| Confirmación por correo del interruptor (`0031_evaluation_automation.sql`) | Aprobado · desafío con hash, vigencia, intentos y reenvío; sin código válido el estado no cambia |
+| Conducto de adjuntos (`server/apiChatWebhook.ts`, `server/apiChatSettings.ts`) | Aprobado · audio, imagen y nota de voz entran al conducto; toda pérdida se asienta con su causa y los descartes legítimos no generan alarmas |
+| Migración `0031` en PostgreSQL 17 real | Aprobado · diez columnas autocertificadas, seis controles en `OK`, reaplicación sin error |
 | Asiento de auditoría del interruptor (`server/assessmentAutomation.ts`, `server/assessmentAutomation.test.ts`) | Aprobado · el identificador es un literal entero y la clave viaja dentro del detalle; se revisaron las sesenta y una inserciones de auditoría del artefacto y ninguna otra superficie de configuración repite el defecto |
 | Identidad y versión (`server/releaseGovernance.test.ts`) | Aprobado · la etiqueta visible bajo el usuario, el README, la caja negra y `package.json` declaran la misma versión; ninguna superficie administrativa escribe el literal a mano |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 29 de 29 pruebas   |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 404 de 404 pruebas |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 418 de 418 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |
 | Migración conversacional (`0022_conversational_agent.sql`) | Aprobado · idempotente, sin secretos ni datos personales |
 | Migración de despliegue separado (`0023_conversation_service_split.sql`) | Aprobado · idempotente, roles sin contraseña |
-| Artefacto único de despliegue (`database/005_servicio_conversacional_listo.sql`) | Aprobado · reúne las migraciones `0022` a `0030`, con dieciocho controles autocertificados; aplicado desde cero en PostgreSQL 17 el dictamen final quedó `GATE GLOBAL OK` |
+| Artefacto único de despliegue (`database/005_servicio_conversacional_listo.sql`) | Aprobado · reúne las migraciones `0022` a `0031`, con veinte controles autocertificados; aplicado desde cero en PostgreSQL 17 el dictamen final quedó `GATE GLOBAL OK` |
 | Retiro de n8n (`n8n-workflows/` y scripts)         | Confirmado · ausentes         |
 | Build cliente/servidor (`pnpm build`)              | Aprobado                      |
 

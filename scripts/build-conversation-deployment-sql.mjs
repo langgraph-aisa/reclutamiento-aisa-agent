@@ -15,7 +15,8 @@ import { fileURLToPath } from "node:url";
  *   7. drizzle/migrations/0028_assessment_cycles.sql
  *   8. drizzle/migrations/0029_assessment_cycle_evaluation.sql
  *   9. drizzle/migrations/0030_assessment_item_attempts.sql
- *  10. database/verificacion_servicio_conversacional.sql
+ *  10. drizzle/migrations/0031_evaluation_automation.sql
+ *  11. database/verificacion_servicio_conversacional.sql
  *
  * Salida:
  *   database/005_servicio_conversacional_listo.sql
@@ -40,6 +41,7 @@ const sources = [
   "drizzle/migrations/0028_assessment_cycles.sql",
   "drizzle/migrations/0029_assessment_cycle_evaluation.sql",
   "drizzle/migrations/0030_assessment_item_attempts.sql",
+  "drizzle/migrations/0031_evaluation_automation.sql",
 ];
 
 const verificationPath = "database/verificacion_servicio_conversacional.sql";

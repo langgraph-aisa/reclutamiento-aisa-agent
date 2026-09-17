@@ -122,6 +122,73 @@ async function conversationForPhone(
   };
 }
 
+/**
+ * Tipos de mensaje que **portan un adjunto**.
+ *
+ * El receptor no puede depender del vocabulario del proveedor: un PDF, una
+ * imagen o una nota de voz llegan con nombres distintos según el plan y la
+ * configuración. Reconocer una sola etiqueta —`file`— dejaba el audio y la
+ * imagen en `tipo-sin-pipeline`, es decir **descartados en silencio**, que es
+ * precisamente la forma que adopta esta pérdida: el candidato cree haber
+ * enviado un archivo y el expediente no lo recibe.
+ */
+export const ATTACHMENT_MESSAGE_TYPES = new Set([
+  "file",
+  "document",
+  "image",
+  "audio",
+  "ptt",
+  "voice",
+  "video",
+]);
+
+/**
+ * Asienta una pérdida de contenido en el receptor.
+ *
+ * El receptor descarta varias cargas sin error: un mensaje de archivo sin
+ * contenido utilizable, o un archivo que no puede decodificarse, devuelven
+ * éxito al proveedor y no dejan rastro. Esa omisión silenciosa convierte una
+ * pérdida de información en una creencia falsa —«el candidato no adjuntó
+ * nada»—, de modo que cada pérdida queda asentada con su causa.
+ *
+ * Solo se asientan las pérdidas de **contenido de archivo**, que son
+ * inequívocas. No se asientan los descartes legítimos —acuses, estados del
+ * teléfono, actualizaciones de chat, salientes ya registrados, mensajes sin
+ * texto—: asentarlos produciría un torrente de alarmas falsas, y la fatiga de
+ * alarmas es a su vez una forma de ceguera.
+ *
+ * El asiento no conserva el nombre del archivo ni dato alguno del candidato:
+ * solo la causa, el tipo declarado y el identificador del proveedor.
+ */
+async function recordWebhookLoss(
+  pool: Pool,
+  input: {
+    cause: "archivo-sin-contenido" | "archivo-ilegible";
+    messageType: string;
+    providerMessageId: string;
+    declaredMimeType: string;
+    declaredSizeBytes: number | null;
+  }
+) {
+  try {
+    await pool.query(
+      `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+       VALUES (NULL,'apichat_webhook',0,'apichat_webhook_loss',$1::jsonb)`,
+      [
+        JSON.stringify({
+          cause: input.cause,
+          messageType: input.messageType.slice(0, 32),
+          providerMessageId: input.providerMessageId.slice(0, 80),
+          declaredMimeType: input.declaredMimeType.slice(0, 120),
+          declaredSizeBytes: input.declaredSizeBytes,
+        }),
+      ]
+    );
+  } catch {
+    // La traza nunca debe impedir la respuesta al proveedor.
+  }
+}
+
 export async function processApiChatWebhook(
   pool: Pool,
   body: unknown
@@ -162,10 +229,22 @@ export async function processApiChatWebhook(
     });
     return { ok: true, registered: true };
   }
-  if (message.type === "file") {
+  if (ATTACHMENT_MESSAGE_TYPES.has(message.type.trim().toLowerCase())) {
     const fileName = (message.filename ?? "archivo").slice(0, 260);
     const rawUrl = (message.url ?? "").trim();
-    if (!rawUrl) return { ok: true, skipped: "archivo-sin-contenido" };
+    // Un mensaje de archivo sin contenido utilizable es una **pérdida**, no un
+    // descarte: el candidato cree haber enviado el archivo y el expediente no
+    // lo recibe. Queda asentada con su causa para que sea visible.
+    if (!rawUrl) {
+      await recordWebhookLoss(pool, {
+        cause: "archivo-sin-contenido",
+        messageType: message.type,
+        providerMessageId: message.id,
+        declaredMimeType: message.mime_type ?? "",
+        declaredSizeBytes: null,
+      });
+      return { ok: true, skipped: "archivo-sin-contenido" };
+    }
     // Transporte canónico: `data:` URI o URL remota, verificados por contenido
     // antes de reconstruir el archivo «normal» en el volumen del RAG.
     let decoded;
@@ -176,9 +255,23 @@ export async function processApiChatWebhook(
         maxBytes: 50 * 1024 * 1024,
       });
     } catch {
+      await recordWebhookLoss(pool, {
+        cause: "archivo-ilegible",
+        messageType: message.type,
+        providerMessageId: message.id,
+        declaredMimeType: message.mime_type ?? "",
+        declaredSizeBytes: null,
+      });
       return { ok: true, skipped: "archivo-ilegible" };
     }
     if (!decoded || decoded.buffer.byteLength === 0) {
+      await recordWebhookLoss(pool, {
+        cause: "archivo-sin-contenido",
+        messageType: message.type,
+        providerMessageId: message.id,
+        declaredMimeType: message.mime_type ?? "",
+        declaredSizeBytes: decoded ? decoded.buffer.byteLength : null,
+      });
       return { ok: true, skipped: "archivo-sin-contenido" };
     }
     const storageKey = buildInboxFileKey("in", conversation.conversationId);

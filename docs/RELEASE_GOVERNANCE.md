@@ -1,8 +1,26 @@
-# Gobierno de release JARVI RH 2.0.169
+# Gobierno de release JARVI RH 2.0.170
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.169**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.170**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.170
+
+El release **entrega el ciclo de evaluación automática** y **corrige la pérdida silenciosa de adjuntos** que lo hacía inviable. Ambas cosas son una sola: el ciclo automático solicita el CV del candidato, y sin conducto de adjuntos esa petición no puede completarse.
+
+**La cola no es una entidad: es un estado del conjunto de postulaciones.** El criterio declarado es `applications.evaluation_at IS NULL` —quien nunca fue evaluado—, de modo que una evaluación hecha por una persona o por un evento **saca el elemento de la cola por sí sola**, sin coordinación ni reconciliación. Los contadores del panel se derivan de esa misma realidad: los mueve cualquier camino de evaluación, y por eso el número visible no puede discrepar del estado. El ciclo toma **la postulación más antigua admisible** sin importar plaza ni formulario.
+
+**La cadena es la de la postulación pública.** Para una postulación importada —que nunca disparó el evento— el ciclo **solicita el CV por el webhook** (lo que registra además el ciclo de pruebas de la plaza) y después **evalúa el perfil laboral**, y las pruebas psicométricas activadas siguen su curso. Cada paso es idempotente, de modo que reproducir la cadena no duplica nada de lo ya hecho.
+
+**Éxito significa que la nota quedó persistida.** El ciclo no avanza porque el proveedor haya respondido, sino porque el hecho quedó escrito: si la evaluación no dejó marca, la unidad falla, se asienta la causa y la postulación permanece en la cola. Tres intentos y sale de la cola como **no evaluable**, visible y con causa: el contador de pendientes nunca esconde trabajo irrecuperable.
+
+**La pausa de treinta segundos se mide desde el cierre de la unidad anterior y vive en el registro durable**, de modo que un reinicio del servicio no la reinicia ni la duplica. La parada es **cooperativa**: apagar declara `deteniendose`, el cese ocurre **entre unidades** y nunca a mitad de una evaluación, y el aviso por correo se envía al consumarse la parada.
+
+**Encender y apagar exigen un código por correo.** El interruptor es un acto de consecuencia institucional: el desafío se guarda solo como hash, con vigencia, intentos y espera entre reenvíos, igual que el retiro de una versión de instrumento. La migración `0031_evaluation_automation.sql` crea el desafío y el índice que hace barata la cuenta de intentos.
+
+**Corrección epistémica del conducto de adjuntos.** Se hallaron dos defectos que convertían una pérdida de información en una creencia falsa —«el candidato no adjuntó nada»—. Primero, el receptor descartaba con éxito (`200 {ok:true, skipped:"archivo-sin-contenido"}`) todo mensaje de archivo sin contenido utilizable, de modo que la pérdida era **indistinguible de que nada hubiera ocurrido**. Segundo, el receptor reconocía una sola etiqueta de tipo (`file`), de manera que **audio, imagen y nota de voz** caían en `tipo-sin-pipeline`: descartados en silencio. Ahora toda pérdida de archivo **queda asentada con su causa** (`apichat_webhook_loss`), el receptor reconoce cualquier tipo portador de adjunto, la configuración **declara el requisito literal del proveedor** —«Notify attachments in base64 format»— y la medición de pérdidas de las últimas veinticuatro horas produce una **advertencia observable**. No se asientan los descartes legítimos —acuses, estados, actualizaciones de chat—: asentarlos produciría un torrente de alarmas falsas.
+
+**Límite declarado.** El artefacto no puede encender por sí mismo una opción del panel del proveedor: **detecta y declara** su ausencia, y la corrección operativa sigue siendo humana. El ciclo administra y puntúa criterios declarados; no confiere validez psicométrica. Y el 99,9 % se promete sobre el planificador y la conservación del trabajo —nunca se pierde una pendiente y ninguna se evalúa dos veces—, no sobre el resultado del proveedor, que es un tercero.
 
 ### Alcance candidato 2.0.169
 
@@ -16,7 +34,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.169 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.170 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -48,7 +66,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.169.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.170.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

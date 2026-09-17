@@ -8,6 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter, auditPublishedPublicCopy } from "../routers";
 import { startInboxSyncBridge } from "../inboxSync";
 import { startConversationWorker } from "../conversationWorker";
+import { startAutomaticEvaluationWorker } from "../automaticEvaluation";
 import { registerApiChatWebhook } from "../apiChatWebhook";
 import { registerInboxFileRoutes } from "../inboxFiles";
 import { registerKnowledgeRoutes } from "../knowledgeRoutes";
@@ -43,6 +44,7 @@ async function startServer() {
   const pool = await getPool();
   let stopInboxSync: (() => void) | null = null;
   let stopConversationWorker: (() => void) | null = null;
+  let stopAutomaticEvaluation: (() => void) | null = null;
   if (pool) {
     const observability = await initializeLangfuseFromDatabase(pool, {
       release: APP_VERSION,
@@ -52,6 +54,9 @@ async function startServer() {
     );
     stopInboxSync = startInboxSyncBridge(() => getPool());
     stopConversationWorker = startConversationWorker(() => getPool());
+    // El ciclo de evaluación automática solo toma trabajo si su interruptor
+    // está encendido: apagado no consume la cola ni contacta a nadie.
+    stopAutomaticEvaluation = startAutomaticEvaluationWorker(() => getPool());
   } else {
     console.warn("[Observability] Langfuse state=disabled reason=DATABASE_UNAVAILABLE.");
   }
@@ -119,6 +124,7 @@ async function startServer() {
       });
       stopInboxSync?.();
       stopConversationWorker?.();
+      stopAutomaticEvaluation?.();
       await shutdownLangfuse();
       if (pool) await pool.end();
       console.log("[Lifecycle] Cierre ordenado completado.");

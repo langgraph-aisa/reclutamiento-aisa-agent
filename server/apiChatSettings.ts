@@ -391,6 +391,91 @@ export function apiChatCapabilityAdvisories(input: {
   return advisories;
 }
 
+/**
+ * Ventana y requisito declarado del conducto de adjuntos.
+ *
+ * El artefacto depende de una capacidad que se configura **fuera** de él: la
+ * notificación de adjuntos del proveedor. Declararla aquí —con el nombre
+ * literal de la opción— es lo que impide que su ausencia vuelva a ser
+ * invisible: antes, el receptor descartaba el mensaje con éxito y el sistema
+ * concluía que el candidato no había adjuntado nada.
+ */
+export const APICHAT_ATTACHMENT_WINDOW_HOURS = 24;
+
+export const APICHAT_ATTACHMENT_REQUIREMENT =
+  "En el panel de ApiChat, la opción «Notify attachments in base64 format» debe permanecer encendida: sin ella el proveedor no entrega el archivo, el candidato cree haberlo enviado y el expediente queda vacío sin ningún error visible.";
+
+export type ApiChatAttachmentLosses = {
+  windowHours: number;
+  withoutContent: number;
+  unreadable: number;
+  total: number;
+  lastAt: string | Date | null;
+};
+
+/**
+ * Pérdidas de archivo asentadas por el receptor en la ventana declarada.
+ *
+ * Es una medida del **hecho**, no de la intención: cuenta lo que el receptor
+ * descartó por falta de contenido utilizable o por ilegibilidad. Sin pérdidas
+ * la respuesta es vacía y no se declara nada.
+ */
+export async function recentAttachmentLosses(
+  pool: Pool | null,
+  options: { windowHours?: number } = {}
+): Promise<ApiChatAttachmentLosses> {
+  const windowHours = options.windowHours ?? APICHAT_ATTACHMENT_WINDOW_HOURS;
+  const empty: ApiChatAttachmentLosses = {
+    windowHours,
+    withoutContent: 0,
+    unreadable: 0,
+    total: 0,
+    lastAt: null,
+  };
+  if (!pool) return empty;
+  try {
+    const result = await pool.query<{
+      cause: string | null;
+      total: number;
+      last_at: string | Date | null;
+    }>(
+      `SELECT after_json->>'cause' AS cause,count(*)::int AS total,
+              max(created_at) AS last_at
+         FROM audit_log
+        WHERE entity_type='apichat_webhook'
+          AND action='apichat_webhook_loss'
+          AND created_at >= now() - ($1 || ' hours')::interval
+        GROUP BY 1`,
+      [String(windowHours)]
+    );
+    const losses = { ...empty };
+    for (const row of result.rows) {
+      const total = Number(row.total ?? 0);
+      losses.total += total;
+      if (row.cause === "archivo-ilegible") losses.unreadable += total;
+      else losses.withoutContent += total;
+      if (row.last_at && !losses.lastAt) losses.lastAt = row.last_at;
+    }
+    return losses;
+  } catch {
+    // Sin la tabla de traza la medida no existe; no se declara nada falso.
+    return empty;
+  }
+}
+
+/**
+ * Advertencia del conducto de adjuntos. Solo habla cuando hay pérdidas: una
+ * advertencia permanente dejaría de leerse, y la que no se lee no protege.
+ */
+export function apiChatAttachmentTransportAdvisory(
+  losses: ApiChatAttachmentLosses
+): string[] {
+  if (!losses.total) return [];
+  return [
+    `La recepción de adjuntos no está verificada: el receptor asentó ${losses.total} pérdida(s) de archivo en las últimas ${losses.windowHours} horas (${losses.withoutContent} sin contenido y ${losses.unreadable} ilegible(s)). Confirme que la opción «Notify attachments in base64 format» del panel de ApiChat permanezca encendida y envíe un archivo de prueba desde un teléfono autorizado.`,
+  ];
+}
+
 export async function getApiChatEndpoints(pool: Pool | null) {
   const readiness = await getApiChatReceptionReadiness(pool);
   const baseEnabled = readiness.sendReady && readiness.mode === "native";
@@ -407,17 +492,27 @@ export async function getApiChatEndpoints(pool: Pool | null) {
     endpoints,
     conversationMode: conversationServiceMode(),
   });
+  const attachmentLosses = await recentAttachmentLosses(pool);
   return {
     mode: readiness.mode,
     enabled: baseEnabled && states.every(state => state.enabled),
     conversationMode: conversationServiceMode(),
     endpoints,
     capabilities,
-    advisories: apiChatCapabilityAdvisories({
-      baseEnabled,
-      endpoints,
-      readiness: capabilities,
-    }),
+    // El conducto de adjuntos no se declara solo en el proveedor: se mide. Si
+    // el receptor asentó pérdidas de archivo recientes, la capacidad está
+    // ausente y el artefacto lo dice en lugar de dar por hecho que el candidato
+    // no adjuntó nada.
+    attachmentRequirement: APICHAT_ATTACHMENT_REQUIREMENT,
+    attachmentLosses,
+    advisories: [
+      ...apiChatCapabilityAdvisories({
+        baseEnabled,
+        endpoints,
+        readiness: capabilities,
+      }),
+      ...apiChatAttachmentTransportAdvisory(attachmentLosses),
+    ],
   };
 }
 

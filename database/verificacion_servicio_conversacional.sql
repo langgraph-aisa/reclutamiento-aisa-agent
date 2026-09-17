@@ -118,6 +118,16 @@ WITH controles AS (
          (SELECT count(*)::text FROM pg_indexes
            WHERE schemaname = 'public'
              AND indexname = 'assessment_item_attempts_identity_uq')
+  UNION ALL
+  SELECT 19, 'Migracion 0031 - desafio del ciclo automatico', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'evaluation_automation_challenges')
+  UNION ALL
+  SELECT 20, 'Migracion 0031 - indice de la cuenta de intentos', '1',
+         (SELECT count(*)::text FROM pg_indexes
+           WHERE schemaname = 'public'
+             AND indexname = 'audit_log_entity_action_idx')
 )
 SELECT orden, control, esperado, obtenido,
        CASE WHEN orden = 9 THEN 'INFORMATIVO'

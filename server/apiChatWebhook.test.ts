@@ -241,11 +241,75 @@ describe("webhook de ApiChat", () => {
       message: {
         id: "3EB0A3",
         number: "50230939134",
-        type: "audio",
+        type: "reaction",
       },
       from_me: false,
     });
     expect(outcome).toEqual({ ok: true, skipped: "tipo-sin-pipeline" });
+  });
+
+  it("asienta la pérdida de una nota de voz sin contenido", async () => {
+    const { pool, query } = webhookPool({
+      conversations: [
+        {
+          conversation_id: 5,
+          application_id: 41,
+          phone_international: "+50230939134",
+        },
+      ],
+      outbound: [],
+    });
+    const outcome = await processApiChatWebhook(pool, {
+      message: {
+        id: "3EB0VOZ",
+        number: "50230939134",
+        type: "audio",
+        url: "",
+        mime_type: "audio/ogg",
+      },
+      from_me: false,
+    });
+    // El tipo portador de adjunto ya no se descarta: se registra su pérdida.
+    expect(outcome).toEqual({ ok: true, skipped: "archivo-sin-contenido" });
+    const audit = query.mock.calls.find(([sql]) =>
+      String(sql).includes("INSERT INTO audit_log")
+    );
+    expect(audit).toBeDefined();
+    const detail = JSON.parse(String((audit?.[1] as unknown[])[0])) as {
+      cause: string;
+      messageType: string;
+    };
+    expect(detail.cause).toBe("archivo-sin-contenido");
+    expect(detail.messageType).toBe("audio");
+    expect(recordNormalizedInboundFile).not.toHaveBeenCalled();
+  });
+
+  it("registra una imagen entrante por el conducto de adjuntos", async () => {
+    const { pool } = webhookPool({
+      conversations: [
+        {
+          conversation_id: 5,
+          application_id: 41,
+          phone_international: "+50230939134",
+        },
+      ],
+      outbound: [],
+    });
+    const outcome = await processApiChatWebhook(pool, {
+      message: {
+        id: "3EB0IMG",
+        number: "50230939134",
+        type: "image",
+        filename: "nota.png",
+        url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      },
+      from_me: false,
+    });
+    expect(outcome).toEqual({ ok: true, registered: true });
+    expect(recordNormalizedInboundFile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ fileName: "nota.png" })
+    );
   });
 });
 

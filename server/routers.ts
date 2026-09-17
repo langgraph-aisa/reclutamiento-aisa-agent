@@ -66,6 +66,12 @@ import {
   saveAssessmentAutomation,
 } from "./assessmentAutomation";
 import {
+  confirmEvaluationAutomation,
+  evaluationAutomationCounters,
+  getEvaluationAutomation,
+  requestEvaluationAutomationCode,
+} from "./automaticEvaluation";
+import {
   AGENT_SECRET_KEYS,
   getAgentConfiguration,
   saveAgentPreferences,
@@ -2795,6 +2801,93 @@ export const appRouter = router({
       }),
   }),
 
+  evaluationAutomation: router({
+    /**
+     * Estado del ciclo automático y sus contadores. Los contadores son
+     * **derivados**: los mueve cualquier camino de evaluación —evento, revisión
+     * humana o el propio ciclo—, de modo que la superficie no puede discrepar
+     * del estado real.
+     */
+    status: roleProcedure.query(async () => {
+      const pool = await getPool();
+      if (!pool)
+        return {
+          state: "apagado" as const,
+          updatedAt: null,
+          counters: {
+            processed: 0,
+            pending: 0,
+            blocked: 0,
+            lastEvaluationAt: null,
+          },
+        };
+      const [automation, counters] = await Promise.all([
+        getEvaluationAutomation(pool),
+        evaluationAutomationCounters(pool),
+      ]);
+      return {
+        state: automation.state,
+        updatedAt: automation.updatedAt,
+        counters,
+      };
+    }),
+    /**
+     * Solicita el código que autoriza encender o apagar el ciclo. El código
+     * viaja solo por correo y no se revela en la respuesta.
+     */
+    requestCode: adminProcedure
+      .input(
+        z.object({ targetState: z.enum(["encendido", "apagado"]) })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const account = await pool.query<{ email: string }>(
+          `SELECT email FROM users WHERE id=$1 LIMIT 1`,
+          [ctx.user.id]
+        );
+        const email = account.rows[0]?.email;
+        if (!email)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "La cuenta no registra un correo para la confirmación.",
+          });
+        try {
+          return await requestEvaluationAutomationCode(pool, {
+            targetState: input.targetState,
+            actorUserId: ctx.user.id,
+            actorEmail: email,
+            requestedIp: requestIp(ctx.req),
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible solicitar el código de confirmación.",
+          });
+        }
+      }),
+    /**
+     * Confirma el cambio con el código recibido. Encender es inmediato;
+     * apagar declara «deteniéndose» y el cese lo consuma el barrido entre
+     * unidades.
+     */
+    confirm: adminProcedure
+      .input(z.object({ code: z.string().trim().regex(/^\d{6}$/) }))
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const account = await pool.query<{ email: string }>(
+          `SELECT email FROM users WHERE id=$1 LIMIT 1`,
+          [ctx.user.id]
+        );
+        return confirmEvaluationAutomation(pool, {
+          code: input.code,
+          actorUserId: ctx.user.id,
+          actorEmail: account.rows[0]?.email ?? "",
+        });
+      }),
+  }),
   assessments: router({
     /**
      * Interruptor del ciclo de pruebas psicométricas. Encendido, el agente

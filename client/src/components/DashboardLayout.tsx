@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AppBrand } from "@/components/AppBrand";
 import { ActivityAuditBar } from "@/components/ActivityAuditBar";
+import { AutomaticEvaluationPanel } from "@/components/AutomaticEvaluationPanel";
 import { ReleaseSummary } from "@/components/ReleaseSummary";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -28,6 +29,7 @@ import { RELEASE_LABEL } from "@shared/release";
 import {
   BarChart3,
   Bot,
+  ChevronDown,
   BrainCircuit,
   BriefcaseBusiness,
   ClipboardList,
@@ -198,6 +200,10 @@ function DashboardLayoutContent({
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
+  // La información del repositorio nace **plegada**: el pie presenta primero el
+  // estado operativo del ciclo automático y la identidad del artefacto queda
+  // tras la flecha, que es un detalle de construcción y no una decisión.
+  const [repositoryOpen, setRepositoryOpen] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const visibleMenuItems = menuItems.filter(
     item => !item.adminOnly || user?.role === "admin"
@@ -351,8 +357,33 @@ function DashboardLayoutContent({
                 </DropdownMenuContent>
               </DropdownMenu>
               <ThemeToggle compact={isCollapsed} />
+              {!isCollapsed ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 rounded-full"
+                  aria-expanded={repositoryOpen}
+                  aria-label={
+                    repositoryOpen
+                      ? "Ocultar la información del repositorio"
+                      : "Mostrar la información del repositorio"
+                  }
+                  onClick={() => setRepositoryOpen(open => !open)}
+                >
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${repositoryOpen ? "rotate-180" : ""}`}
+                  />
+                </Button>
+              ) : null}
             </div>
-            <ReleaseSummary compact={isCollapsed} />
+            {isCollapsed ? (
+              <ReleaseSummary compact />
+            ) : (
+              <>
+                <AutomaticEvaluationPanel />
+                {repositoryOpen ? <ReleaseSummary /> : null}
+              </>
+            )}
           </SidebarFooter>
         </Sidebar>
         <div
