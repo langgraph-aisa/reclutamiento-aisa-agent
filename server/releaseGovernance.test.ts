@@ -72,8 +72,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.156");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.156");
+    expect(APP_VERSION).toBe("2.0.157");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.157");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -518,9 +518,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(115);
+    expect(audit.files).toHaveLength(116);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(115);
+    expect(publicCopyAudit.files).toHaveLength(116);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -1064,6 +1064,58 @@ describe("black-box release contract", () => {
     expect(panel).toContain("Aclaraciones confirmadas por la persona");
   });
 
+  it("scopes the WhatsApp inbox to the candidate under review", () => {
+    const conversation = fs.readFileSync(
+      path.resolve("client/src/components/review/CandidateConversationPanel.tsx"),
+      "utf8"
+    );
+    const review = fs.readFileSync(
+      path.resolve("client/src/components/review/ReviewEvidencePanels.tsx"),
+      "utf8"
+    );
+
+    // Sustituye al panel compacto por el recorrido completo de la bandeja.
+    expect(review).toContain("<CandidateConversationPanel");
+    expect(review).not.toContain("Abrir bandeja completa");
+
+    // Consume los mismos procedimientos que la bandeja general: la conducta
+    // —permisos, guardarraíl salarial, auditoría y encolado— es idéntica.
+    for (const procedure of [
+      "inbox.list",
+      "inbox.detail",
+      "inbox.setAutomation",
+      "inbox.markRead",
+      "inbox.syncNow",
+      "inbox.sendText",
+      "inbox.sendLink",
+      "inbox.sendLocation",
+      "inbox.sendFile",
+      "inbox.sendPtt",
+      "inbox.deleteMessage",
+    ]) {
+      expect(conversation).toContain(procedure);
+    }
+
+    // Historial completo del candidato, no el recorte de la última hora.
+    expect(conversation).toContain('timeRange: "all"');
+    expect(conversation).toContain("applicationId");
+
+    // Herramientas operativas presentes y sujetas al control humano.
+    expect(conversation).toContain("Activar JARVI HR");
+    expect(conversation).toContain("Control humano");
+    expect(conversation).toContain("Excepción administrativa auditada");
+    expect(conversation).toContain("Nota de voz");
+    expect(conversation).toContain("Enlace");
+    expect(conversation).toContain("Ubicación");
+    expect(conversation).toContain("Archivo");
+    expect(conversation).toContain("humanKeyboard");
+    expect(conversation).toContain("messageTicks");
+
+    // El documento recibido por el canal entra al RAG Personal del candidato.
+    expect(conversation).toContain("RAG");
+    expect(conversation).toContain("exclusiva de la persona en estudio");
+  });
+
   it("publishes the academic-commercial README with auditable proportions and references", () => {
     const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
     const academicBody = readme.slice(0, readme.indexOf("## Referencias"));
@@ -1072,7 +1124,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.156");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.157");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1085,7 +1137,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.156");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");
@@ -1202,7 +1254,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.156");
+    expect(governance).toContain("Alcance candidato 2.0.157");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
