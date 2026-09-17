@@ -1,4 +1,9 @@
-import { Badge } from "@/components/ui/badge";
+import {
+  answersFor,
+  formatAnswer,
+  formatDate,
+  scoreFor,
+} from "@/components/review/CandidateReviewSummary";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,67 +16,35 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { APPLICATION_STATUS_OPTIONS } from "@shared/applicationStatus";
 import {
-  APPLICATION_STATUS_OPTIONS,
-  applicationStatusLabel,
-  applicationStatusTone,
-} from "@shared/applicationStatus";
-import {
-  adjacentReviewBlockPage,
   adjacentReviewResultIndex,
-  reviewBlockPageRange,
   type ReviewNavigationDirection,
 } from "@shared/reviewNavigation";
 import {
   ArrowDown,
   ArrowUp,
-  Banknote,
   Bot,
   Check,
   Eye,
   FilterX,
   Loader2,
-  MapPin,
   MessageCircle,
   MessageSquareText,
   Phone,
   Search,
-  Sparkles,
-  UserRound,
 } from "lucide-react";
-import {
-  Fragment,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
 
 type SortBy = "submitted_at" | "name" | "score" | "status" | "position";
 type SortDirection = "asc" | "desc";
-type ViewerSelection =
-  | { kind: "ai" }
-  | { kind: "summary" }
-  | { kind: "reason" }
-  | { kind: "answer"; fieldKey: string };
-
-type Answer = {
-  fieldKey: string;
-  label: string;
-  value: unknown;
-  formId?: number | null;
-  normalizedValue?: string | null;
-  deterministicResult?: string | null;
-};
 
 /**
- * Candidatos: explorador de postulaciones con filtros combinables, matriz de
- * resultados y visor lateral. La búsqueda ocupa la ventana completa y cada
- * fila ofrece el botón «Detalle», que abre la ficha completa en
- * /admin/human-review?application=<id>.
+ * Candidatos: búsqueda de postulaciones. Filtros combinables, matriz de
+ * resultados y navegación vertical entre resultados. La revisión y la decisión
+ * viven en Revisión Humana: el botón «Detalle» de cada fila abre la ficha.
  */
 export default function Candidates() {
   const utils = trpc.useUtils();
@@ -87,7 +60,6 @@ export default function Candidates() {
   const [sortBy, setSortBy] = useState<SortBy>("submitted_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [viewer, setViewer] = useState<ViewerSelection>({ kind: "ai" });
   const matrixScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -118,7 +90,6 @@ export default function Candidates() {
     }
     if (!rows.some((row: any) => row.id === selectedId)) {
       setSelectedId(rows[0].id);
-      setViewer({ kind: "ai" });
     }
   }, [rows, selectedId]);
 
@@ -176,12 +147,6 @@ export default function Candidates() {
 
   const selectCandidate = (id: number) => {
     setSelectedId(id);
-    setViewer({ kind: "ai" });
-  };
-
-  const showForCandidate = (id: number, selection: ViewerSelection) => {
-    setSelectedId(id);
-    setViewer(selection);
   };
 
   const selectedIndex = selected
@@ -235,114 +200,26 @@ export default function Candidates() {
 
   return (
     <div className="human-review-workspace flex h-[calc(100dvh-5.5rem)] min-h-0 min-w-0 flex-col gap-2 overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:h-[calc(100dvh-2rem)] md:gap-3 md:overflow-y-auto">
-      <section className="shrink-0 rounded-2xl border border-border/60 bg-card px-3 py-3 shadow-soft sm:px-4">
-        <div className="human-review-summary-grid">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-muted text-primary sm:h-12 sm:w-12 sm:rounded-2xl">
-              <UserRound className="h-5 w-5 sm:h-6 sm:w-6" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-lg font-800 text-primary sm:text-xl">
-                  {selected?.full_name ?? "Candidatos"}
-                </h1>
-                {selected ? <StatusBadge status={selected.status} /> : null}
-                {selected ? (
-                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
-                    {(selected.submissions ?? []).length} formularios
-                  </span>
-                ) : null}
-                {selected ? (
-                  <Link href={`/admin/inbox?application=${selected.id}`}>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8 rounded-full border-emerald-300 text-emerald-800"
-                      aria-label={`Abrir conversación de WhatsApp de ${selected.full_name ?? "la persona seleccionada"}`}
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                ) : null}
-              </div>
-              <p className="mt-1 truncate text-sm text-muted-foreground">
-                {selected
-                  ? `${selected.position_title} · ${selected.phone_international}`
-                  : "Visión 360° para decisiones humanas trazables"}
-              </p>
-              {selected ? (
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                  <span
-                    className="inline-flex min-w-0 items-center gap-1 text-muted-foreground"
-                    title="Ubicación declarada por la persona"
-                  >
-                    <MapPin className="h-3.5 w-3.5 shrink-0 text-sky-700" />
-                    <span className="truncate">
-                      {declaredLocationLabel(selected)}
-                    </span>
-                  </span>
-                  <span
-                    className={`inline-flex min-w-0 items-center gap-1 ${salaryLabel(selected).declared ? "font-semibold text-emerald-800" : "text-muted-foreground"}`}
-                    title="Expectativa de remuneración registrada únicamente con evidencia literal"
-                  >
-                    <Banknote className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{salaryLabel(selected).text}</span>
-                  </span>
-                </div>
-              ) : null}
-              <button
-                type="button"
-                disabled={!selected}
-                onClick={() => setViewer({ kind: "summary" })}
-                className="mt-1 max-w-full truncate text-left text-xs text-muted-foreground underline decoration-border underline-offset-4 hover:text-primary disabled:no-underline"
-              >
-                {selected?.profile_summary ??
-                  "Seleccione una postulación para abrir su nota inicial de IA."}
-              </button>
-            </div>
-          </div>
-          <div className="human-review-score-actions flex items-center gap-3">
-            <div className="text-center">
-              <p className="text-3xl font-800 tracking-tight text-primary sm:text-4xl">
-                {scoreFor(selected) ?? "—"}
-                <span className="text-lg font-semibold text-muted-foreground">
-                  /100
-                </span>
-              </p>
-              <p className="mt-1 text-[11px] uppercase tracking-[.16em] text-muted-foreground">
-                Punteo IA
-              </p>
-            </div>
-            {selected ? (
-              <Link href={`/admin/human-review?application=${selected.id}`}>
-                <Button variant="outline" className="rounded-full">
-                  <Eye className="mr-2 h-4 w-4" /> Detalle
-                </Button>
-              </Link>
-            ) : null}
-          </div>
-          {selected ? (
-            <QuickReview
-              key={`${selected.id}:${selected.status}`}
-              currentStatus={selected.status}
-              pending={updateStatus.isPending}
-              onSave={(nextStatus, comment) =>
-                saveReview(selected.id, nextStatus, comment)
-              }
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No hay candidatos disponibles con los filtros actuales.
+      <header className="shrink-0 rounded-2xl border border-border/60 bg-card px-3 py-3 shadow-soft sm:px-4">
+        <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-sky-700">
+              Búsqueda de postulaciones
             </p>
-          )}
+            <h1 className="mt-1 text-2xl font-800 tracking-[-.03em] text-primary sm:text-3xl">
+              Candidatos
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {rows.length} postulación{rows.length === 1 ? "" : "es"} en el
+              filtro vigente · el botón «Detalle» abre la ficha completa en
+              Revisión Humana
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            La revisión y la decisión se registran en la ficha de cada persona.
+          </p>
         </div>
-      </section>
-
-      <ViewerPanel
-        candidate={selected}
-        selection={viewer}
-        onSelect={setViewer}
-      />
+      </header>
 
       <section className="shrink-0 rounded-2xl border border-border/60 bg-card p-2 shadow-soft sm:p-3">
         <div className="human-review-filter-grid">
@@ -594,20 +471,14 @@ export default function Candidates() {
                             className="max-w-[240px] border-b border-r px-3 py-2 align-top"
                           >
                             {answer ? (
-                              <button
-                                type="button"
-                                onClick={event => {
-                                  event.stopPropagation();
-                                  showForCandidate(candidate.id, {
-                                    kind: "answer",
-                                    fieldKey: column.fieldKey,
-                                  });
-                                }}
-                                className="line-clamp-2 w-full text-left leading-5 text-primary hover:text-sky-800 hover:underline dark:hover:text-white"
+                              <Link
+                                href={`/admin/human-review?application=${candidate.id}`}
+                                onClick={event => event.stopPropagation()}
+                                className="line-clamp-2 block w-full text-left leading-5 text-primary hover:text-sky-800 hover:underline dark:hover:text-white"
                                 title={formatAnswer(answer)}
                               >
                                 {formatAnswer(answer)}
-                              </button>
+                              </Link>
                             ) : (
                               <span className="text-muted-foreground/50">
                                 —
@@ -617,29 +488,26 @@ export default function Candidates() {
                         );
                       })}
                       <td className="border-b border-r px-3 py-2 text-center align-top">
-                        <button
-                          type="button"
-                          onClick={event => {
-                            event.stopPropagation();
-                            showForCandidate(candidate.id, { kind: "ai" });
-                          }}
+                        <Link
+                          href={`/admin/human-review?application=${candidate.id}`}
+                          onClick={event => event.stopPropagation()}
                           className="inline-flex min-w-20 items-center justify-center rounded-xl border bg-background px-3 py-2 font-bold text-primary hover:border-sky-300 hover:bg-sky-50 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
+                          aria-label={`Abrir la ficha de ${candidate.full_name ?? "la persona"} en Revisión Humana`}
+                          title="Abrir la ficha completa en Revisión Humana"
                         >
                           <Bot className="mr-2 h-4 w-4" />
                           {scoreFor(candidate) ?? "—"}
-                        </button>
+                        </Link>
                       </td>
                       <td className="border-b border-r px-3 py-2 text-center align-top">
-                        <button
-                          type="button"
-                          onClick={event => {
-                            event.stopPropagation();
-                            showForCandidate(candidate.id, { kind: "reason" });
-                          }}
+                        <Link
+                          href={`/admin/human-review?application=${candidate.id}`}
+                          onClick={event => event.stopPropagation()}
                           className="inline-flex items-center rounded-xl border bg-background px-3 py-2 font-semibold text-primary hover:border-sky-300 hover:bg-sky-50 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
+                          title="Abrir la ficha completa en Revisión Humana"
                         >
                           <MessageSquareText className="mr-2 h-4 w-4" /> Ver
-                        </button>
+                        </Link>
                       </td>
                       <RowReviewControls
                         key={`${candidate.id}:${candidate.status}`}
@@ -672,341 +540,6 @@ export default function Candidates() {
           />
         ) : null}
       </Card>
-    </div>
-  );
-}
-
-function ViewerPanel({
-  candidate,
-  selection,
-  onSelect,
-}: {
-  candidate: any;
-  selection: ViewerSelection;
-  onSelect: (selection: ViewerSelection) => void;
-}) {
-  const blocks = Array.isArray(candidate?.ai_payload?.blocks)
-    ? candidate.ai_payload.blocks
-    : [];
-  const answer =
-    selection.kind === "answer"
-      ? answersFor(candidate).find(item => item.fieldKey === selection.fieldKey)
-      : null;
-  const heading =
-    selection.kind === "answer"
-      ? (answer?.fieldKey ?? selection.fieldKey)
-      : selection.kind === "reason"
-        ? "Motivo de evaluación"
-        : selection.kind === "summary"
-          ? "Nota inicial del candidato"
-          : "Matriz de evaluación IA";
-  const viewerPanelRef = useRef<HTMLElement>(null);
-  const [blockPageSize, setBlockPageSize] = useState(3);
-  const [blockPage, setBlockPage] = useState(0);
-  const selectionKey =
-    selection.kind === "answer"
-      ? `${selection.kind}:${selection.fieldKey}`
-      : selection.kind;
-
-  useLayoutEffect(() => {
-    const element = viewerPanelRef.current;
-    if (!element) return;
-    const updatePageSize = () => {
-      setBlockPageSize(element.clientWidth >= 760 ? 3 : 1);
-    };
-    updatePageSize();
-    const observer = new ResizeObserver(updatePageSize);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    setBlockPage(0);
-  }, [candidate?.id, selectionKey, blockPageSize, blocks.length]);
-
-  const blockRange = reviewBlockPageRange(
-    blockPage,
-    blocks.length,
-    blockPageSize
-  );
-  const visibleBlocks = blocks.slice(blockRange.start, blockRange.end);
-  const blockStatus = blocks.length
-    ? `${blockRange.start + 1}–${blockRange.end} de ${blocks.length}`
-    : "Sin bloques";
-  const moveBlockPage = (direction: ReviewNavigationDirection) => {
-    setBlockPage(current =>
-      adjacentReviewBlockPage(current, blocks.length, blockPageSize, direction)
-    );
-  };
-
-  return (
-    <section
-      ref={viewerPanelRef}
-      className="human-review-viewer relative min-h-[168px] shrink-0 rounded-2xl bg-[#0b2d4b] text-white shadow-lift dark:bg-[#162333]"
-    >
-      <div className="flex flex-col px-4 py-3 sm:px-5 sm:py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-sky-200/70">
-              Vista 360° del Candidato
-            </p>
-            <h2 className="mt-1 text-lg font-bold text-white">{heading}</h2>
-          </div>
-          <div className="flex flex-wrap items-start justify-end gap-2">
-            {candidate &&
-            selection.kind === "ai" &&
-            blockRange.pageCount > 1 ? (
-              <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-black/10 px-2 py-1">
-                <span
-                  className="min-w-[4.5rem] text-center text-[11px] font-semibold text-white/75"
-                  aria-live="polite"
-                >
-                  {blockStatus}
-                </span>
-                <VerticalNavigator
-                  label="Navegación de bloques de evaluación"
-                  previousLabel="Mostrar bloque o grupo anterior"
-                  nextLabel="Mostrar bloque o grupo siguiente"
-                  disablePrevious={blockRange.pageIndex === 0}
-                  disableNext={blockRange.pageIndex >= blockRange.pageCount - 1}
-                  onPrevious={() => moveBlockPage(-1)}
-                  onNext={() => moveBlockPage(1)}
-                  status={`Bloques ${blockStatus}`}
-                  orientation="horizontal"
-                />
-              </div>
-            ) : null}
-            <div className="flex flex-wrap gap-1.5">
-              <ViewerButton
-                active={selection.kind === "summary"}
-                onClick={() => onSelect({ kind: "summary" })}
-                icon={Sparkles}
-                label="Nota IA"
-              />
-              <ViewerButton
-                active={selection.kind === "ai"}
-                onClick={() => onSelect({ kind: "ai" })}
-                icon={Bot}
-                label="Evaluación"
-              />
-              <ViewerButton
-                active={selection.kind === "reason"}
-                onClick={() => onSelect({ kind: "reason" })}
-                icon={MessageSquareText}
-                label="Motivo"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="mt-3">
-          {!candidate ? (
-            <div className="grid h-full place-items-center text-sm text-white/60">
-              Seleccione una persona candidata en la matriz inferior.
-            </div>
-          ) : selection.kind === "answer" ? (
-            <div className="grid gap-3 md:grid-cols-[minmax(0,.75fr)_minmax(0,1.25fr)]">
-              <div className="rounded-xl bg-white/8 p-4">
-                <p className="text-xs uppercase tracking-[.14em] text-white/50">
-                  Pregunta del formulario
-                </p>
-                <p className="mt-2 text-sm leading-6 text-white/80">
-                  {answer?.label ?? "Campo dinámico"}
-                </p>
-                {answer?.deterministicResult ? (
-                  <Badge className="mt-3 rounded-full bg-white/10 text-white hover:bg-white/10">
-                    Regla: {answer.deterministicResult}
-                  </Badge>
-                ) : null}
-              </div>
-              <div className="rounded-xl bg-white/8 p-4">
-                <p className="text-xs uppercase tracking-[.14em] text-white/50">
-                  Respuesta registrada
-                </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/90">
-                  {answer ? formatAnswer(answer) : "Sin respuesta registrada."}
-                </p>
-              </div>
-            </div>
-          ) : selection.kind === "summary" ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              <ViewerTextCard
-                label="Resumen de persona"
-                text={candidate.profile_summary ?? "Sin nota inicial de IA."}
-              />
-              <ViewerTextCard
-                label="Contexto de la plaza"
-                text={`${candidate.position_title} · Ingreso ${formatDate(candidate.submitted_at)}`}
-              />
-              <div className="rounded-xl bg-white/8 p-4 md:col-span-2">
-                <p className="text-xs uppercase tracking-[.14em] text-white/50">
-                  Formularios y anuncios · participación
-                </p>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  {(candidate.submissions ?? []).map((submission: any) => {
-                    const formAnswers = answersFor(candidate).filter(
-                      item => Number(item.formId) === Number(submission.formId)
-                    );
-                    return (
-                      <div
-                        key={submission.formId}
-                        className="rounded-xl border border-white/10 p-3"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="truncate text-xs font-semibold text-white/85">
-                            {submission.title}
-                          </p>
-                          <Badge className="shrink-0 rounded-full bg-sky-100 text-sky-800">
-                            {submission.source === "importado"
-                              ? "Importado"
-                              : "Anuncio"}
-                          </Badge>
-                        </div>
-                        <p className="mt-1 text-[11px] text-white/45">
-                          {submission.submittedAt
-                            ? formatDate(submission.submittedAt)
-                            : ""}
-                        </p>
-                        <div className="mt-2 space-y-1">
-                          {formAnswers.length ? (
-                            formAnswers.map(item => (
-                              <p
-                                key={item.fieldKey}
-                                className="text-xs leading-5 text-white/75"
-                              >
-                                <span className="text-white/40">
-                                  {item.label}:{" "}
-                                </span>
-                                {formatAnswer(item)}
-                              </p>
-                            ))
-                          ) : (
-                            <p className="text-xs text-white/45">
-                              Sin respuestas registradas.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {!(candidate.submissions ?? []).length && (
-                    <p className="text-xs text-white/50 md:col-span-2">
-                      Sin participaciones adicionales registradas.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : selection.kind === "reason" ? (
-            <ViewerTextCard
-              label="Razonamiento registrado"
-              text={
-                candidate.evaluation_reason ??
-                candidate.latest_reason ??
-                "Pendiente de evaluación."
-              }
-            />
-          ) : blocks.length ? (
-            <div
-              className={`grid items-stretch gap-2 ${blockPageSize === 3 ? "grid-cols-3" : "grid-cols-1"}`}
-            >
-              {visibleBlocks.map((block: any) => (
-                <div
-                  key={block.id}
-                  className="h-full rounded-xl border border-white/10 bg-white/8 p-3"
-                >
-                  <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="font-semibold text-white/90">
-                      {blockLabel(block.id)}
-                    </span>
-                    <span className="font-bold text-sky-100">
-                      {Math.round(Number(block.score) || 0)}/100
-                    </span>
-                  </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full rounded-full bg-emerald-300"
-                      style={{
-                        width: `${Math.max(0, Math.min(100, Number(block.score) || 0))}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="mt-2 text-[11px] leading-4 text-white/70">
-                    {block.rationale ?? "Sin razonamiento por bloque."}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-[auto_1fr]">
-              <div className="grid min-w-32 place-items-center rounded-xl bg-white/8 p-4">
-                <p className="text-3xl font-bold">
-                  {scoreFor(candidate) ?? "—"}
-                  <span className="text-sm text-white/50">/100</span>
-                </p>
-              </div>
-              <ViewerTextCard
-                label={candidate.ai_model ?? "Evaluación disponible"}
-                text={candidate.evaluation_reason ?? "Sin matriz por bloques."}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function QuickReview({
-  currentStatus,
-  pending,
-  onSave,
-}: {
-  currentStatus: string;
-  pending: boolean;
-  onSave: (status: string, comment: string) => Promise<void>;
-}) {
-  const [status, setStatus] = useState(currentStatus);
-  const [comment, setComment] = useState("");
-  const disabled =
-    pending || (status === currentStatus && comment.trim().length === 0);
-  return (
-    <div className="human-review-quick-grid min-w-0">
-      <Select value={status} onValueChange={setStatus}>
-        <SelectTrigger className="w-full min-w-0 rounded-xl">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {APPLICATION_STATUS_OPTIONS.map(option => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Input
-        value={comment}
-        onChange={event => setComment(event.target.value)}
-        placeholder="Comentario de revisión"
-        maxLength={1000}
-        className="w-full min-w-0 rounded-xl"
-      />
-      <Button
-        type="button"
-        disabled={disabled}
-        className="w-full rounded-xl sm:w-auto"
-        onClick={async () => {
-          await onSave(status, comment);
-          setComment("");
-        }}
-      >
-        {pending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <>
-            <Check className="mr-2 h-4 w-4" /> Guardar
-          </>
-        )}
-      </Button>
     </div>
   );
 }
@@ -1113,152 +646,4 @@ function SortableHead({
       </button>
     </th>
   );
-}
-
-function ViewerButton({
-  active,
-  onClick,
-  icon: Icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: typeof Bot;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition ${active ? "border-white bg-white text-[#0b2d4b] dark:border-primary dark:bg-primary dark:text-primary-foreground" : "border-white/20 bg-white/5 text-white/75 hover:bg-white/10"}`}
-    >
-      <Icon className="mr-1.5 h-3.5 w-3.5" /> {label}
-    </button>
-  );
-}
-
-function ViewerTextCard({ label, text }: { label: string; text: string }) {
-  return (
-    <div className="rounded-xl bg-white/8 p-4">
-      <p className="text-xs uppercase tracking-[.14em] text-white/50">
-        {label}
-      </p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/85">
-        {text}
-      </p>
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const tone = {
-    neutral: "border-slate-200 bg-slate-50 text-slate-800",
-    priority: "border-violet-200 bg-violet-50 text-violet-800",
-    positive: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    conditional: "border-sky-200 bg-sky-50 text-sky-800",
-    review: "border-amber-200 bg-amber-50 text-amber-800",
-    negative: "border-red-200 bg-red-50 text-red-800",
-    interview: "border-cyan-200 bg-cyan-50 text-cyan-800",
-    error: "border-rose-200 bg-rose-50 text-rose-800",
-  }[applicationStatusTone(status)];
-  return (
-    <Badge
-      variant="outline"
-      className={`rounded-full dark:border-[#2A3949] dark:bg-[#162333] dark:text-[#E6EDF3] ${tone}`}
-    >
-      {applicationStatusLabel(status)}
-    </Badge>
-  );
-}
-
-function answersFor(candidate: any): Answer[] {
-  return Array.isArray(candidate?.answers) ? candidate.answers : [];
-}
-
-function scoreFor(candidate: any) {
-  const value = candidate?.evaluation_score ?? candidate?.ai_payload?.score;
-  if (
-    (value === null || value === undefined) &&
-    candidate?.ai_payload?.criticalDisqualification === true
-  ) {
-    return 0;
-  }
-  const score = Number(value);
-  return Number.isFinite(score) ? Math.round(score) : null;
-}
-
-function formatAnswer(answer: Answer) {
-  if (answer.normalizedValue?.trim()) return answer.normalizedValue;
-  const value = answer.value;
-  if (value === null || value === undefined || value === "") return "—";
-  if (typeof value === "string" || typeof value === "number") {
-    return String(value);
-  }
-  if (typeof value === "boolean") return value ? "Sí" : "No";
-  if (Array.isArray(value)) return value.map(String).join(", ");
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function formatDate(value: string | Date | null | undefined) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("es-GT", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-}
-
-/** Ubicación declarada: zona, municipio, departamento y país. */
-function declaredLocationLabel(candidate: any) {
-  const parts = [
-    candidate.location_zone,
-    candidate.location_municipality,
-    candidate.location_department,
-    candidate.location_country,
-  ].filter((value: unknown) => Boolean(String(value ?? "").trim()));
-  return parts.length ? parts.join(" · ") : "Ubicación sin confirmar";
-}
-
-const SALARY_SOURCE_LABELS: Record<string, string> = {
-  message: "mensaje de la persona",
-  cv: "CV recibido",
-  human: "registro humano",
-};
-
-/** Expectativa de remuneración: solo se muestra con evidencia literal. */
-function salaryLabel(candidate: any) {
-  const amount = Number(candidate?.salary_expectation_gtq ?? 0);
-  const source = String(candidate?.salary_expectation_source ?? "no_declarada");
-  const declared = amount > 0 && source !== "no_declarada";
-  if (!declared) {
-    return { declared, text: "Expectativa salarial: no declarada" };
-  }
-  const formatted = new Intl.NumberFormat("es-GT", {
-    style: "currency",
-    currency: "GTQ",
-    minimumFractionDigits: 2,
-  }).format(amount);
-  return {
-    declared,
-    text: `Expectativa salarial: ${formatted} · ${
-      SALARY_SOURCE_LABELS[source] ?? source
-    }`,
-  };
-}
-
-function blockLabel(value: string) {
-  const labels: Record<string, string> = {
-    identificacion_ajuste: "Identificación del ajuste",
-    evidencia_experiencia: "Evidencia de experiencia",
-    competencias: "Competencias técnicas/comerciales",
-    disponibilidad_logistica: "Disponibilidad y logística",
-    riesgos_brechas: "Riesgos o brechas",
-    dictamen_ia: "Dictamen IA",
-  };
-  return labels[value] ?? value;
 }

@@ -1,26 +1,14 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { CandidateReviewSummary } from "@/components/review/CandidateReviewSummary";
 import { ReviewEvidencePanels } from "@/components/review/ReviewEvidencePanels";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Loader2, RefreshCw, XCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { useLocation, useSearch } from "wouter";
-import {
-  APPLICATION_STATUS_OPTIONS,
-  applicationStatusLabel,
-} from "@shared/applicationStatus";
-
-const statuses = APPLICATION_STATUS_OPTIONS;
+import { applicationStatusLabel } from "@shared/applicationStatus";
 
 /**
  * Revisión Humana: ficha completa de una postulación.
@@ -40,6 +28,10 @@ export default function HumanReview() {
   })();
   const detail = trpc.candidates.detail.useQuery(
     { id: requestedApplicationId ?? 0 },
+    { enabled: Boolean(requestedApplicationId) }
+  );
+  const workspace = trpc.candidates.reviewWorkspace.useQuery(
+    { applicationId: requestedApplicationId ?? 0 },
     { enabled: Boolean(requestedApplicationId) }
   );
 
@@ -109,6 +101,7 @@ export default function HumanReview() {
   }
 
   const applicationId = detail.data.application.id;
+  const workspaceRow = workspace.data?.[0];
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-4 pb-10">
@@ -125,6 +118,10 @@ export default function HumanReview() {
           Ficha de evaluación · postulación No. {applicationId}
         </p>
       </div>
+
+      {workspaceRow ? (
+        <CandidateReviewSummary candidate={workspaceRow} />
+      ) : null}
 
       <CandidateDetail
         data={detail.data}
@@ -150,34 +147,6 @@ function CandidateDetail({
   const utils = trpc.useUtils();
   const latestEvaluation = data.evaluations?.[0];
   const agentPayload = latestEvaluation?.ai_payload;
-  const [nextStatus, setNextStatus] = useState(data.application.status);
-  const [comment, setComment] = useState("");
-  const setStatus = trpc.candidates.setStatus.useMutation({
-    onSuccess: async result => {
-      setNextStatus(result.application.status);
-      setComment("");
-      await Promise.all([
-        utils.candidates.detail.invalidate({ id: data.application.id }),
-        utils.candidates.list.invalidate(),
-      ]);
-      if (result.whatsapp?.status === "sent") {
-        toast.success("Estado guardado y solicitud de CV enviada por WhatsApp");
-      } else if (result.whatsapp?.status === "failed") {
-        toast.error(
-          "Estado guardado, pero ApiChat no pudo enviar el mensaje. Puede reintentarlo."
-        );
-      } else if (result.whatsapp?.status === "unknown") {
-        toast.warning(
-          "ApiChat aceptó la solicitud, pero el resultado debe verificarse antes de otro envío."
-        );
-      } else {
-        toast.success("Estado y comentario guardados");
-      }
-    },
-    onError: error => {
-      toast.error(`No fue posible guardar: ${error.message}`);
-    },
-  });
   const retryCvRequest = trpc.candidates.retryCvRequest.useMutation({
     onSuccess: async result => {
       await Promise.all([
@@ -215,17 +184,6 @@ function CandidateDetail({
     onError: error => toast.error(`No fue posible evaluar: ${error.message}`),
   });
 
-  useEffect(() => {
-    setNextStatus(data.application.status);
-  }, [data.application.id, data.application.status]);
-
-  const save = () => {
-    setStatus.mutate({
-      id: data.application.id,
-      status: nextStatus,
-      comment: comment.trim() || undefined,
-    });
-  };
   return (
     <Card className="rounded-3xl border-0 bg-[#0b2d4b] text-white shadow-lift dark:bg-[#162333]">
       <CardHeader className="flex flex-row items-start justify-between">
@@ -286,66 +244,19 @@ function CandidateDetail({
           </Button>
         </div>
         <div className="rounded-2xl bg-card p-5 text-card-foreground shadow-sm">
-          <p className="text-sm font-semibold">Cambio humano</p>
+          <p className="text-sm font-semibold">
+            Solicitud de CV por WhatsApp
+          </p>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Al seleccionar “Solicitar CV por WhatsApp”, Talento AISA solicitará
-            el CV directamente por ApiChat, una sola vez por postulación.
+            La decisión se registra en el encabezado de esta hoja. Al pasar la
+            postulación a «Calificado», Talento AISA solicita el CV
+            directamente por ApiChat, una sola vez por postulación; desde aquí
+            puede reenviarse cuando el envío falló.
           </p>
           <div className="mt-4 space-y-3">
             <p className="text-xs text-muted-foreground">
               Estado registrado: {statusLabel(data.application.status)}
             </p>
-            <Select
-              value={nextStatus}
-              onValueChange={value => {
-                setNextStatus(value);
-                setStatus.reset();
-              }}
-            >
-              <SelectTrigger className="rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {statuses.map(item => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              value={comment}
-              onChange={e => {
-                setComment(e.target.value);
-                setStatus.reset();
-              }}
-              placeholder="Comentario opcional"
-              className="rounded-xl"
-            />
-            <Button
-              onClick={save}
-              disabled={setStatus.isPending}
-              className="w-full rounded-xl"
-            >
-              {setStatus.isPending ? "Guardando…" : "Guardar cambio"}
-            </Button>
-            {setStatus.isSuccess && (
-              <p
-                className="text-xs font-semibold text-emerald-700"
-                aria-live="polite"
-              >
-                Cambio confirmado en PostgreSQL.
-              </p>
-            )}
-            {setStatus.error && (
-              <p
-                className="flex items-start gap-2 text-xs font-semibold text-red-700"
-                role="alert"
-              >
-                <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                {setStatus.error.message}
-              </p>
-            )}
             {data.application.status === "calificado" &&
               data.application.whatsapp_status !== "enviado" && (
                 <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">

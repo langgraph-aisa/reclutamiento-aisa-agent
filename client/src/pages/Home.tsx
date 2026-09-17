@@ -347,8 +347,8 @@ export default function Home() {
             <Quick
               href="/admin/candidates"
               icon={UsersRound}
-              title="Revisar candidatos"
-              text="Filtre estados y registre decisiones humanas."
+              title="Buscar candidatos"
+              text="Filtre postulaciones y abra la ficha de cada persona."
             />
             <Quick
               href="/admin/reports"

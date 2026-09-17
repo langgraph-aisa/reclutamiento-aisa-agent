@@ -47,14 +47,12 @@ function replaceVersion(relativePath, content) {
   );
   // Los encabezados y párrafos de alcance describen releases ya entregados:
   // avanzarlos renombraría la historia y haría que una entrega anterior
-  // apareciera como la vigente. En el párrafo del incremento atómico avanza
-  // solo la versión futura, nunca la ya ejecutada.
+  // apareciera como la vigente. La prosa de gobierno no escribe la versión
+  // vigente: se consulta con `pnpm release:bump -- --dry-run`.
   const historicalHeading = /^#{1,6}\s*Alcance\b/;
   const historicalParagraph = /^El alcance de \d/;
   const historicalCandidate = /^La especificación candidata de \d/;
-  const atomicIncrement = /incremento atómico a/;
   const escapedCurrentVersion = currentVersion.replaceAll(".", "\\.");
-  const futurePatch = new RegExp(`(será\\s+)${escapedCurrentVersion}\\.`);
   // El documento de caja negra se renombra en cada entrega: su referencia en el
   // cuerpo del README debe acompañar el renombrado en lugar de quedar congelada
   // apuntando a un archivo que ya no existe.
@@ -72,9 +70,6 @@ function replaceVersion(relativePath, content) {
           historicalCandidate.test(line)
         ) {
           return line;
-        }
-        if (atomicIncrement.test(line)) {
-          return line.replace(futurePatch, `$1${nextVersion}.`);
         }
         return line
           .replace(versionPattern, nextVersion)

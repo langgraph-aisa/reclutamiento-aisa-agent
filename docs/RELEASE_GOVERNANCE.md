@@ -1,8 +1,22 @@
-# Gobierno de release JARVI RH 2.0.159
+# Gobierno de release JARVI RH 2.0.160
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.159**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.160**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.160
+
+El release **lleva el encabezado de identidad a la hoja donde se decide y retira de la búsqueda toda superficie de revisión**. Hasta 2.0.159, la búsqueda de Candidatos abría con una tarjeta de identidad —persona, plaza, contacto, ubicación declarada, expectativa salarial, punteo de IA y control de estado con comentario— y con un visor lateral que representaba la matriz de evaluación, la nota inicial de IA, el motivo y la participación en formularios. Esa tarjeta es una superficie de decisión y su lugar natural es la ficha: la entrega la monta como **encabezado de Revisión Humana**, encima de la matriz de evaluación, el motivo, el resumen de perfil y las respuestas.
+
+**La búsqueda queda como búsqueda.** Conserva los filtros por estado, plaza, rango de fechas, punteo mínimo, sólo evaluados, orden por columna y búsqueda libre, la matriz de resultados con las columnas propias de la plaza, la navegación vertical y el criterio por fila para triaje. Pierde el encabezado de identidad y el visor lateral, y a cambio **toda evidencia del resultado abre la ficha**: la respuesta, el punteo de IA y el acceso al motivo son enlaces a `/admin/human-review?application=<id>`. La búsqueda deja de alojar una segunda representación del expediente porque su contenido ya vive en la ficha, con mayor detalle.
+
+**Una sola superficie de decisión.** El encabezado de la ficha reúne identidad, punteo y decisión humana con su comentario y su auditoría; el bloque de la ficha que antes repetía estado, comentario y guardado conserva ahora su acción exclusiva —**solicitud y reintento del CV por WhatsApp** con el estado del envío—, de modo que la hoja no ofrece dos controles idénticos. El encabezado vive en `client/src/components/review/CandidateReviewSummary.tsx` y ese módulo expone además los ayudantes de resumen que la matriz necesita (`scoreFor`, `answersFor`, `formatAnswer`, `formatDate`, `declaredLocationLabel`, `salaryLabel`); la búsqueda deja de montarlo.
+
+**Trazabilidad intacta.** La decisión sigue registrándose con el mismo procedimiento (`candidates.setStatus`), el mismo bloqueo de fila y la misma auditoría. La consulta `candidates.reviewWorkspace` admite el filtro por `applicationId`, con el que la ficha pide **una sola postulación** en lugar de la ventana completa de revisión. La puerta de release blinda la nueva titularidad: la búsqueda no monta el encabezado ni los paneles de evidencia, y toda evidencia apunta a la ficha.
+
+**Gobierno del incremento.** La prosa de gobierno dejó de escribir la versión vigente, que envejecía con cada entrega; se consulta con `pnpm release:bump -- --dry-run`.
+
+Sin migración: el alcance es de interfaz.
 
 ### Alcance candidato 2.0.159
 
@@ -116,7 +130,7 @@ La higiene de propiedad intelectual es parte del alcance: el payload público en
 
 El alcance no incluye todavía descarga productiva de medios ApiChat, bucket, antivirus, previsualización de PDF/Word/audio, ejecución adaptativa completa de pruebas, validación psicométrica ni ingestión de despliegues e incidentes para calcular DORA. La asignación de variantes no es aleatoria: la plataforma habilita la comparación A/B/C/D, pero no constituye un ensayo aleatorizado ni calcula significancia estadística, poder o tamaño de muestra. La actividad administrativa usa sondeo de cinco segundos según la vista, no streaming; la bandeja usa sincronización por sondeo de un segundo sin garantía de entrega exactamente una vez. Los resúmenes de actividad son deterministas aunque exista un selector reservado para un modelo futuro. La recepción ya no depende de un webhook ni de un workflow externo: el historial oficial del proveedor es la fuente que rellena la bandeja.
 
-El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico a 2.0.158 ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma que el siguiente parche será 2.0.159.
+El protocolo de privacidad, despliegue, verificación y rollback se documenta en [OBSERVABILIDAD_LANGFUSE_2.0.131.md](OBSERVABILIDAD_LANGFUSE_2.0.131.md). El análisis cognitivo general permanece en [ANALISIS_COGNITIVO_DORA_2.0.130.md](ANALISIS_COGNITIVO_DORA_2.0.130.md). El incremento atómico ya fue ejecutado; `pnpm release:bump -- --dry-run` confirma la versión siguiente antes de publicarla.
 
 La versión 2.0.137 convirtió «Plazas y formularios» en «Plazas y anuncios» con icono de mundo: una plaza administra múltiples formularios, unos construidos con la herramienta y otros importados desde Excel/CSV (migración `0018`). La importación toma la primera fila como preguntas, exige una columna de teléfono o WhatsApp, reconcilia o crea candidatos con el número como única fuente de relación, registra participaciones en `application_form_submissions` y agrega respuestas sin sobrescribir las existentes. El análisis ontológico, epistemológico y fenomenológico de ese alcance permanece en [ANALISIS_ONTOLOGICO_FORMULARIOS_2.0.137.md](ANALISIS_ONTOLOGICO_FORMULARIOS_2.0.137.md).
 

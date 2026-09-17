@@ -3476,6 +3476,7 @@ export const appRouter = router({
           .object({
             status: z.enum(statusValues).optional(),
             search: z.string().trim().max(120).optional(),
+            applicationId: z.number().int().positive().optional(),
             positionId: z.number().int().positive().optional(),
             from: z
               .string()
@@ -3514,6 +3515,10 @@ export const appRouter = router({
           clauses.push(
             `(c.full_name ILIKE $${values.length} OR c.phone_international ILIKE $${values.length} OR c.email ILIKE $${values.length} OR p.title ILIKE $${values.length})`
           );
+        }
+        if (input?.applicationId) {
+          values.push(input.applicationId);
+          clauses.push(`a.id = $${values.length}`);
         }
         if (input?.positionId) {
           values.push(input.positionId);
