@@ -75,18 +75,22 @@ import {
   analyzeKnowledgeDocument,
   buildStorageKey,
   countWords,
-  extensionOf,
   extractKnowledgeText,
   getKnowledgeSettings,
   KNOWLEDGE_ANALYSIS_WORD_LIMIT,
   KNOWLEDGE_SUMMARY_WORD_LIMIT,
   knowledgeFileKind,
-  knowledgeMimeType,
   limitWords,
   removeKnowledgeFile,
   saveKnowledgeSettings,
   writeKnowledgeFile,
 } from "./knowledge";
+import {
+  decodeTransport,
+  extensionOfTransportName,
+  reconstructTransportFileName,
+} from "./base64Transport";
+import { createViewerToken } from "./viewerAccess";
 import { applicationStatuses } from "./policy";
 import {
   APPLICATION_CONSENTS,
@@ -3659,6 +3663,29 @@ export const appRouter = router({
     settings: adminProcedure.query(async () => {
       return getKnowledgeSettings(await getPool());
     }),
+    /**
+     * Acuña el vale del visor. El navegador solicita el archivo y el HTML de
+     * vista previa fuera del ciclo de tRPC (etiquetas `iframe`, `img`, `video` y
+     * `audio`), por lo que esas peticiones no llevan cabeceras propias. El vale
+     * firmado con caducidad corta autoriza únicamente la lectura del archivo
+     * indicado sin depender de la cookie de sesión.
+     */
+    viewerToken: adminProcedure
+      .input(z.object({ fileId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const result = await pool.query(
+          `SELECT id FROM knowledge_files WHERE id=$1 LIMIT 1`,
+          [input.fileId]
+        );
+        if (!result.rows[0]) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "El archivo no existe.",
+          });
+        }
+        return { token: createViewerToken("knowledge", input.fileId) };
+      }),
     saveSettings: adminProcedure
       .input(
         z.object({
@@ -4068,27 +4095,32 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const pool = await requirePool();
         const settings = await getKnowledgeSettings(pool);
-        const extension = extensionOf(input.fileName);
-        if (!extension || !settings.allowedExtensions.includes(extension)) {
+        // El archivo se transporta en base64 y se reconstruye «normal»: bytes
+        // binarios, extensión final y MIME verificados por contenido. Una
+        // discordancia no rechaza la carga —eso retiraría una capacidad ya
+        // declarada—: se corrige la extensión, se registra en auditoría y el
+        // visor recibe el tipo real.
+        let decoded;
+        try {
+          decoded = decodeTransport(
+            { dataBase64: input.base64, fileName: input.fileName },
+            {
+              allowedExtensions: settings.allowedExtensions,
+              maxBytes: settings.maxSizeMb * 1024 * 1024,
+            }
+          );
+        } catch (error) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `Extensión no permitida. Habilitadas en Configuración: ${settings.allowedExtensions.join(", ")}.`,
+            message:
+              error instanceof Error
+                ? error.message
+                : "El contenido del archivo no es válido.",
           });
         }
-        if (!/^[A-Za-z0-9+/=\r\n]+$/.test(input.base64)) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "El contenido del archivo no es válido.",
-          });
-        }
-        const buffer = Buffer.from(input.base64, "base64");
-        const maxBytes = settings.maxSizeMb * 1024 * 1024;
-        if (buffer.length > maxBytes) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `El archivo supera el peso máximo de ${settings.maxSizeMb} MB definido en Configuración > Conocimiento de proyectos.`,
-          });
-        }
+        const buffer = decoded.buffer;
+        const extension = decoded.extension;
+        const kind = knowledgeFileKind(extension);
         const project = await pool.query(
           `SELECT id FROM knowledge_projects WHERE id=$1 LIMIT 1`,
           [input.projectId]
@@ -4113,7 +4145,11 @@ export const appRouter = router({
         }
         const storageKey = buildStorageKey(input.projectId, extension);
         await writeKnowledgeFile(storageKey, buffer);
-        const kind = knowledgeFileKind(extension);
+        // El nombre visible se reconstruye con la extensión final verificada.
+        const finalFileName = reconstructTransportFileName(
+          input.fileName,
+          extension
+        );
         let fileId: number;
         try {
           const inserted = await pool.query(
@@ -4125,9 +4161,9 @@ export const appRouter = router({
             [
               input.projectId,
               input.folderId,
-              input.fileName,
+              finalFileName,
               storageKey,
-              knowledgeMimeType(extension),
+              decoded.mimeType,
               extension,
               buffer.length,
               ctx.user.id,
@@ -4151,6 +4187,12 @@ export const appRouter = router({
             asJson({
               originalName: input.fileName,
               extension,
+              declaredExtension: extensionOfTransportName(input.fileName),
+              mimeType: decoded.mimeType,
+              detectedMimeType: decoded.detectedMimeType,
+              contentTypeMismatch: decoded.contentTypeMismatch,
+              transportVersion: decoded.version,
+              sha256: decoded.sha256,
               sizeBytes: buffer.length,
               projectId: input.projectId,
             }),

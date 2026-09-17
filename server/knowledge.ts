@@ -282,19 +282,266 @@ export async function extractKnowledgeText(
   return raw.slice(0, EXTRACTED_TEXT_LIMIT);
 }
 
-export async function renderDocxHtml(storageKey: string) {
-  const data = await readKnowledgeFile(storageKey);
-  const result = await mammoth.convertToHtml({ buffer: data });
-  return result.value;
+/** Envuelve un fragmento en un documento HTML navegable y con estilo legible. */
+function wrapViewerDocument(title: string, body: string) {
+  const safeTitle = title.replace(/[<>&"]/g, character => {
+    const table: Record<string, string> = {
+      "<": "&lt;",
+      ">": "&gt;",
+      "&": "&amp;",
+      '"': "&quot;",
+    };
+    return table[character] ?? character;
+  });
+  return `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${safeTitle}</title>
+<style>
+  :root { color-scheme: light; }
+  body {
+    margin: 0;
+    padding: 28px 32px 48px;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #0b2d4b;
+    background: #ffffff;
+  }
+  h1 { font-size: 16px; margin: 0 0 18px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td {
+    border: 1px solid #d7dee6;
+    padding: 6px 9px;
+    text-align: left;
+    vertical-align: top;
+    white-space: pre-wrap;
+  }
+  th { background: #eef3f8; font-weight: 600; position: sticky; top: 0; }
+  tr:nth-child(even) td { background: #fafcfe; }
+  p { margin: 0 0 12px; }
+  img { max-width: 100%; height: auto; }
+  .docx-note {
+    margin: 0 0 18px;
+    padding: 10px 14px;
+    border-left: 3px solid #0b2d4b;
+    background: #f4f7fa;
+    font-size: 12px;
+    color: #40556b;
+  }
+  .empty { color: #6b7c8f; font-style: italic; }
+</style>
+</head>
+<body>
+<h1>${safeTitle}</h1>
+${body}
+</body>
+</html>`;
 }
 
-export async function renderCsvPreview(storageKey: string) {
+/**
+ * Vista previa de Word: la conversión entrega HTML, pero sin tema ni metadatos.
+ * Se envuelve en un documento completo para que el visor no muestre texto sin
+ * formato y para que las tablas e imágenes se ajusten al ancho disponible.
+ */
+export async function renderDocxHtml(storageKey: string, title = "Documento") {
   const data = await readKnowledgeFile(storageKey);
-  return data
-    .toString("utf8")
-    .split(/\r?\n/)
-    .slice(0, 100)
-    .join("\n");
+  const result = await mammoth.convertToHtml(
+    { buffer: data },
+    {
+      styleMap: [
+        "p[style-name='Title'] => h1:fresh",
+        "p[style-name='Heading 1'] => h2:fresh",
+        "p[style-name='Heading 2'] => h3:fresh",
+        "table => table",
+      ],
+      convertImage: mammoth.images.imgElement(async image => ({
+        src: `data:${image.contentType};base64,${(
+          await image.read("base64")
+        ).toString()}`,
+      })),
+    }
+  );
+  const body = result.value.trim()
+    ? `<div class="docx-note">Vista previa generada a partir del documento Word original.</div>${result.value}`
+    : `<p class="empty">El documento no contiene texto ni elementos representables.</p>`;
+  return wrapViewerDocument(title, body);
+}
+
+/**
+ * Vista previa CSV: se interpreta como tabla delimitada para que el visor
+ * muestre columnas alineadas en lugar de texto plano con comas.
+ */
+export async function renderCsvPreview(storageKey: string, title = "Hoja") {
+  const data = await readKnowledgeFile(storageKey);
+  const text = data.toString("utf8");
+  const delimiter = detectCsvDelimiter(text);
+  const rows = parseDelimitedRows(text, delimiter);
+  if (!rows.length) {
+    return wrapViewerDocument(
+      title,
+      `<p class="empty">El archivo no contiene filas representables.</p>`
+    );
+  }
+  const [header, ...body] = rows;
+  const escape = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  const head = `<tr>${header
+    .map(cell => `<th>${escape(cell)}</th>`)
+    .join("")}</tr>`;
+  const lines = body
+    .map(
+      row =>
+        `<tr>${header
+          .map((_, index) => `<td>${escape(row[index] ?? "")}</td>`)
+          .join("")}</tr>`
+    )
+    .join("");
+  const omitted =
+    rows.length > 501
+      ? `<p class="empty">Se muestran las primeras 500 filas de ${rows.length - 1}.</p>`
+      : "";
+  return wrapViewerDocument(
+    title,
+    `${omitted}<table><thead>${head}</thead><tbody>${lines}</tbody></table>`
+  );
+}
+
+/** Detecta el delimitador dominante sin depender de la extensión declarada. */
+export function detectCsvDelimiter(text: string) {
+  const sample = text.split(/\r?\n/).slice(0, 20).join("\n");
+  const candidates = [";", ",", "\t", "|"] as const;
+  let best = ";";
+  let bestCount = -1;
+  for (const candidate of candidates) {
+    const count = sample.split(candidate).length - 1;
+    if (count > bestCount) {
+      bestCount = count;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+/** Parser de filas con soporte de comillas dobles escapadas. */
+export function parseDelimitedRows(text: string, delimiter: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  const source = text.replace(/^\uFEFF/, "");
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index]!;
+    if (quoted) {
+      if (character === '"') {
+        if (source[index + 1] === '"') {
+          cell += '"';
+          index += 1;
+        } else {
+          quoted = false;
+        }
+      } else {
+        cell += character;
+      }
+      continue;
+    }
+    if (character === '"') {
+      quoted = true;
+      continue;
+    }
+    if (character === delimiter) {
+      row.push(cell.trim());
+      cell = "";
+      continue;
+    }
+    if (character === "\n") {
+      row.push(cell.trim());
+      rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+    if (character === "\r") continue;
+    cell += character;
+  }
+  if (cell.length || row.length) {
+    row.push(cell.trim());
+    rows.push(row);
+  }
+  return rows.slice(0, 501).filter(entry => entry.some(value => value !== ""));
+}
+
+/**
+ * Vista previa de Excel (.xlsx y .xls): se convierte la primera hoja a tabla
+ * HTML para que el visor muestre la cuadrícula sin depender de un servicio
+ * externo ni de complementos del navegador.
+ */
+export async function renderSpreadsheetHtml(storageKey: string, title = "Hoja") {
+  const data = await readKnowledgeFile(storageKey);
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.read(data, { type: "buffer" });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) {
+    return wrapViewerDocument(
+      title,
+      `<p class="empty">El libro no contiene hojas representables.</p>`
+    );
+  }
+  const sheet = workbook.Sheets[sheetName]!;
+  const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    blankrows: false,
+    defval: "",
+  });
+  if (!grid.length) {
+    return wrapViewerDocument(
+      title,
+      `<p class="empty">La hoja «${sheetName}» no contiene celdas con valor.</p>`
+    );
+  }
+  const escape = (value: unknown) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  const rows = grid.slice(0, 501);
+  const body = rows
+    .map(
+      (row, rowIndex) =>
+        `<tr>${row
+          .map(
+            cell =>
+              rowIndex === 0
+                ? `<th>${escape(cell)}</th>`
+                : `<td>${escape(cell)}</td>`
+          )
+          .join("")}</tr>`
+    )
+    .join("");
+  const sheets =
+    workbook.SheetNames.length > 1
+      ? `<p class="empty">Hoja «${sheetName}» de ${workbook.SheetNames.length}; se muestra la primera.</p>`
+      : "";
+  return wrapViewerDocument(
+    title,
+    `${sheets}<table><tbody>${body}</tbody></table>`
+  );
+}
+
+/** Vista previa de texto plano para extensiones sin representación gráfica. */
+export async function renderPlainTextPreview(storageKey: string) {
+  const data = await readKnowledgeFile(storageKey);
+  const text = data.toString("utf8").slice(0, 200_000);
+  const escape = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return wrapViewerDocument("Archivo de texto", `<p>${escape}</p>`);
 }
 
 const KnowledgeAnalysisSchema = z.object({

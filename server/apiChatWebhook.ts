@@ -8,6 +8,7 @@ import {
   recordNormalizedInboundText,
 } from "./inbox";
 import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
+import { decodeRemoteAttachment } from "./base64Transport";
 
 /**
  * Receptor del webhook de ApiChat (canal push en tiempo real).
@@ -164,38 +165,31 @@ export async function processApiChatWebhook(
     const fileName = (message.filename ?? "archivo").slice(0, 260);
     const rawUrl = (message.url ?? "").trim();
     if (!rawUrl) return { ok: true, skipped: "archivo-sin-contenido" };
-    let data: Buffer;
-    let mimeType = message.mime_type ?? "";
-    if (rawUrl.startsWith("data:")) {
-      const separator = rawUrl.indexOf(",");
-      if (separator < 0) return { ok: true, skipped: "archivo-sin-contenido" };
-      if (!mimeType) {
-        const declared = /^data:([^;]+)/.exec(rawUrl.slice(0, separator));
-        if (declared) mimeType = declared[1];
-      }
-      data = Buffer.from(rawUrl.slice(separator + 1), "base64");
-    } else if (/^https:\/\//.test(rawUrl)) {
-      const response = await fetch(rawUrl, {
-        signal: AbortSignal.timeout(20_000),
+    // Transporte canónico: `data:` URI o URL remota, verificados por contenido
+    // antes de reconstruir el archivo «normal» en el volumen del RAG.
+    let decoded;
+    try {
+      decoded = await decodeRemoteAttachment(rawUrl, {
+        fileName,
+        mimeType: message.mime_type ?? "",
+        maxBytes: 50 * 1024 * 1024,
       });
-      if (!response.ok) return { ok: true, skipped: "archivo-no-descargable" };
-      data = Buffer.from(await response.arrayBuffer());
-    } else {
+    } catch {
+      return { ok: true, skipped: "archivo-ilegible" };
+    }
+    if (!decoded || decoded.buffer.byteLength === 0) {
       return { ok: true, skipped: "archivo-sin-contenido" };
     }
-    if (data.byteLength === 0 || data.byteLength > 50 * 1024 * 1024) {
-      return { ok: true, skipped: "archivo-fuera-de-rango" };
-    }
     const storageKey = buildInboxFileKey("in", conversation.conversationId);
-    await writeInboxFile(storageKey, data);
+    await writeInboxFile(storageKey, decoded.buffer);
     await recordNormalizedInboundFile(pool, {
       applicationId: conversation.applicationId,
       conversationId: conversation.conversationId,
       providerMessageId: message.id,
       phoneInternational: conversation.phoneInternational,
-      fileName,
-      mimeType: mimeType || "application/octet-stream",
-      sizeBytes: data.byteLength,
+      fileName: decoded.fileName,
+      mimeType: decoded.mimeType,
+      sizeBytes: decoded.buffer.byteLength,
       storageKey,
       caption: message.text?.trim() || undefined,
       quotedMessageId: message.quotedMessageId,

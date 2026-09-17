@@ -11,6 +11,7 @@ import {
   recordNormalizedOutboundText,
 } from "./inbox";
 import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
+import { decodeRemoteAttachment } from "./base64Transport";
 
 export const INBOX_SYNC_INTERVAL_MS = 1_000;
 export const INBOX_SYNC_HISTORY_LIMIT = 50;
@@ -317,28 +318,23 @@ async function processFeedRecord(
     const fileName = String(message?.filename ?? "archivo").slice(0, 260);
     const rawUrl = String(message?.url ?? "").trim();
     if (!rawUrl) return { processed: false, inserted: false };
-    let data: Buffer;
-    let mimeType = String(message?.mime_type ?? "").trim();
-    if (rawUrl.startsWith("data:")) {
-      const separator = rawUrl.indexOf(",");
-      if (separator < 0) return { processed: false, inserted: false };
-      if (!mimeType) {
-        const declared = /^data:([^;]+)/.exec(rawUrl.slice(0, separator));
-        if (declared) mimeType = declared[1];
-      }
-      data = Buffer.from(rawUrl.slice(separator + 1), "base64");
-    } else if (/^https:\/\//.test(rawUrl)) {
-      const response = await fetch(rawUrl, {
-        signal: AbortSignal.timeout(20_000),
+    // Transporte canónico: el proveedor entrega un `data:` URI o una URL
+    // remota; en ambos casos se decodifica a bytes, se verifica el tipo por
+    // contenido y se reconstruye la extensión final antes de persistir.
+    let decoded;
+    try {
+      decoded = await decodeRemoteAttachment(rawUrl, {
+        fileName,
+        mimeType: String(message?.mime_type ?? "").trim(),
+        maxBytes: 50 * 1024 * 1024,
       });
-      if (!response.ok) return { processed: false, inserted: false };
-      data = Buffer.from(await response.arrayBuffer());
-    } else {
+    } catch {
       return { processed: false, inserted: false };
     }
-    if (data.byteLength === 0 || data.byteLength > 50 * 1024 * 1024) {
+    if (!decoded || decoded.buffer.byteLength === 0) {
       return { processed: false, inserted: false };
     }
+    const data = decoded.buffer;
     const storageKey = buildInboxFileKey("in", conversation.conversationId);
     await writeInboxFile(storageKey, data);
     const result = await recorder.inboundFile(pool, {
@@ -346,8 +342,8 @@ async function processFeedRecord(
       conversationId: conversation.conversationId,
       providerMessageId: id,
       phoneInternational: conversation.phoneInternational,
-      fileName,
-      mimeType: mimeType || "application/octet-stream",
+      fileName: decoded.fileName,
+      mimeType: decoded.mimeType,
       sizeBytes: data.byteLength,
       storageKey,
     });

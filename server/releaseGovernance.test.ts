@@ -71,8 +71,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.154");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.154");
+    expect(APP_VERSION).toBe("2.0.155");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.155");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -456,9 +456,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(111);
+    expect(audit.files).toHaveLength(113);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(111);
+    expect(publicCopyAudit.files).toHaveLength(113);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -678,6 +678,69 @@ describe("black-box release contract", () => {
     expect(positionsSlot).toBeGreaterThan(summarySlot);
   });
 
+  it("transports files in base64 and delivers a universal viewer", () => {
+    const transport = fs.readFileSync(
+      path.resolve("server/base64Transport.ts"),
+      "utf8"
+    );
+    const viewer = fs.readFileSync(
+      path.resolve("server/viewerAccess.ts"),
+      "utf8"
+    );
+    const routes = fs.readFileSync(
+      path.resolve("server/knowledgeRoutes.ts"),
+      "utf8"
+    );
+    const knowledge = fs.readFileSync(
+      path.resolve("server/knowledge.ts"),
+      "utf8"
+    );
+    const page = fs.readFileSync(
+      path.resolve("client/src/pages/MstEir.tsx"),
+      "utf8"
+    );
+    const sync = fs.readFileSync(
+      path.resolve("server/inboxSync.ts"),
+      "utf8"
+    );
+    const webhook = fs.readFileSync(
+      path.resolve("server/apiChatWebhook.ts"),
+      "utf8"
+    );
+    const inbox = fs.readFileSync(path.resolve("server/inbox.ts"), "utf8");
+
+    // Un solo contrato de transporte para las cuatro fronteras.
+    expect(transport).toContain("export function decodeTransport");
+    expect(transport).toContain("export function detectContentSignature");
+    expect(transport).toContain("export async function decodeRemoteAttachment");
+    expect(transport).toContain("export function createTransportEnvelope");
+    expect(transport).toContain("BASE64_TRANSPORT_VERSION");
+    expect(sync).toContain("decodeRemoteAttachment");
+    expect(webhook).toContain("decodeRemoteAttachment");
+    expect(inbox).toContain("decodeTransport");
+    // La extensión final se verifica por contenido, no por la declaración.
+    expect(transport).toContain("contentTypeMismatch");
+    expect(transport).toContain("reconstructTransportFileName");
+
+    // Acceso firmado para las peticiones que emite el navegador.
+    expect(viewer).toContain("export function createViewerToken");
+    expect(viewer).toContain("export function verifyViewerToken");
+    expect(viewer).toContain("VIEWER_TOKEN_TTL_SECONDS");
+    expect(viewer).toContain("timingSafeEqual");
+    expect(routes).toContain("verifyViewerToken");
+    expect(routes).toContain("VIEWER_SECURITY_HEADERS");
+    expect(viewer).toContain('"X-Content-Type-Options": "nosniff"');
+
+    // El visor cubre todos los formatos representables.
+    expect(knowledge).toContain("export async function renderDocxHtml");
+    expect(knowledge).toContain("export async function renderCsvPreview");
+    expect(knowledge).toContain("export async function renderSpreadsheetHtml");
+    expect(knowledge).toContain("export async function renderPlainTextPreview");
+    expect(knowledge).toContain("export function detectCsvDelimiter");
+    expect(page).toContain("knowledge.viewerToken");
+    expect(page).toContain("isRenderable");
+  });
+
   it("operates multiple forms and announcements per position with spreadsheet import", () => {
     const layout = fs.readFileSync(
       path.resolve("client/src/components/DashboardLayout.tsx"),
@@ -837,15 +900,20 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.154");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.155");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
+    // El cuerpo académico creció con la sección 10 (marco DORA y concepto
+    // estratégico del artefacto), que antes solo existía en documentos de
+    // `docs/`. Se admite ese incremento y se conserva un techo explícito para
+    // impedir que el README derive en un documento sin límite.
     expect(wordCount).toBeGreaterThanOrEqual(2_400);
-    expect(wordCount).toBeLessThanOrEqual(4_200);
+    expect(wordCount).toBeLessThanOrEqual(4_400);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.142");
@@ -961,7 +1029,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.154");
+    expect(governance).toContain("Alcance candidato 2.0.155");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });

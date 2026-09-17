@@ -6,8 +6,11 @@ import {
   knowledgeFileStats,
   renderCsvPreview,
   renderDocxHtml,
+  renderPlainTextPreview,
+  renderSpreadsheetHtml,
 } from "./knowledge";
 import { readLocalSession } from "./localAuth";
+import { VIEWER_SECURITY_HEADERS, verifyViewerToken } from "./viewerAccess";
 
 type KnowledgeRow = {
   id: number;
@@ -18,18 +21,36 @@ type KnowledgeRow = {
   size_bytes: number;
 };
 
-async function resolveKnowledgeFile(req: Request, res: Response) {
+/**
+ * Autoriza la entrega de un archivo de conocimiento. La sesión de
+ * administración es la vía primaria; el vale firmado permite que las peticiones
+ * emitidas por el propio navegador (visor incrustado) no dependan de la cookie,
+ * que los navegadores omiten en contextos incrustados o tras caducar la sesión.
+ */
+async function authorizeKnowledgeAccess(
+  req: Request,
+  res: Response,
+  fileId: number
+) {
+  if (
+    verifyViewerToken("knowledge", fileId, req.query.t as string | undefined)
+  ) {
+    return true;
+  }
   const localUserId = await readLocalSession(req);
   const user = localUserId ? await getUserById(localUserId) : null;
-  if (!user?.active || user.role !== "admin") {
-    res.status(403).json({ error: "Acceso restringido a administración." });
-    return null;
-  }
+  if (user?.active && user.role === "admin") return true;
+  res.status(403).json({ error: "Acceso restringido a administración." });
+  return false;
+}
+
+async function resolveKnowledgeFile(req: Request, res: Response) {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: "Identificador de archivo inválido." });
     return null;
   }
+  if (!(await authorizeKnowledgeAccess(req, res, id))) return null;
   const pool = await getPool();
   if (!pool) {
     res.status(503).json({ error: "Base de datos no disponible." });
@@ -48,6 +69,11 @@ async function resolveKnowledgeFile(req: Request, res: Response) {
   return row;
 }
 
+/**
+ * Entrega binaria con soporte de rangos. El tipo se declara de forma explícita
+ * y se prohíbe la adivinación del navegador, de modo que el visor reciba el
+ * `Content-Type` real del archivo reconstruido.
+ */
 function sendRange(
   res: Response,
   filePath: string,
@@ -56,6 +82,7 @@ function sendRange(
   rangeHeader?: string
 ) {
   const common = {
+    ...VIEWER_SECURITY_HEADERS,
     "Content-Type": mimeType,
     "Cache-Control": "private, max-age=3600",
   };
@@ -88,6 +115,28 @@ function sendRange(
   fs.createReadStream(filePath, { start, end }).pipe(res);
 }
 
+/**
+ * Vistas previas textuales. Cada extensión representable recibe su propia
+ * conversión y todas comparten el mismo documento HTML con estilo, de modo que
+ * el visor muestre contenido legible en lugar de bytes sin interpretación.
+ */
+async function renderKnowledgePreview(row: KnowledgeRow) {
+  const name = row.original_name;
+  switch (row.extension) {
+    case "docx":
+      return renderDocxHtml(row.storage_key, name);
+    case "csv":
+      return renderCsvPreview(row.storage_key, name);
+    case "xlsx":
+    case "xls":
+      return renderSpreadsheetHtml(row.storage_key, name);
+    case "txt":
+      return renderPlainTextPreview(row.storage_key);
+    default:
+      return null;
+  }
+}
+
 export function registerKnowledgeRoutes(app: Express) {
   app.get("/api/knowledge/files/:id", async (req, res) => {
     try {
@@ -99,13 +148,7 @@ export function registerKnowledgeRoutes(app: Express) {
         "Content-Disposition",
         `inline; filename="${row.original_name.replace(/[^\w.\- ]/g, "_")}"`
       );
-      sendRange(
-        res,
-        filePath,
-        stats.size,
-        row.mime_type,
-        req.headers.range
-      );
+      sendRange(res, filePath, stats.size, row.mime_type, req.headers.range);
     } catch (error) {
       console.warn(
         `[Knowledge] File delivery failed (${error instanceof Error ? error.name : "unknown"}).`
@@ -118,19 +161,20 @@ export function registerKnowledgeRoutes(app: Express) {
     try {
       const row = await resolveKnowledgeFile(req, res);
       if (!row) return;
-      if (row.extension === "docx") {
-        const html = await renderDocxHtml(row.storage_key);
-        res.set("Content-Type", "text/html; charset=utf-8").send(html);
+      const html = await renderKnowledgePreview(row);
+      if (!html) {
+        res.status(415).json({
+          error: "Este tipo de archivo no dispone de vista previa textual.",
+        });
         return;
       }
-      if (row.extension === "csv") {
-        const preview = await renderCsvPreview(row.storage_key);
-        res.set("Content-Type", "text/plain; charset=utf-8").send(preview);
-        return;
-      }
-      res.status(415).json({
-        error: "Este tipo de archivo no dispone de vista previa textual.",
-      });
+      res
+        .set({
+          ...VIEWER_SECURITY_HEADERS,
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "private, max-age=600",
+        })
+        .send(html);
     } catch (error) {
       console.warn(
         `[Knowledge] Render failed (${error instanceof Error ? error.name : "unknown"}).`

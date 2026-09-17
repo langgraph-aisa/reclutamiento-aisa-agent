@@ -11,6 +11,7 @@ import {
 } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
 import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
+import { decodeTransport, reconstructTransportFileName } from "./base64Transport";
 import { isUndefinedTableError } from "./governanceObservability";
 import { withLangfuseObservation } from "./observability/langfuse";
 import {
@@ -751,15 +752,25 @@ export function sendInboxFile(
   dependencies: InboxSendDependencies = {}
 ) {
   if (input.dataBase64) {
-    const safeName = (input.fileName ?? "Adjunto")
-      .replace(/[^\w.\- ]/g, "_")
-      .slice(0, 180) || "Adjunto";
+    // El adjunto saliente atraviesa el mismo transporte canónico que la
+    // recepción: se decodifica, se verifica por contenido y se reconstruye
+    // «normal» en el volumen antes de anunciar su URL al proveedor.
+    let decoded;
+    try {
+      decoded = decodeTransport(
+        { dataBase64: input.dataBase64, fileName: input.fileName ?? "Adjunto" },
+        { maxBytes: 20_000_000 }
+      );
+    } catch (error) {
+      throw new Error(
+        error instanceof Error
+          ? error.message
+          : "El adjunto no es una codificación base64 válida."
+      );
+    }
     const key = buildInboxFileKey("out", input.conversationId);
     const resolved = async () => {
-      const data = Buffer.from(input.dataBase64!, "base64");
-      if (data.length > 20_000_000)
-        throw new Error("El archivo supera el límite de 20 MB.");
-      await writeInboxFile(key, data);
+      await writeInboxFile(key, decoded.buffer);
       const base = (input.publicBaseUrl ?? "").replace(/\/$/, "");
       if (!base)
         throw new Error(
@@ -772,7 +783,13 @@ export function sendInboxFile(
       fileName: string;
     }> => {
       const fileUrl = await resolved();
-      return { fileUrl, fileName: safeName };
+      return {
+        fileUrl,
+        fileName: reconstructTransportFileName(
+          input.fileName ?? "Adjunto",
+          decoded.extension
+        ),
+      };
     };
     const draftPromise = wrapped();
     const sendDraft = async () => {

@@ -369,15 +369,31 @@ export default function MstEir() {
     [uploadFileObject]
   );
 
+  /**
+   * El visor se compone con etiquetas que el navegador resuelve por su cuenta
+   * (`img`, `video`, `audio`, `iframe`). Esas peticiones no llevan cabeceras de
+   * sesión, por lo que se solicita un vale firmado y se anexa a la dirección.
+   * El vale caduca en quince minutos y solo autoriza la lectura de este archivo.
+   */
+  const viewerToken = trpc.knowledge.viewerToken.useQuery(
+    { fileId: selectedFileId ?? 0 },
+    { enabled: Boolean(selectedFileId) }
+  );
+  const viewerQuery = viewerToken.data?.token
+    ? `?t=${encodeURIComponent(viewerToken.data.token)}`
+    : "";
   const viewerUrl = selectedFile
-    ? `/api/knowledge/files/${selectedFile.id}`
+    ? `/api/knowledge/files/${selectedFile.id}${viewerQuery}`
     : "";
   const renderUrl = selectedFile
-    ? `/api/knowledge/render/${selectedFile.id}`
+    ? `/api/knowledge/render/${selectedFile.id}${viewerQuery}`
     : "";
   const kind = selectedFile ? kindOfExtension(selectedFile.extension) : "otro";
   const isAnalyzable =
     selectedFile && ["pdf", "docx"].includes(selectedFile.extension);
+  const isRenderable = selectedFile
+    ? ["docx", "csv", "xlsx", "xls", "txt"].includes(selectedFile.extension)
+    : false;
   const deepWords = countWords(deepEditor);
   const deepLimitExceeded = deepWords > 325;
 
@@ -1083,27 +1099,20 @@ export default function MstEir() {
                         className="h-[440px] w-full"
                       />
                     )}
-                    {selectedFile.extension === "docx" && (
+                    {isRenderable && (
                       <iframe
                         src={renderUrl}
                         title={selectedFile.original_name}
                         className="h-[440px] w-full bg-white"
                       />
                     )}
-                    {selectedFile.extension === "csv" && (
-                      <iframe
-                        src={renderUrl}
-                        title={selectedFile.original_name}
-                        className="h-[440px] w-full bg-white"
-                      />
-                    )}
-                    {["doc", "xls", "xlsx"].includes(selectedFile.extension) && (
+                    {selectedFile.extension === "doc" && (
                       <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 p-6 text-center">
                         <FileText className="h-10 w-10 text-muted-foreground" />
                         <p className="max-w-md text-sm text-muted-foreground">
-                          Este tipo de archivo no dispone de vista previa
-                          integrada. Utilice el análisis de IA o descargue el
-                          archivo para revisarlo en su aplicación de escritorio.
+                          El formato Word heredado (.doc) no dispone de vista
+                          previa integrada. Conviértalo a .docx para
+                          previsualizarlo aquí o descargue el archivo.
                         </p>
                         <a
                           href={viewerUrl}
@@ -1114,6 +1123,27 @@ export default function MstEir() {
                         </a>
                       </div>
                     )}
+                    {!isRenderable &&
+                      !["doc", "pdf", "jpg", "jpeg", "png", "mp4", "mp3"].includes(
+                        selectedFile.extension
+                      ) && (
+                        <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 p-6 text-center">
+                          <FileText className="h-10 w-10 text-muted-foreground" />
+                          <p className="max-w-md text-sm text-muted-foreground">
+                            Este tipo de archivo no dispone de vista previa
+                            integrada. Utilice el análisis de IA o descargue el
+                            archivo para revisarlo en su aplicación de
+                            escritorio.
+                          </p>
+                          <a
+                            href={viewerUrl}
+                            download={selectedFile.original_name}
+                            className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                          >
+                            Descargar archivo
+                          </a>
+                        </div>
+                      )}
                   </div>
                 </div>
               )}
