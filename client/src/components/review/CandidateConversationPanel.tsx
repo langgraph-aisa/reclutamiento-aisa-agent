@@ -382,6 +382,13 @@ export function CandidateConversationPanel({
                 value={detail.data?.assessment?.name ?? "Sin prueba activa"}
               />
               <Info
+                label="Avance de la prueba"
+                value={
+                  detail.data?.assessment?.progress_label ??
+                  "Sin prueba en curso"
+                }
+              />
+              <Info
                 label="Ubicación"
                 value={
                   [

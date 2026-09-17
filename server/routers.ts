@@ -20,6 +20,7 @@ import { normalizePhone } from "./phone";
 import { importSpreadsheetForm } from "./importForms";
 import { createFormPublicToken } from "./formTokens";
 import {
+  isUndefinedTableError,
   listGovernanceCoverage,
   registerGovernanceVerification,
 } from "./governanceObservability";
@@ -3263,11 +3264,33 @@ export const appRouter = router({
             message:
               "Una versión activa no puede eliminarse; retire primero su activación.",
           });
-        const sessions = await pool.query(
-          `SELECT 1 FROM assessment_sessions WHERE protocol_id=$1 LIMIT 1`,
+        const activeCycles = await pool.query(
+          `SELECT 1 FROM assessment_cycles
+            WHERE protocol_id=$1 AND state IN ('listo','en_curso') LIMIT 1`,
           [input.id]
         );
-        if (sessions.rows[0])
+        if (activeCycles.rows[0])
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "La versión tiene ciclos de evaluación en curso y no puede eliminarse.",
+          });
+        // La traza del acto pertenece al expediente: una versión que ya evaluó
+        // conserva sus intentos registrados y no puede suprimirse.
+        let linkedAttempts = false;
+        try {
+          const attempts = await pool.query(
+            `SELECT 1 FROM assessment_item_attempts attempt
+               JOIN assessment_items item ON item.id=attempt.item_id
+              WHERE item.protocol_id=$1 LIMIT 1`,
+            [input.id]
+          );
+          linkedAttempts = Boolean(attempts.rows[0]);
+        } catch (error) {
+          // Sin la migración de la traza no hay intentos que preservar.
+          if (!isUndefinedTableError(error)) throw error;
+        }
+        if (linkedAttempts)
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
             message:
@@ -3395,11 +3418,31 @@ export const appRouter = router({
               message:
                 "Una versión activa no puede eliminarse; retire primero su activación.",
             });
-          const sessions = await client.query(
-            `SELECT 1 FROM assessment_sessions WHERE protocol_id=$1 LIMIT 1`,
+          const activeCycles = await client.query(
+            `SELECT 1 FROM assessment_cycles
+              WHERE protocol_id=$1 AND state IN ('listo','en_curso') LIMIT 1`,
             [input.id]
           );
-          if (sessions.rows[0])
+          if (activeCycles.rows[0])
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                "La versión tiene ciclos de evaluación en curso y no puede eliminarse.",
+            });
+          // La traza del acto pertenece al expediente y sobrevive a la versión.
+          let linkedAttempts = false;
+          try {
+            const attempts = await client.query(
+              `SELECT 1 FROM assessment_item_attempts attempt
+                 JOIN assessment_items item ON item.id=attempt.item_id
+                WHERE item.protocol_id=$1 LIMIT 1`,
+              [input.id]
+            );
+            linkedAttempts = Boolean(attempts.rows[0]);
+          } catch (error) {
+            if (!isUndefinedTableError(error)) throw error;
+          }
+          if (linkedAttempts)
             throw new TRPCError({
               code: "PRECONDITION_FAILED",
               message:

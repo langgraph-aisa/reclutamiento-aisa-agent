@@ -1,9 +1,9 @@
 -- ============================================================================
--- JARVI RH 2.0.167 · Despliegue completo del servicio conversacional
+-- JARVI RH 2.0.168 · Despliegue completo del servicio conversacional
 -- ============================================================================
 -- Archivo GENERADO. No editar a mano: se compone con
 --   pnpm deploy:sql
--- a partir de las migraciones 0022, 0023 y 0024 más la consulta única de
+-- a partir de las migraciones 0022 a 0030 más la consulta única de
 -- verificación. Repetir su ejecución es seguro: todas las sentencias son
 -- idempotentes y ninguna contiene credenciales.
 --
@@ -12,6 +12,8 @@
 --   · el RAG personal del candidato alimentado solo con evidencia literal;
 --   · la cola de salida con reclamo atómico y la vista de reconciliación;
 --   · los esquemas y roles de privilegio mínimo por capacidad;
+--   · el expediente documental del candidato y la esencia de su CV;
+--   · el ciclo de pruebas psicométricas, su traza por ítem y su cierre evaluado;
 --   · la activación **preactivada** en el panel de configuración.
 --
 -- Cómo usarlo: pegue el contenido completo en el ejecutor SQL (dbgate o
@@ -444,6 +446,419 @@ VALUES
 ON CONFLICT (provider, setting_key) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
+-- Origen: drizzle/migrations/0025_inbox_read_state.sql
+-- ----------------------------------------------------------------------------
+
+-- JARVI RH: estado de lectura de la bandeja por operador.
+-- Cada operador conserva la marca de cuándo abrió por última vez una
+-- conversación; los mensajes entrantes posteriores cuentan como no leídos.
+
+CREATE TABLE IF NOT EXISTS conversation_read_state (
+  conversation_id integer NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  last_read_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (conversation_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS conversation_read_state_user_idx
+  ON conversation_read_state (user_id, last_read_at DESC);
+
+-- ----------------------------------------------------------------------------
+-- Origen: drizzle/migrations/0026_candidate_knowledge.sql
+-- ----------------------------------------------------------------------------
+
+-- JARVI RH 2.0.156: RAG personal del candidato.
+--
+-- Alcance: el conocimiento del candidato deja de reducirse a las respuestas del
+-- formulario y a las aclaraciones confirmadas. La postulación recibe carpetas y
+-- documentos propios, con el mismo análisis de IA que el RAG de proyectos, con
+-- el mismo volumen de almacenamiento (`KNOWLEDGE_STORAGE_DIR`) y con la misma
+-- configuración de extensiones y peso.
+--
+-- Migración expansiva e idempotente: crea entidades nuevas y no altera, elimina
+-- ni renombra ninguna estructura existente. El RAG de proyectos permanece
+-- intacto y ambos conviven en el mismo volumen mediante un prefijo de namespace
+-- (`applications/...` para el candidato, `<proyecto>/...` para el proyecto).
+
+-- 1) Carpetas del árbol de documentos del candidato.
+CREATE TABLE IF NOT EXISTS candidate_knowledge_folders (
+  id serial PRIMARY KEY,
+  application_id integer NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  parent_id integer REFERENCES candidate_knowledge_folders(id) ON DELETE CASCADE,
+  name varchar(160) NOT NULL,
+  created_by_user_id integer REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT candidate_knowledge_folders_name_ck CHECK (length(trim(name)) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS candidate_knowledge_folders_application_idx
+  ON candidate_knowledge_folders (application_id, parent_id, name);
+
+-- El mismo nombre no se repite dentro de la misma carpeta de la misma
+-- postulación: `COALESCE(parent_id,0)` cubre la raíz, donde `NULL` no compara.
+CREATE UNIQUE INDEX IF NOT EXISTS candidate_knowledge_folders_name_uq
+  ON candidate_knowledge_folders (application_id, COALESCE(parent_id, 0), lower(name));
+
+-- 2) Documentos del candidato con su análisis de IA.
+CREATE TABLE IF NOT EXISTS candidate_knowledge_files (
+  id serial PRIMARY KEY,
+  application_id integer NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  folder_id integer REFERENCES candidate_knowledge_folders(id) ON DELETE SET NULL,
+  original_name varchar(260) NOT NULL,
+  storage_key text NOT NULL,
+  mime_type varchar(160) NOT NULL,
+  extension varchar(16) NOT NULL,
+  size_bytes integer NOT NULL DEFAULT 0,
+  -- Procedencia: registro administrativo, recepción por webhook o documento
+  -- adjuntado durante la propia postulación.
+  source varchar(24) NOT NULL DEFAULT 'manual',
+  -- Mismos límites institucionales que el RAG de proyectos: 66 y 325 palabras.
+  summary_66 varchar(1400) NOT NULL DEFAULT '',
+  deep_analysis varchar(6000) NOT NULL DEFAULT '',
+  analysis_status varchar(32) NOT NULL DEFAULT 'pendiente',
+  analyzed_model varchar(80),
+  -- Integridad del contenido transportado.
+  sha256 varchar(64),
+  uploaded_by_user_id integer REFERENCES users(id) ON DELETE SET NULL,
+  uploaded_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT candidate_knowledge_files_source_ck
+    CHECK (source IN ('manual', 'webhook', 'postulacion')),
+  CONSTRAINT candidate_knowledge_files_status_ck
+    CHECK (analysis_status IN ('pendiente', 'analizado', 'no_aplica', 'error')),
+  CONSTRAINT candidate_knowledge_files_size_ck CHECK (size_bytes >= 0),
+  CONSTRAINT candidate_knowledge_files_sha256_ck
+    CHECK (sha256 IS NULL OR sha256 ~ '^[a-f0-9]{64}$'),
+  CONSTRAINT candidate_knowledge_files_name_ck CHECK (length(trim(original_name)) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS candidate_knowledge_files_application_idx
+  ON candidate_knowledge_files (application_id, folder_id, uploaded_at DESC);
+
+CREATE INDEX IF NOT EXISTS candidate_knowledge_files_analysis_idx
+  ON candidate_knowledge_files (application_id, analysis_status);
+
+-- Una misma referencia de almacenamiento no puede pertenecer a dos documentos:
+-- la unicidad evita que el borrado de una fila deje la evidencia de otra.
+CREATE UNIQUE INDEX IF NOT EXISTS candidate_knowledge_files_storage_uq
+  ON candidate_knowledge_files (storage_key);
+
+-- 3) Vinculación explícita entre la aclaración confirmada que ya existía
+--    (`candidate_knowledge_notes`, migración 0022) y el documento del que
+--    procede, cuando la aclaración se originó en un documento del candidato.
+--    Se agrega una columna anulable: los registros vigentes conservan su valor.
+--
+--    La migración 0022 es opcional: el proyecto declara que sin ella la
+--    revisión humana sigue operativa y el panel conversacional explica la
+--    acción requerida. Por eso el vínculo se agrega únicamente cuando esa tabla
+--    existe; de lo contrario la migración fallaría a mitad de camino y dejaría
+--    las tablas creadas sin poder registrarse como aplicada.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public'
+       AND table_name = 'candidate_knowledge_notes'
+  ) THEN
+    ALTER TABLE candidate_knowledge_notes
+      ADD COLUMN IF NOT EXISTS candidate_knowledge_file_id integer
+        REFERENCES candidate_knowledge_files(id) ON DELETE SET NULL;
+
+    CREATE INDEX IF NOT EXISTS candidate_knowledge_notes_file_idx
+      ON candidate_knowledge_notes (candidate_knowledge_file_id);
+  END IF;
+END
+$$;
+
+-- 4) Los roles del servicio conversacional leen el RAG del candidato para
+--    componer el contexto de razonamiento. Si los roles no existen (despliegue
+--    integrado sin la migración 0023), el bloque no tiene efecto.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'jarvi_motor') THEN
+    GRANT SELECT ON candidate_knowledge_files TO jarvi_motor;
+    GRANT SELECT ON candidate_knowledge_folders TO jarvi_motor;
+  END IF;
+END
+$$;
+
+-- 5) Verificación autocertificada: cada fila debe quedar en OK.
+SELECT 1 AS orden,
+       'Tabla de carpetas del candidato' AS control,
+       '1' AS esperado,
+       (SELECT count(*)::text FROM information_schema.tables
+         WHERE table_schema = 'public'
+           AND table_name = 'candidate_knowledge_folders') AS obtenido
+UNION ALL
+SELECT 2, 'Tabla de documentos del candidato', '1',
+       (SELECT count(*)::text FROM information_schema.tables
+         WHERE table_schema = 'public'
+           AND table_name = 'candidate_knowledge_files')
+UNION ALL
+SELECT 3, 'Columnas de analisis en el documento', '4',
+       (SELECT count(*)::text FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'candidate_knowledge_files'
+           AND column_name IN ('summary_66', 'deep_analysis',
+                               'analysis_status', 'analyzed_model'))
+UNION ALL
+SELECT 4, 'Indices del RAG del candidato', '3',
+       (SELECT count(*)::text FROM pg_indexes
+         WHERE schemaname = 'public'
+           AND indexname IN ('candidate_knowledge_files_application_idx',
+                             'candidate_knowledge_files_analysis_idx',
+                             'candidate_knowledge_files_storage_uq'))
+UNION ALL
+SELECT 5, 'Vinculo con aclaraciones confirmadas',
+       CASE WHEN to_regclass('public.candidate_knowledge_notes') IS NULL
+            THEN 'no aplica' ELSE '1' END,
+       CASE WHEN to_regclass('public.candidate_knowledge_notes') IS NULL
+            THEN 'no aplica'
+            ELSE (SELECT count(*)::text FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                     AND table_name = 'candidate_knowledge_notes'
+                     AND column_name = 'candidate_knowledge_file_id') END
+UNION ALL
+SELECT 6, 'Integridad del RAG de proyectos (sin cambios)', '1',
+       (SELECT count(*)::text FROM information_schema.tables
+         WHERE table_schema = 'public'
+           AND table_name = 'knowledge_files')
+ORDER BY orden;
+
+-- ----------------------------------------------------------------------------
+-- Origen: drizzle/migrations/0027_candidate_cv_essence.sql
+-- ----------------------------------------------------------------------------
+
+-- 0027_candidate_cv_essence.sql
+--
+-- Esencia del CV del candidato: representación de trabajo, acotada por la
+-- configuración del módulo, que alimenta al agente evaluador. El documento
+-- original sigue siendo la evidencia; la esencia solo lo representa.
+--
+-- Expansiva e idempotente: agrega columnas anulables o con valor por omisión y
+-- no altera ni elimina ninguna estructura existente. La migración 0026 es
+-- opcional, así que la alteración se ejecuta únicamente si la tabla existe.
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public'
+       AND table_name = 'candidate_knowledge_files'
+  ) THEN
+    ALTER TABLE candidate_knowledge_files
+      ADD COLUMN IF NOT EXISTS cv_essence varchar(6000) DEFAULT '' NOT NULL,
+      ADD COLUMN IF NOT EXISTS cv_essence_status varchar(32)
+        DEFAULT 'pendiente' NOT NULL,
+      ADD COLUMN IF NOT EXISTS cv_essence_model varchar(80),
+      ADD COLUMN IF NOT EXISTS cv_essence_word_limit integer DEFAULT 550 NOT NULL,
+      ADD COLUMN IF NOT EXISTS cv_essence_updated_at timestamptz;
+
+    CREATE INDEX IF NOT EXISTS candidate_knowledge_files_essence_idx
+      ON candidate_knowledge_files (application_id, cv_essence_status);
+  END IF;
+END $$;
+
+-- Verificación autocertificada de la migración.
+SELECT 1 AS orden, 'Columnas de la esencia del CV' AS bloque, '5' AS esperado,
+       (SELECT count(*)::text FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'candidate_knowledge_files'
+           AND column_name IN ('cv_essence', 'cv_essence_status',
+                               'cv_essence_model', 'cv_essence_word_limit',
+                               'cv_essence_updated_at')) AS obtenido
+UNION ALL
+SELECT 2, 'Estructura previa del expediente conservada', '1',
+       (SELECT count(*)::text FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'candidate_knowledge_files'
+           AND column_name = 'analysis_status')
+UNION ALL
+SELECT 3, 'RAG de proyectos sin cambios', '1',
+       (SELECT count(*)::text FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'knowledge_files')
+ORDER BY orden;
+
+-- ----------------------------------------------------------------------------
+-- Origen: drizzle/migrations/0028_assessment_cycles.sql
+-- ----------------------------------------------------------------------------
+
+-- 0028_assessment_cycles.sql
+--
+-- Ciclo de pruebas psicométricas por postulación.
+--
+-- Registra la obligación que deja la recepción del formulario cuando el
+-- interruptor del módulo está encendido: el agente inicia las pruebas activas
+-- de la plaza treinta segundos después, tras solicitar el CV. Con el
+-- interruptor apagado no se registra obligación alguna.
+--
+-- Expansiva e idempotente: crea una tabla nueva y no altera ni elimina ninguna
+-- estructura existente.
+
+CREATE TABLE IF NOT EXISTS assessment_cycles (
+  id serial PRIMARY KEY,
+  application_id integer NOT NULL UNIQUE
+    REFERENCES applications(id) ON DELETE CASCADE,
+  state varchar(24) NOT NULL DEFAULT 'listo',
+  ready_at timestamptz NOT NULL,
+  started_at timestamptz,
+  completed_at timestamptz,
+  protocol_id integer,
+  protocol_version integer,
+  current_item_index integer NOT NULL DEFAULT 0,
+  score integer,
+  location_zone varchar(120),
+  location_department varchar(120),
+  location_municipality varchar(120),
+  greeting_message_id integer,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS assessment_cycles_due_idx
+  ON assessment_cycles (state, ready_at);
+
+-- Verificación autocertificada de la migración.
+SELECT 1 AS orden, 'Tabla del ciclo de pruebas' AS bloque, '1' AS esperado,
+       (SELECT count(*)::text FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'assessment_cycles')
+       AS obtenido
+UNION ALL
+SELECT 2, 'Columnas del ciclo', '16',
+       (SELECT count(*)::text FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'assessment_cycles')
+UNION ALL
+SELECT 3, 'Postulaciones conservadas', '1',
+       (SELECT count(*)::text FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'applications')
+ORDER BY orden;
+
+-- ----------------------------------------------------------------------------
+-- Origen: drizzle/migrations/0029_assessment_cycle_evaluation.sql
+-- ----------------------------------------------------------------------------
+
+-- 0029_assessment_cycle_evaluation.sql
+--
+-- Cierre evaluado del ciclo de pruebas.
+--
+-- Registra que la re-evaluación automática que acompaña al cierre ya se
+-- ejecutó y con qué puntaje, de modo que un cierre repetido no la vuelva a
+-- lanzar. Expansiva e idempotente: agrega columnas anulables y no altera ni
+-- elimina ninguna estructura existente.
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_name = 'assessment_cycles'
+  ) THEN
+    ALTER TABLE assessment_cycles
+      ADD COLUMN IF NOT EXISTS evaluated_at timestamptz,
+      ADD COLUMN IF NOT EXISTS evaluation_score integer;
+  END IF;
+END $$;
+
+-- Verificación autocertificada de la migración.
+SELECT 1 AS orden, 'Columnas del cierre evaluado' AS bloque, '2' AS esperado,
+       (SELECT count(*)::text FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'assessment_cycles'
+           AND column_name IN ('evaluated_at', 'evaluation_score')) AS obtenido
+UNION ALL
+SELECT 2, 'Estructura previa del ciclo conservada', '1',
+       (SELECT count(*)::text FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'assessment_cycles'
+           AND column_name = 'ready_at')
+ORDER BY orden;
+
+-- ----------------------------------------------------------------------------
+-- Origen: drizzle/migrations/0030_assessment_item_attempts.sql
+-- ----------------------------------------------------------------------------
+
+-- 0030_assessment_item_attempts.sql
+--
+-- Traza del acto: el intento de cada ítem del instrumento.
+--
+-- El ciclo de pruebas registra la obligación y su cierre; esta tabla registra
+-- lo que ocurre entre ambos extremos: qué se preguntó, qué respondió el
+-- candidato, con qué determinación y con qué puntaje. Sin ella el punteo es
+-- inexplicable, el avance no es idempotente y no es posible distinguir una
+-- respuesta breve de una respuesta ausente.
+--
+-- Identidad declarada: un intento por ciclo e ítem. La unicidad es lo que
+-- impide que una reentrega del webhook vuelva a puntuar la misma respuesta.
+--
+-- Expansiva e idempotente: crea una tabla nueva y no altera ni elimina ninguna
+-- estructura existente.
+
+CREATE TABLE IF NOT EXISTS assessment_item_attempts (
+  id serial PRIMARY KEY,
+  cycle_id integer NOT NULL
+    REFERENCES assessment_cycles(id) ON DELETE CASCADE,
+  item_id integer NOT NULL
+    REFERENCES assessment_items(id) ON DELETE CASCADE,
+  item_index integer NOT NULL,
+  prompt_message_id integer,
+  answer_message_id integer,
+  answer_text text,
+  judgement varchar(24),
+  item_score numeric(5, 2),
+  rationale text,
+  asked_at timestamptz NOT NULL DEFAULT now(),
+  answered_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Identidad del intento: un ítem se pregunta y se puntúa una sola vez.
+CREATE UNIQUE INDEX IF NOT EXISTS assessment_item_attempts_identity_uq
+  ON assessment_item_attempts (cycle_id, item_id);
+
+-- El puntero del ciclo es único por posición: no hay dos intentos del mismo
+-- lugar del instrumento.
+CREATE UNIQUE INDEX IF NOT EXISTS assessment_item_attempts_position_uq
+  ON assessment_item_attempts (cycle_id, item_index);
+
+CREATE INDEX IF NOT EXISTS assessment_item_attempts_cycle_idx
+  ON assessment_item_attempts (cycle_id, item_index);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'assessment_item_attempts_judgement_ck'
+  ) THEN
+    ALTER TABLE assessment_item_attempts
+      ADD CONSTRAINT assessment_item_attempts_judgement_ck
+      CHECK (
+        judgement IS NULL
+        OR judgement IN ('cumplido', 'parcial', 'no_respondido')
+      );
+  END IF;
+END $$;
+
+-- Verificación autocertificada de la migración.
+SELECT 1 AS orden, 'Tabla de intentos por ítem' AS bloque, '1' AS esperado,
+       (SELECT count(*)::text FROM information_schema.tables
+         WHERE table_schema = 'public'
+           AND table_name = 'assessment_item_attempts')
+       AS obtenido
+UNION ALL
+SELECT 2, 'Columnas del intento', '14',
+       (SELECT count(*)::text FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'assessment_item_attempts')
+UNION ALL
+SELECT 3, 'Determinación declarada', '1',
+       (SELECT count(*)::text FROM pg_constraint
+         WHERE conname = 'assessment_item_attempts_judgement_ck')
+UNION ALL
+SELECT 4, 'Postulaciones conservadas', '1',
+       (SELECT count(*)::text FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'applications')
+ORDER BY orden;
+
+-- ----------------------------------------------------------------------------
 -- Verificación autocertificada
 -- ----------------------------------------------------------------------------
 
@@ -529,6 +944,44 @@ WITH controles AS (
                 THEN 'SELECT ''sin-panel'' AS c'
                 ELSE 'SELECT setting_value AS c FROM integration_settings WHERE provider = ''conversation'' AND setting_key = ''agent_enabled''' END,
            false, true, '')))[1]::text, 'sin-panel')
+  UNION ALL
+  SELECT 12, 'Migracion 0025 - lectura de la bandeja por operador', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'conversation_read_state')
+  UNION ALL
+  SELECT 13, 'Migracion 0026 - expediente documental del candidato', '2',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name IN ('candidate_knowledge_folders',
+                                'candidate_knowledge_files'))
+  UNION ALL
+  SELECT 14, 'Migracion 0027 - columnas de la esencia del CV', '5',
+         (SELECT count(*)::text FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = 'candidate_knowledge_files'
+             AND column_name IN ('cv_essence', 'cv_essence_status',
+                                 'cv_essence_model', 'cv_essence_word_limit',
+                                 'cv_essence_updated_at'))
+  UNION ALL
+  SELECT 15, 'Migracion 0028 - ciclo de pruebas de la postulacion', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public' AND table_name = 'assessment_cycles')
+  UNION ALL
+  SELECT 16, 'Migracion 0029 - cierre evaluado del ciclo', '2',
+         (SELECT count(*)::text FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'assessment_cycles'
+             AND column_name IN ('evaluated_at', 'evaluation_score'))
+  UNION ALL
+  SELECT 17, 'Migracion 0030 - intentos por item del instrumento', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'assessment_item_attempts')
+  UNION ALL
+  SELECT 18, 'Migracion 0030 - identidad unica del intento', '1',
+         (SELECT count(*)::text FROM pg_indexes
+           WHERE schemaname = 'public'
+             AND indexname = 'assessment_item_attempts_identity_uq')
 )
 SELECT orden, control, esperado, obtenido,
        CASE WHEN orden = 9 THEN 'INFORMATIVO'

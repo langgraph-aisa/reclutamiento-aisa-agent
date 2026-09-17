@@ -7,7 +7,7 @@
 
 1. Cargar este ZIP como servicio App en EasyPanel con el contenido ubicado en la raíz.
 2. Configurar las variables descritas en `docs/IMPLEMENTACION.md`.
-3. Ejecutar `database/005_servicio_conversacional_listo.sql` (reúne `0022`, `0023` y `0024` y verifica al final).
+3. Ejecutar `database/005_servicio_conversacional_listo.sql` (reúne `0022` a `0030` y verifica al final).
 4. Ejecutar `database/001_functions.sql`, `database/002_ine_catalog_seed.sql` y `database/002_local_admin.sql`.
 5. Configurar `pnpm install --frozen-lockfile`, `pnpm build` y `pnpm start`.
 6. Ingresar con `adminit@aisa.com.gt` solicitando el código de correo.
@@ -37,7 +37,7 @@ La migración `0023_conversation_service_split.sql` crea la cola `conversation_o
 
 ## Despliegue en un solo paso 2.0.145
 
-`database/005_servicio_conversacional_listo.sql` reúne las migraciones `0022`, `0023` y `0024` y termina con la verificación autocertificada: se pega una sola vez en el ejecutor SQL y todas las filas deben quedar en `OK`. Es idempotente y se genera con `pnpm deploy:sql`. Validado en PostgreSQL 17 desde cero con `GATE GLOBAL OK`.
+`database/005_servicio_conversacional_listo.sql` reúne las migraciones `0022` a `0030` y termina con la verificación autocertificada: se pega una sola vez en el ejecutor SQL y todas las filas deben quedar en `OK`. Es idempotente y se genera con `pnpm deploy:sql`. Validado en PostgreSQL 17 desde cero con `GATE GLOBAL OK`.
 
 ## Activación por configuración 2.0.144
 

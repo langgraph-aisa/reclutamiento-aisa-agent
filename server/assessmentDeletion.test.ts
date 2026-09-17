@@ -160,6 +160,29 @@ describe("assessments.requestDeleteCode", () => {
     ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
   });
 
+  it("rechaza versiones con intentos de prueba registrados", async () => {
+    // El ciclo quedó cerrado —no hay evaluación en curso— pero la traza del
+    // acto pertenece al expediente y no puede suprimirse con la versión.
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [{ id: 7, name: "Prueba", version: 3, status: "retirado" }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] });
+    getPool.mockResolvedValue({ query });
+
+    await expect(
+      appRouter
+        .createCaller(createContext())
+        .assessments.requestDeleteCode({ id: 7 })
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      message:
+        "La versión tiene sesiones de evaluación vinculadas y no puede eliminarse.",
+    });
+  });
+
   it("envía el código al correo y devuelve máscara, vigencia y espera dinámicas", async () => {
     const protocol = {
       id: 6,
@@ -170,6 +193,9 @@ describe("assessments.requestDeleteCode", () => {
     const query = vi
       .fn()
       .mockResolvedValueOnce({ rows: [protocol] })
+      // Ciclos de evaluación en curso.
+      .mockResolvedValueOnce({ rows: [] })
+      // Intentos registrados de la versión.
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ email: "jardon@aisa.com.gt" }] })
       .mockResolvedValueOnce({ rows: [] })

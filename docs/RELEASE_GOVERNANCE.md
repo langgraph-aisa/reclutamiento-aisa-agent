@@ -1,8 +1,24 @@
-# Gobierno de release JARVI RH 2.0.167
+# Gobierno de release JARVI RH 2.0.168
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.167**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.168**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.168
+
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.168 se dispara como consecuencia del último ítem y no de una invocación manual.
+
+**La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
+
+**La determinación es del servidor.** `judgeAssessmentAnswer` aplica la regla declarada —umbral de palabras— y `assessmentExecutionScore` compone el punteo de ejecución como la proporción del instrumento efectivamente respondida, de modo que el punteo es **reconstruible** a partir de los intentos registrados. El texto del criterio (`evaluation_criterion`) no sale del servidor: la ficha recibe solo lo que puede mostrarse. Ninguna ponderación viaja al cliente.
+
+**La traza del acto es nueva.** La migración `0030_assessment_item_attempts.sql` registra, por ciclo e ítem, la pregunta emitida, la respuesta recibida, su determinación, su puntaje y la razón de esa determinación. La identidad es única por ciclo e ítem —de modo que una reentrega del webhook no vuelve a puntuar la misma respuesta— y la determinación está acotada a un vocabulario declarado, lo que hace distinguible una respuesta insuficiente de una respuesta ausente.
+
+**La continuidad está declarada y probada.** Apagar el interruptor **suspende la ejecución sin suprimir la obligación**: el ciclo conserva su instante de vencimiento y su puntero, y al encenderlo de nuevo la tarea programada **continúa donde quedó**, sin reiniciar el instrumento ni repetir preguntas ya formuladas. El control humano detiene la administración del instrumento mientras conserva la conversación, y la reactivación del agente reanuda el ciclo por el mismo punto. Durante la ejecución del protocolo, el motor general no consume el turno.
+
+**La entrega tiene camino operativo.** El artefacto único `database/005_servicio_conversacional_listo.sql` pasa a reunir las migraciones `0022` a `0030`, y su verificación autocertificada crece de once a dieciocho controles para cubrir las migraciones 0025 a 0030: el despliegue en un solo archivo ya no deja fuera las tablas del expediente, del ciclo y de su traza.
+
+**Límite declarado.** El motor **administra y puntúa criterios declarados**: no confiere validez psicométrica ni sustituye la validación externa de los instrumentos que la requieren. La secuencia es una caminata ordenada y acotada sobre los ítems activos, no un árbol de decisión sin cota: la recursión pertenece a la justificación del puntaje —el seguimiento de un ítem no concluyente— y no al control de flujo.
 
 ### Alcance candidato 2.0.167
 
@@ -22,7 +38,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.167.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.168.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

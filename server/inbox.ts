@@ -198,7 +198,9 @@ export async function listInbox(
             a.salary_expectation_gtq,a.salary_expectation_source,
             assigned.name AS assigned_user_name,
             latest.score AS evaluation_score,
-            session.status AS assessment_status,protocol.name AS assessment_name,
+            session.state AS assessment_status,
+            protocol.name AS assessment_name,
+            session.current_item_index AS assessment_item_index,
             message.body AS last_message_body,message.direction AS last_message_direction,
             message.message_type AS last_message_type,
             COALESCE(forms.form_count,0) AS form_count,forms.form_titles
@@ -217,8 +219,9 @@ export async function listInbox(
           ORDER BY e.created_at DESC,e.id DESC LIMIT 1
        ) latest ON true
        LEFT JOIN LATERAL (
-         SELECT s.* FROM assessment_sessions s WHERE s.application_id=a.id
-          ORDER BY s.created_at DESC,s.id DESC LIMIT 1
+         SELECT cycle.state,cycle.protocol_id,cycle.current_item_index
+           FROM assessment_cycles cycle WHERE cycle.application_id=a.id
+          LIMIT 1
        ) session ON true
        LEFT JOIN assessment_protocols protocol ON protocol.id=session.protocol_id
        LEFT JOIN LATERAL (
@@ -312,14 +315,7 @@ export async function inboxDetail(pool: Pool, conversationId: number) {
         WHERE application_id=$1 ORDER BY created_at DESC,id DESC`,
       [conversation.rows[0].application_id]
     ),
-    pool.query(
-      `SELECT s.id,s.status,s.score,s.current_item_index,s.started_at,s.completed_at,
-              p.name,p.level,p.version
-         FROM assessment_sessions s
-         JOIN assessment_protocols p ON p.id=s.protocol_id
-        WHERE s.application_id=$1 ORDER BY s.created_at DESC,s.id DESC LIMIT 1`,
-      [conversation.rows[0].application_id]
-    ),
+    loadAssessmentIndicator(pool, Number(conversation.rows[0].application_id)),
   ]);
   return {
     conversation: {
@@ -328,8 +324,64 @@ export async function inboxDetail(pool: Pool, conversationId: number) {
     },
     messages: messages.rows,
     attachments: attachments.rows,
-    assessment: assessment.rows[0] ?? null,
+    assessment,
   };
+}
+
+/**
+ * Indicadores de la prueba en curso, derivados en el servidor.
+ *
+ * El acto de la evaluación psicométrica es el ciclo: la obligación, el puntero
+ * del ítem, el punteo de ejecución y su cierre. El criterio del instrumento no
+ * sale del servidor; la ficha recibe sólo lo que puede mostrarse —el nombre de
+ * la prueba, su avance y su punteo—.
+ *
+ * Sin la migración del ciclo, la ficha se muestra sin indicadores de prueba en
+ * lugar de interrumpirse.
+ */
+async function loadAssessmentIndicator(pool: Pool, applicationId: number) {
+  try {
+    const result = await pool.query<{
+      id: number;
+      state: string;
+      score: number | null;
+      current_item_index: number;
+      started_at: string | Date | null;
+      completed_at: string | Date | null;
+      name: string | null;
+      level: string | null;
+      version: number | null;
+      item_count: number;
+    }>(
+      `SELECT cycle.id,cycle.state,cycle.score,cycle.current_item_index,
+              cycle.started_at,cycle.completed_at,
+              protocol.name,protocol.level,protocol.version,
+              COALESCE((
+                SELECT count(*)::int FROM assessment_items item
+                 WHERE item.protocol_id=cycle.protocol_id AND item.active
+              ),0) AS item_count
+         FROM assessment_cycles cycle
+         LEFT JOIN assessment_protocols protocol
+           ON protocol.id=cycle.protocol_id
+        WHERE cycle.application_id=$1 LIMIT 1`,
+      [applicationId]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    // El avance se deriva aquí: la ficha no calcula indicadores de la prueba.
+    const total = Math.max(0, Number(row.item_count ?? 0));
+    const position = Math.min(Number(row.current_item_index ?? 0) + 1, total);
+    return {
+      ...row,
+      progress_label:
+        total > 0
+          ? `Ítem ${position} de ${total}`
+          : "Instrumento sin ítems declarados",
+    };
+  } catch (error) {
+    if (isUndefinedTableError(error)) return null;
+    throw error;
+  }
 }
 
 async function setInboxAutomationInternal(
@@ -347,9 +399,9 @@ async function setInboxAutomationInternal(
     await client.query("BEGIN");
     const current = await client.query(
       `SELECT conv.*,
-              (SELECT s.status FROM assessment_sessions s
-                WHERE s.application_id=conv.application_id
-                ORDER BY s.created_at DESC,s.id DESC LIMIT 1) AS assessment_status
+              (SELECT cycle.state FROM assessment_cycles cycle
+                WHERE cycle.application_id=conv.application_id
+                LIMIT 1) AS assessment_status
          FROM conversations conv
         WHERE conv.id=$1
         FOR UPDATE`,
@@ -359,9 +411,10 @@ async function setInboxAutomationInternal(
     const completed = ["completed", "error"].includes(
       current.rows[0].automation_state
     );
+    // El ciclo concluido —o su ausencia— es lo que habilita el control humano.
     const assessmentCompleted =
       !current.rows[0].assessment_status ||
-      current.rows[0].assessment_status === "finalizada";
+      current.rows[0].assessment_status === "concluido";
     if (
       input.nextState === "human" &&
       !(completed && assessmentCompleted) &&

@@ -80,6 +80,44 @@ WITH controles AS (
                 THEN 'SELECT ''sin-panel'' AS c'
                 ELSE 'SELECT setting_value AS c FROM integration_settings WHERE provider = ''conversation'' AND setting_key = ''agent_enabled''' END,
            false, true, '')))[1]::text, 'sin-panel')
+  UNION ALL
+  SELECT 12, 'Migracion 0025 - lectura de la bandeja por operador', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'conversation_read_state')
+  UNION ALL
+  SELECT 13, 'Migracion 0026 - expediente documental del candidato', '2',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name IN ('candidate_knowledge_folders',
+                                'candidate_knowledge_files'))
+  UNION ALL
+  SELECT 14, 'Migracion 0027 - columnas de la esencia del CV', '5',
+         (SELECT count(*)::text FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = 'candidate_knowledge_files'
+             AND column_name IN ('cv_essence', 'cv_essence_status',
+                                 'cv_essence_model', 'cv_essence_word_limit',
+                                 'cv_essence_updated_at'))
+  UNION ALL
+  SELECT 15, 'Migracion 0028 - ciclo de pruebas de la postulacion', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public' AND table_name = 'assessment_cycles')
+  UNION ALL
+  SELECT 16, 'Migracion 0029 - cierre evaluado del ciclo', '2',
+         (SELECT count(*)::text FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'assessment_cycles'
+             AND column_name IN ('evaluated_at', 'evaluation_score'))
+  UNION ALL
+  SELECT 17, 'Migracion 0030 - intentos por item del instrumento', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'assessment_item_attempts')
+  UNION ALL
+  SELECT 18, 'Migracion 0030 - identidad unica del intento', '1',
+         (SELECT count(*)::text FROM pg_indexes
+           WHERE schemaname = 'public'
+             AND indexname = 'assessment_item_attempts_identity_uq')
 )
 SELECT orden, control, esperado, obtenido,
        CASE WHEN orden = 9 THEN 'INFORMATIVO'

@@ -386,6 +386,7 @@ export default function Inbox() {
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <Info label="Punteo de prueba" value={detail.data?.assessment?.score ?? "Sin puntaje"} />
                   <Info label="Prueba actual" value={detail.data?.assessment?.name ?? "Sin prueba activa"} />
+                  <Info label="Avance de la prueba" value={detail.data?.assessment?.progress_label ?? "Sin prueba en curso"} />
                   <Info label="Ubicación" value={[current.location_zone, current.location_municipality, current.location_department].filter(Boolean).join(", ") || "Sin confirmar"} />
                   <Info label="Último contacto" value={current.last_message_at ? new Date(current.last_message_at).toLocaleString("es-GT", { timeZone: "America/Guatemala" }) : "Sin mensajes"} />
                   <Info label="Formularios y anuncios" value={current.form_count ? `${current.form_count} participaciones · ${current.form_titles ?? ""}` : "Sin formularios registrados"} />

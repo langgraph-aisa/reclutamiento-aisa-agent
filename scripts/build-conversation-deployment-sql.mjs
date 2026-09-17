@@ -9,7 +9,13 @@ import { fileURLToPath } from "node:url";
  *   1. drizzle/migrations/0022_conversational_agent.sql
  *   2. drizzle/migrations/0023_conversation_service_split.sql
  *   3. drizzle/migrations/0024_conversation_activation.sql
- *   4. database/verificacion_servicio_conversacional.sql
+ *   4. drizzle/migrations/0025_inbox_read_state.sql
+ *   5. drizzle/migrations/0026_candidate_knowledge.sql
+ *   6. drizzle/migrations/0027_candidate_cv_essence.sql
+ *   7. drizzle/migrations/0028_assessment_cycles.sql
+ *   8. drizzle/migrations/0029_assessment_cycle_evaluation.sql
+ *   9. drizzle/migrations/0030_assessment_item_attempts.sql
+ *  10. database/verificacion_servicio_conversacional.sql
  *
  * Salida:
  *   database/005_servicio_conversacional_listo.sql
@@ -28,6 +34,12 @@ const sources = [
   "drizzle/migrations/0022_conversational_agent.sql",
   "drizzle/migrations/0023_conversation_service_split.sql",
   "drizzle/migrations/0024_conversation_activation.sql",
+  "drizzle/migrations/0025_inbox_read_state.sql",
+  "drizzle/migrations/0026_candidate_knowledge.sql",
+  "drizzle/migrations/0027_candidate_cv_essence.sql",
+  "drizzle/migrations/0028_assessment_cycles.sql",
+  "drizzle/migrations/0029_assessment_cycle_evaluation.sql",
+  "drizzle/migrations/0030_assessment_item_attempts.sql",
 ];
 
 const verificationPath = "database/verificacion_servicio_conversacional.sql";
@@ -48,7 +60,7 @@ const header = `-- =============================================================
 -- ============================================================================
 -- Archivo GENERADO. No editar a mano: se compone con
 --   pnpm deploy:sql
--- a partir de las migraciones 0022, 0023 y 0024 más la consulta única de
+-- a partir de las migraciones 0022 a 0030 más la consulta única de
 -- verificación. Repetir su ejecución es seguro: todas las sentencias son
 -- idempotentes y ninguna contiene credenciales.
 --
@@ -57,6 +69,8 @@ const header = `-- =============================================================
 --   · el RAG personal del candidato alimentado solo con evidencia literal;
 --   · la cola de salida con reclamo atómico y la vista de reconciliación;
 --   · los esquemas y roles de privilegio mínimo por capacidad;
+--   · el expediente documental del candidato y la esencia de su CV;
+--   · el ciclo de pruebas psicométricas, su traza por ítem y su cierre evaluado;
 --   · la activación **preactivada** en el panel de configuración.
 --
 -- Cómo usarlo: pegue el contenido completo en el ejecutor SQL (dbgate o

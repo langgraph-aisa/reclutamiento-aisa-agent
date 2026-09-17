@@ -201,7 +201,7 @@ describe("bandeja de entrada", () => {
               id: 8,
               application_id: 42,
               automation_state: "completed",
-              assessment_status: "finalizada",
+              assessment_status: "concluido",
             },
           ],
         };
@@ -241,7 +241,7 @@ describe("bandeja de entrada", () => {
               id: 8,
               application_id: 42,
               automation_state: "completed",
-              assessment_status: "finalizada",
+              assessment_status: "concluido",
             },
           ],
         };

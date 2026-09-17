@@ -126,7 +126,7 @@ describe("observabilidad operacional sin contenido privado", () => {
               id: 8,
               application_id: 42,
               automation_state: "completed",
-              assessment_status: "finalizada",
+              assessment_status: "concluido",
             },
           ],
         };

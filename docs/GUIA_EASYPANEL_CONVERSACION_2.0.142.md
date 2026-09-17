@@ -14,7 +14,7 @@ Esta guía describe el **esquema final** del servicio conversacional y los pasos
 
 ## 2. Orden de migraciones
 
-**Un solo archivo deja todo listo:** `database/005_servicio_conversacional_listo.sql`. Reúne las migraciones `0022`, `0023` y `0024`, es idempotente y termina con la verificación autocertificada; se genera con `pnpm deploy:sql` y se validó en PostgreSQL 17 desde cero con `GATE GLOBAL OK`.
+**Un solo archivo deja todo listo:** `database/005_servicio_conversacional_listo.sql`. Reúne las migraciones `0022` a `0030`, es idempotente y termina con la verificación autocertificada; se genera con `pnpm deploy:sql` y se validó en PostgreSQL 17 desde cero con `GATE GLOBAL OK`.
 
 Procedimiento: abra el archivo, copie todo su contenido y pégelo en el ejecutor SQL (dbgate o EasyPanel); ejecútelo una vez y lea el dictamen final. Todas las filas deben quedar en `OK` y el `GATE GLOBAL` en `OK`.
 
@@ -23,8 +23,14 @@ Si prefiere aplicarlo por partes, el orden estricto es:
 1. `drizzle/migrations/0022_conversational_agent.sql`
 2. `drizzle/migrations/0023_conversation_service_split.sql`
 3. `drizzle/migrations/0024_conversation_activation.sql`
+4. `drizzle/migrations/0025_inbox_read_state.sql`
+5. `drizzle/migrations/0026_candidate_knowledge.sql`
+6. `drizzle/migrations/0027_candidate_cv_essence.sql`
+7. `drizzle/migrations/0028_assessment_cycles.sql`
+8. `drizzle/migrations/0029_assessment_cycle_evaluation.sql`
+9. `drizzle/migrations/0030_assessment_item_attempts.sql`
 
-Las tres son idempotentes y ninguna contiene credenciales. La tercera **preactiva** el servicio conversacional en el panel de configuración, de modo que no hace falta agregar ninguna variable de entorno.
+Las nueve son idempotentes y ninguna contiene credenciales. La tercera **preactiva** el servicio conversacional en el panel de configuración, de modo que no hace falta agregar ninguna variable de entorno.
 
 ## 3. Contraseñas de los roles
 

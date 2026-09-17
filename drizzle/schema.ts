@@ -834,6 +834,15 @@ export const assessmentItems = pgTable(
   })
 );
 
+/**
+ * Entidad **legada**: se conserva declarada porque las migraciones de este
+ * proyecto son expansivas y nunca destructivas, pero no tiene productor ni
+ * consumidor. El acto único de la evaluación psicométrica es `assessmentCycles`
+ * y su traza `assessmentItemAttempts`; ninguna superficie lee de aquí.
+ *
+ * Se declara su estado para que quede constancia del reordenamiento ontológico
+ * y para que una futura lectura de esta tabla se reconozca como una regresión.
+ */
 export const assessmentSessions = pgTable(
   "assessment_sessions",
   {
@@ -873,6 +882,92 @@ export const assessmentSessions = pgTable(
     statusCheck: check(
       "assessment_sessions_status_ck",
       sql`${table.status} IN ('pendiente','en_curso','finalizada','error')`
+    ),
+  })
+);
+
+/**
+ * Ciclo de pruebas de la postulación: la obligación que deja la recepción del
+ * formulario y su ejecución. Es el acto único de la evaluación psicométrica; la
+ * ficha lee de aquí. Se declara aquí para que la vista del ORM y la base de
+ * datos no discrepen: la tabla se crea en las migraciones 0028 y 0029.
+ */
+export const assessmentCycles = pgTable("assessment_cycles", {
+  id: serial("id").primaryKey(),
+  applicationId: integer("application_id")
+    .references(() => applications.id, { onDelete: "cascade" })
+    .notNull()
+    .unique(),
+  state: varchar("state", { length: 24 }).default("listo").notNull(),
+  readyAt: timestamp("ready_at", { withTimezone: true }).notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  protocolId: integer("protocol_id"),
+  protocolVersion: integer("protocol_version"),
+  currentItemIndex: integer("current_item_index").default(0).notNull(),
+  score: integer("score"),
+  locationZone: varchar("location_zone", { length: 120 }),
+  locationDepartment: varchar("location_department", { length: 120 }),
+  locationMunicipality: varchar("location_municipality", { length: 120 }),
+  greetingMessageId: integer("greeting_message_id"),
+  evaluatedAt: timestamp("evaluated_at", { withTimezone: true }),
+  evaluationScore: integer("evaluation_score"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+/**
+ * Intento de cada ítem: la traza del acto. Un intento por ciclo e ítem, de modo
+ * que una reentrega del webhook no vuelva a puntuar la misma respuesta.
+ */
+export const assessmentItemAttempts = pgTable(
+  "assessment_item_attempts",
+  {
+    id: serial("id").primaryKey(),
+    cycleId: integer("cycle_id")
+      .references(() => assessmentCycles.id, { onDelete: "cascade" })
+      .notNull(),
+    itemId: integer("item_id")
+      .references(() => assessmentItems.id, { onDelete: "cascade" })
+      .notNull(),
+    itemIndex: integer("item_index").notNull(),
+    promptMessageId: integer("prompt_message_id"),
+    answerMessageId: integer("answer_message_id"),
+    answerText: text("answer_text"),
+    judgement: varchar("judgement", { length: 24 }),
+    itemScore: numeric("item_score", { precision: 5, scale: 2 }),
+    rationale: text("rationale"),
+    askedAt: timestamp("asked_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    identityUq: uniqueIndex("assessment_item_attempts_identity_uq").on(
+      table.cycleId,
+      table.itemId
+    ),
+    positionUq: uniqueIndex("assessment_item_attempts_position_uq").on(
+      table.cycleId,
+      table.itemIndex
+    ),
+    cycleIdx: index("assessment_item_attempts_cycle_idx").on(
+      table.cycleId,
+      table.itemIndex
+    ),
+    judgementCheck: check(
+      "assessment_item_attempts_judgement_ck",
+      sql`${table.judgement} IS NULL OR ${table.judgement} IN ('cumplido','parcial','no_respondido')`
     ),
   })
 );

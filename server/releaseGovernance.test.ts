@@ -90,8 +90,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.167");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.167");
+    expect(APP_VERSION).toBe("2.0.168");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.168");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -1191,7 +1191,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.167");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.168");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1205,7 +1205,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.167");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.168");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1492,6 +1492,15 @@ describe("black-box release contract", () => {
       path.resolve("drizzle/migrations/0028_assessment_cycles.sql"),
       "utf8"
     );
+    const attemptsMigration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0030_assessment_item_attempts.sql"),
+      "utf8"
+    );
+    const inbox = fs.readFileSync(path.resolve("server/inbox.ts"), "utf8");
+    const conversationPanel = fs.readFileSync(
+      path.resolve("client/src/components/review/CandidateConversationPanel.tsx"),
+      "utf8"
+    );
 
     // La ventana declarada y la semántica del interruptor apagado.
     expect(automation).toContain("ASSESSMENT_START_DELAY_SECONDS = 30");
@@ -1512,6 +1521,38 @@ describe("black-box release contract", () => {
     expect(assessments).toContain("Ciclo automático de pruebas");
     expect(migration).toContain("CREATE TABLE IF NOT EXISTS assessment_cycles");
     expect(migration).toContain("ready_at timestamptz NOT NULL");
+
+    // Ejecución del instrumento: decisión pura, traza por ítem y cierre.
+    expect(automation).toContain("export function planAssessmentStep");
+    expect(automation).toContain("export async function runAssessmentStepSweep");
+    expect(automation).toContain("export function judgeAssessmentAnswer");
+    expect(automation).toContain("export function assessmentExecutionScore");
+    expect(automation).toContain("ASSESSMENT_MIN_ANSWER_WORDS");
+    expect(automation).toContain("completeAssessmentCycle(pool, {");
+    expect(attemptsMigration).toContain(
+      "CREATE TABLE IF NOT EXISTS assessment_item_attempts"
+    );
+    expect(attemptsMigration).toContain(
+      "assessment_item_attempts_identity_uq"
+    );
+
+    // Continuidad: el interruptor suspende la ejecución sin suprimir la
+    // obligación, y ambos barridos comparten el mismo punto de arranque para
+    // que el ciclo también se ejecute en el despliegue separado por capacidad.
+    expect(automation).toContain('reason: "automation_disabled"');
+    expect(automation).toContain("assessmentGreetingMessageKey");
+    expect(automation).toContain("assessmentItemMessageKey");
+    expect(worker).toContain("runAssessmentStepSweep(pool");
+    expect(worker).toContain("const assessment = await runAssessmentCycleSweep");
+    expect(worker).toContain("conversationsInProtocol");
+    expect(worker).toContain("const protocol = await runAssessmentStepSweep");
+    expect(worker).toContain("return { assessment, protocol, turns }");
+
+    // Identidad única del acto: la ficha lee el ciclo y no la entidad legada.
+    expect(inbox).toContain("FROM assessment_cycles cycle");
+    expect(inbox).toContain("progress_label");
+    expect(inbox).not.toContain("FROM assessment_sessions");
+    expect(conversationPanel).toContain("Avance de la prueba");
   });
 
   it("declara el despliegue separado por capacidad con cola dedicada", () => {
@@ -1539,7 +1580,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.167");
+    expect(governance).toContain("Alcance candidato 2.0.168");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -1667,10 +1708,22 @@ describe("black-box release contract", () => {
       "utf8"
     );
 
-    // Las tres migraciones y la verificación autocertificada viajan juntas.
+    // Las migraciones y la verificación autocertificada viajan juntas.
     expect(deploy).toContain("Origen: drizzle/migrations/0022_conversational_agent.sql");
     expect(deploy).toContain("Origen: drizzle/migrations/0023_conversation_service_split.sql");
     expect(deploy).toContain("Origen: drizzle/migrations/0024_conversation_activation.sql");
+    // El artefacto no deja fuera las tablas del expediente, del ciclo ni de su
+    // traza: lo que se aplica en un solo paso es lo que se verifica al final.
+    expect(deploy).toContain(
+      "Origen: drizzle/migrations/0027_candidate_cv_essence.sql"
+    );
+    expect(deploy).toContain(
+      "Origen: drizzle/migrations/0028_assessment_cycles.sql"
+    );
+    expect(deploy).toContain(
+      "Origen: drizzle/migrations/0030_assessment_item_attempts.sql"
+    );
+    expect(deploy).toContain("Migracion 0030 - identidad unica del intento");
     expect(deploy).toContain("CREATE TABLE IF NOT EXISTS conversation_outbox");
     expect(deploy).toContain("INSERT INTO integration_settings");
     expect(deploy).toContain("WITH controles AS (");

@@ -1,9 +1,13 @@
 import type { Pool } from "pg";
 import { runConversationTurn } from "./conversationEngine";
 import { dispatchQueuedReplies } from "./conversationOutbox";
-import { runAssessmentCycleSweep } from "./assessmentAutomation";
+import {
+  runAssessmentCycleSweep,
+  runAssessmentStepSweep,
+} from "./assessmentAutomation";
 import { assertCapability } from "./conversationRuntime";
 import { getConversationActivation } from "./conversationActivation";
+import { isUndefinedTableError } from "./governanceObservability";
 
 /**
  * Barrido conversacional.
@@ -44,12 +48,46 @@ export async function pendingConversationIds(
   return result.rows.map(row => Number(row.id));
 }
 
+/**
+ * Conversaciones que están dentro de un ciclo de pruebas en curso.
+ *
+ * Precedencia declarada: mientras el instrumento se administra, el protocolo
+ * conduce la conversación y el motor general no consume el turno. Al concluir
+ * el ciclo, el servicio conversacional ordinario se reanuda por sí solo.
+ * Sin la migración del ciclo, ninguna conversación queda excluida.
+ */
+async function conversationsInProtocol(pool: Pool, ids: number[]) {
+  const excluded = new Set<number>();
+  if (!ids.length) return excluded;
+  try {
+    const result = await pool.query<{ id: number }>(
+      `SELECT conv.id FROM conversations conv
+         JOIN assessment_cycles cycle ON cycle.application_id=conv.application_id
+        WHERE conv.id = ANY($1::int[]) AND cycle.state='en_curso'`,
+      [ids]
+    );
+    for (const row of result.rows) excluded.add(Number(row.id));
+  } catch (error) {
+    if (!isUndefinedTableError(error)) throw error;
+  }
+  return excluded;
+}
+
 export async function runConversationReasoning(
   pool: Pool,
   options: { limit?: number; now?: Date } = {}
 ) {
   assertCapability("reason");
-  const conversationIds = await pendingConversationIds(pool, options.limit);
+  // El protocolo de pruebas se resuelve antes del razonamiento: su saludo y sus
+  // preguntas quedan encolados y los entrega el despacho de esta misma pasada.
+  // Este es el punto que comparten el proceso integrado y el servicio de
+  // razonamiento del despliegue separado, de modo que el ciclo se ejecuta —y se
+  // reanuda al encender el interruptor— en ambos modos.
+  const assessment = await runAssessmentCycleSweep(pool, { now: options.now });
+  const protocol = await runAssessmentStepSweep(pool, { now: options.now });
+  const candidates = await pendingConversationIds(pool, options.limit);
+  const inProtocol = await conversationsInProtocol(pool, candidates);
+  const conversationIds = candidates.filter(id => !inProtocol.has(id));
   const turns: Array<{ conversationId: number; status: string }> = [];
   for (const conversationId of conversationIds) {
     try {
@@ -65,22 +103,19 @@ export async function runConversationReasoning(
       turns.push({ conversationId, status: "error" });
     }
   }
-  return turns;
+  return { assessment, protocol, turns };
 }
 
 export async function runConversationSweep(
   pool: Pool,
   options: { limit?: number; now?: Date } = {}
 ) {
-  // El ciclo de pruebas de la plaza se resuelve antes del razonamiento: su
-  // saludo queda encolado y lo entrega el despacho de esta misma pasada.
-  const assessment = await runAssessmentCycleSweep(pool, { now: options.now });
-  const turns = await runConversationReasoning(pool, options);
+  const reasoning = await runConversationReasoning(pool, options);
   assertCapability("send");
   const dispatched = await dispatchQueuedReplies(pool, {
     limit: CONVERSATION_WORKER_BATCH_LIMIT,
   });
-  return { assessment, turns, dispatched };
+  return { ...reasoning, dispatched };
 }
 
 let running = false;
