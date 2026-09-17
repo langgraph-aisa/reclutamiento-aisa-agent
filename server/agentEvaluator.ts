@@ -107,6 +107,31 @@ export function classificationForScore(score: number) {
   return scoreBandForScore(score).label;
 }
 
+function blockLabelFor(id: unknown) {
+  const block = EVALUATION_BLOCKS.find(item => item.id === id);
+  return block?.label ?? String(id ?? "");
+}
+
+/**
+ * Presentación del payload de evaluación para la ficha administrativa: cada
+ * bloque viaja con su etiqueta institucional resuelta en el servidor, de modo
+ * que el cliente no conserve el catálogo del método. La estrategia de
+ * propiedad intelectual mantiene pesos, criterios e instrucciones fuera del
+ * paquete público (ANALISIS_FORMULARIOS_MULTIPLES_2.0.138).
+ */
+export function withBlockLabels(payload: unknown) {
+  if (!payload || typeof payload !== "object") return payload;
+  const source = payload as Record<string, any>;
+  if (!Array.isArray(source.blocks)) return payload;
+  return {
+    ...source,
+    blocks: source.blocks.map((block: any) => ({
+      ...block,
+      label: block?.label ?? blockLabelFor(block?.id),
+    })),
+  };
+}
+
 function scoreBandForScore(score: number) {
   const normalizedScore = Number.isFinite(score)
     ? Math.max(0, Math.min(100, Math.round(score)))

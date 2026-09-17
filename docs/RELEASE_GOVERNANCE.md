@@ -1,8 +1,20 @@
-# Gobierno de release JARVI RH 2.0.161
+# Gobierno de release JARVI RH 2.0.162
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.161**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.162**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.162
+
+El release **cierra la frontera de propiedad intelectual en el paquete del cliente**. La estrategia declarada en [ANALISIS_FORMULARIOS_MULTIPLES_2.0.138.md](ANALISIS_FORMULARIOS_MULTIPLES_2.0.138.md) exige que pesos, reglas deterministas, criterios e instrucciones del agente permanezcan fuera del paquete público. La revisión del artefacto mostró que la hoja de configuración del agente importaba `EVALUATION_BLOCKS` —pesos, etiquetas y propósito de cada bloque—, `SCORE_BANDS` —bandas de clasificación—, `SALARY_GOVERNANCE_POLICY` y `DEFAULT_AGENT_SETTINGS`, que arrastra la directriz por omisión, desde `shared/agentConfig.ts`. Como Vite empaqueta las hojas administrativas en el mismo paquete que sirve al navegador, ese know-how era descargable sin credenciales.
+
+**El método se sirve, no se distribuye.** `server/agentSettings.ts` publica un catálogo del método —bloques con su identificador, etiqueta, peso y propósito; bandas de clasificación; directriz inalterable de remuneración y directriz por omisión— dentro de la respuesta autenticada de `agent.configuration`. La hoja administrativa lo consume desde la consulta y ya no conserva copia: el formulario no se dibuja hasta recibir la configuración y «Restaurar directriz» toma la directriz del servidor.
+
+**La ficha recibe la etiqueta resuelta.** `server/agentEvaluator.ts` expone `withBlockLabels`, que agrega a cada bloque su etiqueta institucional antes de entregar el payload en `candidates.detail`; el panel de Vista 360° del candidato renderiza `block.label` y dejó de mantener el catálogo de bloques en el cliente. Las evaluaciones ya persistidas conservan su etiqueta porque se resuelve al leer y no depende de un campo almacenado.
+
+**La frontera se audita.** La puerta de release recorre el código del cliente y falla si reaparecen los símbolos del método o los identificadores de bloque; exige además que el servidor conserve el catálogo y que la superficie administrativa lo consuma de la consulta. El paquete compilado se verificó sin la directriz de remuneración, sin los identificadores de bloque y sin las etiquetas ni los propósitos de la matriz.
+
+Sin migración: el alcance es de servidor y de interfaz.
 
 ### Alcance candidato 2.0.161
 

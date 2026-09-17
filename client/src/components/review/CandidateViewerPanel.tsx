@@ -13,19 +13,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type ViewerSelection = "ai" | "summary" | "reason";
 
-/** Etiquetas institucionales de los bloques de la matriz de evaluación. */
-function blockLabel(value: string) {
-  const labels: Record<string, string> = {
-    identificacion_ajuste: "Identificación del ajuste",
-    evidencia_experiencia: "Evidencia de experiencia",
-    competencias: "Competencias técnicas/comerciales",
-    disponibilidad_logistica: "Disponibilidad y logística",
-    riesgos_brechas: "Riesgos o brechas",
-    dictamen_ia: "Dictamen IA",
-  };
-  return labels[value] ?? value;
-}
-
 /**
  * Vista 360° de la postulación en estudio: matriz de evaluación IA, nota inicial
  * y motivo de evaluación en un solo panel, con navegación de bloques.
@@ -34,6 +21,11 @@ function blockLabel(value: string) {
  * la ficha, encima del resumen de perfil y de la decisión, para que la revisión
  * humana lea la evidencia sin cambiar de hoja. La matriz muestra tres bloques a
  * la vez y ofrece el recorrido del resto; en pantallas estrechas muestra uno.
+ *
+ * El catálogo del método —identificadores, etiquetas, pesos y criterios— no
+ * vive aquí: cada bloque viaja con la etiqueta que resolvió el servidor, porque
+ * el know-how no se distribuye en el paquete del cliente (estrategia de
+ * propiedad intelectual, ANALISIS_FORMULARIOS_MULTIPLES_2.0.138).
  */
 export function CandidateViewerPanel({ candidate }: { candidate: any }) {
   const [selection, setSelection] = useState<ViewerSelection>("ai");
@@ -173,7 +165,7 @@ export function CandidateViewerPanel({ candidate }: { candidate: any }) {
                 >
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <span className="font-semibold text-white/90">
-                      {blockLabel(block.id)}
+                      {block.label ?? block.id}
                     </span>
                     <span className="font-bold text-sky-100">
                       {Math.round(Number(block.score) || 0)}/100

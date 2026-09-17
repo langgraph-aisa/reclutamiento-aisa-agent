@@ -52,6 +52,7 @@ import {
   evaluateApplicationWithAgent,
   verifyLangfuseConnection,
   verifyOpenAIConnection,
+  withBlockLabels,
 } from "./agentEvaluator";
 import {
   AGENT_SECRET_KEYS,
@@ -3672,7 +3673,10 @@ export const appRouter = router({
           application: application.rows[0],
           answers: answers.rows,
           submissions: submissions.rows,
-          evaluations: evaluations.rows,
+          evaluations: evaluations.rows.map(row => ({
+            ...row,
+            ai_payload: withBlockLabels(row.ai_payload),
+          })),
           audit: audit.rows,
           conversation: conversation.rows[0] ?? null,
           messages: messages.rows,

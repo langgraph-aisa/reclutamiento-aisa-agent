@@ -7,12 +7,16 @@ import {
 import type { Pool, PoolClient } from "pg";
 import {
   AGENT_MODELS,
+  DEFAULT_AGENT_INSTRUCTIONS,
   DEFAULT_AGENT_SETTINGS,
+  EVALUATION_BLOCKS,
   LANGFUSE_CAPTURE_MODES,
   LANGFUSE_CLOUD_BASE_URLS,
   OPENAI_TRANSCRIPTION_MODELS,
   OPENAI_TTS_MODELS,
   OPENAI_TTS_VOICES,
+  SALARY_GOVERNANCE_POLICY,
+  SCORE_BANDS,
   type AgentPreferences,
 } from "../shared/agentConfig";
 
@@ -326,10 +330,26 @@ function secretState(rows: SettingRow[], key: AgentSecretKey) {
   }
 }
 
+/**
+ * Catálogo del método para el constructor administrativo. El know-how —pesos,
+ * bandas de clasificación, directriz de remuneración y directriz por omisión—
+ * se entrega en esta respuesta autenticada y no vive en el paquete del cliente
+ * (estrategia de propiedad intelectual, ANALISIS_FORMULARIOS_MULTIPLES_2.0.138).
+ */
+function methodCatalog() {
+  return {
+    evaluationBlocks: EVALUATION_BLOCKS,
+    scoreBands: SCORE_BANDS,
+    salaryGovernancePolicy: SALARY_GOVERNANCE_POLICY,
+    defaultInstructions: DEFAULT_AGENT_INSTRUCTIONS,
+  };
+}
+
 export async function getAgentConfiguration(pool: Pool | null) {
   if (!pool) {
     return {
       ...DEFAULT_AGENT_SETTINGS,
+      method: methodCatalog(),
       secrets: Object.fromEntries(
         AGENT_SECRET_KEYS.map(key => [key, { configured: false, masked: null }])
       ) as Record<
@@ -349,6 +369,7 @@ export async function getAgentConfiguration(pool: Pool | null) {
     )[0];
   return {
     ...preferencesFromRows(rows),
+    method: methodCatalog(),
     secrets: Object.fromEntries(
       AGENT_SECRET_KEYS.map(key => [key, secretState(rows, key)])
     ) as Record<AgentSecretKey, { configured: boolean; masked: string | null }>,

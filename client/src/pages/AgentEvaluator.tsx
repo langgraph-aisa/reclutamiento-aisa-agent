@@ -15,8 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import {
   AGENT_MODELS,
-  DEFAULT_AGENT_SETTINGS,
-  EVALUATION_BLOCKS,
   JARVI_HR_IDENTITY_EMAIL,
   LANGFUSE_CLOUD_BASE_URLS,
   OPENAI_API_ENDPOINTS,
@@ -25,8 +23,6 @@ import {
   OPENAI_TRANSCRIPTION_MODELS,
   OPENAI_TTS_MODELS,
   OPENAI_TTS_VOICES,
-  SALARY_GOVERNANCE_POLICY,
-  SCORE_BANDS,
   type AgentPreferences,
 } from "@shared/agentConfig";
 import {
@@ -53,12 +49,39 @@ type SecretKey =
   | "langfuse_public_key"
   | "langfuse_secret_key";
 
+/**
+ * Marcador de posición del formulario. La configuración efectiva —directriz,
+ * interpretación, pesos, bandas y política de remuneración— llega del servidor
+ * en `agent.configuration`; el cliente no conserva copia del método y no
+ * dibuja el formulario hasta recibirla.
+ */
+const PENDING_PREFERENCES: AgentPreferences = {
+  model: "gpt-5.2",
+  psychometricModel: "gpt-4.1-mini",
+  activitySummaryModel: "gpt-4o-mini",
+  transcriptionModel: "gpt-4o-mini-transcribe",
+  ttsModel: "gpt-4o-mini-tts",
+  ttsVoice: "coral",
+  audioMaxMb: 5,
+  documentMaxMb: 5,
+  instructions: "",
+  summaryWordLimit: 180,
+  useMethodologies: true,
+  useResponsesApi: false,
+  methodologyInterpretation: "",
+  langfuseEnabled: true,
+  langfuseBaseUrl: "https://us.cloud.langfuse.com",
+  langfuseEnvironment: "production",
+  langfuseCaptureMode: "metadata_only",
+  langfuseSampleRate: 1,
+};
+
 export default function AgentEvaluator() {
   const configuration = trpc.agent.configuration.useQuery();
   const assignment = trpc.activity.assignment.useQuery();
   const users = trpc.users.list.useQuery();
   const [preferences, setPreferences] = useState<AgentPreferences>(
-    DEFAULT_AGENT_SETTINGS
+    PENDING_PREFERENCES
   );
   const savePreferences = trpc.agent.savePreferences.useMutation({
     onSuccess: async () => {
@@ -137,6 +160,16 @@ export default function AgentEvaluator() {
     configuration.data?.secrets.langfuse_public_key.configured &&
       configuration.data?.secrets.langfuse_secret_key.configured
   );
+
+  if (!configuration.data) {
+    return (
+      <div className="grid min-h-[40vh] place-items-center text-sm text-muted-foreground">
+        Preparando configuración del agente…
+      </div>
+    );
+  }
+
+  const method = configuration.data.method;
 
   return (
     <div className="mx-auto max-w-7xl space-y-7 pb-12">
@@ -387,7 +420,7 @@ export default function AgentEvaluator() {
               </p>
             </div>
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs leading-5 text-red-950">
-              {SALARY_GOVERNANCE_POLICY}
+              {method.salaryGovernancePolicy}
             </div>
           </CardContent>
         </Card>
@@ -521,7 +554,7 @@ export default function AgentEvaluator() {
                 onClick={() =>
                   setPreferences(current => ({
                     ...current,
-                    instructions: DEFAULT_AGENT_SETTINGS.instructions,
+                    instructions: method.defaultInstructions,
                   }))
                 }
               >
@@ -536,7 +569,7 @@ export default function AgentEvaluator() {
               <span>Peso</span>
               <span className="hidden sm:block">Función</span>
             </div>
-            {EVALUATION_BLOCKS.map(block => (
+            {method.evaluationBlocks.map(block => (
               <div
                 key={block.id}
                 className="grid grid-cols-[1fr_90px] gap-2 border-t border-border/60 px-4 py-3 text-sm sm:grid-cols-[1.1fr_100px_1.8fr]"
@@ -594,7 +627,7 @@ export default function AgentEvaluator() {
               className="rounded-2xl leading-6"
             />
             <div className="flex flex-wrap gap-2">
-              {SCORE_BANDS.map(band => (
+              {method.scoreBands.map(band => (
                 <Badge
                   key={band.min}
                   variant="outline"

@@ -70,10 +70,28 @@ function contrastRatio(foreground: string, background: string) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+/**
+ * Reúne el código del cliente que Vite empaqueta y sirve al navegador.
+ * La estrategia de propiedad intelectual exige que el know-how —pesos,
+ * bandas, criterios e instrucciones del agente— no forme parte de ese paquete.
+ */
+function readClientSources(directory = "client/src"): string {
+  return fs
+    .readdirSync(path.resolve(directory), { withFileTypes: true })
+    .map(entry => {
+      const relative = path.join(directory, entry.name);
+      if (entry.isDirectory()) return readClientSources(relative);
+      return /\.tsx?$/.test(entry.name)
+        ? fs.readFileSync(path.resolve(relative), "utf8")
+        : "";
+    })
+    .join("\n");
+}
+
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.161");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.161");
+    expect(APP_VERSION).toBe("2.0.162");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.162");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -1173,7 +1191,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.161");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.162");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1187,7 +1205,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.161");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.162");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1303,6 +1321,69 @@ describe("black-box release contract", () => {
     );
   });
 
+  it("mantiene el método de evaluación fuera del paquete del cliente", () => {
+    const agentConfig = fs.readFileSync(
+      path.resolve("shared/agentConfig.ts"),
+      "utf8"
+    );
+    const agentSettings = fs.readFileSync(
+      path.resolve("server/agentSettings.ts"),
+      "utf8"
+    );
+    const evaluator = fs.readFileSync(
+      path.resolve("server/agentEvaluator.ts"),
+      "utf8"
+    );
+    const page = fs.readFileSync(
+      path.resolve("client/src/pages/AgentEvaluator.tsx"),
+      "utf8"
+    );
+    const panel = fs.readFileSync(
+      path.resolve("client/src/components/review/CandidateViewerPanel.tsx"),
+      "utf8"
+    );
+    const clientSources = readClientSources();
+
+    // El know-how no se distribuye al navegador: llega en una respuesta
+    // autenticada y solo en la superficie administrativa que lo gobierna.
+    expect(clientSources).not.toContain("EVALUATION_BLOCKS");
+    expect(clientSources).not.toContain("SCORE_BANDS");
+    expect(clientSources).not.toContain("SALARY_GOVERNANCE_POLICY");
+    expect(clientSources).not.toContain("DEFAULT_AGENT_SETTINGS");
+    expect(clientSources).not.toContain("DEFAULT_AGENT_INSTRUCTIONS");
+    expect(clientSources).not.toContain("DEFAULT_METHODOLOGY_INTERPRETATION");
+    for (const blockId of [
+      "identificacion_ajuste",
+      "evidencia_experiencia",
+      "disponibilidad_logistica",
+      "riesgos_brechas",
+      "dictamen_ia",
+    ]) {
+      expect(clientSources).not.toContain(blockId);
+    }
+
+    // El servidor conserva el catálogo del método y lo publica únicamente al
+    // constructor administrativo.
+    expect(agentConfig).toContain("weight:");
+    expect(agentSettings).toContain("function methodCatalog()");
+    expect(agentSettings).toContain("evaluationBlocks: EVALUATION_BLOCKS");
+    expect(agentSettings).toContain("scoreBands: SCORE_BANDS");
+    expect(agentSettings).toContain(
+      "salaryGovernancePolicy: SALARY_GOVERNANCE_POLICY"
+    );
+    expect(agentSettings).toContain(
+      "defaultInstructions: DEFAULT_AGENT_INSTRUCTIONS"
+    );
+    expect(page).toContain("method.evaluationBlocks");
+    expect(page).toContain("method.scoreBands");
+    expect(page).toContain("method.salaryGovernancePolicy");
+    expect(page).toContain("method.defaultInstructions");
+
+    // La ficha recibe la etiqueta del bloque resuelta por el servidor.
+    expect(evaluator).toContain("export function withBlockLabels");
+    expect(panel).toContain("{block.label ?? block.id}");
+  });
+
   it("declara el despliegue separado por capacidad con cola dedicada", () => {
     const blackBox = fs.readFileSync(
       path.resolve(`docs/PRUEBAS_CAJA_NEGRA_${APP_VERSION}.md`),
@@ -1328,7 +1409,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.161");
+    expect(governance).toContain("Alcance candidato 2.0.162");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
