@@ -82,6 +82,12 @@ type EvaluationSource = {
     ConfiguredQuestion & { evaluationCriteria?: string; aiPrompt?: string }
   >;
   answers: Record<string, unknown>;
+  /**
+   * Expediente documental del candidato: la esencia del CV y el análisis
+   * vigente de sus documentos. Es evidencia declarada por la persona y se
+   * entrega como capa propia para que el agente pueda distinguirla.
+   */
+  candidateEvidence: string;
 };
 
 function safeJson(value: unknown) {
@@ -154,7 +160,8 @@ export function applicationStatusForEvaluation(
 function buildSystemInstructions(
   settings: Awaited<ReturnType<typeof getAgentRuntimeSettings>>,
   methodologies: Array<{ display_name: string; content_markdown: string }>,
-  projectKnowledge: string
+  projectKnowledge: string,
+  candidateEvidence: string
 ) {
   const blockGuide = EVALUATION_BLOCKS.map(
     block =>
@@ -181,6 +188,7 @@ REGLAS DE SALIDA Y CONTROL
 - Marque criticalDisqualification únicamente ante evidencia explícita de incumplimiento de un requisito indispensable.
 - El resumen debe tener como máximo ${settings.summaryWordLimit} palabras.
 - No use datos sensibles ni características protegidas para decidir.
+- El expediente documental es lo que la persona declaró: úselo como respaldo de experiencia y competencias, sin convertirlo en hecho más allá de lo que el texto afirma.
 
 BLOQUES
 ${blockGuide}
@@ -192,7 +200,10 @@ DOCUMENTOS DE REFERENCIA
 ${references}
 
 BASE DE CONOCIMIENTO DEL PROYECTO (RAG)
-${projectKnowledge}`;
+${projectKnowledge}
+
+EXPEDIENTE DOCUMENTAL DEL CANDIDATO (ANÁLISIS VIGENTE)
+${candidateEvidence || "Sin documentos analizados en el expediente."}`;
 }
 
 /**
@@ -382,6 +393,7 @@ async function evaluationSource(pool: Pool, applicationId: number) {
         aiCriteria: row.ai_criteria,
       }
     : null;
+  const candidateEvidence = await loadCandidateEvidence(pool, applicationId);
   return {
     applicationId,
     position: {
@@ -399,7 +411,58 @@ async function evaluationSource(pool: Pool, applicationId: number) {
     },
     questions,
     answers: answerValues,
+    candidateEvidence,
   } satisfies EvaluationSource;
+}
+
+/**
+ * Expediente documental del candidato para la evaluación.
+ *
+ * Usa la esencia del CV cuando la migración 0027 está aplicada y degrada al
+ * análisis de 66 y 325 palabras cuando no lo está, de modo que una base sin la
+ * migración sigue evaluando en lugar de fallar.
+ */
+async function loadCandidateEvidence(pool: Pool, applicationId: number) {
+  const render = (
+    rows: Array<Record<string, unknown>>,
+    withEssence: boolean
+  ) =>
+    rows
+      .map(row => {
+        const body = withEssence
+          ? String(row.cv_essence ?? "").trim() ||
+            String(row.deep_analysis ?? "").trim() ||
+            String(row.summary_66 ?? "").trim()
+          : String(row.deep_analysis ?? "").trim() ||
+            String(row.summary_66 ?? "").trim();
+        if (!body) return "";
+        return `### ${String(row.original_name ?? "Documento")} (origen ${String(row.source ?? "manual")})\n${body}`;
+      })
+      .filter(Boolean)
+      .join("\n\n");
+  try {
+    const documents = await pool.query(
+      `SELECT original_name,source,cv_essence,deep_analysis,summary_66
+         FROM candidate_knowledge_files
+        WHERE application_id=$1 AND analysis_status='analizado'
+        ORDER BY uploaded_at DESC LIMIT 5`,
+      [applicationId]
+    );
+    return render(documents.rows, true);
+  } catch {
+    try {
+      const documents = await pool.query(
+        `SELECT original_name,source,deep_analysis,summary_66
+           FROM candidate_knowledge_files
+          WHERE application_id=$1 AND analysis_status='analizado'
+          ORDER BY uploaded_at DESC LIMIT 5`,
+        [applicationId]
+      );
+      return render(documents.rows, false);
+    } catch {
+      return "";
+    }
+  }
 }
 
 async function saveHardFail(
@@ -595,7 +658,8 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
       const instructions = buildSystemInstructions(
         settings,
         methodologies,
-        knowledgeContext.rendered
+        knowledgeContext.rendered,
+        source.candidateEvidence
       );
       let output: AgentModelOutput | null = null;
       let keySlot: "primary" | "backup" = "primary";

@@ -54,6 +54,10 @@ import {
   verifyOpenAIConnection,
   withBlockLabels,
 } from "./agentEvaluator";
+import {
+  analyzeCandidateCvEssence,
+  cvAwaitingState,
+} from "./cvAnalysis";
 import { loadCvAnalysisConfiguration } from "./cvAnalysis";
 import {
   AGENT_SECRET_KEYS,
@@ -2466,6 +2470,38 @@ export const appRouter = router({
    * porque son quienes conducen el proceso; toda escritura queda auditada.
    */
   candidateKnowledge: router({
+    /**
+     * Expediente de CV de una postulación para la ficha administrativa: el
+     * estado del ciclo y los documentos recibidos con su esencia.
+     */
+    cvAnalysis: roleProcedure
+      .input(z.object({ applicationId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const state = await cvAwaitingState(pool, input.applicationId);
+        const documents = await pool.query(
+          `SELECT id,original_name,source,extension,analysis_status,
+                  cv_essence,cv_essence_status,cv_essence_word_limit,
+                  cv_essence_updated_at,uploaded_at
+             FROM candidate_knowledge_files
+            WHERE application_id=$1
+            ORDER BY uploaded_at DESC LIMIT 10`,
+          [input.applicationId]
+        );
+        return { state, documents: documents.rows };
+      }),
+    /**
+     * Genera la esencia del CV de un documento del expediente. Aplica el
+     * límite de palabras vigente y deja asiento propio en la auditoría.
+     */
+    generateCvEssence: roleProcedure
+      .input(z.object({ fileId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) =>
+        analyzeCandidateCvEssence(await requirePool(), {
+          fileId: input.fileId,
+          actorUserId: ctx.user.id,
+        })
+      ),
     tree: roleProcedure
       .input(z.object({ applicationId: z.number().int().positive() }))
       .query(async ({ input }) =>

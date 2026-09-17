@@ -104,12 +104,13 @@ rechaza sin efectos laterales. La puerta de release blinda ese orden.
 **Sin migración en el alcance entregado.** La capa de configuración, el cierre
 compuesto y el estado del expediente se resuelven con estructuras existentes.
 
-**Incremento siguiente, declarado.** La generación de la esencia de hasta 550 palabras,
-su almacenamiento y la re-evaluación que actualiza el puntaje requieren: una migración
-aditiva sobre `candidate_knowledge_files` para la esencia y su estado; una función de
-análisis con el límite configurado; y la inyección del expediente en el contexto de
-evaluación como capa declarada. El diseño está fijado en este documento; la entrega
-corresponde al incremento siguiente.
+**Incremento entregado en 2.0.165.** La generación de la esencia, su almacenamiento y
+la re-evaluación que actualiza el puntaje se entregaron: la migración
+`0027_candidate_cv_essence.sql` agrega la esencia y su estado a
+`candidate_knowledge_files`; `analyzeCandidateCvEssence` la genera por fragmentos con
+el límite de la configuración y deja asiento propio; y el evaluador incorpora el
+expediente del candidato como capa declarada, de modo que la re-evaluación que ya
+existía pasa a contar con el CV y actualiza el puntaje.
 
 ## 5. Estrategia de propiedad intelectual
 
@@ -161,8 +162,10 @@ CV **propone re-evaluar**, no decide.
 
 El alcance entregado en 2.0.164 comprende la configuración editorial del módulo, la
 composición del cierre institucional en el mensaje de solicitud y la derivación del
-estado del expediente. **No comprende todavía** la generación de la esencia, su
-persistencia ni la re-evaluación que actualiza el puntaje; tampoco una validación
-psicométrica del CV ni una interpretación automática de su contenido más allá de lo que
-el agente pueda razonar con el texto analizado. La re-evaluación con CV **no sustituye**
-la revisión humana: la alimenta y queda registrada.
+estado del expediente. **2.0.165 añade** la generación de la esencia por fragmentos, su
+persistencia y la inyección del expediente como capa declarada del evaluador, con el
+panel de análisis en la ficha junto a las respuestas de formularios. **No comprende**
+una validación psicométrica del CV, una interpretación automática de su contenido más
+allá de lo que el agente pueda razonar con el texto analizado, ni una re-evaluación
+automática al recibir el documento: la re-evaluación se solicita desde la ficha y queda
+registrada. La re-evaluación con CV **no sustituye** la revisión humana: la alimenta.

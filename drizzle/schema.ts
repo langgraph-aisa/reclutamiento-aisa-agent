@@ -1222,6 +1222,16 @@ export const candidateKnowledgeFiles = pgTable(
       .default("pendiente")
       .notNull(),
     analyzedModel: varchar("analyzed_model", { length: 80 }),
+    /** Esencia del CV: representación de trabajo que alimenta al agente. */
+    cvEssence: varchar("cv_essence", { length: 6000 }).default("").notNull(),
+    cvEssenceStatus: varchar("cv_essence_status", { length: 32 })
+      .default("pendiente")
+      .notNull(),
+    cvEssenceModel: varchar("cv_essence_model", { length: 80 }),
+    cvEssenceWordLimit: integer("cv_essence_word_limit").default(550).notNull(),
+    cvEssenceUpdatedAt: timestamp("cv_essence_updated_at", {
+      withTimezone: true,
+    }),
     sha256: varchar("sha256", { length: 64 }),
     uploadedByUserId: integer("uploaded_by_user_id").references(() => users.id, {
       onDelete: "set null",
@@ -1242,6 +1252,10 @@ export const candidateKnowledgeFiles = pgTable(
     analysisIdx: index("candidate_knowledge_files_analysis_idx").on(
       table.applicationId,
       table.analysisStatus
+    ),
+    essenceIdx: index("candidate_knowledge_files_essence_idx").on(
+      table.applicationId,
+      table.cvEssenceStatus
     ),
     storageUq: uniqueIndex("candidate_knowledge_files_storage_uq").on(
       table.storageKey

@@ -1,4 +1,15 @@
+import { z } from "zod";
+import OpenAI from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
 import type { Pool } from "pg";
+import { APP_VERSION } from "../shared/release";
+import { getAgentRuntimeSettings } from "./agentSettings";
+import {
+  extractKnowledgeText,
+  KNOWLEDGE_ANALYSIS_MODEL,
+  limitWords,
+} from "./knowledge";
+import { observeOpenAIClient } from "./observability/langfuse";
 
 /**
  * Módulo de análisis de CV del agente evaluador.
@@ -169,4 +180,192 @@ export async function cvAwaitingState(
     [`cv_request:${applicationId}`]
   );
   return Number(requested.rows[0]?.requested ?? 0) > 0 ? "pendiente" : "sin_solicitud";
+}
+
+/** Fragmentación del texto del CV para documentos extensos. */
+export const CV_ESSENCE_CHUNK_CHARS = 6_000;
+export const CV_ESSENCE_MAX_CHUNKS = 12;
+
+/**
+ * Fragmenta el texto del CV conservando párrafos completos y rotula cada
+ * fragmento. El rótulo permite que el modelo distinga continuidad de contenido
+ * repetido y que la traza declare cuántos fragmentos se procesaron.
+ */
+export function chunkCvText(
+  text: string,
+  maxChars = CV_ESSENCE_CHUNK_CHARS
+): string[] {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return [];
+  const chunks: string[] = [];
+  let current = "";
+  for (const paragraph of normalized.split(/\n{2,}/)) {
+    if (current && current.length + paragraph.length + 2 > maxChars) {
+      chunks.push(current.trim());
+      current = "";
+    }
+    current = current ? `${current}\n\n${paragraph}` : paragraph;
+  }
+  if (current.trim()) chunks.push(current.trim());
+  return chunks
+    .slice(0, CV_ESSENCE_MAX_CHUNKS)
+    .map((chunk, index) => `[Fragmento ${index + 1}]\n${chunk}`);
+}
+
+const CvEssenceSchema = z.object({
+  essence: z
+    .string()
+    .describe(
+      "Esencia del currículum: experiencia, formación, competencias y evidencia verificable. No infiera datos ausentes ni valore la idoneidad."
+    ),
+});
+
+const CV_ESSENCE_INSTRUCTIONS = `Extraiga la esencia de un currículum para alimentar a un agente de evaluación.
+Reglas:
+- Describa únicamente lo que el documento declara; no complete vacíos ni suponga trayectorias.
+- Organice el texto por experiencia, formación, competencias y evidencia verificable.
+- Conserve cifras, tecnologías, cargos, instituciones y periodos tal como aparecen.
+- No emita juicios de idoneidad, no compare con plazas y no proponga remuneración.
+- Redacte en español formal y en prosa continua; no use listas de mercadeo.`;
+
+/**
+ * Genera la esencia del CV de un documento del expediente y la persiste.
+ *
+ * La esencia es una representación de trabajo acotada por la configuración del
+ * módulo; el documento original sigue siendo la evidencia y el visor lo entrega
+ * íntegro. La operación es idempotente por documento: regenerar reemplaza la
+ * esencia anterior y deja asiento propio en la auditoría.
+ */
+export async function analyzeCandidateCvEssence(
+  pool: Pool,
+  input: { fileId: number; actorUserId: number | null }
+) {
+  const fileResult = await pool.query<{
+    application_id: number;
+    storage_key: string;
+    extension: string;
+  }>(
+    `SELECT application_id,storage_key,extension FROM candidate_knowledge_files
+      WHERE id=$1 LIMIT 1`,
+    [input.fileId]
+  );
+  const file = fileResult.rows[0];
+  if (!file) throw new Error("El documento del candidato no existe.");
+  const configuration = await loadCvAnalysisConfiguration(pool);
+  const markStatus = async (status: string) => {
+    await pool.query(
+      `UPDATE candidate_knowledge_files
+          SET cv_essence_status=$1,cv_essence_updated_at=now(),updated_at=now()
+        WHERE id=$2`,
+      [status, input.fileId]
+    );
+  };
+  let text = "";
+  try {
+    text = await extractKnowledgeText(
+      String(file.storage_key),
+      String(file.extension)
+    );
+  } catch {
+    await markStatus("error");
+    return {
+      essenceStatus: "error",
+      message:
+        "El documento no está en el volumen de almacenamiento; vuelva a cargarlo.",
+    };
+  }
+  const chunks = chunkCvText(text);
+  if (!chunks.length) {
+    await markStatus("no_aplica");
+    return {
+      essenceStatus: "no_aplica",
+      message:
+        "El documento no contiene texto extraíble; la esencia no se generó.",
+    };
+  }
+  const settings = await getAgentRuntimeSettings(pool);
+  if (!settings.useResponsesApi) {
+    throw new Error(
+      "La OpenAI Responses API debe estar habilitada para analizar el CV."
+    );
+  }
+  const keyOptions = [
+    ["primary", settings.secrets.openai_api_key],
+    ["backup", settings.secrets.openai_api_key_backup],
+  ] as const;
+  const configuredKeys = keyOptions.filter(option => Boolean(option[1]));
+  if (!configuredKeys.length) {
+    throw new Error(
+      "Configure y verifique una API Key de OpenAI antes de analizar el CV."
+    );
+  }
+  const model = KNOWLEDGE_ANALYSIS_MODEL;
+  let essence = "";
+  for (const option of configuredKeys) {
+    const slot = option[0];
+    const apiKey = option[1];
+    try {
+      const client = observeOpenAIClient(
+        new OpenAI({ apiKey: apiKey!, timeout: 60_000, maxRetries: 0 }),
+        {
+          traceName: "candidate-cv-essence",
+          tags: ["candidate", "cv", "responses-api"],
+          generationName: `cv-essence-${slot}`,
+          generationMetadata: {
+            feature: "candidate-cv-essence",
+            keySlot: slot,
+            version: APP_VERSION,
+            fileId: input.fileId,
+            chunks: chunks.length,
+            wordLimit: configuration.essenceWordLimit,
+            classification: "restricted-redacted",
+          },
+        }
+      );
+      const response = await client.responses.parse({
+        model,
+        instructions: CV_ESSENCE_INSTRUCTIONS,
+        input: `Currículum (documento ${input.fileId}), en ${chunks.length} fragmento(s):\n\n${chunks.join("\n\n")}`,
+        text: { format: zodTextFormat(CvEssenceSchema, "esencia_cv") },
+        max_output_tokens: 8_000,
+        store: false,
+      });
+      if (!response.output_parsed?.essence?.trim()) {
+        throw new Error("La esencia del CV está vacía.");
+      }
+      essence = response.output_parsed.essence.trim();
+      break;
+    } catch (error) {
+      console.warn(
+        `[CvAnalysis] OpenAI ${slot} no generó la esencia (${error instanceof Error ? error.name : "unknown"}).`
+      );
+    }
+  }
+  if (!essence) {
+    await markStatus("error");
+    throw new Error(
+      "La esencia del CV no pudo generarse con las credenciales configuradas."
+    );
+  }
+  const limited = limitWords(essence, configuration.essenceWordLimit);
+  await pool.query(
+    `UPDATE candidate_knowledge_files
+        SET cv_essence=$1,cv_essence_status='generado',cv_essence_model=$2,
+            cv_essence_word_limit=$3,cv_essence_updated_at=now(),updated_at=now()
+      WHERE id=$4`,
+    [limited, model, configuration.essenceWordLimit, input.fileId]
+  );
+  await pool.query(
+    `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action)
+     VALUES ($1,'candidate_knowledge_file',$2,'candidate_cv_essence_generated')`,
+    [input.actorUserId, input.fileId]
+  );
+  return {
+    essenceStatus: "generado",
+    message: "Esencia del CV generada.",
+    essence: limited,
+    words: limited.split(/\s+/).filter(Boolean).length,
+    wordLimit: configuration.essenceWordLimit,
+    model,
+  };
 }

@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CandidateReviewSummary } from "@/components/review/CandidateReviewSummary";
+import { CandidateCvAnalysisPanel } from "@/components/review/CandidateCvAnalysisPanel";
 import { CandidateViewerPanel } from "@/components/review/CandidateViewerPanel";
 import { ReviewEvidencePanels } from "@/components/review/ReviewEvidencePanels";
 import { trpc } from "@/lib/trpc";
@@ -341,7 +342,7 @@ function CandidateDetail({
                 </div>
               )}
         </div>
-        <div className="lg:col-span-2 rounded-2xl bg-white/8 p-4">
+        <div className="rounded-2xl bg-white/8 p-4">
           <p className="text-xs uppercase tracking-[.14em] text-white/55">
             Formularios y anuncios · respuestas
           </p>
@@ -413,6 +414,13 @@ function CandidateDetail({
             )}
           </div>
         </div>
+        <CandidateCvAnalysisPanel
+          applicationId={data.application.id}
+          reevaluating={evaluateWithAgent.isPending}
+          onReevaluate={() =>
+            evaluateWithAgent.mutate({ applicationId: data.application.id })
+          }
+        />
       </CardContent>
     </Card>
   );

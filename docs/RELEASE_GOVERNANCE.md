@@ -1,8 +1,20 @@
-# Gobierno de release JARVI RH 2.0.164
+# Gobierno de release JARVI RH 2.0.165
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.164**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.165**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.165
+
+El release **entrega la esencia del CV y la re-evaluación que la usa**. `server/cvAnalysis.ts` incorpora `chunkCvText` —que fragmenta el texto conservando párrafos completos y rotula cada fragmento— y `analyzeCandidateCvEssence`, que genera la esencia con el límite vigente de la configuración, la persiste con su modelo y su límite aplicado, marca el estado y deja asiento propio (`candidate_cv_essence_generated`) en la auditoría. La operación es idempotente por documento: regenerar reemplaza la esencia anterior.
+
+**El expediente entra al evaluador como capa declarada.** `server/agentEvaluator.ts` carga el expediente documental del candidato —la esencia del CV y, en su ausencia, el análisis de 66 y 325 palabras— y lo entrega al modelo como sección propia, después del conocimiento del proyecto, con la regla de que es lo que la persona declaró y no se convierte en hecho más allá de lo que el texto afirma. La re-evaluación que ya existía pasa así a contar con el CV y **actualiza el puntaje** sin cambiar el contrato del evaluador ni la ponderación calculada por el servidor.
+
+**Degradación declarada.** La lectura del expediente usa la esencia cuando la migración `0027` está aplicada y **degrada al análisis previo cuando no lo está**, de modo que una base sin la migración sigue evaluando en lugar de fallar.
+
+**El panel en la ficha.** `client/src/components/review/CandidateCvAnalysisPanel.tsx` se monta junto a `Formularios y anuncios · respuestas`: declara primero el estado del ciclo —sin solicitud, pendiente, recibido—, lista los documentos recibidos con su origen, muestra la esencia con su conteo de palabras frente al límite vigente y ofrece generarla y re-evaluar con ella. El panel **propone**; la decisión sigue en el encabezado y su asiento en la bitácora.
+
+La migración `0027_candidate_cv_essence.sql` es expansiva e idempotente: agrega cinco columnas y un índice, se ejecuta solo si la tabla del expediente existe y termina con una verificación autocertificada. Se aplicó sobre PostgreSQL 17 con y sin la tabla previa, se reaplicó sin error y conservó el registro existente.
 
 ### Alcance candidato 2.0.164
 

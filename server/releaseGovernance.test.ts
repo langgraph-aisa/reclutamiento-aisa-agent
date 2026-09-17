@@ -90,8 +90,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.164");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.164");
+    expect(APP_VERSION).toBe("2.0.165");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.165");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -537,9 +537,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(119);
+    expect(audit.files).toHaveLength(120);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(119);
+    expect(publicCopyAudit.files).toHaveLength(120);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -1191,7 +1191,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.164");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.165");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1205,7 +1205,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.164");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.165");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1435,6 +1435,39 @@ describe("black-box release contract", () => {
     expect(config).toContain("Aviso de contacto");
     expect(config).toContain("Palabras de la esencia del CV");
     expect(config).toContain("trpc.config.cvAnalysis.useQuery()");
+
+    // La esencia del CV se genera en el servidor, por fragmentos y acotada por
+    // la configuración; el expediente entra al evaluador como capa declarada.
+    expect(cvAnalysis).toContain("export function chunkCvText");
+    expect(cvAnalysis).toContain("export async function analyzeCandidateCvEssence");
+    expect(cvAnalysis).toContain("limitWords(essence, configuration.essenceWordLimit)");
+    expect(cvAnalysis).toContain("candidate_cv_essence_generated");
+    const evaluatorSource = fs.readFileSync(
+      path.resolve("server/agentEvaluator.ts"),
+      "utf8"
+    );
+    expect(evaluatorSource).toContain("async function loadCandidateEvidence");
+    expect(evaluatorSource).toContain("EXPEDIENTE DOCUMENTAL DEL CANDIDATO");
+    expect(evaluatorSource).toContain("candidateEvidence");
+    const migration0027 = fs.readFileSync(
+      path.resolve("drizzle/migrations/0027_candidate_cv_essence.sql"),
+      "utf8"
+    );
+    expect(migration0027).toContain("ADD COLUMN IF NOT EXISTS cv_essence");
+    expect(migration0027).toContain("cv_essence_status");
+    expect(migration0027).toContain("cv_essence_updated_at");
+    expect(routing).toContain("generateCvEssence: roleProcedure");
+    expect(routing).toContain("cvAnalysis: roleProcedure");
+
+    // El panel se monta junto a las respuestas de formularios en la ficha.
+    const review = fs.readFileSync(
+      path.resolve("client/src/pages/HumanReview.tsx"),
+      "utf8"
+    );
+    expect(review).toContain("<CandidateCvAnalysisPanel");
+    expect(review.indexOf("Formularios y anuncios · respuestas")).toBeLessThan(
+      review.indexOf("<CandidateCvAnalysisPanel")
+    );
   });
 
   it("declara el despliegue separado por capacidad con cola dedicada", () => {
@@ -1462,7 +1495,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.164");
+    expect(governance).toContain("Alcance candidato 2.0.165");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
