@@ -1,8 +1,18 @@
-# Gobierno de release JARVI RH 2.0.166
+# Gobierno de release JARVI RH 2.0.167
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.166**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.167**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.167
+
+El release **hace automática la re-evaluación que acompaña al cierre del ciclo de pruebas**. La decisión estaba abierta —¿la re-evaluación se pide o se ejecuta?— y se resuelve por la segunda: concluir el ciclo es el hecho que la dispara. La evaluación se compone con el **perfil laboral de la plaza** y el **conocimiento del proyecto (RAG)** que el evaluador ya reúne, más el expediente del candidato incorporado en 2.0.165, de modo que no hace falta ninguna capa de contexto nueva para que el resultado sea el correcto.
+
+**Diseño del cierre.** `completeAssessmentCycle` decide el cierre dentro de una transacción con `SELECT … FOR UPDATE`: dos cierres concurrentes no duplican la obligación y un ciclo ya concluido **no vuelve a evaluarse**. La evaluación —una llamada externa lenta— se ejecuta **después del commit**, de modo que la transacción no se retiene durante la llamada al proveedor. El cierre asienta `assessment_cycle_completed` con el punteo de la prueba y, al terminar la evaluación, `assessment_cycle_evaluated` con el punteo resultante; si la evaluación falla, el ciclo **queda concluido** y el fallo se asienta aparte: el cierre nunca queda a medias ni se repite.
+
+**Reanudación y concurrencia.** La marca del cierre es la evidencia de que la evaluación automática ya ocurrió, así que el barrido no la repite ni un reintento del proveedor la duplica. La guardia de evaluación concurrente que el evaluador ya tenía sigue vigente.
+
+La migración `0029_assessment_cycle_evaluation.sql` agrega las dos columnas del cierre evaluado, se ejecuta solo si la tabla del ciclo existe y es idempotente. **Sin migración de datos**: las columnas son anulables.
 
 ### Alcance candidato 2.0.166
 
@@ -12,7 +22,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. Tampoco está entregada la re-evaluación automática al concluir el ciclo, ni el volcado de la prueba en curso, la ubicación y el punteo en los indicadores de la ficha de conversación. Lo entregado es el interruptor, la ventana declarada, el registro de la obligación, el arranque del ciclo y el saludo.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.167.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

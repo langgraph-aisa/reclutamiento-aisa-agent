@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { evaluateApplicationWithAgent } from "./agentEvaluator";
 
 /**
  * Automatización de pruebas psicométricas.
@@ -319,4 +320,118 @@ export async function runAssessmentCycleSweep(
     started.push(cycle.id);
   }
   return { started };
+}
+
+/**
+ * Concluye el ciclo y **re-evalúa de forma automática**.
+ *
+ * La re-evaluación no se pide: ocurre como parte del cierre, con el perfil
+ * laboral de la plaza, el conocimiento del proyecto y el expediente del
+ * candidato que el evaluador ya compone. El cierre se decide dentro de una
+ * transacción con bloqueo de fila —de modo que dos cierres concurrentes no
+ * dupliquen la obligación— y la evaluación, que es una llamada externa lenta,
+ * se ejecuta **después del commit** para no retener la transacción. Si la
+ * evaluación falla, el ciclo queda concluido y el fallo se asienta aparte: el
+ * cierre nunca queda a medias ni se repite.
+ */
+export async function completeAssessmentCycle(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    score?: number | null;
+    actorUserId?: number | null;
+    now?: Date;
+  }
+) {
+  const now = input.now ?? new Date();
+  const client = await pool.connect();
+  let cycleId: number | null = null;
+  try {
+    await client.query("BEGIN");
+    const current = await client.query<{ id: number; state: string }>(
+      `SELECT id,state FROM assessment_cycles WHERE application_id=$1 FOR UPDATE`,
+      [input.applicationId]
+    );
+    const cycle = current.rows[0];
+    if (!cycle) {
+      await client.query("ROLLBACK");
+      return { completed: false, reason: "no_cycle", evaluated: false };
+    }
+    if (cycle.state === "concluido") {
+      await client.query("ROLLBACK");
+      return { completed: false, reason: "already_completed", evaluated: false };
+    }
+    cycleId = cycle.id;
+    await client.query(
+      `UPDATE assessment_cycles
+          SET state='concluido',completed_at=$1,score=COALESCE($2,score),
+              updated_at=now()
+        WHERE id=$3`,
+      [now, input.score ?? null, cycle.id]
+    );
+    await client.query(
+      `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+       VALUES ($1,'assessment_cycle',$2,'assessment_cycle_completed',$3::jsonb)`,
+      [
+        input.actorUserId ?? null,
+        cycle.id,
+        JSON.stringify({
+          applicationId: input.applicationId,
+          score: input.score ?? null,
+        }),
+      ]
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  try {
+    const evaluation = await evaluateApplicationWithAgent(
+      pool,
+      input.applicationId
+    );
+    const score =
+      typeof (evaluation as { score?: unknown })?.score === "number"
+        ? (evaluation as { score: number }).score
+        : null;
+    await pool.query(
+      `UPDATE assessment_cycles
+          SET evaluated_at=now(),evaluation_score=$1,updated_at=now()
+        WHERE id=$2`,
+      [score, cycleId]
+    );
+    await pool.query(
+      `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+       VALUES (NULL,'assessment_cycle',$1,'assessment_cycle_evaluated',$2::jsonb)`,
+      [
+        cycleId,
+        JSON.stringify({
+          applicationId: input.applicationId,
+          score,
+          automatic: true,
+        }),
+      ]
+    );
+    return { completed: true, reason: "completed", evaluated: true, score };
+  } catch (error) {
+    await pool.query(
+      `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+       VALUES (NULL,'assessment_cycle',$1,'assessment_cycle_evaluation_failed',$2::jsonb)`,
+      [
+        cycleId,
+        JSON.stringify({
+          applicationId: input.applicationId,
+          message:
+            error instanceof Error
+              ? error.message.slice(0, 300)
+              : "error desconocido",
+        }),
+      ]
+    );
+    return { completed: true, reason: "completed", evaluated: false };
+  }
 }

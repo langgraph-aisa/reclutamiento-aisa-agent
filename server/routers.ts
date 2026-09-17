@@ -60,6 +60,7 @@ import {
 } from "./cvAnalysis";
 import { loadCvAnalysisConfiguration } from "./cvAnalysis";
 import {
+  completeAssessmentCycle,
   getAssessmentAutomation,
   saveAssessmentAutomation,
 } from "./assessmentAutomation";
@@ -2807,6 +2808,24 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) =>
         saveAssessmentAutomation(await requirePool(), {
           enabled: input.enabled,
+          actorUserId: ctx.user.id,
+        })
+      ),
+    /**
+     * Cierra el ciclo de pruebas y ejecuta la re-evaluación automática. La
+     * operación es idempotente: un ciclo ya concluido no vuelve a evaluarse.
+     */
+    completeCycle: roleProcedure
+      .input(
+        z.object({
+          applicationId: z.number().int().positive(),
+          score: z.number().int().min(0).max(100).optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) =>
+        completeAssessmentCycle(await requirePool(), {
+          applicationId: input.applicationId,
+          score: input.score ?? null,
           actorUserId: ctx.user.id,
         })
       ),
