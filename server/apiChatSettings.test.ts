@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  APICHAT_ATTACHMENT_REQUIREMENT,
   APICHAT_OFFICIAL_ENDPOINTS,
   APICHAT_RECEPTION_VERIFIED_KEY,
+  apiChatAttachmentEvidenceAdvisory,
+  apiChatAttachmentTransportAdvisory,
   apiChatCapabilityAdvisories,
+  attachmentTransportStatus,
   computeApiChatCapabilityReadiness,
   getApiChatConfiguration,
   getApiChatEndpoints,
@@ -542,6 +546,77 @@ describe("capacidad conversacional del catálogo de endpoints", () => {
     ]);
     expect(catalog.endpoints.every(endpoint => "conversationUse" in endpoint)).toBe(
       true
+    );
+  });
+});
+
+describe("estado del conducto de adjuntos", () => {
+  it("distingue la pérdida de la incógnita y de la verificación", () => {
+    expect(attachmentTransportStatus({ received: 0, losses: 0 })).toBe(
+      "sin_evidencia"
+    );
+    expect(attachmentTransportStatus({ received: 0, losses: 3 })).toBe(
+      "con_perdidas"
+    );
+    expect(attachmentTransportStatus({ received: 2, losses: 0 })).toBe(
+      "verificado"
+    );
+    // Una pérdida prevalece sobre cualquier recepción: el conducto falló.
+    expect(attachmentTransportStatus({ received: 5, losses: 1 })).toBe(
+      "con_perdidas"
+    );
+  });
+
+  it("la falta de pérdidas con falta de recepciones no se declara salud", () => {
+    const sinEvidencia = apiChatAttachmentEvidenceAdvisory({
+      windowHours: 24,
+      withoutContent: 0,
+      unreadable: 0,
+      total: 0,
+      lastAt: null,
+      received: 0,
+      lastReceivedAt: null,
+      status: "sin_evidencia",
+    });
+    expect(sinEvidencia).toHaveLength(1);
+    expect(sinEvidencia[0]).toContain("no tiene evidencia");
+    // Con recepciones efectivas el conducto se declara verificado y calla.
+    expect(
+      apiChatAttachmentEvidenceAdvisory({
+        windowHours: 24,
+        withoutContent: 0,
+        unreadable: 0,
+        total: 0,
+        lastAt: null,
+        received: 1,
+        lastReceivedAt: new Date("2026-09-17T12:00:00.000Z"),
+        status: "verificado",
+      })
+    ).toEqual([]);
+  });
+
+  it("la pérdida nombra la opción del proveedor y no habla cuando no hay pérdidas", () => {
+    expect(
+      apiChatAttachmentTransportAdvisory({
+        windowHours: 24,
+        withoutContent: 0,
+        unreadable: 0,
+        total: 0,
+        lastAt: null,
+      })
+    ).toEqual([]);
+    const advisory = apiChatAttachmentTransportAdvisory({
+      windowHours: 24,
+      withoutContent: 2,
+      unreadable: 1,
+      total: 3,
+      lastAt: null,
+    });
+    expect(advisory).toHaveLength(1);
+    expect(advisory[0]).toContain("Notify attachments in base64 format");
+    // El requisito permanente se declara con el nombre literal de la opción.
+    expect(APICHAT_ATTACHMENT_REQUIREMENT).toContain(
+      "Notify attachments in base64 format"
     );
   });
 });

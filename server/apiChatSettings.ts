@@ -476,6 +476,84 @@ export function apiChatAttachmentTransportAdvisory(
   ];
 }
 
+/**
+ * Advertencia del conducto **sin evidencia**.
+ *
+ * La falta de pérdidas con falta de recepciones no es salud: es una incógnita.
+ * Declararla como buena repetiría exactamente el error que este módulo
+ * corrige —concluir que el conducto opera porque nada falló, cuando nunca se
+ * intentó—. Por eso el silencio también habla.
+ */
+export function apiChatAttachmentEvidenceAdvisory(
+  transport: ApiChatAttachmentTransport
+): string[] {
+  if (transport.status !== "sin_evidencia") return [];
+  return [
+    `El conducto de adjuntos no tiene evidencia en las últimas ${transport.windowHours} horas: no se asentó ninguna pérdida, pero tampoco se recibió ningún archivo. Una prueba con un archivo real desde un teléfono autorizado es lo único que convierte esta incógnita en una verificación.`,
+  ];
+}
+
+/**
+ * Recepciones efectivas de adjunto en la ventana declarada.
+ *
+ * La ausencia de pérdidas **no prueba** que el conducto funcione: solo prueba
+ * que no falló nada de lo que llegó a intentarlo. La evidencia de que el
+ * conducto opera es un adjunto **recibido**, y por eso se mide también la
+ * presencia y no solo la ausencia.
+ */
+export async function recentAttachmentReceipts(
+  pool: Pool | null,
+  options: { windowHours?: number } = {}
+): Promise<{ received: number; lastReceivedAt: string | Date | null }> {
+  const empty = { received: 0, lastReceivedAt: null };
+  if (!pool) return empty;
+  const windowHours = options.windowHours ?? APICHAT_ATTACHMENT_WINDOW_HOURS;
+  try {
+    const result = await pool.query<{
+      received: number;
+      last_at: string | Date | null;
+    }>(
+      `SELECT count(*)::int AS received,max(created_at) AS last_at
+         FROM candidate_knowledge_files
+        WHERE source='webhook'
+          AND created_at >= now() - ($1 || ' hours')::interval`,
+      [String(windowHours)]
+    );
+    const row = result.rows[0];
+    return {
+      received: Number(row?.received ?? 0),
+      lastReceivedAt: row?.last_at ?? null,
+    };
+  } catch {
+    // Sin la migración del expediente la medida no existe; no se declara nada.
+    return empty;
+  }
+}
+
+export type ApiChatAttachmentTransportStatus =
+  | "verificado"
+  | "con_perdidas"
+  | "sin_evidencia";
+
+/**
+ * Estado del conducto. Tres estados y no dos, porque el silencio no es salud:
+ * la falta de pérdidas con falta de recepciones es una **incógnita**, y
+ * declararla como buena sería repetir el error que este módulo corrige.
+ */
+export function attachmentTransportStatus(input: {
+  received: number;
+  losses: number;
+}): ApiChatAttachmentTransportStatus {
+  if (input.losses > 0) return "con_perdidas";
+  return input.received > 0 ? "verificado" : "sin_evidencia";
+}
+
+export type ApiChatAttachmentTransport = ApiChatAttachmentLosses & {
+  received: number;
+  lastReceivedAt: string | Date | null;
+  status: ApiChatAttachmentTransportStatus;
+};
+
 export async function getApiChatEndpoints(pool: Pool | null) {
   const readiness = await getApiChatReceptionReadiness(pool);
   const baseEnabled = readiness.sendReady && readiness.mode === "native";
@@ -493,6 +571,16 @@ export async function getApiChatEndpoints(pool: Pool | null) {
     conversationMode: conversationServiceMode(),
   });
   const attachmentLosses = await recentAttachmentLosses(pool);
+  const attachmentReceipts = await recentAttachmentReceipts(pool);
+  const attachmentTransport: ApiChatAttachmentTransport = {
+    ...attachmentLosses,
+    received: attachmentReceipts.received,
+    lastReceivedAt: attachmentReceipts.lastReceivedAt,
+    status: attachmentTransportStatus({
+      received: attachmentReceipts.received,
+      losses: attachmentLosses.total,
+    }),
+  };
   return {
     mode: readiness.mode,
     enabled: baseEnabled && states.every(state => state.enabled),
@@ -505,6 +593,7 @@ export async function getApiChatEndpoints(pool: Pool | null) {
     // no adjuntó nada.
     attachmentRequirement: APICHAT_ATTACHMENT_REQUIREMENT,
     attachmentLosses,
+    attachmentTransport,
     advisories: [
       ...apiChatCapabilityAdvisories({
         baseEnabled,
@@ -512,6 +601,7 @@ export async function getApiChatEndpoints(pool: Pool | null) {
         readiness: capabilities,
       }),
       ...apiChatAttachmentTransportAdvisory(attachmentLosses),
+      ...apiChatAttachmentEvidenceAdvisory(attachmentTransport),
     ],
   };
 }

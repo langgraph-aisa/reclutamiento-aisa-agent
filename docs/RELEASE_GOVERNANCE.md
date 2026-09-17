@@ -1,8 +1,18 @@
-# Gobierno de release JARVI RH 2.0.170
+# Gobierno de release JARVI RH 2.0.171
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.170**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.171**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.171
+
+El release **cierra el conducto de adjuntos con evidencia positiva**. La entrega anterior hizo visible la pérdida; faltaba lo contrario: **la prueba de que el conducto opera**. Y faltaba un matiz que importa más de lo que parece —**la falta de pérdidas con falta de recepciones no es salud, es una incógnita**—. Declararla como buena habría repetido exactamente el error que este módulo corrige: concluir que el conducto funciona porque nada falló, cuando nunca se intentó.
+
+El estado del conducto tiene ahora **tres valores**: `verificado` —se recibieron adjuntos y no hubo pérdidas—, `con_perdidas` —alguna pérdida prevalece sobre cualquier recepción— y `sin_evidencia` —ni pérdidas ni recepciones—. La evidencia positiva se mide sobre los documentos entrantes del expediente con origen en el webhook, en la misma ventana de veinticuatro horas que la medición de pérdidas.
+
+La superficie **muestra lo que el artefacto sabe**: el panel de ApiChat presenta el estado del conducto con sus conteos, el instante de la última recepción efectiva y el **requisito permanente del proveedor** —la opción literal «Notify attachments in base64 format»—, que antes viajaba en la respuesta de la interfaz pero no se dibujaba en ninguna parte. El silencio también habla: sin evidencia, el artefacto lo declara y pide una prueba con un archivo real.
+
+**Sin cambio de esquema.** No hay migración: el estado se deriva del expediente y de la traza.
 
 ### Alcance candidato 2.0.170
 
@@ -34,7 +44,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.170 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.171 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -66,7 +76,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.170.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.171.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

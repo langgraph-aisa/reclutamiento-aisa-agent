@@ -605,6 +605,51 @@ export default function Config() {
                     </ul>
                   ) : null}
                 </div>
+                {endpointCatalog?.attachmentTransport ? (
+                  <div className="mt-3 rounded-2xl border border-border/70 bg-muted/30 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Recepción de adjuntos
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className={`rounded-full text-[10px] ${
+                          endpointCatalog.attachmentTransport.status ===
+                          "verificado"
+                            ? "border-emerald-300 bg-emerald-100 text-emerald-900"
+                            : endpointCatalog.attachmentTransport.status ===
+                                "con_perdidas"
+                              ? "border-rose-300 bg-rose-100 text-rose-900"
+                              : "border-amber-300 bg-amber-100 text-amber-950"
+                        }`}
+                      >
+                        {endpointCatalog.attachmentTransport.status ===
+                        "verificado"
+                          ? "Verificada"
+                          : endpointCatalog.attachmentTransport.status ===
+                              "con_perdidas"
+                            ? "Con pérdidas"
+                            : "Sin evidencia"}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                      {endpointCatalog.attachmentTransport.received} recibido(s)
+                      y {endpointCatalog.attachmentTransport.total} pérdida(s) en
+                      las últimas {endpointCatalog.attachmentTransport.windowHours}{" "}
+                      horas.
+                      {endpointCatalog.attachmentTransport.lastReceivedAt
+                        ? ` Última recepción: ${new Date(
+                            endpointCatalog.attachmentTransport.lastReceivedAt
+                          ).toLocaleString("es-GT", {
+                            timeZone: "America/Guatemala",
+                          })}.`
+                        : ""}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                      {endpointCatalog.attachmentRequirement}
+                    </p>
+                  </div>
+                ) : null}
                 {endpointCatalog && !endpointCatalog.enabled ? (
                   <p className="mt-2 text-xs text-muted-foreground">
                     Los interruptores se aplicarán cuando las credenciales estén
