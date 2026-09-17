@@ -1,8 +1,22 @@
-# Gobierno de release JARVI RH 2.0.163
+# Gobierno de release JARVI RH 2.0.164
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.163**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.164**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.164
+
+El release **abre el módulo de evaluación de CV con IA** y renombra la hoja que lo gobierna. `Configuración › Preferencias de comunicación` pasa a llamarse **Evaluación de CV con IA** y reúne la configuración del ciclo: el mensaje base de solicitud, el **mensaje de agradecimiento** con sus parámetros `{{nombre}}` y `{{plaza}}`, el **aviso de contacto** por el mismo medio y la **extensión de la esencia** del CV —550 palabras por omisión, entre 200 y 900—. La hoja carga los valores vigentes desde el servidor con la misma consulta que los gobierna, de modo que la institución ajusta el trato sin desplegar código.
+
+**El cierre es parte del mensaje.** El agente solicita el CV al confirmar el formulario y el mensaje incorpora el cierre institucional: el agradecimiento por participar y el aviso de que, si el perfil avanza después del análisis, el contacto ocurrirá por ese mismo medio. El cierre se compone con la **misma lectura** que ya alimenta el mensaje, así que no agrega consultas al despacho y usa el texto por omisión cuando no se configuró.
+
+**La guardia salarial precede a la base.** La revisión dejó una propiedad institucional explícita: una plantilla que ofrezca remuneración se rechaza **antes** de cualquier lectura o escritura, de modo que el rechazo no deja efectos laterales. La puerta de release compara la posición de la guardia con la del bloqueo por teléfono y falla si el orden se invierte.
+
+**El estado del expediente se deriva.** `server/cvAnalysis.ts` reúne la configuración del módulo, el renderizado de parámetros, la composición del cierre y la derivación del estado —`sin_solicitud`, `pendiente`, `recibido`— a partir de la evidencia: la marca `cv_request:<id>` prueba que se solicitó y la llegada de un documento con origen distinto de `manual` prueba que la persona respondió.
+
+**Alcance declarado.** El análisis ontológico, epistemológico, fenomenológico, de ingeniería y de propiedad intelectual del módulo, con su ubicación estratégica en la interfaz, está en [ANALISIS_CV_AGENTE_2.0.164.md](ANALISIS_CV_AGENTE_2.0.164.md). La generación de la esencia, su persistencia y la re-evaluación que actualiza el puntaje quedan declaradas como incremento siguiente.
+
+Sin migración: el alcance entregado usa estructuras existentes.
 
 ### Alcance candidato 2.0.163
 

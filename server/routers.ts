@@ -54,6 +54,7 @@ import {
   verifyOpenAIConnection,
   withBlockLabels,
 } from "./agentEvaluator";
+import { loadCvAnalysisConfiguration } from "./cvAnalysis";
 import {
   AGENT_SECRET_KEYS,
   getAgentConfiguration,
@@ -3700,7 +3701,9 @@ export const appRouter = router({
           await client.query("BEGIN");
           const beforeResult = await client.query(
             `SELECT a.*,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message,
-                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message
+                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message,
+                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_thank_you_message' LIMIT 1) AS cv_thank_you_message,
+                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_contact_notice' LIMIT 1) AS cv_contact_notice
              FROM applications a
              JOIN candidates c ON c.id=a.candidate_id
              JOIN job_positions p ON p.id=a.job_position_id
@@ -3778,7 +3781,9 @@ export const appRouter = router({
           await client.query("BEGIN");
           const applicationResult = await client.query(
             `SELECT a.*,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message,
-                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message
+                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message,
+                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_thank_you_message' LIMIT 1) AS cv_thank_you_message,
+                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_contact_notice' LIMIT 1) AS cv_contact_notice
              FROM applications a
              JOIN candidates c ON c.id=a.candidate_id
              JOIN job_positions p ON p.id=a.job_position_id
@@ -5560,6 +5565,9 @@ export const appRouter = router({
   }),
 
   config: router({
+    cvAnalysis: adminProcedure.query(async () =>
+      loadCvAnalysisConfiguration(await getPool())
+    ),
     settings: adminProcedure.query(async () => {
       const pool = await getPool();
       if (!pool) return [];

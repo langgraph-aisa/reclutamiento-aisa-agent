@@ -90,8 +90,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.163");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.163");
+    expect(APP_VERSION).toBe("2.0.164");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.164");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -537,9 +537,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(118);
+    expect(audit.files).toHaveLength(119);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(118);
+    expect(publicCopyAudit.files).toHaveLength(119);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -1191,7 +1191,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.163");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.164");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1205,7 +1205,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.163");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.164");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1391,6 +1391,52 @@ describe("black-box release contract", () => {
     expect(panel).toContain("{block.label ?? block.id}");
   });
 
+  it("configura la evaluación de CV y compone su cierre sin efectos laterales", () => {
+    const cvAnalysis = fs.readFileSync(
+      path.resolve("server/cvAnalysis.ts"),
+      "utf8"
+    );
+    const cvRequest = fs.readFileSync(
+      path.resolve("server/cvRequest.ts"),
+      "utf8"
+    );
+    const config = fs.readFileSync(
+      path.resolve("client/src/pages/Config.tsx"),
+      "utf8"
+    );
+    const routing = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+
+    // El módulo reúne la configuración editorial del expediente de CV.
+    expect(cvAnalysis).toContain("cv_thank_you_message");
+    expect(cvAnalysis).toContain("cv_contact_notice");
+    expect(cvAnalysis).toContain("cv_essence_word_limit");
+    expect(cvAnalysis).toContain("CV_ESSENCE_DEFAULT_WORD_LIMIT = 550");
+    expect(cvAnalysis).toContain("export function renderCvText");
+    expect(cvAnalysis).toContain("export function composeCvClosing");
+    expect(cvAnalysis).toContain("export async function loadCvAnalysisConfiguration");
+    expect(cvAnalysis).toContain("export async function cvAwaitingState");
+    expect(routing).toContain("cvAnalysis: adminProcedure.query");
+
+    // El cierre viaja en la misma lectura que alimenta el mensaje: no agrega
+    // consultas al despacho y usa el texto institucional cuando no se configuró.
+    expect(cvRequest).toContain("composeCvClosingFromSettings");
+    expect(cvRequest).toContain("AS cv_thank_you_message");
+    expect(cvRequest).toContain("AS cv_contact_notice");
+
+    // La guardia salarial se evalúa antes de tocar la base.
+    expect(cvRequest.indexOf("assertNoAutomatedSalaryOffer(requestMessage)")).toBeLessThan(
+      cvRequest.indexOf("pg_advisory_xact_lock")
+    );
+
+    // La hoja administrativa nombra el módulo y expone su configuración.
+    expect(config).toContain("Evaluación de CV con IA");
+    expect(config).not.toContain("Preferencias de comunicación");
+    expect(config).toContain("Mensaje de agradecimiento");
+    expect(config).toContain("Aviso de contacto");
+    expect(config).toContain("Palabras de la esencia del CV");
+    expect(config).toContain("trpc.config.cvAnalysis.useQuery()");
+  });
+
   it("declara el despliegue separado por capacidad con cola dedicada", () => {
     const blackBox = fs.readFileSync(
       path.resolve(`docs/PRUEBAS_CAJA_NEGRA_${APP_VERSION}.md`),
@@ -1416,7 +1462,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.163");
+    expect(governance).toContain("Alcance candidato 2.0.164");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });

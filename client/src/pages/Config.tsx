@@ -63,6 +63,7 @@ export default function Config() {
     onSuccess: () => recipients.refetch(),
   });
   const saveSetting = trpc.config.saveSetting.useMutation();
+  const cvAnalysis = trpc.config.cvAnalysis.useQuery();
   const saveApiChatPreferences = trpc.config.saveApiChatPreferences.useMutation(
     {
       onSuccess: async () => {
@@ -192,6 +193,10 @@ export default function Config() {
   const [recipient, setRecipient] = useState({ label: "", phone: "" });
   const [country, setCountry] = useState("GT");
   const [message, setMessage] = useState(defaultMessage);
+  const [thankYou, setThankYou] = useState("");
+  const [contactNotice, setContactNotice] = useState("");
+  const [essenceWordLimit, setEssenceWordLimit] = useState(550);
+  const [cvAnalysisLoaded, setCvAnalysisLoaded] = useState(false);
   const [catalogText, setCatalogText] = useState("");
   const [saved, setSaved] = useState(false);
   const [apiChat, setApiChat] = useState({
@@ -224,6 +229,14 @@ export default function Config() {
     }
   };
 
+  useEffect(() => {
+    if (cvAnalysisLoaded || !cvAnalysis.data) return;
+    setThankYou(cvAnalysis.data.thankYouMessage);
+    setContactNotice(cvAnalysis.data.contactNotice);
+    setEssenceWordLimit(cvAnalysis.data.essenceWordLimit);
+    setCvAnalysisLoaded(true);
+  }, [cvAnalysis.data, cvAnalysisLoaded]);
+
   const save = async () => {
     await saveSetting.mutateAsync({
       provider: "recruitment",
@@ -237,6 +250,25 @@ export default function Config() {
       settingValue: message,
       isSecret: false,
     });
+    await saveSetting.mutateAsync({
+      provider: "recruitment",
+      settingKey: "cv_thank_you_message",
+      settingValue: thankYou,
+      isSecret: false,
+    });
+    await saveSetting.mutateAsync({
+      provider: "recruitment",
+      settingKey: "cv_contact_notice",
+      settingValue: contactNotice,
+      isSecret: false,
+    });
+    await saveSetting.mutateAsync({
+      provider: "recruitment",
+      settingKey: "cv_essence_word_limit",
+      settingValue: String(essenceWordLimit),
+      isSecret: false,
+    });
+    await cvAnalysis.refetch();
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1600);
   };
@@ -911,8 +943,13 @@ export default function Config() {
           <Card className="rounded-3xl border-0 shadow-soft">
             <CardHeader>
               <CardTitle className="text-xl text-primary">
-                Preferencias de comunicación
+                Evaluación de CV con IA
               </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                El agente solicita el CV al confirmar el formulario, deja el
+                expediente en espera y lo recibe en el RAG Personal cuando la
+                persona responde por el mismo medio.
+              </p>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
@@ -945,12 +982,63 @@ export default function Config() {
                   </p>
                 </div>
               </div>
+              <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-primary">
+                    Mensaje de agradecimiento
+                  </Label>
+                  <Textarea
+                    value={thankYou}
+                    onChange={e => setThankYou(e.target.value)}
+                    rows={3}
+                    className="rounded-2xl"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    El cierre declara el agradecimiento y admite {"{{nombre}}"}{
+                      " "
+                    }
+                    y {"{{plaza}}"}.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold text-primary">
+                    Palabras de la esencia del CV
+                  </Label>
+                  <Input
+                    type="number"
+                    min={200}
+                    max={900}
+                    value={essenceWordLimit}
+                    onChange={e => setEssenceWordLimit(Number(e.target.value))}
+                    className="rounded-2xl"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Entre 200 y 900 palabras. El servidor aplica el límite al
+                    análisis.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-primary">
+                  Aviso de contacto
+                </Label>
+                <Textarea
+                  value={contactNotice}
+                  onChange={e => setContactNotice(e.target.value)}
+                  rows={2}
+                  className="rounded-2xl"
+                />
+                <p className="text-xs text-muted-foreground">
+                  El aviso declara que el contacto de las etapas siguientes
+                  ocurre por este mismo medio.
+                </p>
+              </div>
               <Button
                 onClick={save}
                 disabled={saveSetting.isPending}
                 className="rounded-full"
               >
-                <Save className="mr-2 h-4 w-4" /> Guardar preferencias
+                <Save className="mr-2 h-4 w-4" /> Guardar evaluación de CV
               </Button>
               {saved && (
                 <span className="ml-3 inline-flex items-center gap-2 text-sm text-emerald-700">

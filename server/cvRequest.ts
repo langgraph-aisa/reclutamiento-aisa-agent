@@ -6,6 +6,9 @@ import {
 } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
 import { apichatMessageKey } from "./inbox";
+import {
+  composeCvClosingFromSettings,
+} from "./cvAnalysis";
 import { withLangfuseObservation } from "./observability/langfuse";
 import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
 
@@ -17,6 +20,9 @@ type ApplicationContact = {
   position_title: string | null;
   whatsapp_message?: string | null;
   global_whatsapp_message?: string | null;
+  /** Cierre editorial del módulo de análisis de CV. */
+  cv_thank_you_message?: string | null;
+  cv_contact_notice?: string | null;
 };
 
 type MessageRecord = {
@@ -40,13 +46,25 @@ async function ensureCvRequestMessageInternal(
   client: PoolClient,
   application: ApplicationContact
 ) {
-  const message = renderCvRequestMessage(
+  const requestMessage = renderCvRequestMessage(
     application.full_name,
     application.position_title,
     application.whatsapp_message,
     application.global_whatsapp_message
   );
-  assertNoAutomatedSalaryOffer(message);
+  // La guardia salarial se evalúa antes de tocar la base: una plantilla que
+  // ofrezca remuneración se rechaza sin efectos laterales.
+  assertNoAutomatedSalaryOffer(requestMessage);
+  const closing = composeCvClosingFromSettings({
+    name: application.full_name,
+    position: application.position_title,
+    thankYouMessage: application.cv_thank_you_message,
+    contactNotice: application.cv_contact_notice,
+  });
+  if (closing) assertNoAutomatedSalaryOffer(closing);
+  const message = [requestMessage, closing]
+    .filter(part => part.trim().length > 0)
+    .join("\n\n");
   // Serializa la creación por teléfono para que el receptor entrante pueda
   // volver a comprobar de forma unívoca la conversación dentro de su tx.
   await client.query(`SELECT pg_advisory_xact_lock(130, hashtext($1))`, [
@@ -119,7 +137,9 @@ export async function ensureCvRequestMessage(
 }
 
 const cvRequestContactSql = `SELECT a.id,a.status,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message,
-        (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message
+        (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message,
+        (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_thank_you_message' LIMIT 1) AS cv_thank_you_message,
+        (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_contact_notice' LIMIT 1) AS cv_contact_notice
    FROM applications a
    JOIN candidates c ON c.id=a.candidate_id
    JOIN job_positions p ON p.id=a.job_position_id
