@@ -95,6 +95,17 @@ export type ConversationContextSource = {
   summary: string | null;
   turns: ConversationTurnInput[];
   attachments: ConversationAttachmentInput[];
+  /**
+   * Documentos del RAG personal del candidato con análisis de IA vigente. Son
+   * la evidencia documental del expediente —currículum, títulos,
+   * certificaciones— y complementan lo declarado en el formulario.
+   */
+  knowledgeDocuments: Array<{
+    id: number;
+    originalName: string;
+    source: string;
+    analysis: string;
+  }>;
   lastInboundAt?: string | null;
 };
 
@@ -360,6 +371,12 @@ function renderCandidatoLayer(source: ConversationContextSource) {
         `- [${note.dimension}] ${note.topic}: ${note.detail} (evidencia: ${note.evidenceExcerpt})`
     )
     .join("\n");
+  const documents = (source.knowledgeDocuments ?? [])
+    .map(
+      document =>
+        `- ${document.originalName} (${document.source}): ${document.analysis}`
+    )
+    .join("\n");
   return [
     "=== B. LO QUE LA PERSONA DECLARÓ (RAG PERSONAL) ===",
     `Puesto solicitado: ${source.position.title}`,
@@ -382,6 +399,9 @@ function renderCandidatoLayer(source: ConversationContextSource) {
     "",
     "Documentos recibidos:",
     attachments || "- Sin documentos recibidos.",
+    "",
+    "Expediente documental del candidato (análisis vigente):",
+    documents || "- Sin documentos analizados en el expediente.",
     "",
     SALARY_GOVERNANCE_POLICY,
   ].join("\n");
@@ -582,7 +602,14 @@ export async function loadConversationContextSource(
   const row = header.rows[0];
   if (!row) throw new Error("Postulación no encontrada.");
 
-  const [answers, memory, notes, attachments, methodologies] = await Promise.all([
+  const [
+    answers,
+    memory,
+    notes,
+    attachments,
+    methodologies,
+    knowledgeDocuments,
+  ] = await Promise.all([
     pool.query(
       `SELECT aa.value_json,aa.normalized_value,aa.deterministic_result,
               q.field_key,q.label,q.hard_fail,q.evaluation_criteria,
@@ -627,6 +654,20 @@ export async function loadConversationContextSource(
             WHERE document_key IN ('siera','mst_eir') ORDER BY document_key`
         )
       : Promise.resolve({ rows: [] as Array<{ display_name: string; content_markdown: string }> }),
+    // Expediente documental del candidato. Si la migración 0026 no está
+    // aplicada, la consulta degrada a una lista vacía sin romper el turno.
+    pool
+      .query(
+        `SELECT id,original_name,source,deep_analysis
+           FROM candidate_knowledge_files
+          WHERE application_id=$1
+            AND analysis_status='analizado'
+            AND COALESCE(deep_analysis,'')<>''
+          ORDER BY uploaded_at DESC,id DESC
+          LIMIT 12`,
+        [applicationId]
+      )
+      .catch(() => ({ rows: [] as Array<Record<string, unknown>> })),
   ]);
 
   const turns = await pool.query(
@@ -723,6 +764,14 @@ export async function loadConversationContextSource(
       status: String(item.status),
       transcription: item.transcription ?? null,
     })),
+    knowledgeDocuments: (knowledgeDocuments.rows as Array<Record<string, unknown>>).map(
+      item => ({
+        id: Number(item.id),
+        originalName: String(item.original_name),
+        source: String(item.source ?? "manual"),
+        analysis: String(item.deep_analysis ?? "").slice(0, 2_000),
+      })
+    ),
     lastInboundAt: row.last_inbound_at
       ? new Date(row.last_inbound_at).toISOString()
       : null,

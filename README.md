@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.155</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.156</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.155-0b2d4b" alt="JARVI RH 2.0.155" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.156-0b2d4b" alt="JARVI RH 2.0.156" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse%20SDK-5.11.1-orange" alt="Langfuse SDK 5.11.1" />
@@ -24,7 +24,7 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.155 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.156 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
 Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH integra plazas, formularios y protocolos versionados, evaluación asistida por IA, revisión humana, conversaciones ApiChat, solicitud controlada de currículum y auditoría administrativa. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar, fijar remuneración o atribuir rasgos psicológicos: el personal autorizado conserva la decisión.
@@ -34,6 +34,11 @@ Talento AISA vincula capacidades técnicas con proyectos industriales, energéti
 ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
+
+### 17SEP2026 · JARVI RH 2.0.156
+
+- Revisión Humana estrena el RAG Personal del candidato: arrastre, árbol de documentos, visor y análisis de IA de 66 y 325 palabras.
+- El expediente se alimenta también por el webhook de ApiChat y comparte la configuración de extensiones y peso con el RAG de proyectos.
 
 ### 17SEP2026 · JARVI RH 2.0.155
 
@@ -368,7 +373,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md), [transporte base64 y visor](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md) y [caja negra 2.0.155](docs/PRUEBAS_CAJA_NEGRA_2.0.143.md).
+`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md), [transporte base64 y visor](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md) y [caja negra 2.0.156](docs/PRUEBAS_CAJA_NEGRA_2.0.143.md).
 
 ## 8. Capa cognitiva, resiliencia y alcance verificable
 
@@ -390,9 +395,9 @@ Las amenazas incluyen sesgo del corpus, criterios discriminatorios históricos, 
 
 ## 10. Marco DORA y concepto estratégico
 
-DORA (DevOps Research and Assessment, `dora.dev`) es un programa de investigación, no una certificación. Sus cinco métricas canónicas —Deployment Frequency, Lead Time for Changes, Change Failure Rate, Failed Deployment Recovery Time y Time to Restore Service— exigen cada una su propia tubería de datos: servicio y ambiente identificados, sello de tiempo, unión commit–despliegue, clasificación del fallo y marcas de recuperación. El repositorio aporta **capacidades habilitadoras parciales** —versionado, migraciones, pruebas y build reproducible—, pero no ingiere despliegues ni incidentes, por lo que ninguna métrica se calcula todavía.
+DORA (DevOps Research and Assessment, `dora.dev`) es un programa de investigación, no una certificación. Sus cinco métricas canónicas —Deployment Frequency, Lead Time for Changes, Change Failure Rate, Failed Deployment Recovery Time y Time to Restore Service— exigen cada una su propia tubería de datos. El repositorio aporta capacidades habilitadoras —versionado, migraciones, pruebas y build reproducible—, pero no ingiere despliegues ni incidentes.
 
-El concepto estratégico del artefacto es la **decisión asistida y gobernada**. Su desarrollo completo está en [ANALISIS_ESTRATEGICO_ARTEFACTO_METODO_PRODUCTO.md](docs/ANALISIS_ESTRATEGICO_ARTEFACTO_METODO_PRODUCTO.md) y el del transporte y visor en [ANALISIS_TRANSPORTE_BASE64_VISOR.md](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md).
+El concepto estratégico es la **decisión asistida y gobernada**. Desarrollo en [ANALISIS_ESTRATEGICO_ARTEFACTO_METODO_PRODUCTO.md](docs/ANALISIS_ESTRATEGICO_ARTEFACTO_METODO_PRODUCTO.md) y [ANALISIS_TRANSPORTE_BASE64_VISOR.md](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md).
 
 ## Referencias
 
@@ -462,7 +467,7 @@ Las páginas técnicas evolutivas se consultaron el 14 de septiembre de 2026. La
 - ApiChat. (s. f.). _OpenAPI oficial de la API de mensajería_. https://panel.apichat.io/docs/swagger
 - International Organization for Standardization. (2018). _ISO/IEC 20000-1:2018: Service management system requirements_. https://www.iso.org/standard/70636.html
 
-### Fuentes primarias incorporadas en 2.0.155
+### Fuentes primarias incorporadas en 2.0.156
 
 - pdf-parse. (s. f.). _Pure JavaScript PDF parsing_. https://www.npmjs.com/package/pdf-parse
 - Mammoth. (s. f.). _Convert .docx documents to HTML_. https://www.npmjs.com/package/mammoth

@@ -1,4 +1,4 @@
-# Validación final · JARVI RH 2.0.155
+# Validación final · JARVI RH 2.0.156
 
 Fecha de ejecución: 2026-09-17. Rama objetivo: `main`.
 
@@ -14,8 +14,8 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.155` |
-| Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 113 archivos       |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.156` |
+| Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 115 archivos       |
 | Auditoría de recepción (`database/auditoria_recepcion_inbox.sql`) | Aprobado · 7 bloques de solo lectura, sin efectos sobre los datos |
 | Feed global con reconciliación (`server/inboxSync.test.ts`) | Aprobado · 10 de 10 pruebas |
 | Sincronización manual (`inbox.syncNow`, asiento `inbox_sync_manual`) | Aprobado · contrato verificado en gobernanza y caja negra BN-MANUAL-* |
@@ -38,10 +38,12 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Vale de acceso al visor (`server/viewerAccess.test.ts`) | Aprobado · 8 de 8 pruebas |
 | Entrega y diagnóstico del visor (`server/knowledgeRoutes.test.ts`) | Aprobado · 10 de 10 pruebas · la entrega real sobre HTTP funciona con el binario presente y declara `410` con causa cuando falta del volumen |
 | Diagnóstico de volumen (`knowledge.storageHealth`, `database/diagnostico_visor_rag.sql`) | Aprobado · compara catálogo y volumen, informa ausentes y directorio resuelto |
-| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.155 → 2.0.156` |
+| RAG Personal del candidato (`server/candidateKnowledge.test.ts`) | Aprobado · 14 de 14 pruebas · namespace aislado, política compartida, huella sin duplicados y árbol de documentos |
+| Migración del RAG del candidato (`0026_candidate_knowledge.sql`) | Aprobado · expansiva e idempotente · no altera `knowledge_files` ni `knowledge_projects` |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.156 → 2.0.156` |
 | Identidad y versión (`server/releaseGovernance.test.ts`) | Aprobado · la etiqueta visible bajo el usuario, el README, la caja negra y `package.json` declaran la misma versión; ninguna superficie administrativa escribe el literal a mano |
-| Caja negra (`pnpm test:black-box`)                 | Aprobado · 23 de 23 pruebas   |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 356 de 356 pruebas |
+| Caja negra (`pnpm test:black-box`)                 | Aprobado · 24 de 24 pruebas   |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 371 de 371 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |
 | Migración conversacional (`0022_conversational_agent.sql`) | Aprobado · idempotente, sin secretos ni datos personales |

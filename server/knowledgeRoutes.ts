@@ -280,6 +280,85 @@ function respondDeliveryFailure(
   res.status(failure.status).json({ error: failure.message });
 }
 
+type CandidateKnowledgeRow = {
+  id: number;
+  original_name: string;
+  storage_key: string;
+  mime_type: string;
+  extension: string;
+  size_bytes: number;
+  application_id: number;
+};
+
+/**
+ * Autoriza la entrega de un documento del RAG del candidato. El vale usa el
+ * alcance `candidate`, separado del de proyectos: un vale acuñado para un
+ * documento institucional no abre un expediente del candidato ni al revés.
+ */
+async function authorizeCandidateAccess(
+  req: Request,
+  res: Response,
+  fileId: number
+) {
+  if (
+    verifyViewerToken("candidate", fileId, req.query.t as string | undefined)
+  ) {
+    return true;
+  }
+  const localUserId = await readLocalSession(req);
+  const user = localUserId ? await getUserById(localUserId) : null;
+  if (user?.active && ["admin", "reclutador"].includes(user.role)) return true;
+  res.status(403).json({ error: "Acceso restringido a administración y reclutamiento." });
+  return false;
+}
+
+async function resolveCandidateKnowledgeFile(req: Request, res: Response) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Identificador de documento inválido." });
+    return null;
+  }
+  if (!(await authorizeCandidateAccess(req, res, id))) return null;
+  const pool = await getPool();
+  if (!pool) {
+    res.status(503).json({ error: "Base de datos no disponible." });
+    return null;
+  }
+  const result = await pool.query<CandidateKnowledgeRow>(
+    `SELECT id,application_id,original_name,storage_key,mime_type,extension,size_bytes
+       FROM candidate_knowledge_files WHERE id=$1 LIMIT 1`,
+    [id]
+  );
+  const row = result.rows[0];
+  if (!row) {
+    res.status(404).json({ error: "Documento no encontrado." });
+    return null;
+  }
+  return row;
+}
+
+/**
+ * Vistas previas del expediente del candidato. Reutiliza los mismos
+ * renderizadores que el RAG de proyectos, de modo que un currículum en Word o
+ * una hoja de cálculo se lean igual en ambos módulos.
+ */
+async function renderCandidatePreview(row: CandidateKnowledgeRow) {
+  const name = row.original_name;
+  switch (row.extension) {
+    case "docx":
+      return renderDocxHtml(row.storage_key, name);
+    case "csv":
+      return renderCsvPreview(row.storage_key, name);
+    case "xlsx":
+    case "xls":
+      return renderSpreadsheetHtml(row.storage_key, name);
+    case "txt":
+      return renderPlainTextPreview(row.storage_key);
+    default:
+      return null;
+  }
+}
+
 export function registerKnowledgeRoutes(app: Express) {
   app.get("/api/knowledge/files/:id", async (req, res) => {
     let row: KnowledgeRow | null = null;
@@ -310,6 +389,66 @@ export function registerKnowledgeRoutes(app: Express) {
       if (!html) {
         const message =
           "Este tipo de archivo no dispone de vista previa integrada; descárguelo para revisarlo.";
+        if (prefersHtml(req)) {
+          res
+            .status(415)
+            .type("html")
+            .send(
+              viewerErrorDocument(
+                "Sin vista previa para este formato",
+                message,
+                "Los formatos con vista previa son imagen, video, audio, PDF, Word, Excel, CSV y texto."
+              )
+            );
+          return;
+        }
+        res.status(415).json({ error: message });
+        return;
+      }
+      res
+        .set({
+          ...VIEWER_SECURITY_HEADERS,
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "private, max-age=600",
+        })
+        .send(html);
+    } catch (error) {
+      respondDeliveryFailure(req, res, classifyDeliveryFailure(error), {
+        fileId: row?.id,
+        storageKey: row?.storage_key,
+      });
+    }
+  });
+
+  app.get("/api/candidate-knowledge/files/:id", async (req, res) => {
+    let row: CandidateKnowledgeRow | null = null;
+    try {
+      row = await resolveCandidateKnowledgeFile(req, res);
+      if (!row) return;
+      const filePath = knowledgeFilePath(row.storage_key);
+      const stats = await knowledgeFileStats(row.storage_key);
+      res.set(
+        "Content-Disposition",
+        `inline; filename="${row.original_name.replace(/[^\w.\- ]/g, "_")}"`
+      );
+      sendRange(res, filePath, stats.size, row.mime_type, req.headers.range);
+    } catch (error) {
+      respondDeliveryFailure(req, res, classifyDeliveryFailure(error), {
+        fileId: row?.id,
+        storageKey: row?.storage_key,
+      });
+    }
+  });
+
+  app.get("/api/candidate-knowledge/render/:id", async (req, res) => {
+    let row: CandidateKnowledgeRow | null = null;
+    try {
+      row = await resolveCandidateKnowledgeFile(req, res);
+      if (!row) return;
+      const html = await renderCandidatePreview(row);
+      if (!html) {
+        const message =
+          "Este tipo de documento no dispone de vista previa integrada; descárguelo para revisarlo.";
         if (prefersHtml(req)) {
           res
             .status(415)

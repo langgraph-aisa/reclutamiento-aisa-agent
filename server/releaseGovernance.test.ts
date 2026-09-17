@@ -72,8 +72,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.155");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.155");
+    expect(APP_VERSION).toBe("2.0.156");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.156");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -518,9 +518,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(113);
+    expect(audit.files).toHaveLength(115);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(113);
+    expect(publicCopyAudit.files).toHaveLength(115);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -970,6 +970,83 @@ describe("black-box release contract", () => {
     expect(analysis).toContain("Estrategia de propiedad intelectual");
   });
 
+  it("administers the candidate personal RAG inside human review", () => {
+    const migration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0026_candidate_knowledge.sql"),
+      "utf8"
+    );
+    const module = fs.readFileSync(
+      path.resolve("server/candidateKnowledge.ts"),
+      "utf8"
+    );
+    const panel = fs.readFileSync(
+      path.resolve("client/src/components/review/CandidateRagPanel.tsx"),
+      "utf8"
+    );
+    const review = fs.readFileSync(
+      path.resolve("client/src/components/review/ReviewEvidencePanels.tsx"),
+      "utf8"
+    );
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+    const context = fs.readFileSync(
+      path.resolve("server/conversationContext.ts"),
+      "utf8"
+    );
+    const sync = fs.readFileSync(
+      path.resolve("server/inboxSync.ts"),
+      "utf8"
+    );
+    const webhook = fs.readFileSync(
+      path.resolve("server/apiChatWebhook.ts"),
+      "utf8"
+    );
+
+    // El módulo anterior de solo lectura se retira de Revisión Humana.
+    expect(review).not.toContain("Conocimiento vigente y ciclos de información");
+    expect(review).toContain("<CandidateRagPanel");
+
+    // Migración expansiva: crea entidades nuevas y no toca el RAG de proyectos.
+    expect(migration).toContain("candidate_knowledge_folders");
+    expect(migration).toContain("candidate_knowledge_files");
+    expect(migration).toContain("ADD COLUMN IF NOT EXISTS candidate_knowledge_file_id");
+    expect(migration).not.toMatch(/DROP\s+TABLE/i);
+    expect(migration).not.toMatch(/ALTER\s+TABLE\s+knowledge_files/i);
+    expect(migration).not.toMatch(/ALTER\s+TABLE\s+knowledge_projects/i);
+
+    // Mismos límites institucionales y misma política que el RAG de proyectos.
+    expect(module).toContain("KNOWLEDGE_SUMMARY_WORD_LIMIT");    expect(module).toContain("KNOWLEDGE_ANALYSIS_WORD_LIMIT");
+    expect(module).toContain("getKnowledgeSettings");
+    expect(module).toContain("buildCandidateStorageKey");
+    expect(module).toContain("analyzeKnowledgeDocument");
+    expect(module).toContain("registerCandidateInboundDocument");
+
+    // El expediente se alimenta desde el webhook y desde la sincronización.
+    expect(sync).toContain("registerCandidateInboundDocument");
+    expect(webhook).toContain("registerCandidateInboundDocument");
+
+    // El agente recibe el expediente analizado en la capa personal.
+    expect(context).toContain("Expediente documental del candidato");
+    expect(context).toContain("knowledgeDocuments");
+
+    // Alcance de visor separado del RAG de proyectos.
+    const viewer = fs.readFileSync(
+      path.resolve("server/viewerAccess.ts"),
+      "utf8"
+    );
+    expect(viewer).toContain('"knowledge" | "inbox" | "candidate"');
+    expect(routers).toContain('createViewerToken("candidate"');
+    expect(routers).toContain("candidateKnowledge: router({");
+
+    // El panel ofrece arrastre, árbol, visor y análisis editable.
+    expect(panel).toContain("+ Arrastre y Suelte");
+    expect(panel).toContain("Carpetas");
+    expect(panel).toContain("Generar análisis de IA");
+    expect(panel).toContain("Guardar análisis");
+    expect(panel).toContain("Base de conocimiento de la plaza");
+    expect(panel).toContain("Ciclos abiertos");
+    expect(panel).toContain("Aclaraciones confirmadas por la persona");
+  });
+
   it("publishes the academic-commercial README with auditable proportions and references", () => {
     const readme = fs.readFileSync(path.resolve("README.md"), "utf8");
     const academicBody = readme.slice(0, readme.indexOf("## Referencias"));
@@ -978,7 +1055,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.155");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.156");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -991,6 +1068,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.156");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.143");
@@ -1107,7 +1185,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.155");
+    expect(governance).toContain("Alcance candidato 2.0.156");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });

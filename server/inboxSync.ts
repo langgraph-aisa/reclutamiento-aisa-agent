@@ -12,6 +12,7 @@ import {
 } from "./inbox";
 import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
 import { decodeRemoteAttachment } from "./base64Transport";
+import { registerCandidateInboundDocument } from "./candidateKnowledge";
 
 export const INBOX_SYNC_INTERVAL_MS = 1_000;
 export const INBOX_SYNC_HISTORY_LIMIT = 50;
@@ -337,6 +338,18 @@ async function processFeedRecord(
     const data = decoded.buffer;
     const storageKey = buildInboxFileKey("in", conversation.conversationId);
     await writeInboxFile(storageKey, data);
+    // El mismo documento alimenta el RAG personal del candidato: la recepción
+    // y la carga manual comparten configuración, transporte y análisis de IA.
+    try {
+      await registerCandidateInboundDocument(pool, {
+        applicationId: conversation.applicationId,
+        fileName: decoded.fileName,
+        decoded,
+        source: "webhook",
+      });
+    } catch {
+      // El expediente no debe interrumpir la recepción del mensaje.
+    }
     const result = await recorder.inboundFile(pool, {
       applicationId: conversation.applicationId,
       conversationId: conversation.conversationId,

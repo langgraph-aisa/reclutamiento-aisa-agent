@@ -1,13 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CandidateRagPanel } from "@/components/review/CandidateRagPanel";
 import { trpc } from "@/lib/trpc";
-import {
-  BookOpen,
-  ListChecks,
-  Loader2,
-  MessageCircle,
-  Sparkles,
-} from "lucide-react";
+import { Loader2, MessageCircle } from "lucide-react";
 import { Link } from "wouter";
 
 /**
@@ -137,132 +132,16 @@ export function ReviewEvidencePanels({
         ) : null}
       </div>
 
-      <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft">
-        <header className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-2">
-          <BookOpen className="h-4 w-4 text-sky-700" />
-          <h3 className="text-sm font-bold text-primary">
-            Conocimiento vigente y ciclos de información
-          </h3>
-          {state.data?.evaluationKnowledgeFingerprint ? (
-            <Badge
-              variant="outline"
-              className="shrink-0 rounded-full px-2 text-[10px]"
-              title="Huella del RAG usada en la última evaluación automática"
-            >
-              <Sparkles className="mr-1 h-3 w-3" />
-              {String(state.data.evaluationKnowledgeFingerprint).slice(0, 12)}
-            </Badge>
-          ) : null}
-        </header>
-        <div className="h-[300px] min-h-0 space-y-3 overflow-y-auto p-3 text-xs">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Base de conocimiento de la plaza
-            </p>
-            {projects.length ? (
-              <ul className="mt-1 space-y-1">
-                {projects.map(project => (
-                  <li key={project.id} className="rounded-xl bg-muted/45 p-2">
-                    <p className="font-semibold text-primary">
-                      {project.name}
-                    </p>
-                    <p className="mt-0.5 text-muted-foreground">
-                      {project.files.length} documento(s) analizado(s)
-                    </p>
-                    <ul className="mt-1 space-y-0.5">
-                      {project.files.map((file: any) => (
-                        <li
-                          key={`${project.id}:${file.id ?? file.originalName}`}
-                          className="truncate text-[11px] text-muted-foreground"
-                          title={file.originalName}
-                        >
-                          · {file.originalName} ({file.characters} caracteres)
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1 text-muted-foreground">
-                {positionId
-                  ? "Sin proyectos de conocimiento vinculados a esta plaza."
-                  : "La postulación no tiene plaza vinculada."}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <ListChecks className="h-3 w-3" /> Ciclos abiertos ({openCycles.length})
-            </p>
-            {openCycles.length ? (
-              <ul className="mt-1 space-y-1">
-                {openCycles.map(cycle => (
-                  <li
-                    key={cycle.id}
-                    className="rounded-xl border border-sky-200 bg-sky-50 p-2 text-sky-900"
-                  >
-                    <p className="font-semibold">{cycle.dimension}</p>
-                    <p className="mt-0.5">{cycle.question}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1 text-muted-foreground">
-                Sin preguntas abiertas con el candidato.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Aclaraciones confirmadas por la persona
-            </p>
-            {notes.length ? (
-              <ul className="mt-1 space-y-1">
-                {notes.map(note => (
-                  <li key={note.id} className="rounded-xl bg-muted/45 p-2">
-                    <p className="font-semibold text-primary">
-                      {note.topic} · {note.dimension}
-                    </p>
-                    <p className="mt-0.5">{note.detail}</p>
-                    <p className="mt-1 italic text-muted-foreground">
-                      Evidencia: «{note.evidenceExcerpt}»
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1 text-muted-foreground">
-                Sin aclaraciones registradas todavía.
-              </p>
-            )}
-          </div>
-
-          {state.data && !state.data.ready ? (
-            <p className="rounded-xl bg-amber-50 p-2 text-amber-900">
-              La bitácora conversacional se habilita al aplicar la migración
-              técnica de esta versión.
-            </p>
-          ) : null}
-        </div>
-        <footer className="flex flex-wrap items-center gap-2 border-t border-border/60 px-3 py-2 text-[11px] text-muted-foreground">
-          <span>
-            Turnos del agente: {state.data?.agentTurnCount ?? 0} · etapa{" "}
-            {state.data?.stage ?? "apertura"}
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="ml-auto h-7 rounded-full px-3 text-[11px]"
-            disabled
-            title="El turno se ejecuta automáticamente con cada mensaje entrante."
-          >
-            Automático
-          </Button>
-        </footer>
-      </div>
+      <CandidateRagPanel
+        applicationId={applicationId}
+        candidateName={candidateName}
+        plazaProjects={projects as any[]}
+        cycles={cycles as any[]}
+        notes={notes as any[]}
+        knowledgeFingerprint={
+          state.data?.evaluationKnowledgeFingerprint ?? null
+        }
+      />
     </section>
   );
 }

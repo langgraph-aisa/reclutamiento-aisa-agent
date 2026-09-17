@@ -199,7 +199,24 @@ export function knowledgeStorageDirectory() {
   );
 }
 
-const STORAGE_KEY_PATTERN = /^[0-9]+\/[a-f0-9-]{12,64}\.[A-Za-z0-9]{1,8}$/;
+/**
+ * Referencia de almacenamiento dentro del volumen compartido.
+ *
+ * Acepta dos formas para que el RAG de proyectos y el del candidato convivan en
+ * el mismo volumen sin colisionar cuando un identificador de proyecto coincide
+ * con uno de postulación:
+ *
+ *   · `<proyecto>/<uuid>.<extensión>`             — RAG de proyectos (vigente)
+ *   · `applications/<postulación>/<uuid>.<ext>`   — RAG del candidato (2.0.156)
+ *
+ * El patrón no admite `..` ni rutas absolutas, de modo que la resolución del
+ * archivo permanece confinada al directorio del volumen.
+ */
+const STORAGE_KEY_PATTERN =
+  /^(?:[a-z][a-z0-9-]{1,31}\/)?[0-9]+\/[a-f0-9-]{12,64}\.[A-Za-z0-9]{1,8}$/;
+
+/** Namespace reservado para los documentos del RAG del candidato. */
+export const CANDIDATE_STORAGE_NAMESPACE = "applications";
 
 export function knowledgeFilePath(storageKey: string) {
   if (!STORAGE_KEY_PATTERN.test(storageKey)) {
@@ -210,6 +227,16 @@ export function knowledgeFilePath(storageKey: string) {
 
 export function buildStorageKey(projectId: number, extension: string) {
   return `${projectId}/${randomUUID()}.${extension || "bin"}`;
+}
+
+/** Referencia del RAG del candidato, aislada por namespace en el volumen. */
+export function buildCandidateStorageKey(
+  applicationId: number,
+  extension: string
+) {
+  return `${CANDIDATE_STORAGE_NAMESPACE}/${applicationId}/${randomUUID()}.${
+    extension || "bin"
+  }`;
 }
 
 function resolveStoredPath(storageKey: string) {

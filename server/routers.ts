@@ -92,6 +92,17 @@ import {
   reconstructTransportFileName,
 } from "./base64Transport";
 import { createViewerToken } from "./viewerAccess";
+import {
+  analyzeCandidateDocument,
+  candidateKnowledgeHealth,
+  candidateKnowledgeTree,
+  deleteCandidateDocument,
+  deleteCandidateFolder,
+  moveCandidateDocument,
+  saveCandidateAnalysis,
+  saveCandidateDocument,
+  saveCandidateFolder,
+} from "./candidateKnowledge";
 import { applicationStatuses } from "./policy";
 import {
   APPLICATION_CONSENTS,
@@ -2441,6 +2452,222 @@ export const appRouter = router({
         });
       }
     }),
+  }),
+
+  /**
+   * RAG personal del candidato. Vive en la ficha de Revisión Humana y es
+   * exclusivo del proceso de evaluación de esa persona: administra carpetas,
+   * documentos, análisis de IA y visor con la misma configuración de
+   * extensiones y peso que el RAG de proyectos.
+   *
+   * Lectura y operación están disponibles para Administración y Reclutamiento,
+   * porque son quienes conducen el proceso; toda escritura queda auditada.
+   */
+  candidateKnowledge: router({
+    tree: roleProcedure
+      .input(z.object({ applicationId: z.number().int().positive() }))
+      .query(async ({ input }) =>
+        candidateKnowledgeTree(await requirePool(), input.applicationId)
+      ),
+    storageHealth: roleProcedure.query(async () =>
+      candidateKnowledgeHealth(await getPool())
+    ),
+    /** Vale del visor: las etiquetas `iframe`, `img`, `video` y `audio` las
+     *  resuelve el navegador y no llevan cabeceras de sesión. */
+    viewerToken: roleProcedure
+      .input(z.object({ fileId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const result = await pool.query(
+          `SELECT id FROM candidate_knowledge_files WHERE id=$1 LIMIT 1`,
+          [input.fileId]
+        );
+        if (!result.rows[0]) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "El documento del candidato no existe.",
+          });
+        }
+        return { token: createViewerToken("candidate", input.fileId) };
+      }),
+    upload: roleProcedure
+      .input(
+        z.object({
+          applicationId: z.number().int().positive(),
+          folderId: z.number().int().positive().nullable().optional(),
+          fileName: z.string().trim().min(1).max(260),
+          base64: z.string().min(1).max(40 * 1024 * 1024),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        // La política de extensiones y peso es la misma que la del RAG de
+        // proyectos: una sola configuración gobierna ambos módulos.
+        const settings = await getKnowledgeSettings(pool);
+        try {
+          const saved = await saveCandidateDocument(pool, {
+            applicationId: input.applicationId,
+            folderId: input.folderId ?? null,
+            fileName: input.fileName,
+            base64: input.base64,
+            source: "manual",
+            actorUserId: ctx.user.id,
+            allowedExtensions: settings.allowedExtensions,
+            maxBytes: settings.maxSizeMb * 1024 * 1024,
+          });
+          const analysis = await analyzeCandidateDocument(
+            pool,
+            saved.id,
+            ctx.user.id
+          );
+          return { id: saved.id, analysisMessage: analysis.message };
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible guardar el documento del candidato.",
+          });
+        }
+      }),
+    analyze: roleProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await analyzeCandidateDocument(
+            await requirePool(),
+            input.id,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible analizar el documento.",
+          });
+        }
+      }),
+    saveAnalysis: roleProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          deepAnalysis: z.string().trim().max(8_000),
+          summary: z.string().trim().max(1_600).optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveCandidateAnalysis(
+            await requirePool(),
+            input,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible guardar el análisis.",
+          });
+        }
+      }),
+    move: roleProcedure
+      .input(
+        z.object({
+          id: z.number().int().positive(),
+          folderId: z.number().int().positive().nullable(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await moveCandidateDocument(
+            await requirePool(),
+            input,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible mover el documento.",
+          });
+        }
+      }),
+    delete: roleProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await deleteCandidateDocument(
+            await requirePool(),
+            input.id,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible eliminar el documento.",
+          });
+        }
+      }),
+    saveFolder: roleProcedure
+      .input(
+        z.object({
+          applicationId: z.number().int().positive(),
+          folderId: z.number().int().positive().nullable().optional(),
+          parentId: z.number().int().positive().nullable().optional(),
+          name: z.string().trim().min(1).max(160),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveCandidateFolder(
+            await requirePool(),
+            {
+              applicationId: input.applicationId,
+              folderId: input.folderId ?? null,
+              parentId: input.parentId ?? null,
+              name: input.name,
+            },
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible guardar la carpeta.",
+          });
+        }
+      }),
+    deleteFolder: roleProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await deleteCandidateFolder(
+            await requirePool(),
+            input.id,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible eliminar la carpeta.",
+          });
+        }
+      }),
   }),
 
   governance: router({

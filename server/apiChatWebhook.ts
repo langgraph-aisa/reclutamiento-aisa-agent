@@ -9,6 +9,7 @@ import {
 } from "./inbox";
 import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
 import { decodeRemoteAttachment } from "./base64Transport";
+import { registerCandidateInboundDocument } from "./candidateKnowledge";
 
 /**
  * Receptor del webhook de ApiChat (canal push en tiempo real).
@@ -182,6 +183,18 @@ export async function processApiChatWebhook(
     }
     const storageKey = buildInboxFileKey("in", conversation.conversationId);
     await writeInboxFile(storageKey, decoded.buffer);
+    // El documento recibido por el canal push entra también al RAG personal del
+    // candidato, con el mismo análisis de IA que la carga administrativa.
+    try {
+      await registerCandidateInboundDocument(pool, {
+        applicationId: conversation.applicationId,
+        fileName: decoded.fileName,
+        decoded,
+        source: "webhook",
+      });
+    } catch {
+      // El expediente no debe interrumpir el acuse del webhook.
+    }
     await recordNormalizedInboundFile(pool, {
       applicationId: conversation.applicationId,
       conversationId: conversation.conversationId,
