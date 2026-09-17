@@ -1,8 +1,20 @@
-# Gobierno de release JARVI RH 2.0.160
+# Gobierno de release JARVI RH 2.0.161
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.160**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.161**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.161
+
+El release **integra en la ficha la caja de la matriz que la búsqueda dejó de alojar**, para que la revisión humana lea la evidencia sin cambiar de hoja. La caja —rótulo «Vista 360° del Candidato», matriz de evaluación por bloques, nota inicial y motivo, con su recorrido de bloques y sus tres accesos (`Nota IA`, `Evaluación`, `Motivo`)— se monta en `client/src/components/review/CandidateViewerPanel.tsx` y encabeza el cuerpo de la ficha: **arriba del resumen de perfil y de la decisión, y debajo del encabezado de identidad**.
+
+**Presentación condensada.** La matriz muestra **tres bloques a la vez** y ofrece el recorrido del resto con el contador y sus flechas —«1–3 de 6»—, en lugar de desplegar los seis en una cuadrícula larga; en pantallas estrechas muestra uno. El bloque conserva la clasificación y el modelo que sostienen la evaluación, y la sección de matriz duplicada que la ficha tenía más abajo se retira: su contenido es ahora el de la caja.
+
+**Sin duplicación de controles.** El panel administra su propia vista y no repite decisiones: la decisión humana sigue en el encabezado de identidad y la solicitud de CV en su bloque. La ficha queda condensada en un solo recorrido: encabezado, Vista 360°, resumen de perfil, motivo, reevaluación, solicitud de CV, respuestas de formularios y auditoría.
+
+**Gobierno.** La puerta de release blinda la titularidad y el orden: la ficha monta el panel, y el panel aparece antes del resumen de perfil y de la solicitud de CV. El conteo de archivos auditados pasa a 118.
+
+Sin migración: el alcance es de interfaz.
 
 ### Alcance candidato 2.0.160
 

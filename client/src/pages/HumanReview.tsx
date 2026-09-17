@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CandidateReviewSummary } from "@/components/review/CandidateReviewSummary";
+import { CandidateViewerPanel } from "@/components/review/CandidateViewerPanel";
 import { ReviewEvidencePanels } from "@/components/review/ReviewEvidencePanels";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
@@ -208,6 +209,20 @@ function CandidateDetail({
         </Button>
       </CardHeader>
       <CardContent className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+        <div className="lg:col-span-2">
+          <CandidateViewerPanel
+            candidate={{
+              id: data.application.id,
+              position_title: data.application.position_title,
+              profile_summary: data.application.profile_summary,
+              submitted_at: data.application.submitted_at,
+              evaluation_reason: data.application.evaluation_reason,
+              classification: agentPayload?.classification ?? null,
+              ai_model: latestEvaluation?.ai_model ?? null,
+              ai_payload: agentPayload ?? null,
+            }}
+          />
+        </div>
         <div className="space-y-4">
           <div className="rounded-2xl bg-white/8 p-4">
             <p className="text-xs uppercase tracking-[.14em] text-white/55">
@@ -305,54 +320,6 @@ function CandidateDetail({
               )}
           </div>
         </div>
-        {typeof agentPayload?.score === "number" && (
-          <div className="lg:col-span-2 rounded-2xl bg-white/8 p-4">
-            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-              <div>
-                <p className="text-xs uppercase tracking-[.14em] text-white/55">
-                  Matriz de evaluación IA
-                </p>
-                <p className="mt-2 text-sm text-white/70">
-                  {agentPayload.classification ?? "Resultado ponderado"} ·{" "}
-                  {latestEvaluation.ai_model ?? "Modelo no informado"}
-                </p>
-              </div>
-              <p className="text-3xl font-bold text-white">
-                {agentPayload.score}
-                <span className="text-base font-medium text-white/55">
-                  /100
-                </span>
-              </p>
-            </div>
-            {Array.isArray(agentPayload.blocks) && (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {agentPayload.blocks.map((block: any) => (
-                  <div key={block.id} className="rounded-xl bg-white/6 p-3">
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="truncate font-semibold text-white/80">
-                        {evaluationBlockLabel(block.id)}
-                      </span>
-                      <span className="text-white/60">
-                        {Math.round(block.score)}/100
-                      </span>
-                    </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                      <div
-                        className="h-full rounded-full bg-emerald-300"
-                        style={{
-                          width: `${Math.max(0, Math.min(100, Number(block.score) || 0))}%`,
-                        }}
-                      />
-                    </div>
-                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/55">
-                      {block.rationale}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
         <div className="lg:col-span-2 rounded-2xl bg-white/8 p-4">
           <p className="text-xs uppercase tracking-[.14em] text-white/55">
             Formularios y anuncios · respuestas
@@ -509,15 +476,4 @@ function CandidateDetail({
 
 function statusLabel(value: string | null | undefined) {
   return applicationStatusLabel(value);
-}
-function evaluationBlockLabel(value: string) {
-  const labels: Record<string, string> = {
-    identificacion_ajuste: "Identificación del ajuste",
-    evidencia_experiencia: "Evidencia de experiencia",
-    competencias: "Competencias técnicas/comerciales",
-    disponibilidad_logistica: "Disponibilidad y logística",
-    riesgos_brechas: "Riesgos o brechas",
-    dictamen_ia: "Dictamen IA",
-  };
-  return labels[value] ?? value;
 }

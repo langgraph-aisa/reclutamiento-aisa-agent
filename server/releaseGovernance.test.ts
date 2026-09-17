@@ -72,8 +72,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.160");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.160");
+    expect(APP_VERSION).toBe("2.0.161");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.161");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -519,9 +519,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(117);
+    expect(audit.files).toHaveLength(118);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(117);
+    expect(publicCopyAudit.files).toHaveLength(118);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -1173,7 +1173,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.160");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.161");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1187,7 +1187,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.160");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.161");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1266,6 +1266,10 @@ describe("black-box release contract", () => {
       path.resolve("client/src/components/review/CandidateReviewSummary.tsx"),
       "utf8"
     );
+    const viewerPanel = fs.readFileSync(
+      path.resolve("client/src/components/review/CandidateViewerPanel.tsx"),
+      "utf8"
+    );
 
     expect(blackBox).toContain(`Pruebas de caja negra · JARVI RH ${APP_VERSION}`);
     expect(blackBox).toContain("BN-CONV-01");
@@ -1285,6 +1289,18 @@ describe("black-box release contract", () => {
     expect(identityHeader).toContain("declaredLocationLabel");
     expect(identityHeader).toContain("Punteo IA");
     expect(identityHeader).toContain("candidates.setStatus");
+    // El panel de Vista 360° vive en la ficha, encima del resumen y de la
+    // decisión, con su matriz por bloques y su navegación.
+    expect(review).toContain("<CandidateViewerPanel");
+    expect(viewerPanel).toContain("Vista 360° del Candidato");
+    expect(viewerPanel).toContain("Navegación de bloques de evaluación");
+    expect(viewerPanel).toContain("Matriz de evaluación IA");
+    expect(review.indexOf("<CandidateViewerPanel")).toBeLessThan(
+      review.indexOf("Resumen de perfil")
+    );
+    expect(review.indexOf("<CandidateViewerPanel")).toBeLessThan(
+      review.indexOf("Solicitud de CV por WhatsApp")
+    );
   });
 
   it("declara el despliegue separado por capacidad con cola dedicada", () => {
@@ -1312,7 +1328,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.160");
+    expect(governance).toContain("Alcance candidato 2.0.161");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
