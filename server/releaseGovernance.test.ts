@@ -90,8 +90,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.165");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.165");
+    expect(APP_VERSION).toBe("2.0.166");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.166");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -537,9 +537,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(120);
+    expect(audit.files).toHaveLength(121);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(120);
+    expect(publicCopyAudit.files).toHaveLength(121);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -1191,7 +1191,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.165");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.166");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1205,7 +1205,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.165");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.166");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1470,6 +1470,50 @@ describe("black-box release contract", () => {
     );
   });
 
+  it("declara el ciclo automático de pruebas treinta segundos después del formulario", () => {
+    const automation = fs.readFileSync(
+      path.resolve("server/assessmentAutomation.ts"),
+      "utf8"
+    );
+    const cvRequest = fs.readFileSync(
+      path.resolve("server/cvRequest.ts"),
+      "utf8"
+    );
+    const worker = fs.readFileSync(
+      path.resolve("server/conversationWorker.ts"),
+      "utf8"
+    );
+    const assessments = fs.readFileSync(
+      path.resolve("client/src/pages/Assessments.tsx"),
+      "utf8"
+    );
+    const routing = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+    const migration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0028_assessment_cycles.sql"),
+      "utf8"
+    );
+
+    // La ventana declarada y la semántica del interruptor apagado.
+    expect(automation).toContain("ASSESSMENT_START_DELAY_SECONDS = 30");
+    expect(automation).toContain("export function planAssessmentCycle");
+    expect(automation).toContain("export async function scheduleAssessmentCycle");
+    expect(automation).toContain("export async function runAssessmentCycleSweep");
+    expect(automation).toContain('state: "apagado"');
+    expect(automation).toContain("assessment_cycle_started");
+
+    // El ciclo se registra al solicitar el CV y lo promueve el barrido.
+    expect(cvRequest).toContain("scheduleAssessmentCycle(pool, applicationId)");
+    expect(worker).toContain("runAssessmentCycleSweep(pool");
+    expect(worker).toContain("assessment,");
+
+    // Interruptor administrable y su migración.
+    expect(routing).toContain("saveAutomation: adminProcedure");
+    expect(routing).toContain("automation: roleProcedure.query");
+    expect(assessments).toContain("Ciclo automático de pruebas");
+    expect(migration).toContain("CREATE TABLE IF NOT EXISTS assessment_cycles");
+    expect(migration).toContain("ready_at timestamptz NOT NULL");
+  });
+
   it("declara el despliegue separado por capacidad con cola dedicada", () => {
     const blackBox = fs.readFileSync(
       path.resolve(`docs/PRUEBAS_CAJA_NEGRA_${APP_VERSION}.md`),
@@ -1495,7 +1539,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.165");
+    expect(governance).toContain("Alcance candidato 2.0.166");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });

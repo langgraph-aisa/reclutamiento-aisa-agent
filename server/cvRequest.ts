@@ -5,6 +5,7 @@ import {
   sendApiChatText,
 } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
+import { scheduleAssessmentCycle } from "./assessmentAutomation";
 import { apichatMessageKey } from "./inbox";
 import {
   composeCvClosingFromSettings,
@@ -184,6 +185,10 @@ export async function requestCvForApplication(
   } finally {
     client.release();
   }
+  // Encadenado declarado: el CV se solicita de forma inmediata y el ciclo de
+  // pruebas de la plaza queda registrado para iniciar treinta segundos después.
+  // Con el interruptor apagado no se registra obligación alguna.
+  await scheduleAssessmentCycle(pool, applicationId);
   return messageId ? deliverCvRequestMessage(pool, messageId) : null;
 }
 

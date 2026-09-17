@@ -60,6 +60,10 @@ import {
 } from "./cvAnalysis";
 import { loadCvAnalysisConfiguration } from "./cvAnalysis";
 import {
+  getAssessmentAutomation,
+  saveAssessmentAutomation,
+} from "./assessmentAutomation";
+import {
   AGENT_SECRET_KEYS,
   getAgentConfiguration,
   saveAgentPreferences,
@@ -2790,6 +2794,22 @@ export const appRouter = router({
   }),
 
   assessments: router({
+    /**
+     * Interruptor del ciclo de pruebas psicométricas. Encendido, el agente
+     * inicia las pruebas activas de la plaza treinta segundos después de
+     * recibir el formulario; apagado, no contacta por el webhook.
+     */
+    automation: roleProcedure.query(async () =>
+      getAssessmentAutomation(await getPool())
+    ),
+    saveAutomation: adminProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(async ({ input, ctx }) =>
+        saveAssessmentAutomation(await requirePool(), {
+          enabled: input.enabled,
+          actorUserId: ctx.user.id,
+        })
+      ),
     list: roleProcedure
       .input(
         z

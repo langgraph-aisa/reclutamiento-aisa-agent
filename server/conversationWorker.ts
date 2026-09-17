@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import { runConversationTurn } from "./conversationEngine";
 import { dispatchQueuedReplies } from "./conversationOutbox";
+import { runAssessmentCycleSweep } from "./assessmentAutomation";
 import { assertCapability } from "./conversationRuntime";
 import { getConversationActivation } from "./conversationActivation";
 
@@ -71,12 +72,15 @@ export async function runConversationSweep(
   pool: Pool,
   options: { limit?: number; now?: Date } = {}
 ) {
+  // El ciclo de pruebas de la plaza se resuelve antes del razonamiento: su
+  // saludo queda encolado y lo entrega el despacho de esta misma pasada.
+  const assessment = await runAssessmentCycleSweep(pool, { now: options.now });
   const turns = await runConversationReasoning(pool, options);
   assertCapability("send");
   const dispatched = await dispatchQueuedReplies(pool, {
     limit: CONVERSATION_WORKER_BATCH_LIMIT,
   });
-  return { turns, dispatched };
+  return { assessment, turns, dispatched };
 }
 
 let running = false;

@@ -73,6 +73,18 @@ function protocolFromRow(row: any): ProtocolForm {
 export default function Assessments() {
   const utils = trpc.useUtils();
   const positions = trpc.positions.list.useQuery();
+  const automation = trpc.assessments.automation.useQuery();
+  const saveAutomation = trpc.assessments.saveAutomation.useMutation({
+    onSuccess: async result => {
+      await automation.refetch();
+      toast.success(
+        result.enabled
+          ? "Ciclo automático de pruebas encendido"
+          : "Ciclo automático de pruebas apagado"
+      );
+    },
+    onError: error => toast.error(error.message),
+  });
   const [positionId, setPositionId] = useState("all");
   const protocols = trpc.assessments.list.useQuery({
     positionId: positionId === "all" ? undefined : Number(positionId),
@@ -232,6 +244,40 @@ export default function Assessments() {
 
       <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
         <strong>Límite académico:</strong> {ASSESSMENT_METHODOLOGY_NOTICE}
+      </div>
+
+      <div className="rounded-2xl border border-border/70 bg-card p-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 max-w-3xl">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-primary">
+                Ciclo automático de pruebas
+              </p>
+              <Badge variant="outline" className="rounded-full">
+                {automation.data?.enabled ? "Encendido" : "Apagado"}
+              </Badge>
+            </div>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Interruptor encendido: las pruebas habilitadas de la plaza inician
+              treinta segundos después de recibir el formulario, tras la
+              solicitud del CV. En la ficha quedan la prueba en curso, la
+              ubicación declarada y el punteo obtenido, y la evaluación general
+              se repite con el expediente completo. Interruptor apagado: sin
+              contacto del agente por el webhook.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={Boolean(automation.data?.enabled)}
+              disabled={saveAutomation.isPending || !automation.data}
+              onCheckedChange={enabled => saveAutomation.mutate({ enabled })}
+              aria-label="Ciclo automático de pruebas psicométricas"
+            />
+            <span className="text-sm text-muted-foreground">
+              {automation.data?.enabled ? "Encendido" : "Apagado"}
+            </span>
+          </div>
+        </div>
       </div>
 
       <section className="grid gap-3 rounded-2xl border border-border/70 bg-card p-4 lg:grid-cols-[300px_repeat(4,auto)] lg:items-end">

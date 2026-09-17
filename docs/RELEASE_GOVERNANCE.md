@@ -1,8 +1,20 @@
-# Gobierno de release JARVI RH 2.0.165
+# Gobierno de release JARVI RH 2.0.166
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.165**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.166**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.166
+
+El release **declara el ciclo automático de pruebas psicométricas** y lo gobierna con un interruptor administrable en `Pruebas psicométricas`. Encendido, el agente busca las pruebas habilitadas de la plaza y el ciclo queda registrado para iniciar **treinta segundos después** de recibir el formulario, tras solicitar el CV; apagado, **no se registra obligación alguna y el agente no contacta por el webhook**. La decisión es de la institución, queda auditada (`assessment_automation_updated`) y no se decide por postulación.
+
+**La ventana es una función pura.** `planAssessmentCycle` recibe el estado y devuelve la decisión —`apagado`, `sin_pruebas`, `en_espera`, `listo`, `en_curso`, `concluido`— con el instante en que el ciclo queda listo y los segundos restantes. La semántica del interruptor apagado y la ventana se verifican sin base de datos.
+
+**El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
+
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. Tampoco está entregada la re-evaluación automática al concluir el ciclo, ni el volcado de la prueba en curso, la ubicación y el punteo en los indicadores de la ficha de conversación. Lo entregado es el interruptor, la ventana declarada, el registro de la obligación, el arranque del ciclo y el saludo.
+
+La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 
 ### Alcance candidato 2.0.165
 
