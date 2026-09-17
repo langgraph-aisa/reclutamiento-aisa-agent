@@ -45,7 +45,45 @@ function replaceVersion(relativePath, content) {
     `${currentVersion.replaceAll(".", "\\.")}(?!\\.md)`,
     "g"
   );
-  const substitute = value => value.replace(versionPattern, nextVersion);
+  // Los encabezados y párrafos de alcance describen releases ya entregados:
+  // avanzarlos renombraría la historia y haría que una entrega anterior
+  // apareciera como la vigente. En el párrafo del incremento atómico avanza
+  // solo la versión futura, nunca la ya ejecutada.
+  const historicalHeading = /^#{1,6}\s*Alcance\b/;
+  const historicalParagraph = /^El alcance de \d/;
+  const historicalCandidate = /^La especificación candidata de \d/;
+  const atomicIncrement = /incremento atómico a/;
+  const escapedCurrentVersion = currentVersion.replaceAll(".", "\\.");
+  const futurePatch = new RegExp(`(será\\s+)${escapedCurrentVersion}\\.`);
+  // El documento de caja negra se renombra en cada entrega: su referencia en el
+  // cuerpo del README debe acompañar el renombrado en lugar de quedar congelada
+  // apuntando a un archivo que ya no existe.
+  const blackBoxReference = new RegExp(
+    `PRUEBAS_CAJA_NEGRA_${escapedCurrentVersion}\\.md`,
+    "g"
+  );
+  const substitute = value =>
+    value
+      .split("\n")
+      .map(line => {
+        if (
+          historicalHeading.test(line) ||
+          historicalParagraph.test(line) ||
+          historicalCandidate.test(line)
+        ) {
+          return line;
+        }
+        if (atomicIncrement.test(line)) {
+          return line.replace(futurePatch, `$1${nextVersion}.`);
+        }
+        return line
+          .replace(versionPattern, nextVersion)
+          .replace(
+            blackBoxReference,
+            `PRUEBAS_CAJA_NEGRA_${nextVersion}.md`
+          );
+      })
+      .join("\n");
   if (relativePath !== "README.md") {
     return substitute(content);
   }

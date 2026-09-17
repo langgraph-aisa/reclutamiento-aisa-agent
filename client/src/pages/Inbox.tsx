@@ -366,7 +366,7 @@ export default function Inbox() {
                     </>
                   ) : null}
                   <Link
-                    href={`/admin/candidates?application=${row.application_id}`}
+                    href={`/admin/human-review?application=${row.application_id}`}
                     onClick={event => event.stopPropagation()}
                     className="ml-auto rounded-full border border-border/70 px-3 py-1 text-xs font-semibold text-primary hover:bg-muted"
                   >

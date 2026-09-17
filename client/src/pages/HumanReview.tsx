@@ -1,9 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ReviewEvidencePanels } from "@/components/review/ReviewEvidencePanels";
-import { VerticalNavigator } from "@/components/VerticalNavigator";
 import {
   Select,
   SelectContent,
@@ -11,1242 +9,597 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ReviewEvidencePanels } from "@/components/review/ReviewEvidencePanels";
 import { trpc } from "@/lib/trpc";
+import { ArrowLeft, Loader2, RefreshCw, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { useLocation, useSearch } from "wouter";
 import {
   APPLICATION_STATUS_OPTIONS,
   applicationStatusLabel,
-  applicationStatusTone,
 } from "@shared/applicationStatus";
-import {
-  adjacentReviewBlockPage,
-  adjacentReviewResultIndex,
-  reviewBlockPageRange,
-  type ReviewNavigationDirection,
-} from "@shared/reviewNavigation";
-import {
-  ArrowDown,
-  ArrowUp,
-  Banknote,
-  Bot,
-  Check,
-  Eye,
-  FilterX,
-  Loader2,
-  MapPin,
-  MessageCircle,
-  MessageSquareText,
-  Phone,
-  Search,
-  Sparkles,
-  UserRound,
-} from "lucide-react";
-import {
-  Fragment,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { toast } from "sonner";
-import { Link } from "wouter";
 
-type SortBy = "submitted_at" | "name" | "score" | "status" | "position";
-type SortDirection = "asc" | "desc";
-type ViewerSelection =
-  | { kind: "ai" }
-  | { kind: "summary" }
-  | { kind: "reason" }
-  | { kind: "answer"; fieldKey: string };
+const statuses = APPLICATION_STATUS_OPTIONS;
 
-type Answer = {
-  fieldKey: string;
-  label: string;
-  value: unknown;
-  formId?: number | null;
-  normalizedValue?: string | null;
-  deterministicResult?: string | null;
-};
-
+/**
+ * Revisión Humana: ficha completa de una postulación.
+ * La búsqueda vive en /admin/candidates y abre esta hoja con
+ * ?application=<id>. Aquí se concentran la matriz de evaluación IA, el
+ * motivo, el resumen de perfil, las respuestas de formularios y los
+ * expedientes de conocimiento y conversación del candidato.
+ */
 export default function HumanReview() {
-  const utils = trpc.useUtils();
-  const positions = trpc.positions.list.useQuery();
-  const [searchText, setSearchText] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [status, setStatus] = useState("all");
-  const [positionId, setPositionId] = useState("all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [minimumScore, setMinimumScore] = useState("all");
-  const [evaluatedOnly, setEvaluatedOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<SortBy>("submitted_at");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [viewer, setViewer] = useState<ViewerSelection>({ kind: "ai" });
-  const matrixScrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(searchText), 250);
-    return () => window.clearTimeout(timer);
-  }, [searchText]);
-
-  const workspace = trpc.candidates.reviewWorkspace.useQuery(
-    {
-      search: debouncedSearch.trim() || undefined,
-      status: status === "all" ? undefined : (status as any),
-      positionId: positionId === "all" ? undefined : Number(positionId),
-      from: from || undefined,
-      to: to || undefined,
-      minimumScore: minimumScore === "all" ? undefined : Number(minimumScore),
-      evaluatedOnly,
-      sortBy,
-      sortDirection,
-    },
-    { placeholderData: previous => previous }
+  const locationSearch = useSearch();
+  const [, setLocation] = useLocation();
+  const requestedApplicationId = (() => {
+    const parsed = Number(
+      new URLSearchParams(locationSearch).get("application")
+    );
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  })();
+  const detail = trpc.candidates.detail.useQuery(
+    { id: requestedApplicationId ?? 0 },
+    { enabled: Boolean(requestedApplicationId) }
   );
-  const rows = workspace.data ?? [];
 
-  useEffect(() => {
-    if (!rows.length) {
-      setSelectedId(null);
-      return;
-    }
-    if (!rows.some((row: any) => row.id === selectedId)) {
-      setSelectedId(rows[0].id);
-      setViewer({ kind: "ai" });
-    }
-  }, [rows, selectedId]);
+  if (!requestedApplicationId) {
+    return (
+      <div className="mx-auto max-w-[1500px] space-y-5 pb-10">
+        <header>
+          <p className="text-sm font-semibold uppercase tracking-[.18em] text-emerald-700">
+            Decisión humana
+          </p>
+          <h1 className="mt-2 text-4xl font-800 tracking-[-.04em] text-primary">
+            Revisión Humana
+          </h1>
+          <p className="mt-2 max-w-3xl text-muted-foreground">
+            La ficha se abre desde la búsqueda de Candidatos con el botón
+            «Detalle».
+          </p>
+        </header>
+        <Card className="rounded-3xl border-0 shadow-soft">
+          <CardContent className="flex flex-col items-center justify-center gap-4 p-12 text-center">
+            <p className="max-w-md text-sm leading-6 text-muted-foreground">
+              Seleccione una postulación en Candidatos para revisar su matriz de
+              evaluación, su motivo, su expediente documental y su conversación
+              de WhatsApp.
+            </p>
+            <Button
+              className="rounded-full"
+              onClick={() => setLocation("/admin/candidates")}
+            >
+              Ir a la búsqueda de Candidatos
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
-  const selected = rows.find((row: any) => row.id === selectedId) ?? rows[0];
-  const questionColumns = useMemo(() => {
-    const columns = new Map<string, string>();
-    for (const row of rows as any[]) {
-      for (const answer of answersFor(row)) {
-        if (!columns.has(answer.fieldKey)) {
-          columns.set(answer.fieldKey, answer.label || answer.fieldKey);
-        }
-      }
-    }
-    return Array.from(columns.entries()).map(([fieldKey, label]) => ({
-      fieldKey,
-      label,
-    }));
-  }, [rows]);
+  if (detail.isLoading) {
+    return (
+      <div className="grid min-h-[60vh] place-items-center text-sm text-muted-foreground">
+        <span className="inline-flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Preparando la ficha del candidato
+        </span>
+      </div>
+    );
+  }
 
-  const updateStatus = trpc.candidates.setStatus.useMutation({
+  if (!detail.data) {
+    return (
+      <div className="mx-auto max-w-[1500px] space-y-4 pb-10">
+        <Button
+          variant="outline"
+          className="rounded-full"
+          onClick={() => setLocation("/admin/candidates")}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Volver a Candidatos
+        </Button>
+        <Card className="rounded-3xl border-0 shadow-soft">
+          <CardContent className="p-12 text-center text-sm text-muted-foreground">
+            No fue posible cargar la postulación solicitada.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const applicationId = detail.data.application.id;
+
+  return (
+    <div className="mx-auto max-w-[1500px] space-y-4 pb-10">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Button
+          variant="outline"
+          className="rounded-full"
+          onClick={() => setLocation("/admin/candidates")}
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Volver a Candidatos
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Ficha de evaluación · postulación No. {applicationId}
+        </p>
+      </div>
+
+      <CandidateDetail
+        data={detail.data}
+        onClose={() => setLocation("/admin/candidates")}
+      />
+
+      <ReviewEvidencePanels
+        applicationId={applicationId}
+        positionId={null}
+        candidateName={detail.data.application.full_name ?? null}
+      />
+    </div>
+  );
+}
+
+function CandidateDetail({
+  data,
+  onClose,
+}: {
+  data: any;
+  onClose: () => void;
+}) {
+  const utils = trpc.useUtils();
+  const latestEvaluation = data.evaluations?.[0];
+  const agentPayload = latestEvaluation?.ai_payload;
+  const [nextStatus, setNextStatus] = useState(data.application.status);
+  const [comment, setComment] = useState("");
+  const setStatus = trpc.candidates.setStatus.useMutation({
     onSuccess: async result => {
+      setNextStatus(result.application.status);
+      setComment("");
       await Promise.all([
-        utils.candidates.reviewWorkspace.invalidate(),
+        utils.candidates.detail.invalidate({ id: data.application.id }),
         utils.candidates.list.invalidate(),
-        utils.candidates.detail.invalidate({ id: result.application.id }),
-        utils.dashboard.summary.invalidate(),
-        utils.reports.overview.invalidate(),
       ]);
       if (result.whatsapp?.status === "sent") {
-        toast.success("Cambio guardado y solicitud de CV enviada por WhatsApp");
+        toast.success("Estado guardado y solicitud de CV enviada por WhatsApp");
       } else if (result.whatsapp?.status === "failed") {
-        toast.error("Estado guardado; el envío de WhatsApp requiere revisión");
+        toast.error(
+          "Estado guardado, pero ApiChat no pudo enviar el mensaje. Puede reintentarlo."
+        );
       } else if (result.whatsapp?.status === "unknown") {
         toast.warning(
-          "Estado guardado; confirma el envío antes de reintentarlo"
+          "ApiChat aceptó la solicitud, pero el resultado debe verificarse antes de otro envío."
         );
       } else {
-        toast.success("Revisión humana guardada con auditoría");
+        toast.success("Estado y comentario guardados");
       }
     },
-    onError: error => toast.error(`No fue posible guardar: ${error.message}`),
+    onError: error => {
+      toast.error(`No fue posible guardar: ${error.message}`);
+    },
+  });
+  const retryCvRequest = trpc.candidates.retryCvRequest.useMutation({
+    onSuccess: async result => {
+      await Promise.all([
+        utils.candidates.detail.invalidate({ id: data.application.id }),
+        utils.candidates.list.invalidate(),
+      ]);
+      if (result.whatsapp.status === "sent")
+        toast.success("Solicitud de CV enviada por WhatsApp");
+      else if (result.whatsapp.status === "already_sent")
+        toast.info("La solicitud de CV ya había sido enviada");
+      else if (result.whatsapp.status === "in_progress")
+        toast.info("El envío ya está siendo procesado");
+      else if (result.whatsapp.status === "unknown")
+        toast.warning(
+          "El resultado del envío debe verificarse en WhatsApp antes de intentarlo nuevamente"
+        );
+      else
+        toast.error(
+          "ApiChat no pudo enviar el mensaje. Revise la configuración e inténtelo nuevamente."
+        );
+    },
+    onError: error =>
+      toast.error(`No fue posible reintentar: ${error.message}`),
+  });
+  const evaluateWithAgent = trpc.agent.evaluateApplication.useMutation({
+    onSuccess: async result => {
+      await Promise.all([
+        utils.candidates.detail.invalidate({ id: data.application.id }),
+        utils.candidates.list.invalidate(),
+      ]);
+      toast.success(
+        `Evaluación completada: ${result.classification} (${result.score}/100)`
+      );
+    },
+    onError: error => toast.error(`No fue posible evaluar: ${error.message}`),
   });
 
-  const saveReview = async (
-    id: number,
-    nextStatus: string,
-    comment: string
-  ) => {
-    await updateStatus.mutateAsync({
-      id,
-      status: nextStatus as any,
+  useEffect(() => {
+    setNextStatus(data.application.status);
+  }, [data.application.id, data.application.status]);
+
+  const save = () => {
+    setStatus.mutate({
+      id: data.application.id,
+      status: nextStatus,
       comment: comment.trim() || undefined,
     });
   };
-
-  const selectCandidate = (id: number) => {
-    setSelectedId(id);
-    setViewer({ kind: "ai" });
-  };
-
-  const showForCandidate = (id: number, selection: ViewerSelection) => {
-    setSelectedId(id);
-    setViewer(selection);
-  };
-
-  const selectedIndex = selected
-    ? rows.findIndex((row: any) => row.id === selected.id)
-    : -1;
-
-  const moveThroughResults = (direction: ReviewNavigationDirection) => {
-    if (!rows.length) return;
-    const nextIndex = adjacentReviewResultIndex(
-      selectedIndex,
-      rows.length,
-      direction
-    );
-    const nextCandidate = rows[nextIndex] as any;
-    selectCandidate(nextCandidate.id);
-    window.requestAnimationFrame(() => {
-      const container = matrixScrollRef.current;
-      const row = container?.querySelector<HTMLElement>(
-        `[data-review-row="${nextCandidate.id}"]`
-      );
-      if (!container || !row) return;
-      container.scrollTo({
-        top: Math.max(0, row.offsetTop - 48),
-        behavior: "smooth",
-      });
-    });
-  };
-
-  const changeSort = (column: SortBy) => {
-    if (sortBy === column) {
-      setSortDirection(current => (current === "asc" ? "desc" : "asc"));
-      return;
-    }
-    setSortBy(column);
-    setSortDirection(
-      column === "score" || column === "submitted_at" ? "desc" : "asc"
-    );
-  };
-
-  const clearFilters = () => {
-    setSearchText("");
-    setStatus("all");
-    setPositionId("all");
-    setFrom("");
-    setTo("");
-    setMinimumScore("all");
-    setEvaluatedOnly(false);
-    setSortBy("submitted_at");
-    setSortDirection("desc");
-  };
-
   return (
-    <div className="human-review-workspace flex h-[calc(100dvh-5.5rem)] min-h-0 min-w-0 flex-col gap-2 overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:h-[calc(100dvh-2rem)] md:gap-3 md:overflow-y-auto">
-      <section className="shrink-0 rounded-2xl border border-border/60 bg-card px-3 py-3 shadow-soft sm:px-4">
-        <div className="human-review-summary-grid">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-muted text-primary sm:h-12 sm:w-12 sm:rounded-2xl">
-              <UserRound className="h-5 w-5 sm:h-6 sm:w-6" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-lg font-800 text-primary sm:text-xl">
-                  {selected?.full_name ?? "Revisión Humana"}
-                </h1>
-                {selected ? <StatusBadge status={selected.status} /> : null}
-                {selected ? (
-                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
-                    {(selected.submissions ?? []).length} formularios
-                  </span>
-                ) : null}
-                {selected ? (
-                  <Link href={`/admin/inbox?application=${selected.id}`}>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8 rounded-full border-emerald-300 text-emerald-800"
-                      aria-label={`Abrir conversación de WhatsApp de ${selected.full_name ?? "la persona seleccionada"}`}
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                ) : null}
-              </div>
-              <p className="mt-1 truncate text-sm text-muted-foreground">
-                {selected
-                  ? `${selected.position_title} · ${selected.phone_international}`
-                  : "Visión 360° para decisiones humanas trazables"}
-              </p>
-              {selected ? (
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                  <span
-                    className="inline-flex min-w-0 items-center gap-1 text-muted-foreground"
-                    title="Ubicación declarada por la persona"
-                  >
-                    <MapPin className="h-3.5 w-3.5 shrink-0 text-sky-700" />
-                    <span className="truncate">
-                      {declaredLocationLabel(selected)}
-                    </span>
-                  </span>
-                  <span
-                    className={`inline-flex min-w-0 items-center gap-1 ${salaryLabel(selected).declared ? "font-semibold text-emerald-800" : "text-muted-foreground"}`}
-                    title="Expectativa de remuneración registrada únicamente con evidencia literal"
-                  >
-                    <Banknote className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{salaryLabel(selected).text}</span>
-                  </span>
-                </div>
-              ) : null}
-              <button
-                type="button"
-                disabled={!selected}
-                onClick={() => setViewer({ kind: "summary" })}
-                className="mt-1 max-w-full truncate text-left text-xs text-muted-foreground underline decoration-border underline-offset-4 hover:text-primary disabled:no-underline"
-              >
-                {selected?.profile_summary ??
-                  "Seleccione una postulación para abrir su nota inicial de IA."}
-              </button>
-            </div>
+    <Card className="rounded-3xl border-0 bg-[#0b2d4b] text-white shadow-lift dark:bg-[#162333]">
+      <CardHeader className="flex flex-row items-start justify-between">
+        <div>
+          <Badge className="rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-200">
+            Detalle de postulación
+          </Badge>
+          <CardTitle className="mt-4 text-2xl text-white">
+            {data.application.full_name ?? "Sin nombre"}
+          </CardTitle>
+          <p className="mt-1 text-sm text-white/65">
+            {data.application.position_title} ·{" "}
+            {data.application.phone_international}
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          onClick={onClose}
+          className="rounded-full text-white hover:bg-white/10 hover:text-white"
+        >
+          Cerrar
+        </Button>
+      </CardHeader>
+      <CardContent className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+        <div className="space-y-4">
+          <div className="rounded-2xl bg-white/8 p-4">
+            <p className="text-xs uppercase tracking-[.14em] text-white/55">
+              Resumen de perfil
+            </p>
+            <p className="mt-3 text-sm leading-6 text-white/80">
+              {data.application.profile_summary ?? "Sin resumen todavía."}
+            </p>
           </div>
-          <div className="human-review-score-actions flex items-center gap-3">
-            <div className="text-center">
-              <p className="text-3xl font-800 tracking-tight text-primary sm:text-4xl">
-                {scoreFor(selected) ?? "—"}
-                <span className="text-lg font-semibold text-muted-foreground">
+          <div className="rounded-2xl bg-white/8 p-4">
+            <p className="text-xs uppercase tracking-[.14em] text-white/55">
+              Motivo de evaluación
+            </p>
+            <p className="mt-3 text-sm leading-6 text-white/80">
+              {data.application.evaluation_reason ?? "Pendiente de evaluación."}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            className="w-full rounded-xl border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+            disabled={evaluateWithAgent.isPending}
+            onClick={() =>
+              evaluateWithAgent.mutate({ applicationId: data.application.id })
+            }
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${evaluateWithAgent.isPending ? "animate-spin" : ""}`}
+            />
+            {evaluateWithAgent.isPending
+              ? "Evaluando postulación…"
+              : data.evaluations?.length
+                ? "Reevaluar con agente IA"
+                : "Evaluar con agente IA"}
+          </Button>
+        </div>
+        <div className="rounded-2xl bg-card p-5 text-card-foreground shadow-sm">
+          <p className="text-sm font-semibold">Cambio humano</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Al seleccionar “Solicitar CV por WhatsApp”, Talento AISA solicitará
+            el CV directamente por ApiChat, una sola vez por postulación.
+          </p>
+          <div className="mt-4 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Estado registrado: {statusLabel(data.application.status)}
+            </p>
+            <Select
+              value={nextStatus}
+              onValueChange={value => {
+                setNextStatus(value);
+                setStatus.reset();
+              }}
+            >
+              <SelectTrigger className="rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {statuses.map(item => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              value={comment}
+              onChange={e => {
+                setComment(e.target.value);
+                setStatus.reset();
+              }}
+              placeholder="Comentario opcional"
+              className="rounded-xl"
+            />
+            <Button
+              onClick={save}
+              disabled={setStatus.isPending}
+              className="w-full rounded-xl"
+            >
+              {setStatus.isPending ? "Guardando…" : "Guardar cambio"}
+            </Button>
+            {setStatus.isSuccess && (
+              <p
+                className="text-xs font-semibold text-emerald-700"
+                aria-live="polite"
+              >
+                Cambio confirmado en PostgreSQL.
+              </p>
+            )}
+            {setStatus.error && (
+              <p
+                className="flex items-start gap-2 text-xs font-semibold text-red-700"
+                role="alert"
+              >
+                <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {setStatus.error.message}
+              </p>
+            )}
+            {data.application.status === "calificado" &&
+              data.application.whatsapp_status !== "enviado" && (
+                <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-semibold">
+                    WhatsApp:{" "}
+                    {data.application.whatsapp_status === "error"
+                      ? "envío fallido"
+                      : data.application.whatsapp_status === "pendiente"
+                        ? "pendiente"
+                        : data.application.whatsapp_status === "desconocido"
+                          ? "por confirmar"
+                          : "no enviado"}
+                  </p>
+                  {data.application.last_whatsapp_error && (
+                    <p className="mt-1 leading-5">
+                      {data.application.last_whatsapp_error}
+                    </p>
+                  )}
+                  {data.application.whatsapp_status === "desconocido" ? (
+                    <p className="mt-2 font-semibold">
+                      Verifique la conversación de la persona postulante antes
+                      de realizar otro envío.
+                    </p>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        retryCvRequest.mutate({ id: data.application.id })
+                      }
+                      disabled={retryCvRequest.isPending}
+                      className="mt-3 w-full rounded-xl"
+                    >
+                      <RefreshCw
+                        className={`mr-2 h-3.5 w-3.5 ${retryCvRequest.isPending ? "animate-spin" : ""}`}
+                      />
+                      {retryCvRequest.isPending
+                        ? "Enviando…"
+                        : data.application.whatsapp_status === "error"
+                          ? "Reintentar solicitud de CV"
+                          : "Enviar solicitud de CV"}
+                    </Button>
+                  )}
+                </div>
+              )}
+          </div>
+        </div>
+        {typeof agentPayload?.score === "number" && (
+          <div className="lg:col-span-2 rounded-2xl bg-white/8 p-4">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+              <div>
+                <p className="text-xs uppercase tracking-[.14em] text-white/55">
+                  Matriz de evaluación IA
+                </p>
+                <p className="mt-2 text-sm text-white/70">
+                  {agentPayload.classification ?? "Resultado ponderado"} ·{" "}
+                  {latestEvaluation.ai_model ?? "Modelo no informado"}
+                </p>
+              </div>
+              <p className="text-3xl font-bold text-white">
+                {agentPayload.score}
+                <span className="text-base font-medium text-white/55">
                   /100
                 </span>
               </p>
-              <p className="mt-1 text-[11px] uppercase tracking-[.16em] text-muted-foreground">
-                Punteo IA
-              </p>
             </div>
-            {selected ? (
-              <Link href={`/admin/candidates?application=${selected.id}`}>
-                <Button variant="outline" className="rounded-full">
-                  <Eye className="mr-2 h-4 w-4" /> Detalle
-                </Button>
-              </Link>
-            ) : null}
-          </div>
-          {selected ? (
-            <QuickReview
-              key={`${selected.id}:${selected.status}`}
-              currentStatus={selected.status}
-              pending={updateStatus.isPending}
-              onSave={(nextStatus, comment) =>
-                saveReview(selected.id, nextStatus, comment)
-              }
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No hay candidatos disponibles con los filtros actuales.
-            </p>
-          )}
-        </div>
-      </section>
-
-      <ViewerPanel
-        candidate={selected}
-        selection={viewer}
-        onSelect={setViewer}
-      />
-
-      {selected ? (
-        <ReviewEvidencePanels
-          key={`conversation-evidence:${selected.id}`}
-          applicationId={selected.id}
-          positionId={selected.position_id ?? null}
-          candidateName={selected.full_name ?? null}
-        />
-      ) : null}
-
-      <section className="shrink-0 rounded-2xl border border-border/60 bg-card p-2 shadow-soft sm:p-3">
-        <div className="human-review-filter-grid">
-          <div className="human-review-filter-search relative min-w-0">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={searchText}
-              onChange={event => setSearchText(event.target.value)}
-              className="rounded-xl pl-9"
-              placeholder="Nombre, teléfono, correo o plaza"
-            />
-          </div>
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-full min-w-0 rounded-xl">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los estados</SelectItem>
-              {APPLICATION_STATUS_OPTIONS.map(option => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={positionId} onValueChange={setPositionId}>
-            <SelectTrigger className="w-full min-w-0 rounded-xl">
-              <SelectValue placeholder="Plaza" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas las plazas</SelectItem>
-              {(positions.data ?? []).map((position: any) => (
-                <SelectItem key={position.id} value={String(position.id)}>
-                  {position.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={minimumScore} onValueChange={setMinimumScore}>
-            <SelectTrigger className="w-full min-w-0 rounded-xl">
-              <SelectValue placeholder="Punteo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todo punteo</SelectItem>
-              <SelectItem value="90">90 o más</SelectItem>
-              <SelectItem value="80">80 o más</SelectItem>
-              <SelectItem value="70">70 o más</SelectItem>
-              <SelectItem value="60">60 o más</SelectItem>
-            </SelectContent>
-          </Select>
-          <Input
-            type="date"
-            value={from}
-            onChange={event => setFrom(event.target.value)}
-            className="w-full min-w-0 rounded-xl"
-            aria-label="Fecha inicial"
-          />
-          <Input
-            type="date"
-            value={to}
-            onChange={event => setTo(event.target.value)}
-            className="w-full min-w-0 rounded-xl"
-            aria-label="Fecha final"
-          />
-          <Button
-            type="button"
-            variant={evaluatedOnly ? "default" : "outline"}
-            className="w-full min-w-0 rounded-xl px-3"
-            onClick={() => setEvaluatedOnly(current => !current)}
-            aria-pressed={evaluatedOnly}
-          >
-            <Bot className="mr-2 h-4 w-4" /> Con IA
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className="w-full min-w-0 rounded-xl"
-            onClick={clearFilters}
-          >
-            <FilterX className="mr-2 h-4 w-4" /> Limpiar
-          </Button>
-        </div>
-      </section>
-
-      <Card className="relative flex min-h-[320px] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border-border/60 shadow-soft md:min-h-[18rem]">
-        {workspace.isFetching ? (
-          <span className="pointer-events-none absolute right-24 top-3 z-50 flex items-center rounded-full border bg-card/95 px-2.5 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Actualizando
-          </span>
-        ) : null}
-        <div
-          ref={matrixScrollRef}
-          className="human-review-matrix-scroll min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-auto overscroll-contain"
-        >
-          {workspace.error ? (
-            <div className="grid h-full min-h-40 place-items-center p-6 text-center">
-              <p className="text-sm text-destructive">
-                No fue posible cargar la matriz: {workspace.error.message}
-              </p>
-            </div>
-          ) : rows.length === 0 && !workspace.isLoading ? (
-            <div className="grid h-full min-h-40 place-items-center p-6 text-center">
-              <div>
-                <Search className="mx-auto h-6 w-6 text-muted-foreground" />
-                <p className="mt-3 font-semibold text-primary">
-                  Sin coincidencias
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Ajusta los filtros para ampliar la revisión.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <table className="w-max min-w-full border-separate border-spacing-0 text-xs">
-              <thead className="sticky top-0 z-30 bg-muted/95 shadow-[0_1px_0_hsl(var(--border))] backdrop-blur">
-                <tr>
-                  <SortableHead
-                    label="Candidato / plaza"
-                    column="name"
-                    active={sortBy}
-                    direction={sortDirection}
-                    onSort={changeSort}
-                    className="sticky left-0 z-40 w-[190px] min-w-[190px] max-w-[190px] bg-[#dce8f0] shadow-[8px_0_18px_-16px_rgba(15,23,42,.9)] dark:bg-[#1b2a3a] sm:w-[210px] sm:min-w-[210px] sm:max-w-[210px]"
-                  />
-                  <th className="min-w-[150px] border-r px-3 py-2 text-left font-semibold">
-                    Teléfono
-                  </th>
-                  {questionColumns.map(column => (
-                    <th
-                      key={column.fieldKey}
-                      className="min-w-[170px] max-w-[220px] border-r px-3 py-2 text-left align-bottom sm:min-w-[190px] sm:max-w-[240px]"
-                      title={column.label}
-                    >
-                      <span className="block font-mono text-[11px] font-bold text-primary">
-                        {column.fieldKey}
+            {Array.isArray(agentPayload.blocks) && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {agentPayload.blocks.map((block: any) => (
+                  <div key={block.id} className="rounded-xl bg-white/6 p-3">
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate font-semibold text-white/80">
+                        {evaluationBlockLabel(block.id)}
                       </span>
-                      <span className="mt-1 block line-clamp-2 font-normal text-muted-foreground">
-                        {column.label}
+                      <span className="text-white/60">
+                        {Math.round(block.score)}/100
                       </span>
-                    </th>
-                  ))}
-                  <SortableHead
-                    label="Evaluación IA"
-                    column="score"
-                    active={sortBy}
-                    direction={sortDirection}
-                    onSort={changeSort}
-                    className="min-w-[140px]"
-                  />
-                  <th className="min-w-[150px] border-r px-3 py-2 text-left font-semibold">
-                    Motivo
-                  </th>
-                  <th className="min-w-[230px] border-r px-3 py-2 text-left font-semibold sm:min-w-[270px]">
-                    Comentario humano
-                  </th>
-                  <SortableHead
-                    label="Estado / acción"
-                    column="status"
-                    active={sortBy}
-                    direction={sortDirection}
-                    onSort={changeSort}
-                    className="min-w-[220px] sm:min-w-[250px]"
-                  />
-                  <SortableHead
-                    label="Ingreso"
-                    column="submitted_at"
-                    active={sortBy}
-                    direction={sortDirection}
-                    onSort={changeSort}
-                    className="min-w-[145px]"
-                  />
-                </tr>
-              </thead>
-              <tbody>
-                {(rows as any[]).map(candidate => {
-                  const answerMap = new Map(
-                    answersFor(candidate).map(answer => [
-                      answer.fieldKey,
-                      answer,
-                    ])
-                  );
-                  const isSelected = candidate.id === selected?.id;
-                  return (
-                    <tr
-                      key={candidate.id}
-                      data-review-row={candidate.id}
-                      onClick={() => selectCandidate(candidate.id)}
-                      className={`group cursor-pointer ${isSelected ? "bg-sky-50 dark:bg-[#162333]" : "bg-card hover:bg-muted/45"}`}
-                    >
-                      <td
-                        className={`sticky left-0 z-20 w-[190px] min-w-[190px] max-w-[190px] border-b border-r px-3 py-2 align-top shadow-[8px_0_18px_-16px_rgba(15,23,42,.9)] sm:w-[210px] sm:min-w-[210px] sm:max-w-[210px] ${isSelected ? "bg-[#c8dfec] dark:bg-[#24384d]" : "bg-[#eaf2f7] group-hover:bg-[#dce8f0] dark:bg-[#162333] dark:group-hover:bg-[#1b2a3a]"}`}
-                      >
-                        <div className="flex min-w-0 items-start gap-2">
-                          <button
-                            type="button"
-                            onClick={event => {
-                              event.stopPropagation();
-                              selectCandidate(candidate.id);
-                            }}
-                            aria-pressed={isSelected}
-                            className="block min-w-0 flex-1 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          >
-                            <span className="block truncate text-sm font-bold text-primary">
-                              {candidate.full_name ?? "Sin nombre"}
-                            </span>
-                            <span className="mt-0.5 block truncate text-[11px] font-medium text-muted-foreground">
-                              {candidate.position_title}
-                            </span>
-                          </button>
-                          <Link
-                            href={`/admin/inbox?application=${candidate.id}`}
-                            onClick={event => event.stopPropagation()}
-                            className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-emerald-300 bg-card text-emerald-800 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            aria-label={`Abrir WhatsApp de ${candidate.full_name ?? "la persona"}`}
-                          >
-                            <MessageCircle className="h-3.5 w-3.5" />
-                          </Link>
-                        </div>
-                      </td>
-                      <td className="border-b border-r px-3 py-2 align-top">
-                        <a
-                          href={`tel:${candidate.phone_international}`}
-                          onClick={event => event.stopPropagation()}
-                          className="inline-flex items-center font-mono text-xs text-primary hover:underline"
-                        >
-                          <Phone className="mr-1.5 h-3.5 w-3.5" />
-                          {candidate.phone_international}
-                        </a>
-                        {candidate.email ? (
-                          <p className="mt-2 max-w-[170px] truncate text-[11px] text-muted-foreground">
-                            {candidate.email}
-                          </p>
-                        ) : null}
-                      </td>
-                      {questionColumns.map(column => {
-                        const answer = answerMap.get(column.fieldKey);
-                        return (
-                          <td
-                            key={column.fieldKey}
-                            className="max-w-[240px] border-b border-r px-3 py-2 align-top"
-                          >
-                            {answer ? (
-                              <button
-                                type="button"
-                                onClick={event => {
-                                  event.stopPropagation();
-                                  showForCandidate(candidate.id, {
-                                    kind: "answer",
-                                    fieldKey: column.fieldKey,
-                                  });
-                                }}
-                                className="line-clamp-2 w-full text-left leading-5 text-primary hover:text-sky-800 hover:underline dark:hover:text-white"
-                                title={formatAnswer(answer)}
-                              >
-                                {formatAnswer(answer)}
-                              </button>
-                            ) : (
-                              <span className="text-muted-foreground/50">
-                                —
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="border-b border-r px-3 py-2 text-center align-top">
-                        <button
-                          type="button"
-                          onClick={event => {
-                            event.stopPropagation();
-                            showForCandidate(candidate.id, { kind: "ai" });
-                          }}
-                          className="inline-flex min-w-20 items-center justify-center rounded-xl border bg-background px-3 py-2 font-bold text-primary hover:border-sky-300 hover:bg-sky-50 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
-                        >
-                          <Bot className="mr-2 h-4 w-4" />
-                          {scoreFor(candidate) ?? "—"}
-                        </button>
-                      </td>
-                      <td className="border-b border-r px-3 py-2 text-center align-top">
-                        <button
-                          type="button"
-                          onClick={event => {
-                            event.stopPropagation();
-                            showForCandidate(candidate.id, { kind: "reason" });
-                          }}
-                          className="inline-flex items-center rounded-xl border bg-background px-3 py-2 font-semibold text-primary hover:border-sky-300 hover:bg-sky-50 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
-                        >
-                          <MessageSquareText className="mr-2 h-4 w-4" /> Ver
-                        </button>
-                      </td>
-                      <RowReviewControls
-                        key={`${candidate.id}:${candidate.status}`}
-                        candidate={candidate}
-                        pending={updateStatus.isPending}
-                        onSave={saveReview}
-                      />
-                      <td className="border-b px-3 py-2 align-top text-muted-foreground">
-                        {formatDate(candidate.submitted_at)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-        {rows.length ? (
-          <VerticalNavigator
-            label="Navegación vertical de resultados"
-            previousLabel="Seleccionar candidato anterior"
-            nextLabel="Seleccionar candidato siguiente"
-            disablePrevious={selectedIndex <= 0}
-            disableNext={selectedIndex < 0 || selectedIndex >= rows.length - 1}
-            onPrevious={() => moveThroughResults(-1)}
-            onNext={() => moveThroughResults(1)}
-            status={`Resultado ${selectedIndex + 1} de ${rows.length}`}
-            orientation="horizontal"
-            className="absolute right-3 top-3 z-50 rounded-lg border border-border/70 bg-card/95 p-1 shadow-md backdrop-blur"
-          />
-        ) : null}
-      </Card>
-    </div>
-  );
-}
-
-function ViewerPanel({
-  candidate,
-  selection,
-  onSelect,
-}: {
-  candidate: any;
-  selection: ViewerSelection;
-  onSelect: (selection: ViewerSelection) => void;
-}) {
-  const blocks = Array.isArray(candidate?.ai_payload?.blocks)
-    ? candidate.ai_payload.blocks
-    : [];
-  const answer =
-    selection.kind === "answer"
-      ? answersFor(candidate).find(item => item.fieldKey === selection.fieldKey)
-      : null;
-  const heading =
-    selection.kind === "answer"
-      ? (answer?.fieldKey ?? selection.fieldKey)
-      : selection.kind === "reason"
-        ? "Motivo de evaluación"
-        : selection.kind === "summary"
-          ? "Nota inicial del candidato"
-          : "Matriz de evaluación IA";
-  const viewerPanelRef = useRef<HTMLElement>(null);
-  const [blockPageSize, setBlockPageSize] = useState(3);
-  const [blockPage, setBlockPage] = useState(0);
-  const selectionKey =
-    selection.kind === "answer"
-      ? `${selection.kind}:${selection.fieldKey}`
-      : selection.kind;
-
-  useLayoutEffect(() => {
-    const element = viewerPanelRef.current;
-    if (!element) return;
-    const updatePageSize = () => {
-      setBlockPageSize(element.clientWidth >= 760 ? 3 : 1);
-    };
-    updatePageSize();
-    const observer = new ResizeObserver(updatePageSize);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    setBlockPage(0);
-  }, [candidate?.id, selectionKey, blockPageSize, blocks.length]);
-
-  const blockRange = reviewBlockPageRange(
-    blockPage,
-    blocks.length,
-    blockPageSize
-  );
-  const visibleBlocks = blocks.slice(blockRange.start, blockRange.end);
-  const blockStatus = blocks.length
-    ? `${blockRange.start + 1}–${blockRange.end} de ${blocks.length}`
-    : "Sin bloques";
-  const moveBlockPage = (direction: ReviewNavigationDirection) => {
-    setBlockPage(current =>
-      adjacentReviewBlockPage(current, blocks.length, blockPageSize, direction)
-    );
-  };
-
-  return (
-    <section
-      ref={viewerPanelRef}
-      className="human-review-viewer relative min-h-[168px] shrink-0 rounded-2xl bg-[#0b2d4b] text-white shadow-lift dark:bg-[#162333]"
-    >
-      <div className="flex flex-col px-4 py-3 sm:px-5 sm:py-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[.18em] text-sky-200/70">
-              Vista 360° del Candidato
-            </p>
-            <h2 className="mt-1 text-lg font-bold text-white">{heading}</h2>
-          </div>
-          <div className="flex flex-wrap items-start justify-end gap-2">
-            {candidate &&
-            selection.kind === "ai" &&
-            blockRange.pageCount > 1 ? (
-              <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-black/10 px-2 py-1">
-                <span
-                  className="min-w-[4.5rem] text-center text-[11px] font-semibold text-white/75"
-                  aria-live="polite"
-                >
-                  {blockStatus}
-                </span>
-                <VerticalNavigator
-                  label="Navegación de bloques de evaluación"
-                  previousLabel="Mostrar bloque o grupo anterior"
-                  nextLabel="Mostrar bloque o grupo siguiente"
-                  disablePrevious={blockRange.pageIndex === 0}
-                  disableNext={blockRange.pageIndex >= blockRange.pageCount - 1}
-                  onPrevious={() => moveBlockPage(-1)}
-                  onNext={() => moveBlockPage(1)}
-                  status={`Bloques ${blockStatus}`}
-                  orientation="horizontal"
-                />
-              </div>
-            ) : null}
-            <div className="flex flex-wrap gap-1.5">
-              <ViewerButton
-                active={selection.kind === "summary"}
-                onClick={() => onSelect({ kind: "summary" })}
-                icon={Sparkles}
-                label="Nota IA"
-              />
-              <ViewerButton
-                active={selection.kind === "ai"}
-                onClick={() => onSelect({ kind: "ai" })}
-                icon={Bot}
-                label="Evaluación"
-              />
-              <ViewerButton
-                active={selection.kind === "reason"}
-                onClick={() => onSelect({ kind: "reason" })}
-                icon={MessageSquareText}
-                label="Motivo"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="mt-3">
-          {!candidate ? (
-            <div className="grid h-full place-items-center text-sm text-white/60">
-              Seleccione una persona candidata en la matriz inferior.
-            </div>
-          ) : selection.kind === "answer" ? (
-            <div className="grid gap-3 md:grid-cols-[minmax(0,.75fr)_minmax(0,1.25fr)]">
-              <div className="rounded-xl bg-white/8 p-4">
-                <p className="text-xs uppercase tracking-[.14em] text-white/50">
-                  Pregunta del formulario
-                </p>
-                <p className="mt-2 text-sm leading-6 text-white/80">
-                  {answer?.label ?? "Campo dinámico"}
-                </p>
-                {answer?.deterministicResult ? (
-                  <Badge className="mt-3 rounded-full bg-white/10 text-white hover:bg-white/10">
-                    Regla: {answer.deterministicResult}
-                  </Badge>
-                ) : null}
-              </div>
-              <div className="rounded-xl bg-white/8 p-4">
-                <p className="text-xs uppercase tracking-[.14em] text-white/50">
-                  Respuesta registrada
-                </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/90">
-                  {answer ? formatAnswer(answer) : "Sin respuesta registrada."}
-                </p>
-              </div>
-            </div>
-          ) : selection.kind === "summary" ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              <ViewerTextCard
-                label="Resumen de persona"
-                text={candidate.profile_summary ?? "Sin nota inicial de IA."}
-              />
-              <ViewerTextCard
-                label="Contexto de la plaza"
-                text={`${candidate.position_title} · Ingreso ${formatDate(candidate.submitted_at)}`}
-              />
-              <div className="rounded-xl bg-white/8 p-4 md:col-span-2">
-                <p className="text-xs uppercase tracking-[.14em] text-white/50">
-                  Formularios y anuncios · participación
-                </p>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  {(candidate.submissions ?? []).map((submission: any) => {
-                    const formAnswers = answersFor(candidate).filter(
-                      item => Number(item.formId) === Number(submission.formId)
-                    );
-                    return (
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
                       <div
-                        key={submission.formId}
-                        className="rounded-xl border border-white/10 p-3"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="truncate text-xs font-semibold text-white/85">
-                            {submission.title}
-                          </p>
-                          <Badge className="shrink-0 rounded-full bg-sky-100 text-sky-800">
-                            {submission.source === "importado"
-                              ? "Importado"
-                              : "Anuncio"}
-                          </Badge>
-                        </div>
-                        <p className="mt-1 text-[11px] text-white/45">
-                          {submission.submittedAt
-                            ? formatDate(submission.submittedAt)
-                            : ""}
-                        </p>
-                        <div className="mt-2 space-y-1">
-                          {formAnswers.length ? (
-                            formAnswers.map(item => (
-                              <p
-                                key={item.fieldKey}
-                                className="text-xs leading-5 text-white/75"
-                              >
-                                <span className="text-white/40">
-                                  {item.label}:{" "}
-                                </span>
-                                {formatAnswer(item)}
-                              </p>
-                            ))
-                          ) : (
-                            <p className="text-xs text-white/45">
-                              Sin respuestas registradas.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {!(candidate.submissions ?? []).length && (
-                    <p className="text-xs text-white/50 md:col-span-2">
-                      Sin participaciones adicionales registradas.
+                        className="h-full rounded-full bg-emerald-300"
+                        style={{
+                          width: `${Math.max(0, Math.min(100, Number(block.score) || 0))}%`,
+                        }}
+                      />
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/55">
+                      {block.rationale}
                     </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : selection.kind === "reason" ? (
-            <ViewerTextCard
-              label="Razonamiento registrado"
-              text={
-                candidate.evaluation_reason ??
-                candidate.latest_reason ??
-                "Pendiente de evaluación."
-              }
-            />
-          ) : blocks.length ? (
-            <div
-              className={`grid items-stretch gap-2 ${blockPageSize === 3 ? "grid-cols-3" : "grid-cols-1"}`}
-            >
-              {visibleBlocks.map((block: any) => (
-                <div
-                  key={block.id}
-                  className="h-full rounded-xl border border-white/10 bg-white/8 p-3"
-                >
-                  <div className="flex items-center justify-between gap-2 text-xs">
-                    <span className="font-semibold text-white/90">
-                      {blockLabel(block.id)}
-                    </span>
-                    <span className="font-bold text-sky-100">
-                      {Math.round(Number(block.score) || 0)}/100
-                    </span>
                   </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full rounded-full bg-emerald-300"
-                      style={{
-                        width: `${Math.max(0, Math.min(100, Number(block.score) || 0))}%`,
-                      }}
-                    />
-                  </div>
-                  <p className="mt-2 text-[11px] leading-4 text-white/70">
-                    {block.rationale ?? "Sin razonamiento por bloque."}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-[auto_1fr]">
-              <div className="grid min-w-32 place-items-center rounded-xl bg-white/8 p-4">
-                <p className="text-3xl font-bold">
-                  {scoreFor(candidate) ?? "—"}
-                  <span className="text-sm text-white/50">/100</span>
-                </p>
+                ))}
               </div>
-              <ViewerTextCard
-                label={candidate.ai_model ?? "Evaluación disponible"}
-                text={candidate.evaluation_reason ?? "Sin matriz por bloques."}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function QuickReview({
-  currentStatus,
-  pending,
-  onSave,
-}: {
-  currentStatus: string;
-  pending: boolean;
-  onSave: (status: string, comment: string) => Promise<void>;
-}) {
-  const [status, setStatus] = useState(currentStatus);
-  const [comment, setComment] = useState("");
-  const disabled =
-    pending || (status === currentStatus && comment.trim().length === 0);
-  return (
-    <div className="human-review-quick-grid min-w-0">
-      <Select value={status} onValueChange={setStatus}>
-        <SelectTrigger className="w-full min-w-0 rounded-xl">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {APPLICATION_STATUS_OPTIONS.map(option => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Input
-        value={comment}
-        onChange={event => setComment(event.target.value)}
-        placeholder="Comentario de revisión"
-        maxLength={1000}
-        className="w-full min-w-0 rounded-xl"
-      />
-      <Button
-        type="button"
-        disabled={disabled}
-        className="w-full rounded-xl sm:w-auto"
-        onClick={async () => {
-          await onSave(status, comment);
-          setComment("");
-        }}
-      >
-        {pending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <>
-            <Check className="mr-2 h-4 w-4" /> Guardar
-          </>
-        )}
-      </Button>
-    </div>
-  );
-}
-
-function RowReviewControls({
-  candidate,
-  pending,
-  onSave,
-}: {
-  candidate: any;
-  pending: boolean;
-  onSave: (id: number, status: string, comment: string) => Promise<void>;
-}) {
-  const [status, setStatus] = useState(candidate.status);
-  const [comment, setComment] = useState("");
-  const disabled =
-    pending || (status === candidate.status && comment.trim().length === 0);
-  return (
-    <Fragment>
-      <td className="border-b border-r px-3 py-2 align-top">
-        <Input
-          value={comment}
-          maxLength={1000}
-          onClick={event => event.stopPropagation()}
-          onChange={event => setComment(event.target.value)}
-          placeholder="Agregar criterio o evidencia…"
-          className="h-8 min-w-[245px] rounded-lg text-xs"
-        />
-      </td>
-      <td className="border-b border-r px-3 py-2 align-top">
-        <div className="flex min-w-[225px] gap-2">
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger
-              onClick={event => event.stopPropagation()}
-              className="h-8 min-w-0 flex-1 rounded-lg text-xs"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent onClick={event => event.stopPropagation()}>
-              {APPLICATION_STATUS_OPTIONS.map(option => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            type="button"
-            size="icon"
-            disabled={disabled}
-            className="h-8 w-8 shrink-0 rounded-lg"
-            aria-label="Guardar revisión de esta fila"
-            onClick={async event => {
-              event.stopPropagation();
-              await onSave(candidate.id, status, comment);
-              setComment("");
-            }}
-          >
-            {pending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Check className="h-4 w-4" />
             )}
-          </Button>
-        </div>
-      </td>
-    </Fragment>
-  );
-}
-
-function SortableHead({
-  label,
-  column,
-  active,
-  direction,
-  onSort,
-  className = "",
-}: {
-  label: string;
-  column: SortBy;
-  active: SortBy;
-  direction: SortDirection;
-  onSort: (column: SortBy) => void;
-  className?: string;
-}) {
-  return (
-    <th className={`border-r px-3 py-2 text-left ${className}`}>
-      <button
-        type="button"
-        onClick={() => onSort(column)}
-        className="inline-flex items-center font-semibold text-primary hover:text-sky-800 dark:hover:text-white"
-        title="Ordenar ascendente o descendente"
-      >
-        {label}
-        {active === column ? (
-          direction === "asc" ? (
-            <ArrowUp className="ml-1.5 h-3.5 w-3.5" />
-          ) : (
-            <ArrowDown className="ml-1.5 h-3.5 w-3.5" />
-          )
-        ) : (
-          <span className="ml-1.5 text-muted-foreground/50">↕</span>
+          </div>
         )}
-      </button>
-    </th>
+        <div className="lg:col-span-2 rounded-2xl bg-white/8 p-4">
+          <p className="text-xs uppercase tracking-[.14em] text-white/55">
+            Formularios y anuncios · respuestas
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {(data.submissions ?? []).map((submission: any) => {
+              const formAnswers = (data.answers ?? []).filter(
+                (answer: any) =>
+                  Number(answer.form_id) === Number(submission.form_id)
+              );
+              return (
+                <div
+                  key={submission.form_id}
+                  className="rounded-xl bg-white/6 p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate text-xs font-semibold text-white/80">
+                      {submission.title}
+                    </p>
+                    <Badge className="shrink-0 rounded-full bg-sky-100 text-sky-800">
+                      {submission.source === "importado"
+                        ? "Importado"
+                        : "Anuncio"}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-white/45">
+                    Formulario No. {submission.version} ·{" "}
+                    {formAnswers.length}{" "}
+                    {formAnswers.length === 1 ? "respuesta" : "respuestas"}
+                  </p>
+                  <p className="mt-1 text-xs text-white/45">
+                    {submission.submitted_at
+                      ? new Date(
+                          submission.submitted_at
+                        ).toLocaleString("es-GT")
+                      : ""}
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {formAnswers.length ? (
+                      formAnswers.map((answer: any) => (
+                        <p
+                          key={answer.field_key}
+                          className="text-xs leading-5 text-white/80"
+                        >
+                          <span className="text-white/45">
+                            {answer.label}:{" "}
+                          </span>
+                          {String(
+                            answer.normalized_value ??
+                              answer.value_json ??
+                              "—"
+                          )}
+                        </p>
+                      ))
+                    ) : (
+                      <p className="text-xs text-white/45">
+                        Sin respuestas registradas.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {!(data.submissions ?? []).length && (
+              <p className="text-sm text-white/60 sm:col-span-2">
+                {data.answers?.length
+                  ? "El formulario de origen no registra participación."
+                  : "Sin respuestas registradas."}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="lg:col-span-2 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl bg-white/8 p-4">
+            <p className="text-xs uppercase tracking-[.14em] text-white/55">
+              Conversación WhatsApp
+            </p>
+            {data.messages?.length ? (
+              <div className="mt-3 space-y-2">
+                {data.messages.slice(-5).map((message: any) => (
+                  <div
+                    key={message.id}
+                    className="rounded-xl bg-white/6 p-3 text-sm text-white/80"
+                  >
+                    <span className="mr-2 text-xs text-white/45">
+                      {message.direction === "outbound"
+                        ? message.delivery_status === "failed"
+                          ? "Fallido"
+                          : message.delivery_status === "unknown"
+                            ? "Por confirmar"
+                            : message.delivery_status === "pending" ||
+                                message.delivery_status === "sending"
+                              ? "Pendiente"
+                              : "Enviado"
+                        : "Recibido"}
+                    </span>
+                    {message.body ?? "Mensaje sin texto"}
+                    {message.last_error && (
+                      <p className="mt-2 text-xs text-red-200">
+                        {message.last_error}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-white/60">
+                Aún no hay mensajes asociados.
+              </p>
+            )}
+          </div>
+          <div className="rounded-2xl bg-white/8 p-4">
+            <p className="text-xs uppercase tracking-[.14em] text-white/55">
+              Bitácora
+            </p>
+            {data.audit?.length ? (
+              <div className="mt-3 space-y-2">
+                {data.audit.slice(0, 5).map((event: any) => (
+                  <div key={event.id} className="rounded-xl bg-white/6 p-3">
+                    <p className="text-sm font-semibold text-white/85">
+                      {event.action === "comment_added"
+                        ? "Comentario agregado"
+                        : "Estado actualizado"}
+                    </p>
+                    {event.before_json?.status !== event.after_json?.status && (
+                      <p className="mt-1 text-xs text-white/65">
+                        {statusLabel(event.before_json?.status)} →{" "}
+                        {statusLabel(event.after_json?.status)}
+                      </p>
+                    )}
+                    <p className="mt-2 text-sm text-white/80">
+                      {event.comment || "Sin comentario"}
+                    </p>
+                    <p className="mt-1 text-xs text-white/50">
+                      {event.actor_name ?? "Sistema"}
+                      {event.created_at
+                        ? ` · ${new Date(event.created_at).toLocaleString()}`
+                        : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-white/60">
+                Sin cambios registrados.
+              </p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
-function ViewerButton({
-  active,
-  onClick,
-  icon: Icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: typeof Bot;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition ${active ? "border-white bg-white text-[#0b2d4b] dark:border-primary dark:bg-primary dark:text-primary-foreground" : "border-white/20 bg-white/5 text-white/75 hover:bg-white/10"}`}
-    >
-      <Icon className="mr-1.5 h-3.5 w-3.5" /> {label}
-    </button>
-  );
+function statusLabel(value: string | null | undefined) {
+  return applicationStatusLabel(value);
 }
-
-function ViewerTextCard({ label, text }: { label: string; text: string }) {
-  return (
-    <div className="rounded-xl bg-white/8 p-4">
-      <p className="text-xs uppercase tracking-[.14em] text-white/50">
-        {label}
-      </p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/85">
-        {text}
-      </p>
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const tone = {
-    neutral: "border-slate-200 bg-slate-50 text-slate-800",
-    priority: "border-violet-200 bg-violet-50 text-violet-800",
-    positive: "border-emerald-200 bg-emerald-50 text-emerald-800",
-    conditional: "border-sky-200 bg-sky-50 text-sky-800",
-    review: "border-amber-200 bg-amber-50 text-amber-800",
-    negative: "border-red-200 bg-red-50 text-red-800",
-    interview: "border-cyan-200 bg-cyan-50 text-cyan-800",
-    error: "border-rose-200 bg-rose-50 text-rose-800",
-  }[applicationStatusTone(status)];
-  return (
-    <Badge
-      variant="outline"
-      className={`rounded-full dark:border-[#2A3949] dark:bg-[#162333] dark:text-[#E6EDF3] ${tone}`}
-    >
-      {applicationStatusLabel(status)}
-    </Badge>
-  );
-}
-
-function answersFor(candidate: any): Answer[] {
-  return Array.isArray(candidate?.answers) ? candidate.answers : [];
-}
-
-function scoreFor(candidate: any) {
-  const value = candidate?.evaluation_score ?? candidate?.ai_payload?.score;
-  if (
-    (value === null || value === undefined) &&
-    candidate?.ai_payload?.criticalDisqualification === true
-  ) {
-    return 0;
-  }
-  const score = Number(value);
-  return Number.isFinite(score) ? Math.round(score) : null;
-}
-
-function formatAnswer(answer: Answer) {
-  if (answer.normalizedValue?.trim()) return answer.normalizedValue;
-  const value = answer.value;
-  if (value === null || value === undefined || value === "") return "—";
-  if (typeof value === "string" || typeof value === "number") {
-    return String(value);
-  }
-  if (typeof value === "boolean") return value ? "Sí" : "No";
-  if (Array.isArray(value)) return value.map(String).join(", ");
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function formatDate(value: string | Date | null | undefined) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("es-GT", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-}
-
-/** Ubicación declarada: zona, municipio, departamento y país. */
-function declaredLocationLabel(candidate: any) {
-  const parts = [
-    candidate.location_zone,
-    candidate.location_municipality,
-    candidate.location_department,
-    candidate.location_country,
-  ].filter((value: unknown) => Boolean(String(value ?? "").trim()));
-  return parts.length ? parts.join(" · ") : "Ubicación sin confirmar";
-}
-
-const SALARY_SOURCE_LABELS: Record<string, string> = {
-  message: "mensaje de la persona",
-  cv: "CV recibido",
-  human: "registro humano",
-};
-
-/** Expectativa de remuneración: solo se muestra con evidencia literal. */
-function salaryLabel(candidate: any) {
-  const amount = Number(candidate?.salary_expectation_gtq ?? 0);
-  const source = String(candidate?.salary_expectation_source ?? "no_declarada");
-  const declared = amount > 0 && source !== "no_declarada";
-  if (!declared) {
-    return { declared, text: "Expectativa salarial: no declarada" };
-  }
-  const formatted = new Intl.NumberFormat("es-GT", {
-    style: "currency",
-    currency: "GTQ",
-    minimumFractionDigits: 2,
-  }).format(amount);
-  return {
-    declared,
-    text: `Expectativa salarial: ${formatted} · ${
-      SALARY_SOURCE_LABELS[source] ?? source
-    }`,
-  };
-}
-
-function blockLabel(value: string) {
+function evaluationBlockLabel(value: string) {
   const labels: Record<string, string> = {
     identificacion_ajuste: "Identificación del ajuste",
     evidencia_experiencia: "Evidencia de experiencia",

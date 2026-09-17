@@ -72,8 +72,8 @@ function contrastRatio(foreground: string, background: string) {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.158");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.158");
+    expect(APP_VERSION).toBe("2.0.159");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.159");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -242,7 +242,7 @@ describe("black-box release contract", () => {
 
   it("integrates the compact matrix, Dark AISA tokens, and transparent brand", () => {
     const review = fs.readFileSync(
-      path.resolve("client/src/pages/HumanReview.tsx"),
+      path.resolve("client/src/pages/Candidates.tsx"),
       "utf8"
     );
     const theme = fs.readFileSync(path.resolve("client/src/index.css"), "utf8");
@@ -881,9 +881,9 @@ describe("black-box release contract", () => {
     expect(jobs).toContain("Plazas y Anuncios");
     expect(jobs).toContain("Importar Excel/CSV");
     expect(jobs).toContain("Formularios y anuncios");
-    expect(candidatesPage).toContain("Formularios y anuncios · respuestas");
-    expect(candidatesPage).toContain("answers_summary");
-    expect(humanReview).toContain("Formularios y anuncios · participación");
+    expect(candidatesPage).toContain("Formularios y anuncios · participación");
+    expect(routers).toContain("answers_summary");
+    expect(humanReview).toContain("Formularios y anuncios · respuestas");
     expect(humanReview).toContain("submissions");
     expect(inbox).toContain("form_count");
     expect(ontology).toContain("Análisis ontológico");
@@ -926,6 +926,10 @@ describe("black-box release contract", () => {
       path.resolve("client/src/pages/Candidates.tsx"),
       "utf8"
     );
+    const humanReview = fs.readFileSync(
+      path.resolve("client/src/pages/HumanReview.tsx"),
+      "utf8"
+    );
     const evaluator = fs.readFileSync(
       path.resolve("server/agentEvaluator.ts"),
       "utf8"
@@ -961,7 +965,7 @@ describe("black-box release contract", () => {
     expect(jobs).toContain("<Switch");
     expect(formBuilder).toContain("formId");
     expect(preview).toContain("Vista previa pública del formulario");
-    expect(candidatesPage).toContain("Formulario No. {submission.version}");
+    expect(humanReview).toContain("Formulario No. {submission.version}");
     expect(evaluator).toContain("answerKeyFor");
     expect(evaluator).toContain("questionId: answer.question_id");
     expect(analysis).toContain("Análisis ontológico");
@@ -1168,7 +1172,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.158");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.159");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1182,7 +1186,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.158");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.159");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1257,6 +1261,10 @@ describe("black-box release contract", () => {
       path.resolve("client/src/pages/HumanReview.tsx"),
       "utf8"
     );
+    const explorer = fs.readFileSync(
+      path.resolve("client/src/pages/Candidates.tsx"),
+      "utf8"
+    );
 
     expect(blackBox).toContain(`Pruebas de caja negra · JARVI RH ${APP_VERSION}`);
     expect(blackBox).toContain("BN-CONV-01");
@@ -1271,8 +1279,8 @@ describe("black-box release contract", () => {
     expect(routing).toContain("conversationPanelState");
     expect(routing).toContain("runConversationTurn");
     expect(review).toContain("ReviewEvidencePanels");
-    expect(review).toContain("salaryLabel");
-    expect(review).toContain("declaredLocationLabel");
+    expect(explorer).toContain("salaryLabel");
+    expect(explorer).toContain("declaredLocationLabel");
   });
 
   it("declara el despliegue separado por capacidad con cola dedicada", () => {
@@ -1300,7 +1308,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.158");
+    expect(governance).toContain("Alcance candidato 2.0.159");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
