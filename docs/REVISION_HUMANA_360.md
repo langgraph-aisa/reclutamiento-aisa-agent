@@ -8,12 +8,19 @@ evaluaciones ni decisiones. La única operación de escritura reutiliza
 `candidates.setStatus`, por lo que conserva permisos, bloqueo de fila,
 transacción PostgreSQL, auditoría y la semántica de envío único de CV.
 
+Desde 2.0.159 el explorador aquí descrito se sirve en `/admin/candidates` y la
+ficha de la postulación en `/admin/human-review`; los planos de consulta,
+decisión y eventos no cambiaron. El intercambio es de ubicación y de recorrido:
+el botón «Detalle» de cada resultado abre la ficha, que reúne la matriz de
+evaluación de IA, el resumen de perfil, el motivo, la decisión humana y el
+expediente documental y conversacional de la persona.
+
 La separación principal es deliberada:
 
 - **Plano de consulta:** `candidates.reviewWorkspace` compone la vista 360°.
 - **Plano de decisión:** `candidates.setStatus` registra estado y comentario.
-- **Plano de navegación:** `/admin/human-review` presenta la matriz; la ficha
-  completa continúa en `/admin/candidates?application={id}`.
+- **Plano de navegación:** `/admin/candidates` presenta la matriz; la ficha
+  completa se abre en `/admin/human-review?application={id}`.
 - **Plano de eventos:** solo el valor interno `calificado` activa la solicitud
   de CV. Los demás estados, incluido `calificado_aisa`, no generan ese evento.
 
