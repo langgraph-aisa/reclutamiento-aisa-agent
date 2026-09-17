@@ -137,10 +137,154 @@ async function renderKnowledgePreview(row: KnowledgeRow) {
   }
 }
 
+/**
+ * El visor incrusta el archivo en `iframe`, `img`, `video` y `audio`: el
+ * navegador pide esas direcciones con `Accept: text/html`. Cuando la entrega
+ * falla, devolver JSON hace que el operador vea un objeto crudo dentro del
+ * visor y no la causa. Esta función decide el formato de la respuesta de error
+ * según quien la solicite, de modo que el visor reciba una explicación legible
+ * y las integraciones sigan recibiendo JSON.
+ */
+function prefersHtml(req: Request) {
+  return (req.headers.accept ?? "").includes("text/html");
+}
+
+function viewerErrorDocument(title: string, message: string, hint: string) {
+  const escape = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  return `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escape(title)}</title>
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    background: #f6f8fa;
+    color: #0b2d4b;
+  }
+  .card {
+    max-width: 30rem;
+    border: 1px solid #d7dee6;
+    border-radius: 16px;
+    background: #ffffff;
+    padding: 24px 26px;
+    box-shadow: 0 10px 30px rgba(11, 45, 75, 0.08);
+  }
+  h1 { margin: 0 0 10px; font-size: 15px; }
+  p { margin: 0 0 10px; font-size: 13px; line-height: 1.65; }
+  .hint { margin: 0; color: #40556b; font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>${escape(title)}</h1>
+    <p>${escape(message)}</p>
+    <p class="hint">${escape(hint)}</p>
+  </div>
+</body>
+</html>`;
+}
+
+type DeliveryFailure = {
+  status: number;
+  message: string;
+  reason: string;
+};
+
+/**
+ * Clasifica el fallo de entrega. Antes toda causa respondía con el mismo texto
+ * genérico, de modo que un archivo ausente del volumen era indistinguible de un
+ * error de permisos o de una referencia inválida.
+ */
+function classifyDeliveryFailure(error: unknown): DeliveryFailure {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  if (code === "ENOENT") {
+    return {
+      status: 410,
+      reason: "volumen-sin-archivo",
+      message:
+        "El archivo no está en el volumen de almacenamiento. El registro existe en la base de datos, pero el documento binario no se encuentra en la ruta configurada.",
+    };
+  }
+  if (code === "EACCES" || code === "EPERM") {
+    return {
+      status: 500,
+      reason: "permiso-denegado",
+      message:
+        "El servicio no tiene permiso de lectura sobre el volumen de almacenamiento.",
+    };
+  }
+  if (code === "EISDIR") {
+    return {
+      status: 500,
+      reason: "ruta-es-directorio",
+      message:
+        "La ruta configurada apunta a un directorio y no al documento almacenado.",
+    };
+  }
+  if (error instanceof Error && /no es válida/i.test(error.message)) {
+    return {
+      status: 500,
+      reason: "referencia-invalida",
+      message:
+        "La referencia de almacenamiento del documento no es válida; vuelva a cargar el archivo.",
+    };
+  }
+  return {
+    status: 500,
+    reason: "error-no-clasificado",
+    message: "No fue posible entregar el archivo.",
+  };
+}
+
+const DELIVERY_HINT =
+  "Verifique que KNOWLEDGE_STORAGE_DIR apunte a un volumen persistente en EasyPanel. Si el volumen se recreó, los documentos deben volver a cargarse.";
+
+function respondDeliveryFailure(
+  req: Request,
+  res: Response,
+  failure: DeliveryFailure,
+  context: { fileId?: number; storageKey?: string }
+) {
+  // La bitácora conserva la causa y la referencia interna (opaca, sin datos
+  // personales) para que la operación pueda reconstruir el incidente.
+  console.warn(
+    `[Knowledge] entrega fallida motivo=${failure.reason} fileId=${context.fileId ?? "n/d"} clave=${context.storageKey ?? "n/d"}`
+  );
+  if (prefersHtml(req)) {
+    res
+      .status(failure.status)
+      .type("html")
+      .send(
+        viewerErrorDocument(
+          "No fue posible abrir el documento",
+          failure.message,
+          DELIVERY_HINT
+        )
+      );
+    return;
+  }
+  res.status(failure.status).json({ error: failure.message });
+}
+
 export function registerKnowledgeRoutes(app: Express) {
   app.get("/api/knowledge/files/:id", async (req, res) => {
+    let row: KnowledgeRow | null = null;
     try {
-      const row = await resolveKnowledgeFile(req, res);
+      row = await resolveKnowledgeFile(req, res);
       if (!row) return;
       const filePath = knowledgeFilePath(row.storage_key);
       const stats = await knowledgeFileStats(row.storage_key);
@@ -150,22 +294,36 @@ export function registerKnowledgeRoutes(app: Express) {
       );
       sendRange(res, filePath, stats.size, row.mime_type, req.headers.range);
     } catch (error) {
-      console.warn(
-        `[Knowledge] File delivery failed (${error instanceof Error ? error.name : "unknown"}).`
-      );
-      res.status(500).json({ error: "No fue posible entregar el archivo." });
+      respondDeliveryFailure(req, res, classifyDeliveryFailure(error), {
+        fileId: row?.id,
+        storageKey: row?.storage_key,
+      });
     }
   });
 
   app.get("/api/knowledge/render/:id", async (req, res) => {
+    let row: KnowledgeRow | null = null;
     try {
-      const row = await resolveKnowledgeFile(req, res);
+      row = await resolveKnowledgeFile(req, res);
       if (!row) return;
       const html = await renderKnowledgePreview(row);
       if (!html) {
-        res.status(415).json({
-          error: "Este tipo de archivo no dispone de vista previa textual.",
-        });
+        const message =
+          "Este tipo de archivo no dispone de vista previa integrada; descárguelo para revisarlo.";
+        if (prefersHtml(req)) {
+          res
+            .status(415)
+            .type("html")
+            .send(
+              viewerErrorDocument(
+                "Sin vista previa para este formato",
+                message,
+                "Los formatos con vista previa son imagen, video, audio, PDF, Word, Excel, CSV y texto."
+              )
+            );
+          return;
+        }
+        res.status(415).json({ error: message });
         return;
       }
       res
@@ -176,10 +334,10 @@ export function registerKnowledgeRoutes(app: Express) {
         })
         .send(html);
     } catch (error) {
-      console.warn(
-        `[Knowledge] Render failed (${error instanceof Error ? error.name : "unknown"}).`
-      );
-      res.status(500).json({ error: "No fue posible generar la vista previa." });
+      respondDeliveryFailure(req, res, classifyDeliveryFailure(error), {
+        fileId: row?.id,
+        storageKey: row?.storage_key,
+      });
     }
   });
 }

@@ -36,10 +36,12 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Proyección única del RAG (`server/knowledgeContext.test.ts`) | Aprobado · 5 de 5 pruebas |
 | Transporte base64 (`server/base64Transport.test.ts`) | Aprobado · 26 de 26 pruebas |
 | Vale de acceso al visor (`server/viewerAccess.test.ts`) | Aprobado · 8 de 8 pruebas |
+| Entrega y diagnóstico del visor (`server/knowledgeRoutes.test.ts`) | Aprobado · 10 de 10 pruebas · la entrega real sobre HTTP funciona con el binario presente y declara `410` con causa cuando falta del volumen |
+| Diagnóstico de volumen (`knowledge.storageHealth`, `database/diagnostico_visor_rag.sql`) | Aprobado · compara catálogo y volumen, informa ausentes y directorio resuelto |
 | Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.155 → 2.0.156` |
 | Identidad y versión (`server/releaseGovernance.test.ts`) | Aprobado · la etiqueta visible bajo el usuario, el README, la caja negra y `package.json` declaran la misma versión; ninguna superficie administrativa escribe el literal a mano |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 23 de 23 pruebas   |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 346 de 346 pruebas |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 356 de 356 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |
 | Migración conversacional (`0022_conversational_agent.sql`) | Aprobado · idempotente, sin secretos ni datos personales |

@@ -238,6 +238,94 @@ export function knowledgeFileStats(storageKey: string) {
   return fs.promises.stat(resolveStoredPath(storageKey));
 }
 
+export type KnowledgeStorageHealth = {
+  /** Directorio resuelto en este proceso, útil para comparar ambientes. */
+  directory: string;
+  directoryExists: boolean;
+  writable: boolean;
+  registered: number;
+  present: number;
+  missing: number;
+  /** Muestra acotada de los documentos cuyo binario no está en el volumen. */
+  missingSample: Array<{
+    id: number;
+    originalName: string;
+    uploadedAt: string;
+  }>;
+};
+
+/**
+ * Comprueba si los documentos registrados en la base existen realmente en el
+ * volumen. El catálogo y los binarios viven en dos sistemas distintos: una base
+ * restaurada sin su volumen —o un volumen recreado en el despliegue— deja filas
+ * válidas apuntando a archivos ausentes. Sin este diagnóstico, el operador solo
+ * descubre el problema documento por documento al abrir el visor.
+ */
+export async function knowledgeStorageHealth(
+  pool: Pool | null
+): Promise<KnowledgeStorageHealth> {
+  const directory = knowledgeStorageDirectory();
+  let directoryExists = false;
+  let writable = false;
+  try {
+    directoryExists = (await fs.promises.stat(directory)).isDirectory();
+  } catch {
+    directoryExists = false;
+  }
+  if (directoryExists) {
+    try {
+      await fs.promises.access(directory, fs.constants.W_OK);
+      writable = true;
+    } catch {
+      writable = false;
+    }
+  }
+  const health: KnowledgeStorageHealth = {
+    directory,
+    directoryExists,
+    writable,
+    registered: 0,
+    present: 0,
+    missing: 0,
+    missingSample: [],
+  };
+  if (!pool) return health;
+  const rows = await pool.query(
+    `SELECT id,original_name,storage_key,uploaded_at
+       FROM knowledge_files
+      ORDER BY uploaded_at DESC
+      LIMIT 5000`
+  );
+  health.registered = rows.rows.length;
+  for (const row of rows.rows as Array<{
+    id: number;
+    original_name: string;
+    storage_key: string;
+    uploaded_at: Date | string;
+  }>) {
+    let exists = false;
+    try {
+      await fs.promises.access(knowledgeFilePath(String(row.storage_key)));
+      exists = true;
+    } catch {
+      exists = false;
+    }
+    if (exists) {
+      health.present += 1;
+      continue;
+    }
+    health.missing += 1;
+    if (health.missingSample.length < 10) {
+      health.missingSample.push({
+        id: Number(row.id),
+        originalName: String(row.original_name),
+        uploadedAt: new Date(row.uploaded_at).toISOString(),
+      });
+    }
+  }
+  return health;
+}
+
 export function knowledgeFileSha256(buffer: Buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }

@@ -80,6 +80,7 @@ import {
   KNOWLEDGE_ANALYSIS_WORD_LIMIT,
   KNOWLEDGE_SUMMARY_WORD_LIMIT,
   knowledgeFileKind,
+  knowledgeStorageHealth,
   limitWords,
   removeKnowledgeFile,
   saveKnowledgeSettings,
@@ -3662,6 +3663,14 @@ export const appRouter = router({
   knowledge: router({
     settings: adminProcedure.query(async () => {
       return getKnowledgeSettings(await getPool());
+    }),
+    /**
+     * Diagnóstico del volumen de conocimiento. Compara el catálogo de la base
+     * con los binarios presentes en disco: un documento registrado cuyo archivo
+     * no está en el volumen explica que el visor no pueda abrirlo.
+     */
+    storageHealth: adminProcedure.query(async () => {
+      return knowledgeStorageHealth(await getPool());
     }),
     /**
      * Acuña el vale del visor. El navegador solicita el archivo y el HTML de

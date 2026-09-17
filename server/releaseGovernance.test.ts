@@ -770,6 +770,7 @@ describe("black-box release contract", () => {
       "utf8"
     );
     const inbox = fs.readFileSync(path.resolve("server/inbox.ts"), "utf8");
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
 
     // Un solo contrato de transporte para las cuatro fronteras.
     expect(transport).toContain("export function decodeTransport");
@@ -801,6 +802,21 @@ describe("black-box release contract", () => {
     expect(knowledge).toContain("export function detectCsvDelimiter");
     expect(page).toContain("knowledge.viewerToken");
     expect(page).toContain("isRenderable");
+
+    // Un fallo de entrega debe declarar su causa: sin clasificación, un archivo
+    // ausente del volumen es indistinguible de un error de permisos y el visor
+    // muestra un objeto crudo imposible de diagnosticar.
+    expect(routes).toContain("classifyDeliveryFailure");
+    expect(routes).toContain("volumen-sin-archivo");
+    expect(routes).toContain("permiso-denegado");
+    expect(routes).toContain("prefersHtml");
+    expect(routes).toContain("No fue posible abrir el documento");
+    // El diagnóstico compara el catálogo con el volumen y es de administración.
+    expect(knowledge).toContain("export async function knowledgeStorageHealth");
+    expect(knowledge).toContain("missingSample");
+    expect(routers).toContain("storageHealth: adminProcedure.query");
+    expect(page).toContain("knowledge.storageHealth");
+    expect(page).toContain("KNOWLEDGE_STORAGE_DIR");
   });
 
   it("operates multiple forms and announcements per position with spreadsheet import", () => {

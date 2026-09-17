@@ -35,6 +35,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  TriangleAlert,
   Upload,
   X,
 } from "lucide-react";
@@ -166,6 +167,11 @@ export default function MstEir() {
     { enabled: Boolean(selectedProjectId) }
   );
   const methodology = trpc.mstEir.documents.useQuery();
+  // Diagnóstico del volumen: distingue un fallo de la aplicación de un volumen
+  // no persistente, que es la causa habitual de que el visor no abra un archivo.
+  const storageHealth = trpc.knowledge.storageHealth.useQuery(undefined, {
+    refetchOnWindowFocus: true,
+  });
 
   const saveProject = trpc.knowledge.saveProject.useMutation({
     onSuccess: result => {
@@ -750,6 +756,62 @@ export default function MstEir() {
           </div>
         </CardHeader>
         <CardContent className="p-4 sm:p-5">
+          {storageHealth.data && storageHealth.data.missing > 0 ? (
+            <div className="mb-4 flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/40 dark:bg-amber-500/10">
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-300" />
+              <div className="min-w-0 space-y-1">
+                <p className="text-sm font-semibold text-primary">
+                  {storageHealth.data.missing} de {storageHealth.data.registered}{" "}
+                  documentos no están en el volumen de almacenamiento
+                </p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  El registro existe en la base de datos, pero el archivo binario
+                  no se encuentra en{" "}
+                  <span className="font-mono">
+                    {storageHealth.data.directory}
+                  </span>
+                  , de modo que el visor no puede abrirlos. Verifique que
+                  KNOWLEDGE_STORAGE_DIR apunte a un volumen persistente en
+                  EasyPanel y vuelva a cargar los documentos afectados.
+                </p>
+                {storageHealth.data.missingSample.length ? (
+                  <p className="pt-1 text-xs text-muted-foreground">
+                    Afectados, entre otros:{" "}
+                    {storageHealth.data.missingSample
+                      .slice(0, 3)
+                      .map(file => file.originalName)
+                      .join("; ")}
+                    .
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          {storageHealth.data && !storageHealth.data.directoryExists ? (
+            <div className="mb-4 flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/40 dark:bg-amber-500/10">
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-300" />
+              <p className="text-xs leading-5 text-muted-foreground">
+                El directorio de almacenamiento{" "}
+                <span className="font-mono">
+                  {storageHealth.data.directory}
+                </span>{" "}
+                no existe todavía en este proceso. Se creará al cargar el primer
+                documento; si esperaba encontrar archivos previos, el volumen
+                persistente no está montado.
+              </p>
+            </div>
+          ) : null}
+          {storageHealth.data &&
+          storageHealth.data.directoryExists &&
+          !storageHealth.data.writable ? (
+            <div className="mb-4 flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/40 dark:bg-amber-500/10">
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-300" />
+              <p className="text-xs leading-5 text-muted-foreground">
+                El volumen de almacenamiento existe pero el servicio no puede
+                escribir en él; las cargas nuevas fallarán.
+              </p>
+            </div>
+          ) : null}
           <div className="grid gap-4 lg:grid-cols-[220px_280px_minmax(0,1fr)]">
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
