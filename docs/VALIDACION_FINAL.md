@@ -40,6 +40,8 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Diagnóstico de volumen (`knowledge.storageHealth`, `database/diagnostico_visor_rag.sql`) | Aprobado · compara catálogo y volumen, informa ausentes y directorio resuelto |
 | RAG Personal del candidato (`server/candidateKnowledge.test.ts`) | Aprobado · 14 de 14 pruebas · namespace aislado, política compartida, huella sin duplicados y árbol de documentos |
 | Migración del RAG del candidato (`0026_candidate_knowledge.sql`) | Aprobado · expansiva e idempotente · no altera `knowledge_files` ni `knowledge_projects` |
+| Migración `0026` en PostgreSQL 17 real | Aprobado · aplicada sobre esquema existente con y sin `candidate_knowledge_notes`; dos ejecuciones consecutivas sin error; los seis bloques de verificación en `OK` o `no aplica` |
+| Restricciones del expediente en PostgreSQL 17 real | Aprobado · carpeta duplicada, procedencia inválida, huella no hexadecimal, referencia de almacenamiento duplicada y carpeta inexistente se rechazan; borrar la postulación elimina el expediente en cascada y el RAG de proyectos permanece intacto |
 | Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.156 → 2.0.156` |
 | Identidad y versión (`server/releaseGovernance.test.ts`) | Aprobado · la etiqueta visible bajo el usuario, el README, la caja negra y `package.json` declaran la misma versión; ninguna superficie administrativa escribe el literal a mano |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 24 de 24 pruebas   |

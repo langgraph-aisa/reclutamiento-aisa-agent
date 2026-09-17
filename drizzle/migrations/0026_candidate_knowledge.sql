@@ -79,12 +79,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS candidate_knowledge_files_storage_uq
 --    (`candidate_knowledge_notes`, migración 0022) y el documento del que
 --    procede, cuando la aclaración se originó en un documento del candidato.
 --    Se agrega una columna anulable: los registros vigentes conservan su valor.
-ALTER TABLE candidate_knowledge_notes
-  ADD COLUMN IF NOT EXISTS candidate_knowledge_file_id integer
-    REFERENCES candidate_knowledge_files(id) ON DELETE SET NULL;
+--
+--    La migración 0022 es opcional: el proyecto declara que sin ella la
+--    revisión humana sigue operativa y el panel conversacional explica la
+--    acción requerida. Por eso el vínculo se agrega únicamente cuando esa tabla
+--    existe; de lo contrario la migración fallaría a mitad de camino y dejaría
+--    las tablas creadas sin poder registrarse como aplicada.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public'
+       AND table_name = 'candidate_knowledge_notes'
+  ) THEN
+    ALTER TABLE candidate_knowledge_notes
+      ADD COLUMN IF NOT EXISTS candidate_knowledge_file_id integer
+        REFERENCES candidate_knowledge_files(id) ON DELETE SET NULL;
 
-CREATE INDEX IF NOT EXISTS candidate_knowledge_notes_file_idx
-  ON candidate_knowledge_notes (candidate_knowledge_file_id);
+    CREATE INDEX IF NOT EXISTS candidate_knowledge_notes_file_idx
+      ON candidate_knowledge_notes (candidate_knowledge_file_id);
+  END IF;
+END
+$$;
 
 -- 4) Los roles del servicio conversacional leen el RAG del candidato para
 --    componer el contexto de razonamiento. Si los roles no existen (despliegue
@@ -125,11 +141,15 @@ SELECT 4, 'Indices del RAG del candidato', '3',
                              'candidate_knowledge_files_analysis_idx',
                              'candidate_knowledge_files_storage_uq'))
 UNION ALL
-SELECT 5, 'Vinculo con aclaraciones confirmadas', '1',
-       (SELECT count(*)::text FROM information_schema.columns
-         WHERE table_schema = 'public'
-           AND table_name = 'candidate_knowledge_notes'
-           AND column_name = 'candidate_knowledge_file_id')
+SELECT 5, 'Vinculo con aclaraciones confirmadas',
+       CASE WHEN to_regclass('public.candidate_knowledge_notes') IS NULL
+            THEN 'no aplica' ELSE '1' END,
+       CASE WHEN to_regclass('public.candidate_knowledge_notes') IS NULL
+            THEN 'no aplica'
+            ELSE (SELECT count(*)::text FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                     AND table_name = 'candidate_knowledge_notes'
+                     AND column_name = 'candidate_knowledge_file_id') END
 UNION ALL
 SELECT 6, 'Integridad del RAG de proyectos (sin cambios)', '1',
        (SELECT count(*)::text FROM information_schema.tables

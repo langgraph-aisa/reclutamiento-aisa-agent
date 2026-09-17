@@ -1152,6 +1152,107 @@ export const knowledgeFiles = pgTable(
   })
 );
 
+/**
+ * RAG personal del candidato.
+ *
+ * Declara en el esquema las entidades de la migración `0026`, del mismo modo
+ * que `knowledgeFolders` y `knowledgeFiles` declaran las del RAG de proyectos.
+ * Sin esta declaración, una sincronización de esquema vería las tablas como
+ * sobrantes y podría eliminarlas.
+ *
+ * La diferencia con el RAG de proyectos es el alcance: aquí la unidad es la
+ * postulación (`application_id`), porque el expediente pertenece al proceso de
+ * evaluación de esa persona y no al conocimiento institucional de la plaza.
+ */
+export const candidateKnowledgeFolders = pgTable(
+  "candidate_knowledge_folders",
+  {
+    id: serial("id").primaryKey(),
+    applicationId: integer("application_id")
+      .references(() => applications.id, { onDelete: "cascade" })
+      .notNull(),
+    parentId: integer("parent_id"),
+    name: varchar("name", { length: 160 }).notNull(),
+    createdByUserId: integer("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    pathUq: uniqueIndex("candidate_knowledge_folders_name_uq").on(
+      table.applicationId,
+      sql`COALESCE(${table.parentId},0)`,
+      sql`lower(${table.name})`
+    ),
+    applicationIdx: index("candidate_knowledge_folders_application_idx").on(
+      table.applicationId,
+      table.parentId,
+      table.name
+    ),
+  })
+);
+
+export const candidateKnowledgeFiles = pgTable(
+  "candidate_knowledge_files",
+  {
+    id: serial("id").primaryKey(),
+    applicationId: integer("application_id")
+      .references(() => applications.id, { onDelete: "cascade" })
+      .notNull(),
+    folderId: integer("folder_id").references(() => candidateKnowledgeFolders.id, {
+      onDelete: "set null",
+    }),
+    originalName: varchar("original_name", { length: 260 }).notNull(),
+    storageKey: text("storage_key").notNull(),
+    mimeType: varchar("mime_type", { length: 160 }).notNull(),
+    extension: varchar("extension", { length: 16 }).notNull(),
+    sizeBytes: integer("size_bytes").default(0).notNull(),
+    /** `manual`, `webhook` o `postulacion`. */
+    source: varchar("source", { length: 24 }).default("manual").notNull(),
+    summary66: varchar("summary_66", { length: 1400 }).default("").notNull(),
+    deepAnalysis: varchar("deep_analysis", { length: 6000 })
+      .default("")
+      .notNull(),
+    analysisStatus: varchar("analysis_status", { length: 32 })
+      .default("pendiente")
+      .notNull(),
+    analyzedModel: varchar("analyzed_model", { length: 80 }),
+    sha256: varchar("sha256", { length: 64 }),
+    uploadedByUserId: integer("uploaded_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    applicationIdx: index("candidate_knowledge_files_application_idx").on(
+      table.applicationId,
+      table.folderId,
+      table.uploadedAt.desc()
+    ),
+    analysisIdx: index("candidate_knowledge_files_analysis_idx").on(
+      table.applicationId,
+      table.analysisStatus
+    ),
+    storageUq: uniqueIndex("candidate_knowledge_files_storage_uq").on(
+      table.storageKey
+    ),
+  })
+);
+
+export type CandidateKnowledgeFolder =
+  typeof candidateKnowledgeFolders.$inferSelect;
+export type CandidateKnowledgeFile = typeof candidateKnowledgeFiles.$inferSelect;
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type LoginCodeChallenge = typeof loginCodeChallenges.$inferSelect;

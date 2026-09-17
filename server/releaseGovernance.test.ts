@@ -1012,6 +1012,23 @@ describe("black-box release contract", () => {
     expect(migration).not.toMatch(/DROP\s+TABLE/i);
     expect(migration).not.toMatch(/ALTER\s+TABLE\s+knowledge_files/i);
     expect(migration).not.toMatch(/ALTER\s+TABLE\s+knowledge_projects/i);
+    // La migración 0022 es opcional: el vínculo con las aclaraciones debe
+    // agregarse solo cuando esa tabla existe, o la migración fallaría a mitad.
+    expect(migration).toContain("table_name = 'candidate_knowledge_notes'");
+    expect(migration).not.toMatch(
+      /^ALTER TABLE candidate_knowledge_notes/m
+    );
+
+    // El esquema declara las tablas nuevas: sin esa declaración una
+    // sincronización las vería como sobrantes y podría eliminarlas.
+    const schema = fs.readFileSync(path.resolve("drizzle/schema.ts"), "utf8");
+    expect(schema).toContain('pgTable(\n  "candidate_knowledge_folders"');
+    expect(schema).toContain('pgTable(\n  "candidate_knowledge_files"');
+    expect(schema).toContain("candidateKnowledgeFolders");
+    expect(schema).toContain("candidateKnowledgeFiles");
+    expect(schema).toContain("candidate_knowledge_files_storage_uq");
+    // El patrón de auto-referencia replica el de las carpetas de proyecto.
+    expect(schema).toContain("candidate_knowledge_folders_name_uq");
 
     // Mismos límites institucionales y misma política que el RAG de proyectos.
     expect(module).toContain("KNOWLEDGE_SUMMARY_WORD_LIMIT");    expect(module).toContain("KNOWLEDGE_ANALYSIS_WORD_LIMIT");
