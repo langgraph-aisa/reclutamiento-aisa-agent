@@ -3,7 +3,7 @@
 -- ============================================================================
 -- Archivo GENERADO. No editar a mano: se compone con
 --   pnpm deploy:sql
--- a partir de las migraciones 0022 a 0030 más la consulta única de
+-- a partir de las migraciones 0022 a 0037 más la consulta única de
 -- verificación. Repetir su ejecución es seguro: todas las sentencias son
 -- idempotentes y ninguna contiene credenciales.
 --
@@ -14,6 +14,7 @@
 --   · los esquemas y roles de privilegio mínimo por capacidad;
 --   · el expediente documental del candidato y la esencia de su CV;
 --   · el ciclo de pruebas psicométricas, su traza por ítem y su cierre evaluado;
+--   · la recepción durable de adjuntos y la cola de procesamiento documental;
 --   · la activación **preactivada** en el panel de configuración.
 --
 -- Cómo usarlo: pegue el contenido completo en el ejecutor SQL (dbgate o
@@ -1585,6 +1586,39 @@ WITH controles AS (
   SELECT 27, 'Migracion 0035 - retencion declarada de la traza', '1',
          (SELECT count(*)::text FROM pg_proc
            WHERE proname = 'trim_conversation_transport_traces')
+  UNION ALL
+  SELECT 28, 'Migracion 0036 - recepcion durable del webhook', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'apichat_inbound_receipts')
+  UNION ALL
+  SELECT 29, 'Migracion 0036 - cursor del historial paginado', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'apichat_history_cursors')
+  UNION ALL
+  SELECT 30, 'Migracion 0036 - indice de trabajo de la recepcion', '1',
+         (SELECT count(*)::text FROM pg_indexes
+           WHERE schemaname = 'public'
+             AND indexname = 'apichat_receipts_work_idx')
+  UNION ALL
+  SELECT 31, 'Migracion 0037 - cola de procesamiento documental', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'candidate_document_jobs')
+  UNION ALL
+  SELECT 32, 'Migracion 0037 - columnas de procesamiento documental', '5',
+         (SELECT count(*)::text FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = 'candidate_knowledge_files'
+             AND column_name IN ('extracted_text','extraction_method',
+                                 'extraction_truncated','processing_error_code',
+                                 'document_class'))
+  UNION ALL
+  SELECT 33, 'Migracion 0037 - indice de trabajo documental', '1',
+         (SELECT count(*)::text FROM pg_indexes
+           WHERE schemaname = 'public'
+             AND indexname = 'candidate_document_jobs_available_idx')
 )
 SELECT orden, control, esperado, obtenido,
        CASE WHEN orden = 9 THEN 'INFORMATIVO'

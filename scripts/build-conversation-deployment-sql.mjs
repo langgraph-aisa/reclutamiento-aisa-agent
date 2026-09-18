@@ -18,9 +18,11 @@ import { fileURLToPath } from "node:url";
  *  10. drizzle/migrations/0031_evaluation_automation.sql
  *  11. drizzle/migrations/0032_codec_registry.sql
  *  12. drizzle/migrations/0033_security_roles.sql
- *  12. drizzle/migrations/0034_recruiter_agent.sql
- *  13. drizzle/migrations/0035_transport_traces.sql
- *  14. database/verificacion_servicio_conversacional.sql
+ *  13. drizzle/migrations/0034_recruiter_agent.sql
+ *  14. drizzle/migrations/0035_transport_traces.sql
+ *  15. drizzle/migrations/0036_apichat_inbound_receipts.sql
+ *  16. drizzle/migrations/0037_candidate_processing.sql
+ *  17. database/verificacion_servicio_conversacional.sql
  *
  * Salida:
  *   database/005_servicio_conversacional_listo.sql
@@ -72,7 +74,7 @@ const header = `-- =============================================================
 -- ============================================================================
 -- Archivo GENERADO. No editar a mano: se compone con
 --   pnpm deploy:sql
--- a partir de las migraciones 0022 a 0030 más la consulta única de
+-- a partir de las migraciones 0022 a 0037 más la consulta única de
 -- verificación. Repetir su ejecución es seguro: todas las sentencias son
 -- idempotentes y ninguna contiene credenciales.
 --
@@ -83,6 +85,7 @@ const header = `-- =============================================================
 --   · los esquemas y roles de privilegio mínimo por capacidad;
 --   · el expediente documental del candidato y la esencia de su CV;
 --   · el ciclo de pruebas psicométricas, su traza por ítem y su cierre evaluado;
+--   · la recepción durable de adjuntos y la cola de procesamiento documental;
 --   · la activación **preactivada** en el panel de configuración.
 --
 -- Cómo usarlo: pegue el contenido completo en el ejecutor SQL (dbgate o
