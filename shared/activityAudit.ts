@@ -14,6 +14,7 @@ export const ADMIN_PAGE_LABELS: Record<string, string> = {
   "/admin/reports": "Informes",
   "/admin/mst-eir": "Administrador de Proyectos",
   "/admin/agent-evaluator": "Agente de IA LangGraph",
+  "/admin/apichat-audit": "Auditoría de ApiChat",
   "/admin/activity": "Actividad y control ISO",
   "/admin/config": "Configuración",
   "/admin/users": "Usuarios",

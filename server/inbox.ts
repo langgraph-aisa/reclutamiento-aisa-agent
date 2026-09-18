@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createViewerToken } from "./viewerAccess";
+import { recordApiChatSendFailure } from "./apiChatAudit";
 import type { Pool } from "pg";
 import {
   ApiChatDeliveryUnknownError,
@@ -790,7 +791,7 @@ export function sendInboxLocation(
   );
 }
 
-export function sendInboxFile(
+export async function sendInboxFile(
   pool: Pool,
   input: {
     conversationId: number;
@@ -816,20 +817,37 @@ export function sendInboxFile(
         { maxBytes: 20_000_000 }
       );
     } catch (error) {
-      throw new Error(
+      const reason =
         error instanceof Error
           ? error.message
-          : "El adjunto no es una codificación base64 válida."
-      );
+          : "El adjunto no es una codificación base64 válida.";
+      // El fallo ocurre **antes** de que exista una fila de mensaje: sin este
+      // asiento no quedaría rastro de por qué el archivo no llegó.
+      await recordApiChatSendFailure(pool, {
+        stage: "decodificacion",
+        reason,
+        conversationId: input.conversationId,
+        fileName: input.fileName ?? null,
+        messageType: "file",
+      });
+      throw new Error(reason);
     }
     const key = buildInboxFileKey("out", input.conversationId);
     const resolved = async () => {
       await writeInboxFile(key, decoded.buffer);
       const base = (input.publicBaseUrl ?? "").replace(/\/$/, "");
-      if (!base)
-        throw new Error(
-          "No fue posible resolver la dirección pública del servicio."
-        );
+      if (!base) {
+        const reason =
+          "No fue posible resolver la dirección pública del servicio.";
+        await recordApiChatSendFailure(pool, {
+          stage: "direccion-publica",
+          reason,
+          conversationId: input.conversationId,
+          fileName: input.fileName ?? null,
+          messageType: "file",
+        });
+        throw new Error(reason);
+      }
       return `${base}/api/inbox/files/${key}?t=${createViewerToken("inbox", key)}`;
     };
     const wrapped = async (): Promise<{

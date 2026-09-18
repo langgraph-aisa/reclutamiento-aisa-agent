@@ -1,12 +1,24 @@
-# Gobierno de release JARVI RH 2.0.176
+# Gobierno de release JARVI RH 2.0.177
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.176**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.177**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.177
+
+El release **entrega la auditoría del canal de ApiChat**, situada en el menú inmediatamente después del Agente de IA LangGraph. Es un instrumento de diagnóstico, no una reparación: el conducto de archivos falla en silencio por diseño del proveedor —un adjunto sin contenido utilizable devuelve éxito y un envío aceptado no es un envío entregado—, de modo que sin un asiento no hay nada que explicar cuando el archivo no llega.
+
+**Consolida lo que ya existía y cierra el hueco que no dejaba rastro.** El informe reúne las pérdidas asentadas por el receptor y los fallos de entrega de la cola, y agrega el único error que hoy no se asentaba en ninguna parte: el que ocurre **antes** de que exista una fila de mensaje —dirección pública ausente, contenido ilegible, salario automatizado—. A partir de esta entrega, ese fallo se asienta en la bitácora con su etapa y su motivo.
+
+**La clasificación distingue cuatro estados y no tres.** Verificado, con pérdidas, con fallos de envío y **sin evidencia**. La cuarta no es un adorno: la falta de pérdidas sin recepciones no es salud, es una incógnita, y el panel la nombra como tal. La precedencia es deliberada: una pérdida de recepción pesa más que un fallo de envío, porque la primera es información que existió y no llegó y la segunda es información que todavía puede reintentarse.
+
+**Solo lectura.** El informe no cambia estados, no reintenta envíos y no altera ninguna evaluación. Cada consulta degrada a una incógnita si la tabla no existe, en lugar de fallar. El registro del fallo de salida no conserva el nombre del archivo del candidato: basta su tipo y el hecho de que existía para diagnosticar sin exponer contenido.
+
+**Sin cambio de esquema.** No hay migración: la auditoría reutiliza la bitácora y los mensajes de conversación. El artefacto único de despliegue permanece en las migraciones `0022` a `0034` con sus veinticinco controles autocertificados.
 
 ### Alcance candidato 2.0.176
 
-El release **entrega los paneles plegables de la ficha de evaluación**, que quedaron declarados como límite en 2.0.176. Los cinco bloques de lectura —Resumen de perfil, Motivo de evaluación, Bitácora, Análisis de CV de Agente IA y Formulario y anuncio · respuestas— se pliegan con un botón, de modo que **la matriz de evaluación queda a la vista** y el detalle se despliega solo cuando el operador lo necesita. La matriz no cambia: conserva su disposición y su contenido.
+El release **entrega los paneles plegables de la ficha de evaluación**, que quedaron declarados como límite en el release inmediatamente anterior. Los cinco bloques de lectura —Resumen de perfil, Motivo de evaluación, Bitácora, Análisis de CV de Agente IA y Formulario y anuncio · respuestas— se pliegan con un botón, de modo que **la matriz de evaluación queda a la vista** y el detalle se despliega solo cuando el operador lo necesita. La matriz no cambia: conserva su disposición y su contenido.
 
 **El estado de plegado es una preferencia de lectura, no una decisión del sistema**, y por eso vive en el almacenamiento del navegador **por sección y por operador**: no viaja al servidor, no se audita y no altera ninguna evaluación. Si el almacenamiento no está disponible —modo privado, política restrictiva— el plegado funciona igual y la preferencia simplemente no se recuerda.
 
@@ -120,7 +132,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.176 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.177 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -152,7 +164,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.176.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.177.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

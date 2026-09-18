@@ -1,0 +1,223 @@
+import { Badge } from "@/components/ui/badge";
+import { trpc } from "@/lib/trpc";
+import { AlertTriangle, CheckCircle2, HelpCircle, Inbox, Send } from "lucide-react";
+
+/**
+ * Auditoría del canal de ApiChat.
+ *
+ * Consolida, en una sola lectura, lo que hoy está disperso: las pérdidas de
+ * recepción asentadas por el webhook, los fallos de entrega de la cola y las
+ * entregas detenidas. Es **solo lectura**: su función es que el fallo del
+ * conducto deje de ser invisible, no corregirlo desde aquí.
+ *
+ * La clasificación distingue tres cosas que no son la misma: lo **verificado**,
+ * lo que tiene **pérdidas** y lo que **no tiene evidencia** —porque la falta de
+ * pérdidas sin recepciones no es salud, es una incógnita—.
+ */
+const STATE_LABELS: Record<string, string> = {
+  verificado: "Conducto verificado",
+  con_perdidas: "Con pérdidas",
+  con_fallos_de_envio: "Con fallos de envío",
+  sin_evidencia: "Sin evidencia",
+};
+
+const STATE_CLASSES: Record<string, string> = {
+  verificado: "border-emerald-300 bg-emerald-100 text-emerald-900",
+  con_perdidas: "border-rose-300 bg-rose-100 text-rose-900",
+  con_fallos_de_envio: "border-amber-300 bg-amber-100 text-amber-950",
+  sin_evidencia: "border-slate-300 bg-slate-100 text-slate-700",
+};
+
+const STATE_ICONS: Record<string, typeof CheckCircle2> = {
+  verificado: CheckCircle2,
+  con_perdidas: AlertTriangle,
+  con_fallos_de_envio: AlertTriangle,
+  sin_evidencia: HelpCircle,
+};
+
+function formatMoment(value: string | Date | null | undefined) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("es-GT", {
+    timeZone: "America/Guatemala",
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+export default function ApiChatAudit() {
+  const report = trpc.apiChatAudit.report.useQuery(undefined, {
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const summary = report.data?.summary;
+  const StateIcon = STATE_ICONS[summary?.state ?? "sin_evidencia"] ?? HelpCircle;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-xs uppercase tracking-[.14em] text-muted-foreground">
+          Comunicación operativa
+        </p>
+        <h1 className="mt-1 text-2xl font-bold text-primary">
+          Auditoría de ApiChat
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Errores del mecanismo de comunicación: pérdidas de recepción, fallos
+          de entrega y entregas detenidas. Solo lectura.
+        </p>
+      </div>
+
+      {report.isLoading ? (
+        <p className="text-sm text-muted-foreground">Leyendo el canal…</p>
+      ) : null}
+
+      {summary ? (
+        <>
+          <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <StateIcon className="h-4 w-4 text-primary" aria-hidden="true" />
+              <Badge
+                variant="outline"
+                className={`rounded-full text-[10px] ${STATE_CLASSES[summary.state] ?? ""}`}
+              >
+                {STATE_LABELS[summary.state] ?? summary.state}
+              </Badge>
+              <span className="text-[11px] text-muted-foreground">
+                ventana de {report.data?.windowHours} horas
+              </span>
+            </div>
+            <p className="mt-2 text-sm leading-6">{summary.verdict}</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Recibidos
+                </p>
+                <p className="mt-1 inline-flex items-center gap-1.5 text-lg font-semibold">
+                  <Inbox className="h-4 w-4" aria-hidden="true" />
+                  {summary.inboundReceived}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Pérdidas de recepción
+                </p>
+                <p className="mt-1 text-lg font-semibold">
+                  {summary.inboundLosses}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Fallos de envío
+                </p>
+                <p className="mt-1 inline-flex items-center gap-1.5 text-lg font-semibold">
+                  <Send className="h-4 w-4" aria-hidden="true" />
+                  {summary.outboundFailures}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Entregas detenidas
+                </p>
+                <p className="mt-1 text-lg font-semibold">
+                  {summary.stuckDeliveries}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-primary">
+              Pérdidas de recepción por causa
+            </h2>
+            {(report.data?.losses ?? []).length ? (
+              <ul className="mt-2 space-y-1 text-xs">
+                {(report.data?.losses ?? []).map(loss => (
+                  <li key={loss.cause} className="flex flex-wrap gap-2">
+                    <span className="font-mono">{loss.cause}</span>
+                    <span className="text-muted-foreground">
+                      {loss.total} · última {formatMoment(loss.lastAt)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Sin pérdidas asentadas en la ventana.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-primary">
+              Fallos de entrega
+            </h2>
+            {(report.data?.failures ?? []).length ? (
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <tr>
+                      <th className="py-1 pr-3">Fecha</th>
+                      <th className="py-1 pr-3">Tipo</th>
+                      <th className="py-1 pr-3">Archivo</th>
+                      <th className="py-1 pr-3">Intentos</th>
+                      <th className="py-1">Detalle del proveedor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(report.data?.failures ?? []).map(failure => (
+                      <tr key={failure.id} className="border-t border-border/60">
+                        <td className="py-1 pr-3">{formatMoment(failure.at)}</td>
+                        <td className="py-1 pr-3">{failure.messageType}</td>
+                        <td className="py-1 pr-3">{failure.fileName ?? "—"}</td>
+                        <td className="py-1 pr-3">{failure.attempts}</td>
+                        <td className="py-1">
+                          {failure.lastError ?? "sin detalle del proveedor"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Ningún envío quedó sin confirmar en la ventana.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-primary">
+              LOG DE ERRORES DEL MECANISMO DE COMUNICACIÓN
+            </h2>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Últimos {report.data?.log.length ?? 0} asientos derivados del
+              conducto, del más reciente al más antiguo.
+            </p>
+            {(report.data?.log ?? []).length ? (
+              <ul className="mt-2 space-y-1.5">
+                {(report.data?.log ?? []).map((entry, index) => (
+                  <li
+                    key={`${entry.kind}-${index}`}
+                    className="rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1.5 text-xs"
+                  >
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      {formatMoment(entry.at)} · {entry.kind}
+                      {entry.reference ? ` · ${entry.reference}` : ""}
+                    </span>
+                    <p className="mt-0.5 leading-5">{entry.detail}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Sin errores asentados en la ventana. Si el conducto no ha
+                recibido ningún archivo, esto es una incógnita y no una
+                verificación.
+              </p>
+            )}
+          </section>
+        </>
+      ) : null}
+    </div>
+  );
+}

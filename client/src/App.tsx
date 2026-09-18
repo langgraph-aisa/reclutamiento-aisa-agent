@@ -24,6 +24,7 @@ import Profiles from "./pages/Profiles";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
 import SecurityRoles from "./pages/SecurityRoles";
+import ApiChatAudit from "./pages/ApiChatAudit";
 
 const HumanReview = lazy(() => import("./pages/HumanReview"));
 const PrivacyTerms = lazy(() => import("./pages/PrivacyTerms"));
@@ -88,6 +89,11 @@ function Router() {
       <Route path="/admin/security-roles">
         <AdminShell>
           <SecurityRoles />
+        </AdminShell>
+      </Route>
+      <Route path="/admin/apichat-audit">
+        <AdminShell>
+          <ApiChatAudit />
         </AdminShell>
       </Route>
       <Route path="/admin/candidates">

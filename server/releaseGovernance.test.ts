@@ -90,8 +90,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.176");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.176");
+    expect(APP_VERSION).toBe("2.0.177");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.177");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -537,9 +537,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(129);
+    expect(audit.files).toHaveLength(131);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(129);
+    expect(publicCopyAudit.files).toHaveLength(131);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -1212,7 +1212,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.176");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.177");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1226,7 +1226,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.176");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.177");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1601,7 +1601,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.176");
+    expect(governance).toContain("Alcance candidato 2.0.177");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -1758,5 +1758,68 @@ describe("black-box release contract", () => {
     expect(blackBox).toContain("005_servicio_conversacional_listo.sql");
     expect(guide).toContain("005_servicio_conversacional_listo.sql");
     expect(manifest).toContain("005_servicio_conversacional_listo.sql");
+  });
+
+  it("audita el canal de ApiChat sin escribir y sin exponer el archivo del candidato", () => {
+    const audit = fs.readFileSync(
+      path.resolve("server/apiChatAudit.ts"),
+      "utf8"
+    );
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+    const inbox = fs.readFileSync(path.resolve("server/inbox.ts"), "utf8");
+    const layout = fs.readFileSync(
+      path.resolve("client/src/components/DashboardLayout.tsx"),
+      "utf8"
+    );
+    const page = fs.readFileSync(
+      path.resolve("client/src/pages/ApiChatAudit.tsx"),
+      "utf8"
+    );
+    const governance = fs.readFileSync(
+      path.resolve("docs/RELEASE_GOVERNANCE.md"),
+      "utf8"
+    );
+    const blackBox = fs.readFileSync(
+      path.resolve(`docs/PRUEBAS_CAJA_NEGRA_${APP_VERSION}.md`),
+      "utf8"
+    );
+
+    // El informe es de solo lectura: la única escritura del módulo es el asiento
+    // del fallo de salida, y su identificador de entidad es un entero literal.
+    const report = audit.slice(audit.indexOf("export async function apiChatChannelReport"));
+    expect(report).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/);
+    expect(audit).toContain("VALUES (NULL,$1,0,'apichat_send_failure'");
+    // El nombre del archivo no se conserva: se diagnostica sin exponer contenido.
+    expect(audit).toContain("hasFileName: Boolean(input.fileName)");
+    expect(audit).not.toContain("fileName: input.fileName");
+
+    // La clasificación declara cuatro estados y nombra la incógnita.
+    for (const state of [
+      '"verificado"',
+      '"con_perdidas"',
+      '"con_fallos_de_envio"',
+      '"sin_evidencia"',
+    ]) {
+      expect(audit).toContain(state);
+    }
+
+    // La superficie llega al operador por consulta autenticada y por el menú,
+    // inmediatamente después del Agente de IA LangGraph.
+    expect(routers).toContain("apiChatAudit: router({");
+    expect(routers).toContain("apiChatChannelReport(await requirePool())");
+    expect(layout.indexOf('label: "Auditoría de ApiChat"')).toBeGreaterThan(
+      layout.indexOf('label: "Agente de IA LangGraph"')
+    );
+    expect(page).toContain("trpc.apiChatAudit.report.useQuery");
+    expect(page).toContain("LOG DE ERRORES DEL MECANISMO DE COMUNICACIÓN");
+    // El fallo de salida que ocurría antes de existir la fila del mensaje deja
+    // de ser invisible: queda asentado con su etapa.
+    expect(inbox).toContain("recordApiChatSendFailure");
+    expect(inbox).toContain('stage: "decodificacion"');
+    expect(inbox).toContain('stage: "direccion-publica"');
+
+    expect(governance).toContain("Alcance candidato 2.0.177");
+    expect(blackBox).toContain("BN-AUDIT-01");
+    expect(blackBox).toContain("BN-AUDIT-09");
   });
 });

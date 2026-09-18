@@ -32,6 +32,7 @@ import {
   Bot,
   ChevronDown,
   ShieldCheck,
+  ShieldAlert,
   BrainCircuit,
   BriefcaseBusiness,
   ClipboardList,
@@ -96,6 +97,12 @@ const menuItems = [
     icon: Bot,
     label: "Agente de IA LangGraph",
     path: "/admin/agent-evaluator",
+    adminOnly: true,
+  },
+  {
+    icon: ShieldAlert,
+    label: "Auditoría de ApiChat",
+    path: "/admin/apichat-audit",
     adminOnly: true,
   },
   {

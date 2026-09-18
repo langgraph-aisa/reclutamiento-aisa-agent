@@ -27,6 +27,7 @@ const CONFIGURATION_NAMESPACES = new Set([
 const PAGE_BY_NAMESPACE: Record<string, string> = {
   activity: "/admin/activity",
   agent: "/admin/agent-evaluator",
+  apiChatAudit: "/admin/apichat-audit",
   assessments: "/admin/assessments",
   candidates: "/admin/human-review",
   config: "/admin/config",

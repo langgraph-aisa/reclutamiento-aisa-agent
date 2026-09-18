@@ -1,8 +1,10 @@
-# Validación final · JARVI RH 2.0.176
+# Validación final · JARVI RH 2.0.177
 
 Fecha de ejecución: 2026-09-17. Rama objetivo: `main`.
 
 ## Alcance verificado
+
+Esta hoja registra la **auditoría del canal de ApiChat**: el módulo que se lee en el menú inmediatamente después del Agente de IA LangGraph y clasifica el conducto en cuatro estados —verificado, con pérdidas, con fallos de envío y sin evidencia—. Consolida las pérdidas de recepción del webhook, los fallos de entrega de la cola y las entregas detenidas, y cierra el log de errores derivados del mecanismo de comunicación. El fallo que ocurría antes de que existiera una fila de mensaje —dirección pública ausente, contenido ilegible— deja de ser invisible. El informe es de solo lectura: no reintenta envíos, no cambia estados y no altera ninguna evaluación, y toda consulta degrada a una incógnita si la tabla no existe. Sin cambio de esquema: reutiliza la bitácora existente.
 
 Esta hoja registra el **transporte canónico en base64 y el visor universal**: el archivo se transporta codificado y se almacena «normal» con su extensión final verificada por contenido, tanto en la carga del RAG —selector o arrastre y suelte— como en la recepción remota por ApiChat y en el envío saliente de la bandeja; el visor reproduce sin novedad imagen, video, audio, PDF, Word, CSV, hoja de cálculo y texto, con vale de acceso firmado, renderizadores completos y cabeceras que impiden la descarga forzada. Se conserva bajo regresión la cadena de adjuntos de la bandeja (2.0.154), la alerta de no leídos (2.0.153), el control visual de citas (2.0.152), la recepción push por webhook (2.0.151), la sincronización manual con auditoría ISO (2.0.150), la corrección de la recepción con evidencia de producción (feed global, clasificación por reconciliación, respaldo en `conversation_events`), la auditoría de recepción de solo lectura (2.0.148), la eliminación de duplicados (clave canónica `apichat:sha256`), el despliegue en un solo archivo autocertificado (`database/005_servicio_conversacional_listo.sql`), la activación en el panel preactivada por la migración `0024`, el administrador de endpoints por capacidad, el despliegue separado, la memoria conversacional con doble RAG, la **solicitud automática de CV**, el módulo **Gobierno, Observabilidad y Monitoreo** y la línea base verificable de **ApiChat**. Cada endpoint del catálogo oficial declara la capacidad que atiende (`receive`, `send`, `moderation`), sus consumidores (`recepcion`, `bandeja`, `agente`, `moderacion`), si es indispensable para el agente y el efecto operativo literal de apagarlo; `computeApiChatCapabilityReadiness` publica la preparación por capacidad —Recepción, Razonamiento y Envío— con el endpoint exigido y el modo declarado, y `apiChatCapabilityAdvisories` emite avisos en tratamiento formal. El razonamiento declara que no consume endpoints del proveedor: apagar un endpoint de envío no lo detiene, pero impide entregar lo que encole. **No hay cambio de esquema** y los interruptores guardados conservan su valor.
 
@@ -14,7 +16,7 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.176` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.177` |
 | Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 123 archivos       |
 | Auditoría de recepción (`database/auditoria_recepcion_inbox.sql`) | Aprobado · 7 bloques de solo lectura, sin efectos sobre los datos |
 | Feed global con reconciliación (`server/inboxSync.test.ts`) | Aprobado · 10 de 10 pruebas |
@@ -82,7 +84,8 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Asiento de auditoría del interruptor (`server/assessmentAutomation.ts`, `server/assessmentAutomation.test.ts`) | Aprobado · el identificador es un literal entero y la clave viaja dentro del detalle; se revisaron las sesenta y una inserciones de auditoría del artefacto y ninguna otra superficie de configuración repite el defecto |
 | Identidad y versión (`server/releaseGovernance.test.ts`) | Aprobado · la etiqueta visible bajo el usuario, el README, la caja negra y `package.json` declaran la misma versión; ninguna superficie administrativa escribe el literal a mano |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 29 de 29 pruebas   |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 455 de 455 pruebas |
+| Auditoría del canal de ApiChat (`server/apiChatAudit.ts`, `server/apiChatAudit.test.ts`) | Aprobado · 14 de 14 pruebas · el informe es de solo lectura —ninguna de sus cuatro consultas escribe—, la precedencia de estados es explícita, el fallo de envío sin fila de mensaje se asienta con identificador entero y sin el nombre del archivo del candidato, y la ausencia de tablas degrada a una incógnita |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 469 de 469 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |
 | Migración conversacional (`0022_conversational_agent.sql`) | Aprobado · idempotente, sin secretos ni datos personales |

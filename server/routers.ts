@@ -73,6 +73,7 @@ import {
   requestEvaluationAutomationCode,
 } from "./automaticEvaluation";
 import { codecRegistry, saveCodecSettings } from "./codecRegistry";
+import { apiChatChannelReport } from "./apiChatAudit";
 import {
   RECRUITER_AGENT_MAX_QUESTION_CHARS,
   RECRUITER_AGENT_MODELS,
@@ -2930,6 +2931,19 @@ export const appRouter = router({
           });
         return outcome;
       }),
+  }),
+
+  /**
+   * Auditoría del canal de ApiChat.
+   *
+   * **Solo lectura**: informa el estado del conducto, las pérdidas de recepción
+   * y los fallos de entrega. No reintenta envíos, no cambia estados y no altera
+   * ninguna evaluación: su función es que el fallo deje de ser invisible.
+   */
+  apiChatAudit: router({
+    report: roleProcedure.query(async () =>
+      apiChatChannelReport(await requirePool())
+    ),
   }),
 
   security: router({
