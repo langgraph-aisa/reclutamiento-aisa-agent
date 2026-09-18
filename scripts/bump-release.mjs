@@ -52,6 +52,10 @@ function replaceVersion(relativePath, content) {
   const historicalHeading = /^#{1,6}\s*Alcance\b/;
   const historicalParagraph = /^El alcance de \d/;
   const historicalCandidate = /^La especificación candidata de \d/;
+  // Los rótulos de fuentes primarias documentan los recursos que entraron con
+  // una entrega concreta: avanzarlos atribuiría a la versión vigente una
+  // bibliografía que no incorporó.
+  const historicalSources = /^#{1,6}\s*Fuentes primarias\b/;
   const escapedCurrentVersion = currentVersion.replaceAll(".", "\\.");
   // El documento de caja negra se renombra en cada entrega: su referencia en el
   // cuerpo del README debe acompañar el renombrado en lugar de quedar congelada
@@ -67,7 +71,8 @@ function replaceVersion(relativePath, content) {
         if (
           historicalHeading.test(line) ||
           historicalParagraph.test(line) ||
-          historicalCandidate.test(line)
+          historicalCandidate.test(line) ||
+          historicalSources.test(line)
         ) {
           return line;
         }

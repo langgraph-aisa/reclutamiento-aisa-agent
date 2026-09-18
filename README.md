@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.181</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.182</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.181-0b2d4b" alt="JARVI RH 2.0.181" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.182-0b2d4b" alt="JARVI RH 2.0.182" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse%20SDK-5.11.1-orange" alt="Langfuse SDK 5.11.1" />
@@ -24,7 +24,7 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.181 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.182 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
 Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH integra plazas, formularios y protocolos versionados, evaluación asistida por IA, revisión humana, conversaciones ApiChat, solicitud controlada de currículum y auditoría administrativa. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar, fijar remuneración o atribuir rasgos psicológicos: el personal autorizado conserva la decisión.
@@ -34,6 +34,12 @@ Talento AISA vincula capacidades técnicas con proyectos industriales, energéti
 ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
+
+### 17SEP2026 · JARVI RH 2.0.182
+
+- El conducto del adjunto deja de ser un punto ciego: la Auditoría de ApiChat publica el estado de cada notificación de la cola durable y el trabajo documental abierto con su código de error. Sin migración.
+- La bandeja y el motor leen el mismo manifiesto de adjuntos: la ficha consultaba una entidad que ningún componente escribía y declaraba cero cuando el agente veía el archivo.
+- La extracción documental deja de depender del interruptor del diálogo.
 
 ### 17SEP2026 · JARVI RH 2.0.181
 
@@ -262,7 +268,7 @@ ACTUALIZACIÓN DE LA VERSIÓN
 ### 10SEP2026 · JARVI RH 2.0.129
 
 - Configuración > WhatsApp administra modo, endpoint, conexión, webhook, Client ID, token e ID heredado; los secretos se cifran con AES-256-GCM y la interfaz solo recibe máscaras.
-- El envío y el reintento consultan exclusivamente PostgreSQL y la verificación usa el endpoint de estado sin enviar mensajes ni exponer códigos QR; la migración `0013` inicializa valores públicos y filas secretas vacías.
+- El envío y el reintento consultan exclusivamente PostgreSQL; la migración `0013` inicializa valores públicos y filas secretas vacías.
 
 ### 10SEP2026 · JARVI RH 2.0.127–2.0.128
 
@@ -274,7 +280,7 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 ### 10SEP2026 · JARVI RH 2.0.126
 
-- Las responsabilidades de las plazas publicadas exigen una oración autónoma, verbo en infinitivo y puntuación, y la política versionada audita las plazas al iniciar sin consumir OpenAI durante las visitas.
+- Las responsabilidades publicadas exigen oración autónoma, verbo en infinitivo y puntuación; la política versionada audita las plazas al iniciar.
 
 ### 10SEP2026 · JARVI RH 2.0.125
 
@@ -285,12 +291,11 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 - Un control editorial transversal con GPT-4.1 mini revisa plazas, perfiles, objetivos, responsabilidades, requisitos, formularios, preguntas, ayudas, opciones y mensajes públicos configurables antes de guardarlos, activarlos o publicarlos.
 - La validación recompone fragmentos en una idea completa por línea, rota credenciales, falla de forma cerrada y, al iniciar, alcanza las plazas públicas ya existentes.
-- El build audita también los textos institucionales fijos y bloquea cualquier ruta que pierda el control editorial.
 
 ### 10SEP2026 · JARVI RH 2.0.123
 
 - GPT-4.1 mini corrige ortografía, gramática, redacción y estructura antes de publicar; la evidencia se reutiliza sin consumir tokens durante las visitas.
-- La portada dice «Cada candidato merece una evaluación a su medida», acorta el enlace jurídico y presenta a Talento AISA como plataforma tecnológica de oportunidades laborales.
+- La portada dice «Cada candidato merece una evaluación a su medida» y presenta a Talento AISA como plataforma tecnológica de oportunidades laborales.
 
 ### 10SEP2026 · JARVI RH 2.0.122
 
@@ -299,7 +304,7 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 ### 10SEP2026 · JARVI RH 2.0.121
 
-- La landing consume objetivo, responsabilidades y requisitos del perfil; los enlaces externos abren pestañas paralelas y JARVI duplica su escala.
+- La landing consume objetivo, responsabilidades y requisitos del perfil.
 
 ### 10SEP2026 · JARVI RH 2.0.120
 
@@ -472,7 +477,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md), [transporte base64 y visor](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md) y [caja negra 2.0.181](docs/PRUEBAS_CAJA_NEGRA_2.0.181.md).
+`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md), [transporte base64 y visor](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md) y [caja negra 2.0.182](docs/PRUEBAS_CAJA_NEGRA_2.0.182.md).
 
 ## 8. Capa cognitiva, resiliencia y alcance verificable
 

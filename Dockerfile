@@ -20,6 +20,14 @@ COPY --from=builder /app/dist/public ./dist/public
 ENV KNOWLEDGE_STORAGE_DIR=/app/data/knowledge-files
 ENV DOCUMENT_OCR_ENABLED=true
 RUN mkdir -p /app/uploads /app/data/knowledge-files && chown -R nodejs:nodejs /app
+# El catálogo de adjuntos vive en PostgreSQL y los bytes en este directorio: son
+# dos almacenes distintos que no comparten transacción. Sin volumen declarado,
+# cada contenedor escribe en su propia capa y una réplica no ve lo que otra
+# guardó; el extractor responde entonces `storage_missing` sobre un documento que
+# sí existe. En modo dividido, los servicios `receptor` y `motor` requieren el
+# MISMO volumen con nombre montado en esta ruta; el volumen anónimo que declara
+# esta línea basta para el proceso único y para sobrevivir a un redespliegue.
+VOLUME ["/app/data/knowledge-files"]
 USER nodejs
 EXPOSE 3000
 CMD ["pnpm", "start"]

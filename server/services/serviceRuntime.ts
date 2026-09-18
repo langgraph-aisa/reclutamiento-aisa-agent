@@ -25,6 +25,18 @@ export async function startCapabilityService(
   options: {
     /** Trabajo que se ejecuta una sola vez al arrancar. */
     onStart?: (pool: CapabilityPool) => Promise<void> | void;
+    /**
+     * Trabajo que corresponde al **proceso**, no a la capacidad.
+     *
+     * Se ejecuta aunque la capacidad esté apagada. Existe porque la evidencia
+     * documental del candidato —la extracción de texto, la transcripción de voz
+     * y el reconocimiento óptico— no es una consecuencia del razonamiento
+     * conversacional: suspender el diálogo no debe dejar archivos recibidos sin
+     * interpretar, ni convertir esa carencia en una afirmación sobre el
+     * candidato. Atar este trabajador al interruptor del agente producía
+     * exactamente eso: el receptor seguía aceptando archivos y nadie los leía.
+     */
+    onProcessStart?: (pool: CapabilityPool) => Promise<void> | void;
     /** Trabajo periódico de la capacidad declarada. */
     tick?: (pool: CapabilityPool) => Promise<void>;
     intervalMs?: number;
@@ -61,6 +73,8 @@ export async function startCapabilityService(
   }
 
   let stopped = false;
+  // El arranque del proceso precede al de la capacidad y no lo sustituye.
+  if (options.onProcessStart) await options.onProcessStart(pool);
   if (active && options.onStart) await options.onStart(pool);
 
   const intervalMs = options.intervalMs ?? 2_000;

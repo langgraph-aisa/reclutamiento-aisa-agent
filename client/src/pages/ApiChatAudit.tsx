@@ -19,20 +19,44 @@ const STATE_LABELS: Record<string, string> = {
   con_perdidas: "Con pérdidas",
   con_fallos_de_envio: "Con fallos de envío",
   sin_evidencia: "Sin evidencia",
+  observabilidad_no_disponible: "Observación no disponible",
+  recepcion_no_confirmada: "Recepción sin confirmar",
+  procesamiento_detenido: "Procesamiento detenido",
+  derivacion_fallida: "Derivación fallida",
+  derivacion_requerida: "Derivación requerida",
+  ingreso_rechazado: "Ingreso rechazado",
+  sin_actividad: "Sin actividad en la ventana",
+  sin_pendientes: "Sin pendientes",
 };
 
 const STATE_CLASSES: Record<string, string> = {
   verificado: "border-emerald-300 bg-emerald-100 text-emerald-900",
+  sin_pendientes: "border-emerald-300 bg-emerald-100 text-emerald-900",
   con_perdidas: "border-rose-300 bg-rose-100 text-rose-900",
+  recepcion_no_confirmada: "border-rose-300 bg-rose-100 text-rose-900",
+  observabilidad_no_disponible: "border-rose-300 bg-rose-100 text-rose-900",
   con_fallos_de_envio: "border-amber-300 bg-amber-100 text-amber-950",
+  procesamiento_detenido: "border-amber-300 bg-amber-100 text-amber-950",
+  derivacion_fallida: "border-amber-300 bg-amber-100 text-amber-950",
+  derivacion_requerida: "border-sky-300 bg-sky-100 text-sky-900",
+  ingreso_rechazado: "border-slate-300 bg-slate-100 text-slate-700",
   sin_evidencia: "border-slate-300 bg-slate-100 text-slate-700",
+  sin_actividad: "border-slate-300 bg-slate-100 text-slate-700",
 };
 
 const STATE_ICONS: Record<string, typeof CheckCircle2> = {
   verificado: CheckCircle2,
+  sin_pendientes: CheckCircle2,
   con_perdidas: AlertTriangle,
+  recepcion_no_confirmada: AlertTriangle,
+  observabilidad_no_disponible: AlertTriangle,
   con_fallos_de_envio: AlertTriangle,
+  procesamiento_detenido: AlertTriangle,
+  derivacion_fallida: AlertTriangle,
+  derivacion_requerida: HelpCircle,
+  ingreso_rechazado: HelpCircle,
   sin_evidencia: HelpCircle,
+  sin_actividad: HelpCircle,
 };
 
 function formatMoment(value: string | Date | null | undefined) {
@@ -46,6 +70,10 @@ function formatMoment(value: string | Date | null | undefined) {
 
 export default function ApiChatAudit() {
   const report = trpc.apiChatAudit.report.useQuery(undefined, {
+    refetchInterval: 30_000,
+    retry: false,
+  });
+  const pipeline = trpc.apiChatAudit.pipeline.useQuery(undefined, {
     refetchInterval: 30_000,
     retry: false,
   });
@@ -181,6 +209,194 @@ export default function ApiChatAudit() {
             ) : (
               <p className="mt-2 text-xs text-muted-foreground">
                 Ningún envío quedó sin confirmar en la ventana.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-primary">
+              CONDUCTO DEL ADJUNTO · RECEPCIÓN, DERIVACIÓN Y EVALUACIÓN
+            </h2>
+            <p className="mt-1 text-xs leading-5">
+              {pipeline.data?.summary.verdict ??
+                "Sin lectura del conducto de adjuntos."}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge
+                variant="outline"
+                className={`rounded-full text-[10px] ${
+                  STATE_CLASSES[pipeline.data?.summary.state ?? "sin_evidencia"] ??
+                  ""
+                }`}
+              >
+                {STATE_LABELS[pipeline.data?.summary.state ?? "sin_evidencia"] ??
+                  pipeline.data?.summary.state}
+              </Badge>
+              <span className="text-[11px] text-muted-foreground">
+                ventana de {pipeline.data?.windowHours} horas
+              </span>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Notificaciones recibidas
+                </p>
+                <p className="mt-1 text-lg font-semibold">
+                  {pipeline.data?.summary.receiptsReceived ?? 0}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Sin resolver
+                </p>
+                <p className="mt-1 text-lg font-semibold">
+                  {pipeline.data?.summary.receiptsOpen ?? 0}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Intentos agotados
+                </p>
+                <p className="mt-1 text-lg font-semibold">
+                  {pipeline.data?.summary.receiptsDead ?? 0}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Documentos sin análisis
+                </p>
+                <p className="mt-1 text-lg font-semibold">
+                  {(pipeline.data?.summary.documentsPending ?? 0) +
+                    (pipeline.data?.summary.documentsFailed ?? 0)}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-primary">
+              NOTIFICACIONES SIN RESOLVER
+            </h2>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              El motivo de cada fallo consta aquí y no en la conducta del
+              candidato: un archivo que no llegó a la bandeja es un hecho del
+              transporte.
+            </p>
+            {(pipeline.data?.receipts ?? []).length ? (
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <tr>
+                      <th className="py-1 pr-3">Recibida</th>
+                      <th className="py-1 pr-3">Vía</th>
+                      <th className="py-1 pr-3">Estado</th>
+                      <th className="py-1 pr-3">Intentos</th>
+                      <th className="py-1 pr-3">Desenlace</th>
+                      <th className="py-1">Diagnóstico</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(pipeline.data?.receipts ?? []).map(receipt => (
+                      <tr
+                        key={receipt.receiptKey}
+                        className="border-t border-border/60"
+                      >
+                        <td className="py-1 pr-3">
+                          {formatMoment(receipt.receivedAt)}
+                        </td>
+                        <td className="py-1 pr-3">{receipt.origin}</td>
+                        <td className="py-1 pr-3">{receipt.status}</td>
+                        <td className="py-1 pr-3">{receipt.attempts}</td>
+                        <td className="py-1 pr-3">
+                          {receipt.outcome ?? "sin desenlace"}
+                        </td>
+                        <td className="py-1">
+                          {receipt.lastError ?? "sin error registrado"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Ninguna notificación quedó sin resolver en la ventana.
+                La cola vacía no demuestra que el proveedor no llamó: sólo
+                afirma que no hay trabajo pendiente en este período.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-primary">
+              TRABAJOS DOCUMENTALES ABIERTOS
+            </h2>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Un archivo conservado con su trabajo en cola está recibido, no
+              interpretado. La distinción importa: la ausencia de texto derivado
+              no autoriza a declarar que el candidato no envió nada.
+            </p>
+            {(pipeline.data?.jobs ?? []).length ? (
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <tr>
+                      <th className="py-1 pr-3">Postulación</th>
+                      <th className="py-1 pr-3">Archivo</th>
+                      <th className="py-1 pr-3">Formato</th>
+                      <th className="py-1 pr-3">Trabajo</th>
+                      <th className="py-1 pr-3">Análisis</th>
+                      <th className="py-1">Causa</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(pipeline.data?.jobs ?? []).map(job => (
+                      <tr key={job.fileId} className="border-t border-border/60">
+                        <td className="py-1 pr-3">{job.applicationId}</td>
+                        <td className="py-1 pr-3">{job.originalName}</td>
+                        <td className="py-1 pr-3">{job.extension}</td>
+                        <td className="py-1 pr-3">
+                          {job.state} · {job.attempts}
+                        </td>
+                        <td className="py-1 pr-3">{job.analysisStatus}</td>
+                        <td className="py-1">
+                          {job.lastErrorCode ??
+                            job.processingErrorCode ??
+                            "sin causa registrada"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Sin trabajos documentales abiertos en la ventana.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-primary">
+              DOCUMENTOS POR DESENLACE
+            </h2>
+            {(pipeline.data?.documentsByError ?? []).length ? (
+              <ul className="mt-2 space-y-1 text-xs">
+                {(pipeline.data?.documentsByError ?? []).map(row => (
+                  <li
+                    key={`${row.analysisStatus}-${row.processingErrorCode ?? "ok"}`}
+                    className="flex flex-wrap gap-2"
+                  >
+                    <span className="font-mono">{row.analysisStatus}</span>
+                    <span className="text-muted-foreground">
+                      {row.total} · {row.processingErrorCode ?? "sin error"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Sin documentos registrados en la ventana.
               </p>
             )}
           </section>

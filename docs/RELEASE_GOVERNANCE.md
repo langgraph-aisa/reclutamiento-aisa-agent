@@ -1,8 +1,23 @@
-# Gobierno de release JARVI RH 2.0.181
+# Gobierno de release JARVI RH 2.0.182
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.181**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.182**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.182
+El release **cierra la continuidad entre recibir el adjunto, mostrarlo y usarlo como evidencia**. Repara los cuatro residuos que la entrega anterior dejó fuera de su alcance, y ninguno era un defecto de lógica: los tres primeros pertenecen al ciclo de vida de los trabajadores y el cuarto a la provisión del despliegue, que es exactamente donde una suite verde no alcanza a mirar.
+
+**La cola durable deja de ser un punto ciego.** `apichat_inbound_receipts` y `candidate_document_jobs` ya existían y guardaban cada notificación y cada trabajo, pero ninguna superficie las leía. Un operador no podía distinguir «no llegó» de «llegó y murió», ni ver el motivo del último intento, de modo que el síntoma «no procesa» era indistinguible de la conducta del candidato. La Auditoría de ApiChat publica ahora el conducto del adjunto: el veredicto informa el **eslabón más temprano con evidencia** —recepción, registro, derivación o evaluación—, la tabla de notificaciones declara vía, estado, intentos y motivo, y la de trabajos declara archivo, formato, intento y código de error. La precedencia sigue la cadena causal porque atribuir el resultado a un eslabón posterior cuando otro anterior ya falló sería una conclusión inadmisible.
+
+**Una sola fuente autoritativa para el hecho «qué recibió el candidato».** La bandeja leía `candidate_attachments`, una tabla que **ningún componente del artefacto escribía**; el motor conversacional leía la unión del expediente documental y del mensaje. La consecuencia era una contradicción interna: la ficha declaraba cero adjuntos justo cuando el agente veía el archivo. Ambas superficies consumen ahora el mismo manifiesto, y un rechazo explícito —extensión fuera de política, peso excedido, contenido no disponible— viaja con su motivo en lugar de degradarse a silencio.
+
+**La extracción documental pertenece al proceso, no al interruptor del diálogo.** El trabajador que extrae texto, transcribe voz y aplica reconocimiento óptico arrancaba dentro de `onStart`, que solo se ejecuta si la capacidad de razonamiento está encendida. Apagar el agente en el panel detenía la interpretación de PDF, audio e imagen mientras el receptor seguía aceptándolos y persistiéndolos: los archivos quedaban recibidos y sin analizar sin que ninguna capa lo declarara. El arranque de proceso precede ahora al de la capacidad y no depende de él.
+
+**El volumen se declara.** El catálogo de adjuntos vive en PostgreSQL y los bytes en el directorio de almacenamiento: son dos almacenes que no comparten transacción. Sin volumen declarado, cada contenedor escribe en su propia capa, y en modo dividido el servicio que lee responde `storage_missing` sobre un documento que sí existe. La imagen declara el volumen de conocimiento y su comentario fija la condición del despliegue dividido: los servicios de recepción y de razonamiento requieren el **mismo** volumen con nombre.
+
+**La incógnita no se convierte en cero.** Cuando una de las fuentes falla, el veredicto declara la observación no disponible y advierte que los contadores son parciales; nunca resume la lectura fallida como ausencia de adjuntos. Sin migración: reutiliza las tablas `0036` y `0037` y no añade esquema.
+
+**El incremento deja de desplazar un rótulo histórico.** El incremento avanzaba también la versión del encabezado de fuentes primarias vigente y atribuía a esta entrega dos recursos que entraron en la anterior. El script preserva ahora esas líneas junto con los encabezados y párrafos de alcance, y el rótulo vuelve a su entrega original.
 
 ### Alcance candidato 2.0.181
 El release **adjunta contenido desde la bandeja sin pegar direcciones**. El diálogo «Enviar archivo» acepta un archivo arrastrado o elegido del equipo; el de «Enviar nota de voz» graba con el micrófono del dispositivo; y el de «Enviar ubicación» toma la posición del navegador. En los tres casos el contenido viaja al servidor en base64, se verifica por su contenido y se publica con una capacidad firmada antes de anunciarlo al proveedor.
@@ -191,7 +206,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.181 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.182 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -223,7 +238,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.181.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.182.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

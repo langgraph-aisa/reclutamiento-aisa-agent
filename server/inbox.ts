@@ -13,6 +13,7 @@ import {
 } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
 import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
+import { loadAttachmentManifest } from "./attachmentPipeline";
 import { decodeTransport, reconstructTransportFileName } from "./base64Transport";
 import { isUndefinedTableError } from "./governanceObservability";
 import { withLangfuseObservation } from "./observability/langfuse";
@@ -337,13 +338,10 @@ export async function inboxDetail(pool: Pool, conversationId: number) {
        ) recent_messages ORDER BY created_at,id`,
       [conversationId]
     ),
-    pool.query(
-      `SELECT id,category,original_name,detected_mime_type,size_bytes,status,
-              transcription,created_at
-         FROM candidate_attachments
-        WHERE application_id=$1 ORDER BY created_at DESC,id DESC`,
-      [conversation.rows[0].application_id]
-    ),
+    // Mismo manifiesto que alimenta al motor conversacional: una sola fuente
+    // autoritativa para el hecho «qué recibió el candidato». Antes esta lectura
+    // consultaba una entidad sin escritor y devolvía siempre cero.
+    loadAttachmentManifest(pool, Number(conversation.rows[0].application_id)),
     loadAssessmentIndicator(pool, Number(conversation.rows[0].application_id)),
   ]);
   return {
@@ -352,7 +350,7 @@ export async function inboxDetail(pool: Pool, conversationId: number) {
       traffic_light: trafficLight(conversation.rows[0].automation_state),
     },
     messages: messages.rows,
-    attachments: attachments.rows,
+    attachments,
     assessment,
   };
 }

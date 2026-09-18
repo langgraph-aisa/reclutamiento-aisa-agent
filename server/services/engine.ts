@@ -11,7 +11,13 @@ import { startCandidateDocumentWorker } from "../candidateDocumentWorker";
  * capacidad declarada lo impide.
  */
 void startCapabilityService("reason", {
-  onStart: pool => { startCandidateDocumentWorker(() => Promise.resolve(pool)); },
+  // La extracción documental pertenece al proceso: un PDF, un audio o una
+  // imagen recibidos se interpretan aunque el diálogo conversacional esté
+  // apagado. El receptor no sabe leer documentos y la ficha no debe mostrarlos
+  // como pendientes indefinidamente por un interruptor ajeno.
+  onProcessStart: pool => {
+    startCandidateDocumentWorker(() => Promise.resolve(pool));
+  },
   tick: async pool => {
     await runConversationReasoning(pool);
   },

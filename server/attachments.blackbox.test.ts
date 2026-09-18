@@ -15,6 +15,7 @@ import { issueLocalSession, LOCAL_SESSION_COOKIE } from "./localAuth";
 import { createMediaTestDatabase } from "./testSupport/mediaDatabase";
 import { syntheticPdf } from "./testSupport/mediaFixtures";
 import { runCandidateDocumentSweep } from "./candidateDocumentWorker";
+import { attachmentPipelineReport } from "./attachmentPipeline";
 
 const enabled = Boolean(process.env.MEDIA_TEST_DATABASE_URL);
 const sha = (value: Buffer) => createHash("sha256").update(value).digest("hex");
@@ -226,6 +227,121 @@ describe.runIf(enabled)("Caja negra HTTP / PostgreSQL / archivos reales", () => 
     )).rows[0];
     expect(row).toMatchObject({ message_type: "ptt", original_file_name: "nota-de-voz.ogg", mime_type: "audio/ogg" });
     expect(String(row.storage_key)).toMatch(/^out-\d+\//);
+  });
+  it("la bandeja y el motor conversacional leen el mismo manifiesto de adjuntos", async () => {
+    const response = await fetch(
+      base + "/api/trpc/inbox.detail?input=" +
+        encodeURIComponent(JSON.stringify({ json: { conversationId } })),
+      { headers: { cookie } }
+    );
+    const body = await response.json();
+    expect(response.status, JSON.stringify(body)).toBe(200);
+    const attachments = body.result.data.json.attachments as Array<
+      Record<string, unknown>
+    >;
+    // Antes esta lista se leía de `candidate_attachments`, una entidad que ningún
+    // componente escribía: la ficha declaraba cero mientras el agente veía el
+    // archivo. Ahora ambas superficies comparten la misma consulta.
+    const names = attachments.map(entry => entry.originalName);
+    expect(names).toContain("curriculum.pdf");
+    expect(names).toContain("faltante.pdf");
+    expect(
+      attachments.find(entry => entry.originalName === "curriculum.pdf")
+    ).toMatchObject({ status: "analizado" });
+    // Un rechazo explícito viaja con su motivo: recibido y no interpretado no
+    // es lo mismo que inexistente.
+    expect(
+      attachments.find(entry => entry.originalName === "faltante.pdf")
+    ).toMatchObject({ status: "rejected", errorCode: "contenido_no_disponible" });
+  });
+  it("el diagnóstico del conducto informa el eslabón que falla y no lo resume como ausencia", async () => {
+    // Estado real de la ventana: un ingreso rechazado por falta de contenido y
+    // ningún trabajo abierto. El veredicto lo nombra en lugar de declarar
+    // «sin adjuntos».
+    const inicial = await attachmentPipelineReport(database.pool);
+    expect(inicial.summary.state).toBe("ingreso_rechazado");
+    // Dos descartes confirmados con su motivo: el elemento inválido del lote
+    // mixto y el adjunto sin contenido. Ninguno quedó sin clasificar.
+    expect(inicial.summary.receiptsRejected).toBe(2);
+    expect(inicial.summary.documentsAnalyzed).toBe(1);
+    expect(inicial.receiptOutcomes.map(row => row.outcome)).toEqual(
+      expect.arrayContaining(["archivo-sin-contenido", "forma-no-reconocida"])
+    );
+
+    // Un documento registrado con su trabajo en cola está recibido, no
+    // interpretado. El diagnóstico lo declara pendiente, que es un hecho
+    // distinto de «no llegó» y de «ya se analizó».
+    const constancia = syntheticPdf("Certificado de estudios tecnicos.");
+    expect(
+      (
+        await post({
+          messages: [
+            {
+              id: "pdf-2",
+              number: "50255550001",
+              type: "file",
+              filename: "constancia.pdf",
+              from_me: false,
+              time: 1789730800,
+              url: "data:application/pdf;base64," + constancia.toString("base64"),
+            },
+          ],
+        })
+      ).status
+    ).toBe(200);
+    await runApiChatReceiptSweep(database.pool, processApiChatMessage);
+    const enCola = await attachmentPipelineReport(database.pool);
+    expect(enCola.summary.state).toBe("procesamiento_detenido");
+    expect(enCola.summary.documentsPending).toBe(1);
+    expect(enCola.summary.jobsOpen).toBe(1);
+    expect(enCola.jobs[0]).toMatchObject({
+      originalName: "constancia.pdf",
+      state: "pending",
+      applicationId,
+    });
+
+    // Con el trabajador simulado, el mismo diagnóstico cierra el ciclo.
+    const analyze = vi.fn(async () => ({
+      summary: "Constancia recibida.",
+      deepAnalysis: "Acredita estudios tecnicos.",
+      model: "gpt-4.1-mini-2025-04-14" as const,
+      keySlot: "primary" as const,
+      documentClass: "cv" as const,
+    }));
+    expect(
+      await runCandidateDocumentSweep(database.pool, {
+        dependencies: { analyze: analyze as never },
+      })
+    ).toHaveLength(1);
+    const cerrado = await attachmentPipelineReport(database.pool);
+    expect(cerrado.summary.state).toBe("ingreso_rechazado");
+    expect(cerrado.summary.jobsOpen).toBe(0);
+    expect(cerrado.summary.documentsAnalyzed).toBe(2);
+
+    // Una notificación que agota sus intentos deja de ser una pérdida invisible:
+    // aparece con su motivo y desplaza el veredicto al eslabón más temprano.
+    await post({
+      messages: [{ id: "dead-1", number: "50255550001", type: "text", text: "Registro" }],
+    });
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await runApiChatReceiptSweep(database.pool, async () => {
+        throw new TypeError("synthetic-dead");
+      });
+      await database.pool.query(
+        "UPDATE apichat_inbound_receipts SET next_attempt_at=now() WHERE provider_message_id='dead-1'"
+      );
+    }
+    const agotado = await attachmentPipelineReport(database.pool);
+    expect(agotado.summary.state).toBe("recepcion_no_confirmada");
+    expect(agotado.summary.receiptsDead).toBe(1);
+    const dead = agotado.receipts.find(row => row.providerMessageId === "dead-1");
+    expect(dead).toMatchObject({
+      status: "dead",
+      lastError: "TypeError",
+      origin: "webhook",
+    });
+    // El diagnóstico nombra el error y nunca transporta contenido del candidato.
+    expect(dead?.lastError).not.toContain("Registro");
   });
 });
 

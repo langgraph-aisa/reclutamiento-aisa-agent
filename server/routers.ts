@@ -74,6 +74,7 @@ import {
 } from "./automaticEvaluation";
 import { codecRegistry, saveCodecSettings } from "./codecRegistry";
 import { apiChatChannelReport } from "./apiChatAudit";
+import { attachmentPipelineReport } from "./attachmentPipeline";
 import {
   RECRUITER_AGENT_MAX_QUESTION_CHARS,
   RECRUITER_AGENT_MODELS,
@@ -2958,6 +2959,18 @@ export const appRouter = router({
   apiChatAudit: router({
     report: roleProcedure.query(async () =>
       apiChatChannelReport(await requirePool())
+    ),
+    /**
+     * Conducto del adjunto: recepción durable, registro documental y derivación.
+     *
+     * Cierra el punto ciego que hacía indistinguible «no llegó» de «llegó y
+     * murió»: la cola de recepción y la de procesamiento existían sin superficie
+     * de lectura. El veredicto informa el eslabón más temprano con evidencia y
+     * declara la incógnita cuando una fuente falla, en lugar de resumirla como
+     * ausencia de adjuntos.
+     */
+    pipeline: roleProcedure.query(async () =>
+      attachmentPipelineReport(await requirePool())
     ),
   }),
 

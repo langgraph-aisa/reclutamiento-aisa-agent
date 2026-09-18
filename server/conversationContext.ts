@@ -14,6 +14,7 @@ import {
   loadPositionKnowledgeContext,
   type PositionKnowledgeContext,
 } from "./knowledgeContext";
+import { loadAttachmentManifest } from "./attachmentPipeline";
 
 /**
  * Contexto conversacional de cuatro capas.
@@ -639,23 +640,8 @@ export async function loadConversationContextSource(
         LIMIT 120`,
       [applicationId]
     ),
-    pool.query(
-      `SELECT original_name,category,status,transcription,error_code,truncated FROM (
-         SELECT original_name,document_class AS category,analysis_status AS status,
-                CASE WHEN extraction_method LIKE 'transcription:%' THEN extracted_text ELSE NULL END AS transcription,
-                processing_error_code AS error_code,extraction_truncated AS truncated,uploaded_at AS received_at
-           FROM candidate_knowledge_files WHERE application_id=$1
-         UNION ALL
-         SELECT COALESCE(m.metadata->'media'->>'fileName',m.body),'unclassified',
-                CASE WHEN m.metadata->'media'->>'processingOutcome'='rejected' THEN 'rejected' ELSE 'received' END,
-                m.transcript,m.metadata->'media'->>'processingReason',false,m.created_at
-           FROM conversation_messages m JOIN conversations c ON c.id=m.conversation_id
-          WHERE c.application_id=$1 AND m.direction='inbound' AND m.metadata->'media' IS NOT NULL
-            AND NOT EXISTS (SELECT 1 FROM candidate_knowledge_files k
-              WHERE k.application_id=$1 AND k.id::text=m.metadata->'media'->>'candidateFileId')
-       ) manifest ORDER BY received_at DESC LIMIT 100`,
-      [applicationId]
-    ),
+    // Manifiesto único: la bandeja y este motor leen el mismo hecho.
+    loadAttachmentManifest(pool, applicationId),
     options.methodologies
       ? pool.query<{ display_name: string; content_markdown: string }>(
           `SELECT display_name,content_markdown FROM methodology_documents
@@ -766,14 +752,7 @@ export async function loadConversationContextSource(
           ? new Date(item.created_at).toISOString()
           : null,
       })),
-    attachments: attachments.rows.map(item => ({
-      originalName: String(item.original_name),
-      category: String(item.category),
-      status: String(item.status),
-      transcription: item.transcription ?? null,
-      errorCode: item.error_code ?? null,
-      truncated: Boolean(item.truncated),
-    })),
+    attachments,
     knowledgeDocuments: (
       knowledgeDocuments.rows as Array<Record<string, unknown>>
     ).map(item => ({
