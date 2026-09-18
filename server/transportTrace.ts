@@ -4,22 +4,12 @@ import type { Pool } from "pg";
 /**
  * Traza del conducto de transporte.
  *
- * El receptor declara ocho desenlaces y solo dos dejan rastro, de modo que un
- * adjunto que el proveedor envía con una forma no prevista es **indistinguible**
- * de un adjunto que el proveedor nunca envió. Ese es el punto ciego que dejó el
- * transporte sin diagnosticar durante tres releases: la auditoría podía decir
- * «sin evidencia», pero no «el proveedor envió esto y lo descartamos aquí».
- *
- * Este módulo cierra el punto ciego registrando, por cada petición que entra al
- * conducto, **la forma del cuerpo recibido** —claves, tipos y tamaños— y un
- * cuerpo redactado y acotado. No registra el resultado de interpretar la carga:
- * registra la carga. La diferencia es la que separa una conjetura de una prueba.
- *
- * Privacidad: ningún contenido del candidato se conserva. Todo valor que parezca
- * contenido —sobre `data:`, base64 largo o URL de archivo— se sustituye por su
- * peso, su tipo y una huella; los identificadores telefónicos se enmascaran. El
- * asiento sirve para saber **qué campos llegaron y de qué tamaño**, que es
- * exactamente lo que faltaba.
+ * Registra una muestra acotada de rutas, tipos y tamaños del cuerpo recibido.
+ * Recorre sobres anidados, listas y JSON serializado sin conservar texto,
+ * nombres, números ni secretos. El ID técnico del evento permite correlación.
+ * La huella de un campo de medios identifica su representación recibida; no
+ * acredita entrega de bytes, análisis ni integridad de toda la cadena.
+ * Una consulta fallida se distingue explícitamente de una muestra vacía.
  */
 
 export const TRANSPORT_TRACE_LIMIT_BYTES = 65_536;
@@ -29,10 +19,25 @@ export const TRANSPORT_TRACE_RETENTION_DAYS = 14;
 
 export type TransportTraceOrigin = "webhook" | "sondeo";
 
-/** Campos cuyo valor es un dato personal directo y no se conserva. */
-const SENSITIVE_KEY = /(phone|number|telefono|token|authorization|secret|password)/i;
-/** Campos que transportan contenido de archivo. */
-const CONTENT_KEY = /(url|base64|media|file|content|data|body|document|image|audio|video)/i;
+const SENSITIVE_KEY =
+  /(phone|number|telefono|token|authorization|secret|password|cookie)/i;
+const SAFE_TYPES = new Set([
+  "text",
+  "file",
+  "document",
+  "image",
+  "audio",
+  "ptt",
+  "voice",
+  "video",
+  "location",
+  "contacts",
+  "reaction",
+  "sticker",
+  "link",
+]);
+const TRACE_MAX_FIELDS = 128;
+const TRACE_MAX_DEPTH = 6;
 
 export type TransportFieldShape = {
   /** Tipo JSON del valor recibido. */
@@ -47,85 +52,123 @@ export type TransportFieldShape = {
 
 export type TransportShape = Record<string, TransportFieldShape>;
 
+/** También minimiza filas históricas escritas antes de aplicar este contrato. */
+function minimizeStoredShape(value: TransportShape | null): TransportShape {
+  const result: TransportShape = {};
+  for (const [path, field] of Object.entries(value ?? {}).slice(0, TRACE_MAX_FIELDS)) {
+    if (!field || typeof field !== "object") continue;
+    const safePath = /^[A-Za-z_$][A-Za-z0-9_$.[\]-]{0,255}$/.test(path) ? path : `campo_${Object.keys(result).length}`;
+    const kind = /^(contenido:[a-f0-9]{12,64}|texto|objeto|lista|nulo|number|boolean|string|json-en-texto|limite-de-campos)$/.test(field.kind) ? field.kind : "desconocido";
+    result[safePath] = {
+      kind,
+      ...(typeof field.bytes === "number" && Number.isFinite(field.bytes) && field.bytes >= 0 ? { bytes: field.bytes } : {}),
+      ...(field.masked ? { masked: "«dato omitido»" } : {}),
+      ...(/(^|\.)type$/.test(path) && typeof field.value === "string" && SAFE_TYPES.has(field.value) ? { value: field.value } : {}),
+    };
+  }
+  return result;
+}
+
 function looksLikeBase64(text: string) {
   const compact = text.replace(/\s+/g, "");
-  if (compact.length < 256 || !/^[A-Za-z0-9+/]+={0,2}$/.test(compact)) return false;
-  // Una firma real de base64 mezcla mayúsculas, minúsculas, dígitos o los
-  // símbolos propios del alfabeto. Sin esa mezcla, una cadena larga es texto
-  // corrido —un pie de foto, una descripción— y no contenido de archivo.
-  let clases = 0;
-  if (/[a-z]/.test(compact)) clases += 1;
-  if (/[A-Z]/.test(compact)) clases += 1;
-  if (/[0-9]/.test(compact)) clases += 1;
-  if (/[+/=]/.test(compact)) clases += 1;
-  return clases >= 2;
+  return compact.length >= 64 && /^[A-Za-z0-9+/]+={0,2}$/.test(compact);
 }
 
 function looksLikeContent(text: string) {
-  return text.startsWith("data:") || looksLikeBase64(text) || /^https?:\/\//i.test(text);
+  return (
+    text.startsWith("data:") ||
+    looksLikeBase64(text) ||
+    /^https?:\/\//i.test(text)
+  );
 }
 
 function fingerprint(value: string) {
-  return createHash("sha256").update(value).digest("hex").slice(0, 12);
+  return createHash("sha256").update(value).digest("hex");
 }
 
-/** Enmascara un identificador telefónico conservando los extremos útiles. */
-function maskDigits(value: string) {
-  const digits = value.replace(/\D/g, "");
-  if (digits.length < 6) return "«dato»";
-  return `«${digits.slice(0, 3)}…${digits.slice(-4)}»`;
+function jsonContainer(value: string): unknown | null {
+  if (!/^[\s]*[\[{]/.test(value)) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function traceKey(key: string, index: number) {
+  return /^[A-Za-z_][A-Za-z0-9_-]{0,31}$/.test(key) ? key : `campo_${index}`;
 }
 
 /**
  * Resume la forma de un objeto sin conservar su contenido. Es la pieza que
  * permite leer, en el panel, exactamente qué mandó el proveedor.
  */
-export function describeTransportShape(value: unknown, depth = 0): TransportShape {
+export function describeTransportShape(
+  value: unknown,
+  depth = 0
+): TransportShape {
   const shape: TransportShape = {};
-  if (depth > 3 || !value || typeof value !== "object" || Array.isArray(value)) {
-    return shape;
-  }
-  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+  let fields = 0;
+  const walk = (entry: unknown, path: string, key: string, level: number) => {
+    if (fields++ >= TRACE_MAX_FIELDS || level > TRACE_MAX_DEPTH) return;
+    const target = path || "$";
     if (entry === null || entry === undefined) {
-      shape[key] = { kind: "nulo" };
-      continue;
+      shape[target] = { kind: "nulo" };
+      return;
+    }
+    if (SENSITIVE_KEY.test(key)) {
+      shape[target] = { kind: typeof entry, masked: "«dato omitido»" };
+      return;
     }
     if (Array.isArray(entry)) {
-      shape[key] = {
-        kind: "lista",
-        bytes: entry.length,
-      };
-      continue;
+      shape[target] = { kind: "lista", bytes: entry.length };
+      entry
+        .slice(0, 20)
+        .forEach((item, index) =>
+          walk(item, `${path}[${index}]`, "", level + 1)
+        );
+      return;
     }
     if (typeof entry === "object") {
-      shape[key] = { kind: "objeto" };
-      continue;
+      if (path) shape[target] = { kind: "objeto" };
+      Object.entries(entry)
+        .slice(0, TRACE_MAX_FIELDS)
+        .forEach(([name, item], index) => {
+          const safe = traceKey(name, index);
+          walk(item, path ? `${path}.${safe}` : safe, name, level + 1);
+        });
+      return;
     }
     if (typeof entry === "string") {
-      const masked = SENSITIVE_KEY.test(key) && /^[+\d\s()-]{6,}$/.test(entry.trim());
-      if (masked) {
-        shape[key] = { kind: "texto", bytes: entry.length, masked: maskDigits(entry) };
-        continue;
+      const parsed = jsonContainer(entry);
+      if (parsed) {
+        shape[target] = {
+          kind: "json-en-texto",
+          bytes: Buffer.byteLength(entry),
+        };
+        walk(parsed, target, "", level + 1);
+        return;
       }
       if (looksLikeContent(entry)) {
-        shape[key] = {
+        shape[target] = {
           kind: `contenido:${fingerprint(entry)}`,
-          bytes: entry.length,
+          bytes: Buffer.byteLength(entry),
         };
-        continue;
+        return;
       }
-      shape[key] = {
+      shape[target] = {
         kind: "texto",
-        bytes: entry.length,
-        value: entry.length <= 80 ? entry : undefined,
+        bytes: Buffer.byteLength(entry),
+        ...(key === "type" && SAFE_TYPES.has(entry) ? { value: entry } : {}),
       };
-      continue;
+      return;
     }
-    shape[key] = {
-      kind: typeof entry,
-      value: typeof entry === "number" ? String(entry) : undefined,
-    };
-  }
+    shape[target] = { kind: typeof entry };
+  };
+  walk(value, "", "", depth);
+  if (fields >= TRACE_MAX_FIELDS)
+    shape.$truncated = { kind: "limite-de-campos" };
   return shape;
 }
 
@@ -135,36 +178,21 @@ export function describeTransportShape(value: unknown, depth = 0): TransportShap
  * personales se enmascaran; el resto se trunca.
  */
 export function redactTransportPayload(value: unknown, depth = 0): unknown {
-  if (depth > 4) return "«profundidad»";
-  if (value === null || value === undefined) return value;
-  if (typeof value === "string") {
-    if (looksLikeContent(value)) {
-      const prefix = value.startsWith("data:") ? value.slice(0, 40).split(",")[0] : "";
-      return `«contenido ${value.length} car · sha256:${fingerprint(value)}${prefix ? ` · ${prefix}` : ""}»`;
-    }
-    return value.length > TRANSPORT_TRACE_STRING_CAP
-      ? `${value.slice(0, TRANSPORT_TRACE_STRING_CAP)}…«+${value.length - TRANSPORT_TRACE_STRING_CAP} car»`
-      : value;
-  }
-  if (Array.isArray(value)) {
-    return value.slice(0, 20).map(entry => redactTransportPayload(entry, depth + 1));
-  }
-  if (typeof value === "object") {
-    const output: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      if (SENSITIVE_KEY.test(key) && typeof entry === "string") {
-        output[key] = maskDigits(entry);
-        continue;
-      }
-      if (CONTENT_KEY.test(key) && typeof entry === "string" && looksLikeContent(entry)) {
-        output[key] = redactTransportPayload(entry, depth + 1);
-        continue;
-      }
-      output[key] = redactTransportPayload(entry, depth + 1);
-    }
-    return output;
-  }
-  return value;
+  // La estructura y las medidas bastan para diagnosticar el adaptador. Ningún
+  // texto, nombre, número o secreto del candidato se conserva como muestra.
+  return { fields: describeTransportShape(value, depth) };
+}
+
+export function serializeBoundedTrace(
+  value: unknown,
+  maxBytes = TRANSPORT_TRACE_LIMIT_BYTES
+) {
+  const serialized = JSON.stringify(value ?? null);
+  if (Buffer.byteLength(serialized) <= maxBytes) return serialized;
+  return JSON.stringify({
+    truncated: true,
+    originalBytes: Buffer.byteLength(serialized),
+  });
 }
 
 export function transportPayloadBytes(value: unknown) {
@@ -200,13 +228,17 @@ export async function recordTransportTrace(
         input.outcome.slice(0, 48),
         input.providerType?.slice(0, 48) ?? null,
         input.eventId?.slice(0, 180) ?? null,
-        JSON.stringify(describeTransportShape(input.body)),
-        JSON.stringify(redactTransportPayload(input.body)).slice(0, TRANSPORT_TRACE_LIMIT_BYTES),
+        serializeBoundedTrace(describeTransportShape(input.body)),
+        serializeBoundedTrace(redactTransportPayload(input.body)),
         transportPayloadBytes(input.body),
       ]
     );
+    return { available: true as const };
   } catch {
-    // La traza nunca debe impedir la respuesta al proveedor.
+    console.warn(
+      "[TransportTrace] No fue posible persistir la traza del transporte."
+    );
+    return { available: false as const };
   }
 }
 
@@ -241,9 +273,8 @@ export type TransportTrace = {
 };
 
 /**
- * Lectura de la traza. Es **solo lectura** y degrada a una lista vacía cuando la
- * tabla no existe, porque el panel debe seguir sirviendo antes de aplicar la
- * migración.
+ * Lectura de la traza. Los errores se propagan para que el informe declare
+ * observabilidad no disponible; no equivalen a una consulta sin resultados.
  */
 export async function loadTransportTraces(
   pool: Pool,
@@ -259,23 +290,21 @@ export async function loadTransportTraces(
     params.push(options.origin);
     filtro = ` WHERE origin=$2`;
   }
-  const result = await pool
-    .query<{
-      created_at: string | Date;
-      origin: string;
-      outcome: string;
-      provider_type: string | null;
-      event_id: string | null;
-      payload_bytes: number;
-      shape: TransportShape | null;
-      payload: unknown;
-    }>(
-      `SELECT created_at,origin,outcome,provider_type,event_id,payload_bytes,shape,payload
+  const result = await pool.query<{
+    created_at: string | Date;
+    origin: string;
+    outcome: string;
+    provider_type: string | null;
+    event_id: string | null;
+    payload_bytes: number;
+    shape: TransportShape | null;
+    payload: unknown;
+  }>(
+    `SELECT created_at,origin,outcome,provider_type,event_id,payload_bytes,shape,payload
          FROM conversation_transport_traces${filtro}
         ORDER BY created_at DESC LIMIT $1`,
-      params
-    )
-    .catch(() => ({ rows: [] as never[] }));
+    params
+  );
   return result.rows.map(row => ({
     at: row.created_at,
     origin: row.origin,
@@ -283,8 +312,8 @@ export async function loadTransportTraces(
     providerType: row.provider_type,
     eventId: row.event_id,
     payloadBytes: Number(row.payload_bytes ?? 0),
-    shape: (row.shape ?? {}) as TransportShape,
-    payload: row.payload,
+    shape: minimizeStoredShape(row.shape),
+    payload: { fields: minimizeStoredShape(row.shape) },
   }));
 }
 
@@ -293,18 +322,37 @@ export async function loadTransportTraces(
  * receptor descartó, de lo que el proveedor nunca envió. Es la distinción que
  * faltaba.
  */
-export function summarizeTransportTrace(traces: TransportTrace[]) {
+export function summarizeTransportTrace(
+  traces: TransportTrace[],
+  available = true
+) {
+  if (!available)
+    return {
+      state: "no-disponible" as const,
+      verdict:
+        "La observabilidad del transporte no está disponible. No es posible inferir si llegaron adjuntos a partir de esta lectura.",
+      withAttachment: 0,
+      discarded: 0,
+    };
   const conAdjunto = traces.filter(trace =>
     Object.values(trace.shape).some(field =>
       String(field.kind).startsWith("contenido:")
     )
   );
-  const descartes = traces.filter(trace => trace.outcome !== "registrado");
+  const acceptedOutcomes = new Set([
+    "registrado",
+    "aceptado-durable",
+    "duplicado",
+    "persistido",
+  ]);
+  const descartes = traces.filter(
+    trace => !acceptedOutcomes.has(trace.outcome)
+  );
   if (!traces.length)
     return {
       state: "sin-trazas" as const,
       verdict:
-        "Sin trazas: el conducto no ha recibido ninguna petición desde que la captura quedó encendida. Si el candidato ya envió un archivo, el proveedor no está llamando al receptor.",
+        "No hay trazas en la muestra consultada. Esto no demuestra ausencia de envíos ni permite atribuir la causa al proveedor.",
       withAttachment: 0,
       discarded: 0,
     };
@@ -312,13 +360,13 @@ export function summarizeTransportTrace(traces: TransportTrace[]) {
     return {
       state: "sin-adjuntos" as const,
       verdict:
-        "El proveedor llama al receptor, pero ninguna petición trajo contenido de archivo. La pérdida está del lado del proveedor o de la configuración del webhook, no del receptor.",
+        "La muestra consultada no contiene contenido de archivo identificable. Deben verificarse la ventana, el sobre recibido y el estado de procesamiento antes de atribuir una causa.",
       withAttachment: 0,
       discarded: descartes.length,
     };
   return {
     state: "con-adjuntos" as const,
-    verdict: `El proveedor sí envía contenido de archivo: ${conAdjunto.length} petición(es) con adjunto y ${descartes.length} descarte(s). La forma capturada dice en qué campo viaja y qué desenlace tuvo.`,
+    verdict: `La muestra contiene ${conAdjunto.length} petición(es) con contenido identificable y ${descartes.length} desenlace(s) sin aceptación confirmada. Una URL o carga codificada no acredita por sí sola persistencia ni análisis.`,
     withAttachment: conAdjunto.length,
     discarded: descartes.length,
   };

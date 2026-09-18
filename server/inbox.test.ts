@@ -114,7 +114,7 @@ describe("bandeja de entrada", () => {
       text: "Hola Jose soy JARVI",
     });
 
-    expect(result).toEqual({ inserted: false, conversationId: 5 });
+    expect(result).toEqual({ inserted: false, conversationId: 5, messageId: 91 });
     expect(
       calls.some(([sql]) => sql.includes("INSERT INTO conversation_messages"))
     ).toBe(false);
@@ -149,7 +149,7 @@ describe("bandeja de entrada", () => {
       text: "hola",
     });
 
-    expect(result).toEqual({ inserted: false, conversationId: 5 });
+    expect(result).toEqual({ inserted: false, conversationId: 5, messageId: 90 });
     expect(
       calls.some(([sql]) => sql.includes("INSERT INTO conversation_messages"))
     ).toBe(false);

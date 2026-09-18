@@ -37,8 +37,21 @@ export type InboxOutboundDraft =
       longitude: number;
       address?: string;
     }
-  | { type: "file"; fileUrl: string; fileName?: string; caption?: string }
+  | { type: "file"; fileUrl: string; fileName?: string; caption?: string; media?: InboxStoredMedia }
   | { type: "ptt"; audioUrl: string };
+
+type InboxStoredMedia = {
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageKey: string;
+  sha256?: string;
+  candidateFileId?: number;
+  processingOutcome?: "accepted" | "duplicate" | "rejected";
+  processingStatus?: string;
+  processingReason?: string;
+  providerTimestamp?: string;
+};
 
 type InboxSendDependencies = {
   sendText?: typeof sendApiChatText;
@@ -302,12 +315,26 @@ export async function inboxDetail(pool: Pool, conversationId: number) {
   if (!conversation.rows[0]) throw new Error("La conversación no existe.");
   const [messages, attachments, assessment] = await Promise.all([
     pool.query(
-      `SELECT id,direction,message_type,body,delivery_status,sent_at,created_at,
-              original_file_name,mime_type,size_bytes,transcript,
-              metadata->'quoted'->>'messageId' AS quoted_message_id,
-              metadata->'quoted'->>'text' AS quoted_text
-         FROM conversation_messages WHERE conversation_id=$1
-        ORDER BY created_at,id LIMIT 500`,
+      `SELECT * FROM (
+         SELECT m.id,m.direction,m.message_type,m.body,m.delivery_status,m.sent_at,m.created_at,
+                COALESCE(m.original_file_name,m.metadata->'media'->>'fileName') AS original_file_name,
+                COALESCE(m.mime_type,m.metadata->'media'->>'mimeType') AS mime_type,
+                m.size_bytes,
+                COALESCE(m.transcript,CASE WHEN k.extraction_method LIKE 'transcription:%' THEN k.extracted_text END) AS transcript,
+                COALESCE(m.storage_key,m.metadata->'media'->>'storageKey') AS media_storage_key,
+                COALESCE(m.original_file_name,m.metadata->'media'->>'fileName') AS media_file_name,
+                m.metadata->'media'->>'candidateFileId' AS candidate_file_id,
+                m.metadata->'media'->>'processingOutcome' AS media_processing_outcome,
+                COALESCE(k.analysis_status,m.metadata->'media'->>'processingStatus') AS media_processing_status,
+                COALESCE(k.processing_error_code,m.metadata->'media'->>'processingReason') AS media_processing_reason,
+                m.metadata->'quoted'->>'messageId' AS quoted_message_id,
+                m.metadata->'quoted'->>'text' AS quoted_text
+           FROM conversation_messages m
+           LEFT JOIN candidate_knowledge_files k
+             ON k.id::text=m.metadata->'media'->>'candidateFileId'
+          WHERE m.conversation_id=$1
+          ORDER BY m.created_at DESC,m.id DESC LIMIT 500
+       ) recent_messages ORDER BY created_at,id`,
       [conversationId]
     ),
     pool.query(
@@ -556,16 +583,22 @@ async function sendInboxMessageInternal(
       );
     }
     const messageKey = `human:${String(conversation.id)}:${randomUUID()}`;
+    const media = input.draft.type === "file" ? input.draft.media : undefined;
     const inserted = await client.query(
       `INSERT INTO conversation_messages
-         (conversation_id,direction,message_type,body,message_key,delivery_status,metadata)
-       VALUES ($1,'outbound',$2,$3,$4,'sending',$5::jsonb) RETURNING id`,
+         (conversation_id,direction,message_type,body,message_key,delivery_status,metadata,
+          storage_key,original_file_name,mime_type,size_bytes)
+       VALUES ($1,'outbound',$2,$3,$4,'sending',$5::jsonb,$6,$7,$8,$9) RETURNING id`,
       [
         conversation.id,
         input.draft.type,
         body,
         messageKey,
-        JSON.stringify({ actorType: "human", actorUserId: input.actorUserId }),
+        JSON.stringify({ actorType: "human", actorUserId: input.actorUserId, media }),
+        media?.storageKey ?? null,
+        media?.fileName ?? null,
+        media?.mimeType ?? null,
+        media?.sizeBytes ?? null,
       ]
     );
     messageId = inserted.rows[0].id;
@@ -848,7 +881,7 @@ export async function sendInboxFile(
         });
         throw new Error(reason);
       }
-      return `${base}/api/inbox/files/${key}?t=${createViewerToken("inbox", key)}`;
+      return `${base}/api/inbox/files/${encodeURIComponent(key)}?t=${createViewerToken("inbox", key)}`;
     };
     const wrapped = async (): Promise<{
       fileUrl: string;
@@ -876,6 +909,13 @@ export async function sendInboxFile(
             fileUrl,
             fileName,
             caption: input.caption,
+            media: {
+              fileName,
+              mimeType: decoded.mimeType,
+              sizeBytes: decoded.sizeBytes,
+              storageKey: key,
+              sha256: decoded.sha256,
+            },
           },
         },
         dependencies
@@ -924,21 +964,34 @@ export function apichatMessageKey(providerMessageId: string) {
     .digest("hex")}`;
 }
 
+/** Consulta de identidad antes de descargar o reconstruir un adjunto repetido. */
+export async function findRecordedApiChatMessage(pool: Pool, providerMessageId: string) {
+  const result = await pool.query<{
+    id: number;
+    conversation_id: number;
+    storage_key: string | null;
+  }>(
+    `SELECT id,conversation_id,COALESCE(storage_key,metadata->'media'->>'storageKey') AS storage_key
+       FROM conversation_messages WHERE message_key=$1 LIMIT 1`,
+    [apichatMessageKey(providerMessageId)]
+  );
+  const row = result.rows[0];
+  return row ? { messageId: Number(row.id), conversationId: Number(row.conversation_id), storageKey: row.storage_key } : null;
+}
+
+export type NormalizedMessageResult = {
+  inserted: boolean;
+  conversationId: number;
+  messageId?: number;
+};
+
 async function recordNormalizedInboundEventInternal(
   pool: Pool,
-  input: {
-    applicationId: number;
-    conversationId: number;
-    providerMessageId: string;
-    phoneInternational: string;
-    messageType: "text" | "link" | "location" | "file";
-    body: string;
-    text?: string;
-    direction: "inbound" | "outbound";
-    quotedMessageId?: string;
-    mediaMetadata?: Record<string, unknown> | null;
-  }
+  input: InboundEventInput
 ) {
+  const providerTime = input.providerTimestamp && Number.isFinite(Date.parse(input.providerTimestamp))
+    ? new Date(input.providerTimestamp).toISOString() : null;
+  const media = input.mediaMetadata?.media as InboxStoredMedia | undefined;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -1008,12 +1061,17 @@ async function recordNormalizedInboundEventInternal(
         );
       }
       await client.query("COMMIT");
-      return { inserted: false, conversationId };
+      return { inserted: false, conversationId, messageId: Number(existing.rows[0].id) };
     }
+    const sentAt = input.direction === "outbound"
+      ? (providerTime ?? new Date().toISOString())
+      : null;
     const inserted = await client.query(
       `INSERT INTO conversation_messages
-         (conversation_id,direction,message_type,body,provider_message_id,message_key,delivery_status,metadata)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+         (conversation_id,direction,message_type,body,provider_message_id,message_key,delivery_status,metadata,
+          storage_key,original_file_name,mime_type,size_bytes,created_at,sent_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,
+               COALESCE($13::timestamptz,now()),$14::timestamptz)
        ON CONFLICT (message_key) DO NOTHING RETURNING id`,
       [
         conversationId,
@@ -1034,19 +1092,26 @@ async function recordNormalizedInboundEventInternal(
           if (input.mediaMetadata) {
             Object.assign(metadata, input.mediaMetadata);
           }
+          if (providerTime) metadata.providerTimestamp = providerTime;
           return Object.keys(metadata).length ? JSON.stringify(metadata) : null;
         })(),
+        media?.storageKey ?? null,
+        media?.fileName ?? null,
+        media?.mimeType ?? null,
+        media?.sizeBytes ?? null,
+        providerTime,
+        sentAt,
       ]
     );
     if (inserted.rows[0]) {
       await client.query(
         `UPDATE conversations
-            SET status='activo',last_message_at=now(),
-                last_inbound_at=CASE WHEN $2='inbound' THEN now() ELSE last_inbound_at END,
-                last_outbound_at=CASE WHEN $2='outbound' THEN now() ELSE last_outbound_at END,
+            SET status='activo',last_message_at=GREATEST(last_message_at,COALESCE($3::timestamptz,now())),
+                last_inbound_at=CASE WHEN $2='inbound' THEN GREATEST(last_inbound_at,COALESCE($3::timestamptz,now())) ELSE last_inbound_at END,
+                last_outbound_at=CASE WHEN $2='outbound' THEN GREATEST(last_outbound_at,COALESCE($3::timestamptz,now())) ELSE last_outbound_at END,
                 updated_at=now()
           WHERE id=$1`,
-        [conversationId, input.direction]
+        [conversationId, input.direction, providerTime]
       );
       if (input.text && input.direction === "inbound") {
         const expectation = extractExplicitSalaryExpectation(
@@ -1078,7 +1143,11 @@ async function recordNormalizedInboundEventInternal(
       }
     }
     await client.query("COMMIT");
-    return { inserted: Boolean(inserted.rows[0]), conversationId };
+    return {
+      inserted: Boolean(inserted.rows[0]),
+      conversationId,
+      ...(inserted.rows[0] ? { messageId: Number(inserted.rows[0].id) } : {}),
+    };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -1092,7 +1161,7 @@ type InboundEventInput = {
   conversationId: number;
   providerMessageId: string;
   phoneInternational: string;
-  messageType: "text" | "link" | "location" | "file";
+  messageType: "text" | "link" | "location" | "file" | "audio" | "image" | "video";
   body: string;
   text?: string;
   direction: "inbound" | "outbound";
@@ -1100,12 +1169,13 @@ type InboundEventInput = {
   quotedMessageId?: string;
   /** Metadatos adicionales del adjunto cuando el mensaje es un archivo. */
   mediaMetadata?: Record<string, unknown> | null;
+  providerTimestamp?: string;
 };
 
 async function recordNormalizedInboundEvent(
   pool: Pool,
   input: InboundEventInput
-) {
+): Promise<NormalizedMessageResult> {
   return withLangfuseObservation(
     {
       name: "inbox.message.record_inbound",
@@ -1142,6 +1212,7 @@ export function recordNormalizedInboundText(
     phoneInternational: string;
     text: string;
     quotedMessageId?: string;
+    providerTimestamp?: string;
   }
 ) {
   const text = input.text.trim();
@@ -1154,42 +1225,55 @@ export function recordNormalizedInboundText(
   });
 }
 
-/** Registra un adjunto entrante del candidato con su metadata de visor. */
-export function recordNormalizedInboundFile(
-  pool: Pool,
-  input: {
-    applicationId: number;
-    conversationId: number;
-    providerMessageId: string;
-    phoneInternational: string;
-    fileName: string;
-    mimeType: string;
-    sizeBytes: number;
-    storageKey: string;
-    caption?: string;
-    quotedMessageId?: string;
-  }
-) {
+export type NormalizedFileInput = InboxStoredMedia & {
+  applicationId: number;
+  conversationId: number;
+  providerMessageId: string;
+  phoneInternational: string;
+  caption?: string;
+  quotedMessageId?: string;
+};
+
+function recordNormalizedFile(pool: Pool, input: NormalizedFileInput, direction: "inbound" | "outbound") {
   return recordNormalizedInboundEvent(pool, {
     applicationId: input.applicationId,
     conversationId: input.conversationId,
     providerMessageId: input.providerMessageId,
     phoneInternational: input.phoneInternational,
-    messageType: "file",
+    messageType: input.mimeType.startsWith("audio/") ? "audio"
+      : input.mimeType.startsWith("image/") ? "image"
+      : input.mimeType.startsWith("video/") ? "video" : "file",
     body: input.caption
       ? `${input.fileName}\n${input.caption}`
       : input.fileName,
-    direction: "inbound",
+    direction,
     quotedMessageId: input.quotedMessageId,
+    providerTimestamp: input.providerTimestamp,
     mediaMetadata: {
       media: {
         fileName: input.fileName,
         mimeType: input.mimeType,
         sizeBytes: input.sizeBytes,
         storageKey: input.storageKey,
+        sha256: input.sha256,
+        candidateFileId: input.candidateFileId,
+        processingOutcome: input.processingOutcome,
+        processingStatus: input.processingStatus,
+        processingReason: input.processingReason,
+        providerTimestamp: input.providerTimestamp,
       },
     },
   });
+}
+
+/** Conserva bytes, procedencia y vínculo al expediente como una recepción. */
+export function recordNormalizedInboundFile(pool: Pool, input: NormalizedFileInput) {
+  return recordNormalizedFile(pool, input, "inbound");
+}
+
+/** Rehidrata medios enviados por la cuenta sin atribuirlos al candidato. */
+export function recordNormalizedOutboundFile(pool: Pool, input: NormalizedFileInput) {
+  return recordNormalizedFile(pool, input, "outbound");
 }
 
 export function recordNormalizedOutboundText(
@@ -1200,6 +1284,7 @@ export function recordNormalizedOutboundText(
     providerMessageId: string;
     phoneInternational: string;
     text: string;
+    providerTimestamp?: string;
   }
 ) {
   const text = input.text.trim();
@@ -1222,6 +1307,7 @@ export function recordNormalizedInboundLink(
     link: string;
     caption?: string;
     quotedMessageId?: string;
+    providerTimestamp?: string;
   }
 ) {
   const caption = input.caption?.trim();
@@ -1242,6 +1328,7 @@ export function recordNormalizedOutboundLink(
     phoneInternational: string;
     link: string;
     caption?: string;
+    providerTimestamp?: string;
   }
 ) {
   const caption = input.caption?.trim();
@@ -1264,6 +1351,7 @@ export function recordNormalizedInboundLocation(
     longitude: number;
     address?: string;
     quotedMessageId?: string;
+    providerTimestamp?: string;
   }
 ) {
   return recordNormalizedInboundEvent(pool, {
@@ -1288,6 +1376,7 @@ export function recordNormalizedOutboundLocation(
     latitude: number;
     longitude: number;
     address?: string;
+    providerTimestamp?: string;
   }
 ) {
   return recordNormalizedInboundEvent(pool, {

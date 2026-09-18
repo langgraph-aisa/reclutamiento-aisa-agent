@@ -8,8 +8,8 @@ import {
 /**
  * Auditoría del canal de ApiChat.
  *
- * El conducto de archivos falla en silencio por diseño del proveedor: un
- * mensaje de archivo sin contenido utilizable devuelve éxito, y un envío
+ * El receptor local puede haber descartado un archivo antes de persistirlo.
+ * El informe distingue ese hecho de una consulta de diagnóstico fallida. Un envío
  * aceptado no es un envío entregado. Este módulo **no inventa un registro
  * nuevo**: consolida el que ya existe —las pérdidas del receptor y los fallos
  * de entrega de la cola— y cierra el único error que hoy no se asienta en
@@ -34,6 +34,7 @@ export const APICHAT_AUDIT_DETAIL_LIMIT = 20;
 export const APICHAT_AUDIT_STUCK_MINUTES = 10;
 
 export type ApiChatChannelState =
+  | "observabilidad_no_disponible"
   | "verificado"
   | "con_perdidas"
   | "con_fallos_de_envio"
@@ -60,19 +61,27 @@ export function summarizeApiChatChannel(input: {
   inboundLosses: number;
   outboundFailures: number;
   stuckDeliveries: number;
+  available?: boolean;
 }): ApiChatChannelSummary {
   const base = { ...input };
+  if (input.available === false)
+    return {
+      ...base,
+      state: "observabilidad_no_disponible",
+      verdict:
+        "La lectura de una o más fuentes de auditoría falló. Los contadores son parciales y no permiten certificar el transporte.",
+    };
   if (input.inboundLosses > 0)
     return {
       ...base,
       state: "con_perdidas",
       verdict: `La recepción pierde archivos: ${input.inboundLosses} pérdida(s) asentada(s). El candidato cree haber enviado y el expediente no lo recibe.`,
     };
-  if (input.outboundFailures > 0)
+  if (input.outboundFailures > 0 || input.stuckDeliveries > 0)
     return {
       ...base,
       state: "con_fallos_de_envio",
-      verdict: `La entrega falla: ${input.outboundFailures} envío(s) no confirmado(s). El archivo salió del artefacto pero no consta entregado.`,
+      verdict: `Hay ${input.outboundFailures} envío(s) con fallo y ${input.stuckDeliveries} envío(s) detenido(s). No consta su entrega confirmada.`,
     };
   if (input.inboundReceived > 0)
     return {
@@ -84,7 +93,7 @@ export function summarizeApiChatChannel(input: {
     ...base,
     state: "sin_evidencia",
     verdict:
-      "Sin evidencia: no se asentó ninguna pérdida, pero tampoco se recibió ningún archivo. Una prueba con un archivo real desde un teléfono autorizado es lo único que convierte esta incógnita en una verificación.",
+      "No hay adjuntos registrados en la ventana consultada. La ausencia de registros no permite atribuir la causa; corresponde revisar los eventos y su procesamiento.",
   };
 }
 
@@ -141,6 +150,7 @@ export async function recordApiChatSendFailure(
 
 export type ApiChatChannelReport = {
   windowHours: number;
+  available: boolean;
   summary: ApiChatChannelSummary;
   inbound: {
     received: number;
@@ -184,23 +194,38 @@ export async function apiChatChannelReport(
 ): Promise<ApiChatChannelReport> {
   const windowHours = options.windowHours ?? APICHAT_AUDIT_WINDOW_HOURS;
   const detail = APICHAT_AUDIT_DETAIL_LIMIT;
+  let transportAvailable = true;
   const traces = await loadTransportTraces(pool, {
     limit: APICHAT_AUDIT_DETAIL_LIMIT,
+  }).catch(() => {
+    transportAvailable = false;
+    return [] as TransportTrace[];
   });
+  let available = transportAvailable;
+  const unavailable = <T>(rows: T[]) => {
+    available = false;
+    return { rows };
+  };
   const [received, losses, failures, stuck] = await Promise.all([
     pool
       .query<{ message_type: string; total: number }>(
         `SELECT message_type,count(*)::int AS total
            FROM conversation_messages
           WHERE direction='inbound'
-            AND message_type <> 'text'
+            AND message_type IN ('file','document','image','audio','ptt','voice','video')
             AND created_at >= now() - ($1 || ' hours')::interval
           GROUP BY message_type ORDER BY total DESC`,
         [String(windowHours)]
       )
-      .catch(() => ({ rows: [] as Array<{ message_type: string; total: number }> })),
+      .catch(() =>
+        unavailable([] as Array<{ message_type: string; total: number }>)
+      ),
     pool
-      .query<{ cause: string | null; total: number; last_at: string | Date | null }>(
+      .query<{
+        cause: string | null;
+        total: number;
+        last_at: string | Date | null;
+      }>(
         `SELECT after_json->>'cause' AS cause,count(*)::int AS total,
                 max(created_at) AS last_at
            FROM audit_log
@@ -209,7 +234,15 @@ export async function apiChatChannelReport(
           GROUP BY 1 ORDER BY total DESC`,
         [APICHAT_AUDIT_INBOUND, String(windowHours)]
       )
-      .catch(() => ({ rows: [] as Array<{ cause: string | null; total: number; last_at: string | Date | null }> })),
+      .catch(() =>
+        unavailable(
+          [] as Array<{
+            cause: string | null;
+            total: number;
+            last_at: string | Date | null;
+          }>
+        )
+      ),
     pool
       .query<{
         id: number;
@@ -229,7 +262,7 @@ export async function apiChatChannelReport(
           ORDER BY created_at DESC LIMIT $2`,
         [String(windowHours), detail]
       )
-      .catch(() => ({ rows: [] })),
+      .catch(() => unavailable([])),
     pool
       .query<{ total: number }>(
         `SELECT count(*)::int AS total FROM conversation_messages
@@ -238,25 +271,28 @@ export async function apiChatChannelReport(
             AND updated_at < now() - ($1 || ' minutes')::interval`,
         [String(APICHAT_AUDIT_STUCK_MINUTES)]
       )
-      .catch(() => ({ rows: [{ total: 0 }] })),
+      .catch(() => unavailable([{ total: 0 }])),
   ]);
 
   const inboundReceived = received.rows.reduce(
     (total, row) => total + Number(row.total ?? 0),
     0
-  );  const inboundLosses = losses.rows.reduce(
+  );
+  const inboundLosses = losses.rows.reduce(
     (total, row) => total + Number(row.total ?? 0),
     0
   );
-  const failureRows = (failures.rows as Array<{
-    id: number;
-    delivery_status: string;
-    message_type: string;
-    original_file_name: string | null;
-    attempt_count: number;
-    last_error: string | null;
-    created_at: string | Date;
-  }>).map(row => ({
+  const failureRows = (
+    failures.rows as Array<{
+      id: number;
+      delivery_status: string;
+      message_type: string;
+      original_file_name: string | null;
+      attempt_count: number;
+      last_error: string | null;
+      created_at: string | Date;
+    }>
+  ).map(row => ({
     id: Number(row.id),
     deliveryStatus: row.delivery_status,
     messageType: row.message_type,
@@ -271,6 +307,7 @@ export async function apiChatChannelReport(
     inboundLosses,
     outboundFailures: failureRows.length,
     stuckDeliveries,
+    available,
   });
   const log: ApiChatAuditEntry[] = [
     ...losses.rows.map(row => ({
@@ -296,11 +333,11 @@ export async function apiChatChannelReport(
         ]
       : []),
   ].sort(
-    (left, right) =>
-      new Date(right.at).getTime() - new Date(left.at).getTime()
+    (left, right) => new Date(right.at).getTime() - new Date(left.at).getTime()
   );
   return {
     windowHours,
+    available,
     summary,
     inbound: {
       received: inboundReceived,
@@ -316,7 +353,7 @@ export async function apiChatChannelReport(
     })),
     failures: failureRows,
     transport: {
-      summary: summarizeTransportTrace(traces),
+      summary: summarizeTransportTrace(traces, transportAvailable),
       traces,
     },
     log,

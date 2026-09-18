@@ -54,14 +54,14 @@ describe("clasificación del canal de ApiChat", () => {
     expect(summary.verdict).toContain("2 envío");
   });
 
-  it("con recepciones y sin fallos el conducto se declara verificado", () => {
+  it("no declara verificado un conducto con entregas detenidas", () => {
     const summary = summarizeApiChatChannel({
       inboundReceived: 7,
       inboundLosses: 0,
       outboundFailures: 0,
       stuckDeliveries: 2,
     });
-    expect(summary.state).toBe("verificado");
+    expect(summary.state).toBe("con_fallos_de_envio");
     // Una entrega detenida no se disfraza de verificación silenciosa.
     expect(summary.stuckDeliveries).toBe(2);
   });
@@ -74,7 +74,7 @@ describe("clasificación del canal de ApiChat", () => {
       stuckDeliveries: 0,
     });
     expect(summary.state).toBe("sin_evidencia");
-    expect(summary.verdict).toContain("prueba con un archivo real");
+    expect(summary.verdict).toContain("no permite atribuir la causa");
   });
 
   it("no muta la entrada recibida", () => {
@@ -172,9 +172,9 @@ describe("informe consolidado del canal", () => {
     for (const call of calls) {
       expect(call.text).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
     }
-    expect(calls.some(call => call.text.includes("conversation_transport_traces"))).toBe(
-      true
-    );
+    expect(
+      calls.some(call => call.text.includes("conversation_transport_traces"))
+    ).toBe(true);
   });
 
   it("consolida recepciones, pérdidas y fallos en una sola lectura", async () => {
@@ -210,10 +210,7 @@ describe("informe consolidado del canal", () => {
           },
         ],
       ],
-      [
-        "delivery_status IN ('pending','queued','sending')",
-        [{ total: 2 }],
-      ],
+      ["delivery_status IN ('pending','queued','sending')", [{ total: 2 }]],
     ]);
 
     const report = await apiChatChannelReport(pool);
@@ -279,14 +276,16 @@ describe("informe consolidado del canal", () => {
     expect(report.log[0].detail).toContain("sin detalle del proveedor");
   });
 
-  it("degrada a una incógnita cuando las tablas no existen", async () => {
+  it("declara observabilidad no disponible cuando las tablas no existen", async () => {
     const pool = {
       query: async () => {
         throw new Error("relación inexistente");
       },
     } as unknown as Pool;
     const report = await apiChatChannelReport(pool);
-    expect(report.summary.state).toBe("sin_evidencia");
+    expect(report.summary.state).toBe("observabilidad_no_disponible");
+    expect(report.available).toBe(false);
+    expect(report.transport.summary.state).toBe("no-disponible");
     expect(report.failures).toHaveLength(0);
     expect(report.log).toHaveLength(0);
   });

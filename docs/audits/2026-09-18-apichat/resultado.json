@@ -1,0 +1,92 @@
+{
+  "tipo": "caracterizacion_de_defectos_existentes",
+  "interpretacion": "Exito confirma los cinco contraejemplos; no demuestra una correccion ni identifica por si solo la causa del incidente productivo.",
+  "alcance": "Funciones reales del checkout, entradas ficticias, sin red, sin servicios privados y sin base de datos real.",
+  "comando": "node --import tsx docs/audits/2026-09-18-apichat/contraejemplos.ts",
+  "llamadasFetch": 0,
+  "totalConfirmados": 5,
+  "resultados": [
+    {
+      "id": "C01_ruta_con_barra",
+      "confirmado": true,
+      "funcion": "registerInboxFileRoutes",
+      "observado": {
+        "rawPath": "/api/inbox/files/in-42/11111111-2222-3333-4444-555555555555",
+        "rawMatches": false,
+        "encodedPath": "/api/inbox/files/in-42%2F11111111-2222-3333-4444-555555555555",
+        "encodedMatches": true,
+        "claveDecodificadaCorrecta": true
+      }
+    },
+    {
+      "id": "C02_sobre_messages",
+      "confirmado": true,
+      "funcion": "normalizeApiChatWebhookPayload",
+      "observado": {
+        "sobre": "{ messages: [mensaje] }",
+        "mensajesEnSobre": 1,
+        "resultadoSobre": null,
+        "resultadoDirectoAceptado": true,
+        "campoContenidoDirecto": "url",
+        "bytesBinariosFicticios": 59
+      }
+    },
+    {
+      "id": "C03_adjunto_anidado_invisible_para_resumen",
+      "confirmado": true,
+      "funciones": [
+        "describeTransportShape",
+        "summarizeTransportTrace"
+      ],
+      "observado": {
+        "shape": {
+          "message": {
+            "kind": "objeto"
+          }
+        },
+        "payloadBytes": 300,
+        "bytesBinariosFicticios": 59,
+        "resumenAnidado": {
+          "state": "sin-adjuntos",
+          "verdict": "El proveedor llama al receptor, pero ninguna petición trajo contenido de archivo. La pérdida está del lado del proveedor o de la configuración del webhook, no del receptor.",
+          "withAttachment": 0,
+          "discarded": 0
+        },
+        "controlDirecto": {
+          "state": "con-adjuntos",
+          "withAttachment": 1
+        }
+      }
+    },
+    {
+      "id": "C04_truncamiento_rompe_json",
+      "confirmado": true,
+      "funcion": "recordTransportTrace",
+      "observado": {
+        "camposFicticios": 40,
+        "caracteresJsonAntes": 82481,
+        "caracteresJsonEnviados": 65536,
+        "limiteDeclarado": 65536,
+        "parametroJsonbInvalido": true,
+        "rechazoSimuladoAbsorbido": true,
+        "llamadasPoolSimulado": 1,
+        "baseDeDatosReal": false
+      }
+    },
+    {
+      "id": "C05_contenido_corto_conservado",
+      "confirmado": true,
+      "funciones": [
+        "describeTransportShape",
+        "redactTransportPayload"
+      ],
+      "observado": {
+        "shapeConservaTexto": true,
+        "shapeConservaSecretoSintetico": true,
+        "payloadConservaTexto": true,
+        "payloadEnmascaraSecretoSintetico": true,
+        "valoresRealesUtilizados": false
+      }
+    }
+  ]
+}

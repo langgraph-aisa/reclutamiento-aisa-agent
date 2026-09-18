@@ -41,6 +41,19 @@ export type SpeechResponse = {
 type AudioClient = Pick<OpenAI, "audio">;
 type AudioClientFactory = (apiKey: string) => AudioClient;
 
+export class AudioInputError extends Error {
+  constructor(
+    public readonly code:
+      | "audio_format_unsupported"
+      | "audio_empty"
+      | "audio_size_limit",
+    message: string
+  ) {
+    super(message);
+    this.name = "AudioInputError";
+  }
+}
+
 const mimeExtension: Record<string, string> = {
   "audio/flac": "flac",
   "audio/mpeg": "mp3",
@@ -78,16 +91,21 @@ function normalizedExtension(fileName: string, mimeType: string) {
     !extension ||
     !OPENAI_TRANSCRIPTION_EXTENSIONS.includes(extension as never)
   ) {
-    throw new Error("El formato de audio no está admitido para transcripción.");
+    throw new AudioInputError(
+      "audio_format_unsupported",
+      "El formato de audio no está admitido para transcripción."
+    );
   }
   return extension;
 }
 
 function assertSize(data: Buffer | Uint8Array, maximumMb: number) {
   const maximumBytes = maximumMb * 1024 * 1024;
-  if (data.byteLength === 0) throw new Error("El archivo de audio está vacío.");
+  if (data.byteLength === 0)
+    throw new AudioInputError("audio_empty", "El archivo de audio está vacío.");
   if (data.byteLength > maximumBytes) {
-    throw new Error(
+    throw new AudioInputError(
+      "audio_size_limit",
       `El archivo de audio supera la cuota configurada de ${maximumMb} MB.`
     );
   }
@@ -113,6 +131,7 @@ async function withKeyRotation<T>(
     try {
       return await operation(factory(apiKey), slot, settings);
     } catch (error) {
+      if (error instanceof AudioInputError) throw error;
       lastError = error;
     }
   }

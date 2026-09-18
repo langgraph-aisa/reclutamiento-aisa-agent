@@ -4,7 +4,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { getPool, getUserById } from "./db";
 import { readLocalSession } from "./localAuth";
-import { verifyViewerToken } from "./viewerAccess";
+import { verifyViewerToken, VIEWER_SECURITY_HEADERS } from "./viewerAccess";
 
 /**
  * Almacenamiento de archivos de la bandeja conversacional.
@@ -44,7 +44,15 @@ export function inboxFilePath(key: string) {
 export async function writeInboxFile(key: string, data: Buffer) {
   const target = inboxFilePath(key);
   await fs.promises.mkdir(path.dirname(target), { recursive: true });
-  await fs.promises.writeFile(target, data);
+  // La ruta final sólo publica archivos completos, incluso durante un reintento.
+  const temporary = `${target}.${randomUUID()}.tmp`;
+  try {
+    await fs.promises.writeFile(temporary, data, { flag: "wx", mode: 0o600 });
+    await fs.promises.rename(temporary, target);
+  } catch (error) {
+    await fs.promises.rm(temporary, { force: true }).catch(() => undefined);
+    throw error;
+  }
   return target;
 }
 
@@ -64,6 +72,7 @@ function sendRange(
   rangeHeader?: string
 ) {
   const common = {
+    ...VIEWER_SECURITY_HEADERS,
     "Content-Type": mimeType,
     "Cache-Control": "private, max-age=3600",
   };
@@ -77,12 +86,19 @@ function sendRange(
     return;
   }
   const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
-  if (!match) {
+  if (!match || (!match[1] && !match[2]) || size === 0) {
     res.status(416).set("Content-Range", `bytes */${size}`).end();
     return;
   }
-  const start = match[1] ? Number(match[1]) : 0;
-  const end = match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+  const suffix = !match[1];
+  const first = Number(match[1] || match[2]);
+  const last = match[1] && match[2] ? Number(match[2]) : size - 1;
+  if (!Number.isSafeInteger(first) || !Number.isSafeInteger(last) || (suffix && first <= 0)) {
+    res.status(416).set("Content-Range", `bytes */${size}`).end();
+    return;
+  }
+  const start = suffix ? Math.max(0, size - first) : first;
+  const end = suffix ? size - 1 : Math.min(last, size - 1);
   if (start > end || start >= size || end < 0) {
     res.status(416).set("Content-Range", `bytes */${size}`).end();
     return;
@@ -108,8 +124,9 @@ async function resolveInboxAttachment(req: Request, res: Response) {
   if (!capability) {
     const localUserId = await readLocalSession(req);
     const user = localUserId ? await getUserById(localUserId) : null;
-    if (!user?.active || user.role !== "admin") {
-      res.status(403).json({ error: "Acceso restringido a administración." });
+    // Misma política de rol que recruiterProcedure, usada por inbox.detail.
+    if (!user?.active || !["admin", "reclutador"].includes(user.role)) {
+      res.status(403).json({ error: "Se requiere rol de reclutador o administrador." });
       return null;
     }
   }
@@ -120,11 +137,11 @@ async function resolveInboxAttachment(req: Request, res: Response) {
   }
   const result = await pool.query(
     `SELECT m.id,
-            COALESCE(metadata->'media'->>'fileName',m.body) AS original_name,
-            metadata->'media'->>'mimeType' AS mime_type,
-            metadata->'media'->>'storageKey' AS storage_key
+            COALESCE(m.original_file_name,metadata->'media'->>'fileName','Adjunto') AS original_name,
+            COALESCE(m.mime_type,metadata->'media'->>'mimeType') AS mime_type,
+            COALESCE(m.storage_key,metadata->'media'->>'storageKey') AS storage_key
        FROM conversation_messages m
-      WHERE metadata->'media'->>'storageKey'=$1 LIMIT 1`,
+      WHERE COALESCE(m.storage_key,metadata->'media'->>'storageKey')=$1 LIMIT 1`,
     [key]
   );
   const row = result.rows[0];
@@ -163,7 +180,7 @@ export function registerInboxFileRoutes(app: Express) {
       console.warn(
         `[InboxFiles] Entrega fallida (${error instanceof Error ? error.name : "unknown"}).`
       );
-      res.status(500).json({
+      res.status(missing ? 410 : 500).json({
         error: missing
           ? "El archivo no está en el volumen de almacenamiento; verifique la persistencia del volumen en EasyPanel."
           : "No fue posible entregar el archivo.",

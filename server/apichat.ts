@@ -449,8 +449,8 @@ export async function sendApiChatFile(
   const file = secureUrl(input.fileUrl, "el archivo").toString();
   const fileName = input.fileName?.trim().slice(0, 260);
   const caption = input.caption?.trim();
-  const body: Record<string, unknown> = { number: phoneDigits, file };
-  if (fileName) body.name = fileName;
+  const body: Record<string, unknown> = { number: phoneDigits, url: file };
+  if (fileName) body.filename = fileName;
   if (caption) body.caption = caption;
   return postApiChatAction(
     "file",
@@ -472,14 +472,16 @@ export async function sendApiChatPtt(
   options: ApiChatPostOptions = {}
 ): Promise<ApiChatSendResult> {
   const config = validateApiChatConfig(configInput);
-  requireNativeMode(config, "sendPTT");
+  requireNativeMode(config, "sendAudio");
+  // /sendPTT conserva el interruptor de configuraciones ya almacenadas.
   assertApiChatEndpointEnabled(config, "/sendPTT");
+  assertApiChatEndpointEnabled(config, "/sendAudio");
   const phoneDigits = outboundPhoneDigits(input.phoneInternational);
   const audio = secureUrl(input.audioUrl, "el audio").toString();
-  const body: Record<string, unknown> = { number: phoneDigits, ptt: audio };
+  const body: Record<string, unknown> = { number: phoneDigits, url: audio };
   return postApiChatAction(
     "ptt",
-    officialActionUrl(config, "sendPTT"),
+    officialActionUrl(config, "sendAudio"),
     nativeHeaders(config),
     body,
     options,

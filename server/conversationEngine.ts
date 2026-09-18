@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { Pool } from "pg";
+import { databaseQueryScope } from "./databaseQueryScope";
 import { z } from "zod";
 import {
   JARVI_HR_IDENTITY_EMAIL,
@@ -15,6 +16,7 @@ import {
   type ConversationStage,
   verifyConversationConduct,
 } from "../shared/conversationPersona";
+import { candidateDocumentsProcessing } from "./candidateDocumentWorker";
 import { APP_VERSION } from "../shared/release";
 import { getAgentRuntimeSettings } from "./agentSettings";
 import {
@@ -28,7 +30,10 @@ import {
 import { enqueueAgentReply } from "./conversationOutbox";
 import { assertCapability } from "./conversationRuntime";
 import { getConversationActivation } from "./conversationActivation";
-import { observeOpenAIClient, withLangfuseObservation } from "./observability/langfuse";
+import {
+  observeOpenAIClient,
+  withLangfuseObservation,
+} from "./observability/langfuse";
 import {
   assertNoAutomatedSalaryOffer,
   immutableSalaryInstructions,
@@ -184,48 +189,54 @@ export function buildConversationUserInput(
     `Mensaje más reciente de la persona: ${lastInbound}`,
     `Plaza: ${source.position.title}`,
     `Documentos recibidos: ${
-      source.attachments.map(attachment => attachment.originalName).join(", ") ||
-      "ninguno"
+      source.attachments
+        .map(attachment => attachment.originalName)
+        .join(", ") || "sin adjuntos registrados en el manifiesto"
     }`,
+    "Si el manifiesto contiene un archivo, confirme su recepción; no afirme que no llegó. Los fallos o pendientes son de procesamiento, no ausencia de envío. Un documento recibido todavía puede no ser un CV.",
     "Redacte el siguiente turno de la conversación.",
   ].join("\n");
 }
 
-export const defaultConversationGenerator: ConversationGenerator = async input => {
-  const client = observeOpenAIClient(
-    new OpenAI({ apiKey: input.apiKey, timeout: 45_000, maxRetries: 0 }),
-    {
-      traceName: "conversation-turn",
-      tags: ["conversation", "responses-api", "whatsapp"],
-      generationName: `conversation-turn-${input.keySlot}`,
-      generationMetadata: {
-        feature: "conversational-agent",
-        keySlot: input.keySlot,
-        attempt: input.attempt,
-        version: APP_VERSION,
-        classification: "restricted-redacted",
+export const defaultConversationGenerator: ConversationGenerator =
+  async input => {
+    const client = observeOpenAIClient(
+      new OpenAI({ apiKey: input.apiKey, timeout: 45_000, maxRetries: 0 }),
+      {
+        traceName: "conversation-turn",
+        tags: ["conversation", "responses-api", "whatsapp"],
+        generationName: `conversation-turn-${input.keySlot}`,
+        generationMetadata: {
+          feature: "conversational-agent",
+          keySlot: input.keySlot,
+          attempt: input.attempt,
+          version: APP_VERSION,
+          classification: "restricted-redacted",
+        },
+      }
+    );
+    const response = await client.responses.parse({
+      model: input.model,
+      instructions: input.instructions,
+      input: input.userInput,
+      text: {
+        format: zodTextFormat(
+          ConversationTurnOutputSchema,
+          "turno_conversacional"
+        ),
       },
+      max_output_tokens: 1_600,
+      store: false,
+    });
+    if (!response.output_parsed) {
+      throw new Error("El agente conversacional devolvió una respuesta vacía.");
     }
-  );
-  const response = await client.responses.parse({
-    model: input.model,
-    instructions: input.instructions,
-    input: input.userInput,
-    text: {
-      format: zodTextFormat(ConversationTurnOutputSchema, "turno_conversacional"),
-    },
-    max_output_tokens: 1_600,
-    store: false,
-  });
-  if (!response.output_parsed) {
-    throw new Error("El agente conversacional devolvió una respuesta vacía.");
-  }
-  return {
-    output: ConversationTurnOutputSchema.parse(response.output_parsed),
-    responseId: response.id ?? null,
-    model: input.model,
+    return {
+      output: ConversationTurnOutputSchema.parse(response.output_parsed),
+      responseId: response.id ?? null,
+      model: input.model,
+    };
   };
-};
 
 async function loadConversationState(pool: Pool, conversationId: number) {
   const result = await pool.query<ConversationState>(
@@ -334,7 +345,7 @@ async function escalateConversation(
  * Ejecuta un turno completo del agente: rehidrata el hilo, razona, verifica la
  * conducta y encola la respuesta autorizada.
  */
-export async function runConversationTurn(
+async function runConversationTurnInternal(
   pool: Pool,
   input: {
     conversationId: number;
@@ -355,10 +366,12 @@ export async function runConversationTurn(
   if (!activation.capabilities.reason)
     return {
       status: "skipped",
-      reason: "La capacidad de razonamiento está desactivada por configuración.",
+      reason:
+        "La capacidad de razonamiento está desactivada por configuración.",
     };
   const state = await loadConversationState(pool, input.conversationId);
-  if (!state) return { status: "skipped", reason: "La conversación no existe." };
+  if (!state)
+    return { status: "skipped", reason: "La conversación no existe." };
   if (!state.agent_enabled || state.human_takeover)
     return {
       status: "skipped",
@@ -374,6 +387,14 @@ export async function runConversationTurn(
       status: "skipped",
       reason: "La conversación no registra un mensaje entrante pendiente.",
     };
+
+  if (await candidateDocumentsProcessing(pool, Number(state.application_id))) {
+    return {
+      status: "skipped",
+      reason:
+        "Los adjuntos recibidos se están procesando; el turno se retomará al finalizar.",
+    };
+  }
 
   const alreadyProcessed = await pool.query(
     `SELECT id FROM conversation_turns
@@ -403,8 +424,9 @@ export async function runConversationTurn(
       input: { operation: "run_conversation_turn" },
     },
     async observation => {
-      const settings = await (input.dependencies?.settings ??
-        getAgentRuntimeSettings)(pool);
+      const settings = await (
+        input.dependencies?.settings ?? getAgentRuntimeSettings
+      )(pool);
       if (!settings.useResponsesApi) {
         throw new Error(
           "La OpenAI Responses API debe estar habilitada para el agente conversacional."
@@ -461,12 +483,18 @@ export async function runConversationTurn(
       let lastReasons: string[] = [];
       let lastModel: string = settings.model;
       let lastResponseId: string | null = null;
-      for (let attempt = 0; attempt <= CONVERSATION_REGENERATION_LIMIT; attempt += 1) {
+      for (
+        let attempt = 0;
+        attempt <= CONVERSATION_REGENERATION_LIMIT;
+        attempt += 1
+      ) {
         const startedAt = Date.now();
         const slot = configuredKeys[attempt % configuredKeys.length]!;
-        const keySlot = slot[0] === "backup" ? ("backup" as const) : ("primary" as const);
-        const generated = await (input.dependencies?.generator ??
-          defaultConversationGenerator)({
+        const keySlot =
+          slot[0] === "backup" ? ("backup" as const) : ("primary" as const);
+        const generated = await (
+          input.dependencies?.generator ?? defaultConversationGenerator
+        )({
           instructions:
             attempt === 0
               ? instructions
@@ -508,6 +536,10 @@ export async function runConversationTurn(
         }
 
         const reasons: string[] = [];
+        if (deniesReceivedAttachments(generated.output.reply, source))
+          reasons.push(
+            "El manifiesto confirma adjuntos recibidos. Describa su estado y no niegue su recepción."
+          );
         try {
           assertNoAutomatedSalaryOffer(generated.output.reply);
         } catch (error) {
@@ -628,12 +660,71 @@ export async function runConversationTurn(
         validationReasons: lastReasons,
         attempt: CONVERSATION_REGENERATION_LIMIT + 1,
       });
-      const escalation = await escalateConversation(pool, state.id, lastReasons);
+      const escalation = await escalateConversation(
+        pool,
+        state.id,
+        lastReasons
+      );
       observation.update({
         output: { status: "escalated", reasons: lastReasons },
         metadata: { outcome: "conduct_failed", escalation },
       });
       return { status: "escalated", turnId, reasons: lastReasons };
     }
+  );
+}
+
+/** Evita dos respuestas al mismo inbound cuando trabajan varias instancias. */
+export async function runConversationTurn(
+  pool: Pool,
+  input: Parameters<typeof runConversationTurnInternal>[1]
+): Promise<ConversationTurnOutcome> {
+  const lock = await pool.connect();
+  let acquired = false;
+  try {
+    acquired = Boolean(
+      (
+        await lock.query(`SELECT pg_try_advisory_lock(139,$1) AS acquired`, [
+          input.conversationId,
+        ])
+      ).rows[0]?.acquired
+    );
+    if (!acquired)
+      return {
+        status: "skipped",
+        reason: "Otra instancia está procesando esta conversación.",
+      };
+    return await runConversationTurnInternal(
+      databaseQueryScope(lock) as Pool,
+      input
+    );
+  } finally {
+    try {
+      if (acquired)
+        await lock.query(`SELECT pg_advisory_unlock(139,$1)`, [
+          input.conversationId,
+        ]);
+    } finally {
+      lock.release();
+    }
+  }
+}
+
+export function deniesReceivedAttachments(
+  reply: string,
+  source: Pick<ConversationContextSource, "attachments">
+) {
+  if (!source.attachments.length) return false;
+  const normalized = reply
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return (
+    /\b(?:no (?:hay|aparece[n]?|recibi|recibimos|veo|tengo|tenemos|llego)|ningun[a]?)\b[^.!?\n]{0,100}\b(?:documento[s]?|adjunto[s]?|archivo[s]?|pdf)\b/.test(
+      normalized
+    ) ||
+    /\b(?:documento[s]?|adjunto[s]?|archivo[s]?|pdf)\b[^.!?\n]{0,60}\bno (?:llego|llegaron|aparece|aparecen|se recibio|se recibieron)\b/.test(
+      normalized
+    )
   );
 }

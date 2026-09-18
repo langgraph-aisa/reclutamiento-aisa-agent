@@ -4,8 +4,12 @@ import {
   buildConversationUserInput,
   conversationStageForTurn,
   evidenceIsLiteral,
+  deniesReceivedAttachments,
 } from "./conversationEngine";
-import { buildConversationContext, type ConversationContextSource } from "./conversationContext";
+import {
+  buildConversationContext,
+  type ConversationContextSource,
+} from "./conversationContext";
 import { POSITION_KNOWLEDGE_FALLBACK } from "./knowledgeContext";
 
 const baseSource: ConversationContextSource = {
@@ -46,12 +50,40 @@ const baseSource: ConversationContextSource = {
 };
 
 describe("motor conversacional: contrato verificable", () => {
-  it("no acepta como nota de conocimiento una evidencia que no es literal", () => {
+  it("impide negar un adjunto registrado aunque su extracción haya fallado", () => {
+    const source = {
+      attachments: [
+        { originalName: "cv.pdf", category: "unclassified", status: "error" },
+      ],
+    };
     expect(
-      evidenceIsLiteral("cuenta con licencia tipo A", "Sí, cuenta con licencia tipo A vigente")
+      deniesReceivedAttachments("No aparece adjunto el PDF en el chat.", source)
     ).toBe(true);
     expect(
-      evidenceIsLiteral("cuenta con licencia tipo B", "Sí, cuenta con licencia tipo A vigente")
+      deniesReceivedAttachments(
+        "En el expediente no aparecen documentos adjuntos.",
+        source
+      )
+    ).toBe(true);
+    expect(
+      deniesReceivedAttachments(
+        "El archivo fue recibido y su lectura requiere revisión.",
+        source
+      )
+    ).toBe(false);
+  });
+  it("no acepta como nota de conocimiento una evidencia que no es literal", () => {
+    expect(
+      evidenceIsLiteral(
+        "cuenta con licencia tipo A",
+        "Sí, cuenta con licencia tipo A vigente"
+      )
+    ).toBe(true);
+    expect(
+      evidenceIsLiteral(
+        "cuenta con licencia tipo B",
+        "Sí, cuenta con licencia tipo A vigente"
+      )
     ).toBe(false);
     expect(evidenceIsLiteral("corto", "corto")).toBe(false);
   });
@@ -64,7 +96,10 @@ describe("motor conversacional: contrato verificable", () => {
   });
 
   it("inyecta la conducta, la política salarial y el expediente en las instrucciones", () => {
-    const context = buildConversationContext(baseSource, new Date("2026-09-16"));
+    const context = buildConversationContext(
+      baseSource,
+      new Date("2026-09-16")
+    );
     const instructions = buildConversationInstructions(
       baseSource,
       context,
@@ -80,7 +115,9 @@ describe("motor conversacional: contrato verificable", () => {
       ],
       "apertura"
     );
-    expect(instructions).toContain("Conducta institucional del agente conversacional");
+    expect(instructions).toContain(
+      "Conducta institucional del agente conversacional"
+    );
     expect(instructions).toContain("REGLA INALTERABLE DE REMUNERACIÓN");
     expect(instructions).toContain("EXPEDIENTE Y CONTEXTO VIGENTE");
     expect(instructions).toContain("¿En qué zona reside actualmente?");

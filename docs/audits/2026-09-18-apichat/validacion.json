@@ -1,0 +1,24 @@
+{
+  "alcance": "Pruebas existentes seleccionadas; no es la suite completa ni una prueba productiva de extremo a extremo",
+  "commit": "b450bdbcfa9c1225221936206220a46117c2d77e",
+  "comando": "node node_modules/vitest/vitest.mjs run server/apiChatWebhook.test.ts server/inboxSync.test.ts server/base64Transport.test.ts server/transportTrace.test.ts server/candidateKnowledge.test.ts server/apiChatSettings.test.ts server/conversationContext.test.ts server/inbox.test.ts",
+  "vitest": "2.1.9",
+  "fechaUtc": "2026-09-18",
+  "inicioUtc": "20:26:42",
+  "duracionSegundos": 16.22,
+  "archivosAprobados": 8,
+  "pruebasAprobadas": 125,
+  "pruebasFallidas": 0,
+  "archivos": {
+    "server/apiChatWebhook.test.ts": 13,
+    "server/inboxSync.test.ts": 12,
+    "server/base64Transport.test.ts": 29,
+    "server/transportTrace.test.ts": 14,
+    "server/candidateKnowledge.test.ts": 14,
+    "server/apiChatSettings.test.ts": 19,
+    "server/conversationContext.test.ts": 6,
+    "server/inbox.test.ts": 18
+  },
+  "incidenciaLanzador": "pnpm exec falló preparando /home/codespace/.local/share/pnpm/store (ENOENT). Se utilizó el ejecutable Vitest local con Node, sin instalar dependencias.",
+  "interpretacion": "La suite seleccionada pasa aunque existen defectos contractuales y de integración. Los cinco contraejemplos adicionales se documentan por separado en resultado.json."
+}

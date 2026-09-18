@@ -69,6 +69,8 @@ export type ConversationAttachmentInput = {
   category: string;
   status: string;
   transcription?: string | null;
+  errorCode?: string | null;
+  truncated?: boolean;
 };
 
 export type ConversationContextSource = {
@@ -100,7 +102,7 @@ export type ConversationContextSource = {
    * la evidencia documental del expediente —currículum, títulos,
    * certificaciones— y complementan lo declarado en el formulario.
    */
-  knowledgeDocuments: Array<{
+  knowledgeDocuments?: Array<{
     id: number;
     originalName: string;
     source: string;
@@ -161,7 +163,8 @@ const DIMENSION_KEYWORDS: Array<{
   },
   {
     dimension: "riesgos_brechas",
-    pattern: /(brecha|riesgo|inconsistencia|requisito indispensable|descalific)/i,
+    pattern:
+      /(brecha|riesgo|inconsistencia|requisito indispensable|descalific)/i,
   },
   {
     dimension: "remuneracion",
@@ -269,17 +272,17 @@ export function computeConversationGaps(
       kind: "missing_location",
       dimension: "disponibilidad_logistica",
       reason: "La ubicación declarada está incompleta para la revisión humana.",
-      suggestion:
-        "¿En qué zona, municipio y departamento reside actualmente?",
+      suggestion: "¿En qué zona, municipio y departamento reside actualmente?",
       askable: true,
-      evidence: [
-        source.declaredLocation.zone,
-        source.declaredLocation.municipality,
-        source.declaredLocation.department,
-        source.declaredLocation.country,
-      ]
-        .filter(Boolean)
-        .join(", ") || null,
+      evidence:
+        [
+          source.declaredLocation.zone,
+          source.declaredLocation.municipality,
+          source.declaredLocation.department,
+          source.declaredLocation.country,
+        ]
+          .filter(Boolean)
+          .join(", ") || null,
     });
   }
 
@@ -305,9 +308,8 @@ export function computeConversationGaps(
       kind: "cv_pending",
       dimension: "identificacion_ajuste",
       reason: "El CV recibido todavía no está analizado en el RAG personal.",
-      suggestion:
-        "¿Podría compartir su CV más reciente en formato PDF para completar el expediente?",
-      askable: true,
+      suggestion: null,
+      askable: false,
       evidence: null,
     });
   }
@@ -341,7 +343,8 @@ function renderMarcoLayer(source: ConversationContextSource) {
     source.knowledge.rendered,
     "",
     "Documentos metodológicos:",
-    methodologies || "Referencias SIERA/MST-EIR deshabilitadas por administración.",
+    methodologies ||
+      "Referencias SIERA/MST-EIR deshabilitadas por administración.",
   ].join("\n");
 }
 
@@ -358,7 +361,7 @@ function renderCandidatoLayer(source: ConversationContextSource) {
   const attachments = source.attachments
     .map(
       attachment =>
-        `- ${attachment.originalName} · ${attachment.category} · ${attachment.status}${
+        `- ${attachment.originalName} · ${attachment.category} · ${attachment.status}${attachment.errorCode ? ` · procesamiento: ${attachment.errorCode}` : ""}${attachment.truncated ? " · extracción parcial: revisar original" : ""}${
           attachment.transcription?.trim()
             ? ` · transcripción: ${attachment.transcription.trim().slice(0, 400)}`
             : ""
@@ -381,7 +384,12 @@ function renderCandidatoLayer(source: ConversationContextSource) {
     "=== B. LO QUE LA PERSONA DECLARÓ (RAG PERSONAL) ===",
     `Puesto solicitado: ${source.position.title}`,
     `Ubicación declarada: ${
-      [location.zone, location.municipality, location.department, location.country]
+      [
+        location.zone,
+        location.municipality,
+        location.department,
+        location.country,
+      ]
         .filter(Boolean)
         .join(", ") || "sin confirmar"
     }`,
@@ -398,7 +406,8 @@ function renderCandidatoLayer(source: ConversationContextSource) {
     notes || "- Sin aclaraciones adicionales.",
     "",
     "Documentos recibidos:",
-    attachments || "- Sin documentos recibidos.",
+    attachments || "- No hay adjuntos registrados en el manifiesto disponible.",
+    "Recibido no significa interpretado ni identificado como CV. Si un archivo está pendiente, falló o requiere OCR, comunique su estado sin negar su recepción ni pedir reenviarlo por un fallo interno.",
     "",
     "Expediente documental del candidato (análisis vigente):",
     documents || "- Sin documentos analizados en el expediente.",
@@ -485,34 +494,23 @@ export function buildConversationContext(
     memoria: renderMemoriaLayer(source),
   };
   const rendered = [
-    layers.marco,
     layers.candidato,
-    layers.comparativo,
     layers.memoria,
+    layers.comparativo,
+    layers.marco,
   ]
     .join("\n\n")
     .slice(0, CONVERSATION_LAYER_CHARACTER_LIMIT);
   const openQuestions = source.cycles
     .filter(cycle => cycle.status === "abierto")
     .map(cycle => cycle.question);
-  const canonical = JSON.stringify([
-    source.knowledge.fingerprint,
-    source.answers.map(answer => [
-      answer.answerKey,
-      stringifyValue(answer.value),
-      answer.deterministicResult ?? "",
-    ]),
-    source.notes.map(note => [note.dimension, note.topic, note.detail]),
-    [source.salary.declared, source.salary.expectationGtq, source.salary.source],
-    [
-      source.declaredLocation.zone,
-      source.declaredLocation.municipality,
-      source.declaredLocation.department,
-      source.declaredLocation.country,
-    ],
-    openQuestions,
-    gaps.map(gap => [gap.kind, gap.dimension, gap.reason]),
-  ]);
+  const canonical = JSON.stringify({
+    rendered,
+    attachments: source.attachments,
+    documents: source.knowledgeDocuments ?? [],
+    knowledge: source.knowledge.fingerprint,
+    gaps,
+  });
   return {
     fingerprint: createHash("sha256").update(canonical).digest("hex"),
     characters: rendered.length,
@@ -642,10 +640,20 @@ export async function loadConversationContextSource(
       [applicationId]
     ),
     pool.query(
-      `SELECT original_name,category,status,transcription
-         FROM candidate_attachments
-        WHERE application_id=$1
-        ORDER BY created_at DESC,id DESC LIMIT 30`,
+      `SELECT original_name,category,status,transcription,error_code,truncated FROM (
+         SELECT original_name,document_class AS category,analysis_status AS status,
+                CASE WHEN extraction_method LIKE 'transcription:%' THEN extracted_text ELSE NULL END AS transcription,
+                processing_error_code AS error_code,extraction_truncated AS truncated,uploaded_at AS received_at
+           FROM candidate_knowledge_files WHERE application_id=$1
+         UNION ALL
+         SELECT COALESCE(m.metadata->'media'->>'fileName',m.body),'unclassified',
+                CASE WHEN m.metadata->'media'->>'processingOutcome'='rejected' THEN 'rejected' ELSE 'received' END,
+                m.transcript,m.metadata->'media'->>'processingReason',false,m.created_at
+           FROM conversation_messages m JOIN conversations c ON c.id=m.conversation_id
+          WHERE c.application_id=$1 AND m.direction='inbound' AND m.metadata->'media' IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM candidate_knowledge_files k
+              WHERE k.application_id=$1 AND k.id::text=m.metadata->'media'->>'candidateFileId')
+       ) manifest ORDER BY received_at DESC LIMIT 100`,
       [applicationId]
     ),
     options.methodologies
@@ -653,21 +661,19 @@ export async function loadConversationContextSource(
           `SELECT display_name,content_markdown FROM methodology_documents
             WHERE document_key IN ('siera','mst_eir') ORDER BY document_key`
         )
-      : Promise.resolve({ rows: [] as Array<{ display_name: string; content_markdown: string }> }),
-    // Expediente documental del candidato. Si la migración 0026 no está
-    // aplicada, la consulta degrada a una lista vacía sin romper el turno.
-    pool
-      .query(
-        `SELECT id,original_name,source,deep_analysis
+      : Promise.resolve({
+          rows: [] as Array<{ display_name: string; content_markdown: string }>,
+        }),
+    pool.query(
+      `SELECT id,original_name,source,deep_analysis
            FROM candidate_knowledge_files
           WHERE application_id=$1
             AND analysis_status='analizado'
             AND COALESCE(deep_analysis,'')<>''
           ORDER BY uploaded_at DESC,id DESC
           LIMIT 12`,
-        [applicationId]
-      )
-      .catch(() => ({ rows: [] as Array<Record<string, unknown>> })),
+      [applicationId]
+    ),
   ]);
 
   const turns = await pool.query(
@@ -694,7 +700,9 @@ export async function loadConversationContextSource(
         dimension: String(item.dimension) as ConversationDimension,
         question: String(item.question),
         status: String(item.status),
-        openedAt: item.opened_at ? new Date(item.opened_at).toISOString() : null,
+        openedAt: item.opened_at
+          ? new Date(item.opened_at).toISOString()
+          : null,
       });
     }
     if (item.topic && item.detail && item.evidence_excerpt) {
@@ -763,15 +771,17 @@ export async function loadConversationContextSource(
       category: String(item.category),
       status: String(item.status),
       transcription: item.transcription ?? null,
+      errorCode: item.error_code ?? null,
+      truncated: Boolean(item.truncated),
     })),
-    knowledgeDocuments: (knowledgeDocuments.rows as Array<Record<string, unknown>>).map(
-      item => ({
-        id: Number(item.id),
-        originalName: String(item.original_name),
-        source: String(item.source ?? "manual"),
-        analysis: String(item.deep_analysis ?? "").slice(0, 2_000),
-      })
-    ),
+    knowledgeDocuments: (
+      knowledgeDocuments.rows as Array<Record<string, unknown>>
+    ).map(item => ({
+      id: Number(item.id),
+      originalName: String(item.original_name),
+      source: String(item.source ?? "manual"),
+      analysis: String(item.deep_analysis ?? "").slice(0, 2_000),
+    })),
     lastInboundAt: row.last_inbound_at
       ? new Date(row.last_inbound_at).toISOString()
       : null,

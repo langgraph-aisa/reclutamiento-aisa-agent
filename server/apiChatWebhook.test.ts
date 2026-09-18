@@ -1,20 +1,15 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pool } from "pg";
-import {
-  recordNormalizedInboundFile,
-  recordNormalizedInboundLink,
-  recordNormalizedInboundText,
-} from "./inbox";
 import {
   normalizeApiChatWebhookPayload,
   processApiChatWebhook,
 } from "./apiChatWebhook";
-
-vi.mock("./inboxFiles", () => ({
-  buildInboxFileKey: vi.fn(() => "in-5/abcdef1234567890abcdef"),
-  writeInboxFile: vi.fn(async () => {}),
-  inboxFilesDirectory: () => "/tmp",
-}));
+import { normalizeApiChatBatch } from "./apiChatContract";
+import {
+  recordNormalizedInboundFile,
+  recordNormalizedInboundText,
+  recordNormalizedOutboundText,
+} from "./inbox";
 
 vi.mock("./inbox", () => ({
   recordNormalizedInboundText: vi.fn(async () => ({
@@ -26,6 +21,10 @@ vi.mock("./inbox", () => ({
     conversationId: 5,
   })),
   recordNormalizedInboundLocation: vi.fn(async () => ({
+    inserted: true,
+    conversationId: 5,
+  })),
+  recordNormalizedInboundFile: vi.fn(async () => ({
     inserted: true,
     conversationId: 5,
   })),
@@ -41,29 +40,36 @@ vi.mock("./inbox", () => ({
     inserted: true,
     conversationId: 5,
   })),
-  recordNormalizedInboundFile: vi.fn(async () => ({
+  recordNormalizedOutboundFile: vi.fn(async () => ({
     inserted: true,
     conversationId: 5,
   })),
 }));
 
-function webhookPool(rows: {
-  conversations?: unknown[];
-  outbound?: unknown[];
-}) {
+vi.mock("./inboxFiles", () => ({
+  writeInboxFile: vi.fn(async () => {}),
+  inboxFilesDirectory: () => "/tmp",
+}));
+
+const conversation = {
+  conversation_id: 5,
+  application_id: 41,
+  phone_international: "+50230939134",
+};
+
+function webhookPool(rows: unknown[] = [conversation]) {
   const query = vi.fn(async (sql: string) => {
-    if (sql.includes("FROM candidates c")) {
-      return { rows: rows.conversations ?? [] };
-    }
-    if (sql.includes("direction='outbound'")) {
-      return { rows: rows.outbound ?? [] };
-    }
+    if (sql.includes("conv.provider='apichat'")) return { rows };
     return { rows: [] };
   });
   return { pool: { query } as unknown as Pool, query };
 }
 
-describe("webhook de ApiChat", () => {
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("normalización del contrato de ApiChat", () => {
   it("normaliza el formato jsonrpc con params como texto JSON", () => {
     const message = normalizeApiChatWebhookPayload({
       jsonrpc: "2.0",
@@ -129,17 +135,58 @@ describe("webhook de ApiChat", () => {
     expect(normalizeApiChatWebhookPayload({ foo: "bar" })).toBeNull();
   });
 
-  it("registra como entrante un mensaje que no coincide con envíos propios", async () => {
-    const { pool } = webhookPool({
-      conversations: [
-        {
-          conversation_id: 5,
-          application_id: 41,
-          phone_international: "+50230939134",
-        },
+  it("recorre la colección contractual messages[] sin descartar los válidos", () => {
+    const batch = normalizeApiChatBatch({
+      messages: [
+        { id: "a", number: "50255550001", type: "text", text: "x" },
+        { no: "message" },
+        { id: "b", number: "50255550001", type: "text", text: "y" },
       ],
-      outbound: [],
     });
+    expect(batch).toHaveLength(3);
+    expect(batch[0]).toMatchObject({ id: "a" });
+    expect(batch[1]).toBeNull();
+    expect(batch[2]).toMatchObject({ id: "b" });
+  });
+
+  it("no convierte un identificador de grupo en teléfono de persona", () => {
+    expect(
+      normalizeApiChatWebhookPayload({
+        id: "g1",
+        number: "12036300000@g.us",
+        type: "text",
+        text: "grupo",
+      })
+    ).toBeNull();
+    expect(
+      normalizeApiChatWebhookPayload({
+        id: "g1",
+        number: "12036300000",
+        type: "text",
+        text: "x",
+        chat_type: "group",
+      })
+    ).toBeNull();
+  });
+
+  it("identifica campos de contenido de un adjunto base64", () => {
+    const base64 = Buffer.from("x".repeat(100)).toString("base64");
+    const message = normalizeApiChatWebhookPayload({
+      id: "f1",
+      number: "50255550001",
+      type: "file",
+      filename: "cv.pdf",
+      base64,
+    });
+    expect(message).toMatchObject({ id: "f1", filename: "cv.pdf" });
+    expect(message?.contentFieldsPresent).toContain("base64");
+    expect(message?.contentValue).toBe(base64);
+  });
+});
+
+describe("procesamiento del webhook", () => {
+  it("preserva la dirección del proveedor en el registro", async () => {
+    const { pool } = webhookPool();
     const outcome = await processApiChatWebhook(pool, {
       message: {
         id: "3EB0A1",
@@ -150,7 +197,7 @@ describe("webhook de ApiChat", () => {
       from_me: true,
     });
     expect(outcome).toEqual({ ok: true, registered: true });
-    expect(recordNormalizedInboundText).toHaveBeenCalledWith(
+    expect(recordNormalizedOutboundText).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         conversationId: 5,
@@ -158,231 +205,82 @@ describe("webhook de ApiChat", () => {
         text: "Gracias",
       })
     );
-  });
-
-  it("descarta como ack un identificador ya registrado como saliente", async () => {
-    const { pool } = webhookPool({
-      conversations: [
-        {
-          conversation_id: 5,
-          application_id: 41,
-          phone_international: "+50230939134",
-        },
-      ],
-      outbound: [{ provider_message_id: "3EB0SAL" }],
-    });
-    const outcome = await processApiChatWebhook(pool, {
-      message: {
-        id: "3EB0SAL",
-        number: "50230939134",
-        type: "text",
-        text: "Prueba de 1534",
-      },
-      from_me: true,
-    });
-    expect(outcome).toEqual({ ok: true, skipped: "saliente-ya-registrado" });
     expect(recordNormalizedInboundText).not.toHaveBeenCalled();
   });
 
-  it("descarta sin conservar contenido un teléfono sin conversación activa", async () => {
-    const { pool } = webhookPool({ conversations: [], outbound: [] });
+  it("registra un mensaje entrante del candidato", async () => {
+    const { pool } = webhookPool();
     const outcome = await processApiChatWebhook(pool, {
-      message: {
-        id: "3EB0A2",
-        number: "50200000000",
-        type: "text",
-        text: "Desconocido",
-      },
-      from_me: false,
-    });
-    expect(outcome).toEqual({ ok: true, skipped: "sin-conversacion" });
-  });
-
-  it("registra un adjunto entrante con su metadata de visor", async () => {
-    const { pool } = webhookPool({
-      conversations: [
-        {
-          conversation_id: 5,
-          application_id: 41,
-          phone_international: "+50230939134",
-        },
-      ],
-      outbound: [],
-    });
-    const outcome = await processApiChatWebhook(pool, {
-      message: {
-        id: "3EB0FILE",
-        number: "50230939134",
-        type: "file",
-        filename: "hoja.docx",
-        url: "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsFBg==",
-      },
-      from_me: false,
+      id: "3EB0IN",
+      number: "50230939134",
+      type: "text",
+      text: "Hola",
     });
     expect(outcome).toEqual({ ok: true, registered: true });
-    expect(recordNormalizedInboundFile).toHaveBeenCalledWith(
+    expect(recordNormalizedInboundText).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
-        conversationId: 5,
-        fileName: "hoja.docx",
-      })
+      expect.objectContaining({ providerMessageId: "3EB0IN", text: "Hola" })
     );
   });
 
-  it("acusa recibo de tipos sin pipeline", async () => {
-    const { pool } = webhookPool({
-      conversations: [
-        {
-          conversation_id: 5,
-          application_id: 41,
-          phone_international: "+50230939134",
-        },
-      ],
-      outbound: [],
-    });
+  it("descarta sin conservar contenido un teléfono sin conversación activa", async () => {
+    const { pool } = webhookPool([]);
     const outcome = await processApiChatWebhook(pool, {
-      message: {
-        id: "3EB0A3",
-        number: "50230939134",
-        type: "reaction",
-      },
-      from_me: false,
+      id: "3EB0A2",
+      number: "50200000000",
+      type: "text",
+      text: "Desconocido",
+    });
+    expect(outcome).toEqual({ ok: true, skipped: "sin-conversacion" });
+    expect(recordNormalizedInboundText).not.toHaveBeenCalled();
+  });
+
+  it("conserva la forma no reconocida dentro de un lote sin descartar los válidos", async () => {
+    const { pool } = webhookPool();
+    const outcome = await processApiChatWebhook(pool, {
+      messages: [
+        { no: "message" },
+        { id: "ok1", number: "50230939134", type: "text", text: "válido" },
+      ],
+    });
+    expect(outcome).toMatchObject({ ok: true, registered: true });
+    expect((outcome as { results?: unknown[] }).results).toHaveLength(2);
+    expect((outcome as { results: unknown[] }).results[0]).toEqual({
+      ok: true,
+      skipped: "forma-no-reconocida",
+    });
+    expect((outcome as { results: unknown[] }).results[1]).toEqual({
+      ok: true,
+      registered: true,
+    });
+  });
+
+  it("acusa recibo de tipos sin pipeline", async () => {
+    const { pool } = webhookPool();
+    const outcome = await processApiChatWebhook(pool, {
+      id: "3EB0A3",
+      number: "50230939134",
+      type: "reaction",
     });
     expect(outcome).toEqual({ ok: true, skipped: "tipo-sin-pipeline" });
   });
 
-  it("asienta la pérdida de una nota de voz sin contenido", async () => {
-    const { pool, query } = webhookPool({
-      conversations: [
-        {
-          conversation_id: 5,
-          application_id: 41,
-          phone_international: "+50230939134",
-        },
-      ],
-      outbound: [],
-    });
+  it("asienta un adjunto sin contenido con motivo explícito", async () => {
+    const { pool } = webhookPool();
     const outcome = await processApiChatWebhook(pool, {
-      message: {
-        id: "3EB0VOZ",
-        number: "50230939134",
-        type: "audio",
-        url: "",
-        mime_type: "audio/ogg",
-      },
-      from_me: false,
-    });
-    // El tipo portador de adjunto ya no se descarta: se registra su pérdida.
-    expect(outcome).toEqual({ ok: true, skipped: "archivo-sin-contenido" });
-    const audit = query.mock.calls.find(([sql]) =>
-      String(sql).includes("INSERT INTO audit_log")
-    );
-    expect(audit).toBeDefined();
-    const detail = JSON.parse(String((audit?.[1] as unknown[])[0])) as {
-      cause: string;
-      messageType: string;
-    };
-    expect(detail.cause).toBe("archivo-sin-contenido");
-    expect(detail.messageType).toBe("audio");
-    expect(recordNormalizedInboundFile).not.toHaveBeenCalled();
-  });
-
-  it("registra un adjunto que llega como base64 sin sobre", async () => {
-    // La opción del panel se llama «Notify attachments in base64 format»: el
-    // contenido puede llegar sin el sobre `data:` y el receptor debe admitirlo.
-    const { pool } = webhookPool({
-      conversations: [
-        {
-          conversation_id: 5,
-          application_id: 41,
-          phone_international: "+50230939134",
-        },
-      ],
-      outbound: [],
-    });
-    const base64 = Buffer.from(
-      `%PDF-1.7\nCV del candidato\n${"contenido ".repeat(12)}\n%%EOF`
-    ).toString("base64");
-    const outcome = await processApiChatWebhook(pool, {
-      message: {
-        id: "3EB0B64",
-        number: "50230939134",
-        type: "file",
-        filename: "cv.pdf",
-        base64,
-      },
-      from_me: false,
-    });
-    expect(outcome).toEqual({ ok: true, registered: true });
-    expect(recordNormalizedInboundFile).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ fileName: "cv.pdf" })
-    );
-  });
-
-  it("asienta los campos de contenido presentes cuando la carga no trae archivo", async () => {
-    const { pool, query } = webhookPool({
-      conversations: [
-        {
-          conversation_id: 5,
-          application_id: 41,
-          phone_international: "+50230939134",
-        },
-      ],
-      outbound: [],
-    });
-    const outcome = await processApiChatWebhook(pool, {
-      message: {
-        id: "3EB0SIN",
-        number: "50230939134",
-        type: "document",
-        mimetype: "application/pdf",
-        media_url: "sin-contenido-utilizable",
-      },
-      from_me: false,
+      id: "3EB0VOZ",
+      number: "50230939134",
+      type: "audio",
+      mime_type: "audio/ogg",
     });
     expect(outcome).toEqual({ ok: true, skipped: "archivo-sin-contenido" });
-    const audit = query.mock.calls.find(([sql]) =>
-      String(sql).includes("apichat_webhook_loss")
-    );
-    const detail = JSON.parse(String((audit?.[1] as unknown[])[0])) as {
-      cause: string;
-      fieldsPresent: string[];
-    };
-    expect(detail.cause).toBe("archivo-sin-contenido");
-    // El diagnóstico nombra lo que la carga **sí** traía, sin su contenido.
-    expect(detail.fieldsPresent).toContain("media_url");
-  });
-
-  it("registra una imagen entrante por el conducto de adjuntos", async () => {
-    const { pool } = webhookPool({
-      conversations: [
-        {
-          conversation_id: 5,
-          application_id: 41,
-          phone_international: "+50230939134",
-        },
-      ],
-      outbound: [],
-    });
-    const outcome = await processApiChatWebhook(pool, {
-      message: {
-        id: "3EB0IMG",
-        number: "50230939134",
-        type: "image",
-        filename: "nota.png",
-        url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-      },
-      from_me: false,
-    });
-    expect(outcome).toEqual({ ok: true, registered: true });
     expect(recordNormalizedInboundFile).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ fileName: "nota.png" })
+      expect.objectContaining({
+        conversationId: 5,
+        processingOutcome: "rejected",
+        processingReason: "contenido_no_disponible",
+      })
     );
   });
-});
-
-afterEach(() => {
-  vi.clearAllMocks();
 });

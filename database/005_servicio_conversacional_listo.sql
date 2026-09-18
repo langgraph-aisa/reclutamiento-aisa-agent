@@ -1,5 +1,5 @@
 -- ============================================================================
--- JARVI RH 2.0.179 · Despliegue completo del servicio conversacional
+-- JARVI RH 2.0.180 · Despliegue completo del servicio conversacional
 -- ============================================================================
 -- Archivo GENERADO. No editar a mano: se compone con
 --   pnpm deploy:sql
@@ -1327,6 +1327,97 @@ ORDER BY bloque;
 
 -- Reaplicación: la migración es idempotente.
 SELECT 'GATE 0035 OK · traza del conducto autocertificada' AS dictamen;
+
+-- ----------------------------------------------------------------------------
+-- Origen: drizzle/migrations/0036_apichat_inbound_receipts.sql
+-- ----------------------------------------------------------------------------
+
+-- Recepción durable antes del acuse HTTP; sin datos ni credenciales de producción.
+CREATE TABLE IF NOT EXISTS apichat_inbound_receipts (
+  receipt_key varchar(64) PRIMARY KEY,
+  provider_message_id varchar(180),
+  origin varchar(16) NOT NULL CHECK (origin IN ('webhook','sondeo')),
+  payload jsonb,
+  payload_sha256 varchar(64) NOT NULL,
+  status varchar(16) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','processing','retry','completed','rejected','dead')),
+  attempts integer NOT NULL DEFAULT 0,
+  lease_token varchar(36),
+  locked_at timestamptz,
+  next_attempt_at timestamptz NOT NULL DEFAULT now(),
+  outcome varchar(80),
+  last_error varchar(200),
+  received_at timestamptz NOT NULL DEFAULT now(),
+  completed_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS apichat_receipts_work_idx
+  ON apichat_inbound_receipts(status,next_attempt_at,received_at);
+CREATE TABLE IF NOT EXISTS apichat_history_cursors (
+  scope varchar(80) PRIMARY KEY,
+  page integer NOT NULL DEFAULT 0 CHECK(page >= 0),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+-- La carga original sólo permanece para recuperación de trabajo pendiente o
+-- fallido. El trabajador elimina el contenido al completar; conserva identidad.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='jarvi_receptor') THEN
+    GRANT SELECT,INSERT,UPDATE,DELETE ON apichat_inbound_receipts,apichat_history_cursors TO jarvi_receptor;
+  END IF;
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- Origen: drizzle/migrations/0037_candidate_processing.sql
+-- ----------------------------------------------------------------------------
+
+-- Procesamiento durable. Aplicar antes de desplegar los nuevos workers.
+ALTER TABLE candidate_knowledge_files DROP CONSTRAINT IF EXISTS candidate_knowledge_files_source_ck;
+ALTER TABLE candidate_knowledge_files ADD CONSTRAINT candidate_knowledge_files_source_ck CHECK (source IN ('manual','webhook','sondeo','postulacion'));
+ALTER TABLE candidate_knowledge_files
+  ADD COLUMN IF NOT EXISTS extracted_text text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS extraction_method varchar(48),
+  ADD COLUMN IF NOT EXISTS extraction_truncated boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS processing_error_code varchar(64),
+  ADD COLUMN IF NOT EXISTS document_class varchar(24) NOT NULL DEFAULT 'unclassified';
+
+CREATE TABLE IF NOT EXISTS candidate_document_jobs (
+  file_id integer PRIMARY KEY REFERENCES candidate_knowledge_files(id) ON DELETE CASCADE,
+  state varchar(24) NOT NULL DEFAULT 'pending' CHECK (state IN ('pending','running','retry','completed','failed')),
+  attempts integer NOT NULL DEFAULT 0,
+  available_at timestamptz NOT NULL DEFAULT now(),
+  lease_until timestamptz,
+  last_error_code varchar(64),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS candidate_document_jobs_available_idx ON candidate_document_jobs(state,available_at);
+
+INSERT INTO candidate_document_jobs(file_id)
+SELECT id FROM candidate_knowledge_files WHERE analysis_status IN ('pendiente','error')
+  OR (analysis_status='no_aplica' AND extension IN ('doc','pdf','jpg','jpeg','png','webp','mp3','ogg','opus','m4a','aac','amr','wav','webm','flac','mpeg','mpga','3gp'))
+ON CONFLICT (file_id) DO NOTHING;
+UPDATE candidate_knowledge_files k SET analysis_status='pendiente'
+WHERE EXISTS (SELECT 1 FROM candidate_document_jobs j WHERE j.file_id=k.id AND j.state='pending');
+
+-- El rol de razonamiento procesa y conserva su evidencia documental.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='jarvi_motor') THEN
+    GRANT SELECT,INSERT,UPDATE ON candidate_document_jobs TO jarvi_motor;
+    GRANT SELECT,UPDATE ON candidate_knowledge_files TO jarvi_motor;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='jarvi_receptor') THEN
+    GRANT SELECT,INSERT,UPDATE ON candidate_document_jobs TO jarvi_receptor;
+    GRANT SELECT,INSERT,UPDATE ON candidate_knowledge_files TO jarvi_receptor;
+    GRANT USAGE,SELECT ON SEQUENCE candidate_knowledge_files_id_seq TO jarvi_receptor;
+  END IF;
+END $$;
+
+-- Amplía solamente el catálogo de fábrica anterior; respeta políticas específicas.
+UPDATE integration_settings SET setting_value='jpg,jpeg,png,webp,mp4,mp3,ogg,opus,m4a,aac,amr,wav,webm,flac,mpeg,mpga,3gp,doc,docx,xls,xlsx,csv,pdf',updated_at=now()
+WHERE provider='knowledge' AND setting_key='allowed_extensions'
+  AND regexp_split_to_array(replace(setting_value,' ',''),',') <@ ARRAY['jpg','jpeg','png','mp4','mp3','doc','docx','xls','xlsx','csv','pdf']
+  AND regexp_split_to_array(replace(setting_value,' ',''),',') @> ARRAY['jpg','jpeg','png','mp4','mp3','doc','docx','xls','xlsx','csv','pdf'];
 
 -- ----------------------------------------------------------------------------
 -- Verificación autocertificada

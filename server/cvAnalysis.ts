@@ -111,7 +111,10 @@ export async function loadCvAnalysisConfiguration(
 ): Promise<CvAnalysisConfiguration> {
   const configuration: CvAnalysisConfiguration = cvAnalysisDefaults();
   if (!pool) return configuration;
-  const result = await pool.query<{ setting_key: string; setting_value: string }>(
+  const result = await pool.query<{
+    setting_key: string;
+    setting_value: string;
+  }>(
     `SELECT setting_key,setting_value FROM integration_settings
       WHERE provider=$1 AND setting_key = ANY($2)`,
     [
@@ -170,7 +173,7 @@ export async function cvAwaitingState(
 ): Promise<CvAwaitingState> {
   const documents = await pool.query<{ received: string }>(
     `SELECT count(*)::text AS received FROM candidate_knowledge_files
-      WHERE application_id=$1 AND source <> 'manual'`,
+      WHERE application_id=$1 AND document_class='cv'`,
     [applicationId]
   );
   if (Number(documents.rows[0]?.received ?? 0) > 0) return "recibido";
@@ -179,7 +182,9 @@ export async function cvAwaitingState(
       WHERE message_key=$1`,
     [`cv_request:${applicationId}`]
   );
-  return Number(requested.rows[0]?.requested ?? 0) > 0 ? "pendiente" : "sin_solicitud";
+  return Number(requested.rows[0]?.requested ?? 0) > 0
+    ? "pendiente"
+    : "sin_solicitud";
 }
 
 /** Fragmentación del texto del CV para documentos extensos. */

@@ -1,15 +1,22 @@
 import type { Pool } from "pg";
+import { databaseQueryScope } from "./databaseQueryScope";
+import {
+  extractDocumentText,
+  normalizeLegacyAudio,
+  DocumentExtractionError,
+} from "./documentExtraction";
+import { transcribeAudio, AudioInputError } from "./_core/voiceTranscription";
 import {
   analyzeKnowledgeDocument,
   buildCandidateStorageKey,
   countWords,
-  extractKnowledgeText,
   getKnowledgeSettings,
   KNOWLEDGE_ANALYSIS_WORD_LIMIT,
   KNOWLEDGE_SUMMARY_WORD_LIMIT,
   knowledgeFileKind,
   limitWords,
   removeKnowledgeFile,
+  readKnowledgeFile,
   writeKnowledgeFile,
 } from "./knowledge";
 import {
@@ -36,6 +43,7 @@ import {
 export const CANDIDATE_DOCUMENT_SOURCES = [
   "manual",
   "webhook",
+  "sondeo",
   "postulacion",
 ] as const;
 
@@ -226,167 +234,206 @@ export async function saveCandidateDocument(
     input.applicationId,
     input.folderId
   );
-  const source: CandidateDocumentSource = input.source ?? "manual";
-  const storageKey = buildCandidateStorageKey(
-    input.applicationId,
-    decoded.extension
-  );
-  await writeKnowledgeFile(storageKey, decoded.buffer);
-  const finalName = reconstructTransportFileName(
-    input.fileName,
-    decoded.extension
-  );
-
-  let fileId: number;
-  try {
-    const inserted = await pool.query(
-      `INSERT INTO candidate_knowledge_files
-         (application_id,folder_id,original_name,storage_key,mime_type,extension,
-          size_bytes,source,analysis_status,sha256,uploaded_by_user_id,uploaded_at,updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pendiente',$9,$10,now(),now())
-       RETURNING id`,
-      [
-        input.applicationId,
-        folderId,
-        finalName,
-        storageKey,
-        decoded.mimeType,
-        decoded.extension,
-        decoded.sizeBytes,
-        source,
-        decoded.sha256,
-        input.actorUserId ?? null,
-      ]
+  const saved = await persistCandidateDocument(pool, {
+    applicationId: input.applicationId,
+    fileName: input.fileName,
+    decoded,
+    source: input.source ?? "manual",
+    folderId,
+    actorUserId: input.actorUserId ?? null,
+  });
+  const analyzed = input.analyze
+    ? await analyzeCandidateDocument(pool, saved.id, input.actorUserId ?? null)
+    : null;
+  if (
+    analyzed?.analysisStatus === "analizado" ||
+    analyzed?.analysisStatus === "no_aplica"
+  )
+    await pool.query(
+      `UPDATE candidate_document_jobs SET state='completed',updated_at=now() WHERE file_id=$1`,
+      [saved.id]
     );
-    fileId = Number(inserted.rows[0].id);
-  } catch (error) {
-    // Si la fila no llega a persistirse, el binario no debe quedar huérfano.
-    try {
-      await removeKnowledgeFile(storageKey);
-    } catch {
-      // best effort
-    }
-    throw error;
-  }
-
-  await pool.query(
-    `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
-     VALUES ($1,'candidate_knowledge_file',$2,'candidate_file_uploaded',$3::jsonb)`,
-    [
-      input.actorUserId ?? null,
-      fileId,
-      JSON.stringify({
-        applicationId: input.applicationId,
-        originalName: finalName,
-        extension: decoded.extension,
-        detectedMimeType: decoded.detectedMimeType,
-        contentTypeMismatch: decoded.contentTypeMismatch,
-        source,
-        sizeBytes: decoded.sizeBytes,
-        transportVersion: decoded.version,
-        sha256: decoded.sha256,
-      }),
-    ]
-  );
-
-  if (input.analyze) {
-    await analyzeCandidateDocument(pool, fileId, input.actorUserId ?? null);
-  }
   return {
-    id: fileId,
-    originalName: finalName,
+    id: saved.id,
+    originalName: reconstructTransportFileName(
+      input.fileName,
+      decoded.extension
+    ),
     extension: decoded.extension,
-    analysisStatus: "pendiente",
+    analysisStatus: analyzed?.analysisStatus ?? "pendiente",
   };
 }
 
-/** Extrae el texto y genera el resumen y el análisis profundo del documento. */
+export type CandidateProcessingDependencies = {
+  extract?: typeof extractDocumentText;
+  transcribe?: typeof transcribeAudio;
+  analyze?: typeof analyzeKnowledgeDocument;
+  skipCompleted?: boolean;
+};
+
+/** Una sesión PostgreSQL protege también los análisis manuales frente al worker. */
 export async function analyzeCandidateDocument(
   pool: Pool,
   fileId: number,
-  actorUserId: number | null
+  actorUserId: number | null,
+  dependencies: CandidateProcessingDependencies = {}
 ) {
-  const result = await pool.query(
-    `SELECT id,application_id,storage_key,extension FROM candidate_knowledge_files
-      WHERE id=$1 LIMIT 1`,
-    [fileId]
-  );
-  const file = result.rows[0];
-  if (!file) throw new Error("El documento del candidato no existe.");
-  const extension = String(file.extension);
-  if (!["pdf", "docx"].includes(extension)) {
-    await pool.query(
-      `UPDATE candidate_knowledge_files SET analysis_status='no_aplica',updated_at=now()
-        WHERE id=$1`,
-      [fileId]
-    );
-    return {
-      analysisStatus: "no_aplica",
-      message:
-        "El análisis de IA aplica únicamente a documentos PDF y Word; el archivo queda disponible en el visor.",
-    };
-  }
-  let text = "";
+  const lock = await pool.connect();
+  const scopedPool = databaseQueryScope(lock) as Pool;
+  let acquired = false;
   try {
-    text = await extractKnowledgeText(String(file.storage_key), extension);
-  } catch {
-    await pool.query(
-      `UPDATE candidate_knowledge_files SET analysis_status='error',updated_at=now()
-        WHERE id=$1`,
+    acquired = Boolean(
+      (
+        await lock.query(`SELECT pg_try_advisory_lock(137,$1) AS acquired`, [
+          fileId,
+        ])
+      ).rows[0]?.acquired
+    );
+    if (!acquired)
+      return {
+        analysisStatus: "pendiente",
+        errorCode: "processing_busy",
+        message: "El documento ya se está procesando.",
+      };
+    const result = await lock.query(
+      `SELECT id,application_id,storage_key,extension,original_name,mime_type,analysis_status,extracted_text,extraction_method,extraction_truncated FROM candidate_knowledge_files WHERE id=$1 LIMIT 1`,
       [fileId]
     );
-    return {
-      analysisStatus: "error",
-      message:
-        "El documento no está en el volumen de almacenamiento; vuelva a cargarlo.",
-    };
-  }
-  if (!text) {
-    await pool.query(
-      `UPDATE candidate_knowledge_files SET analysis_status='no_aplica',updated_at=now()
-        WHERE id=$1`,
-      [fileId]
-    );
-    return {
-      analysisStatus: "no_aplica",
-      message: "El documento no contiene texto extraíble; no se generó análisis.",
-    };
-  }
-  try {
-    const analysis = await analyzeKnowledgeDocument(pool, fileId, text);
-    await pool.query(
-      `UPDATE candidate_knowledge_files
-          SET summary_66=$1,deep_analysis=$2,analysis_status='analizado',
-              analyzed_model=$3,updated_at=now()
-        WHERE id=$4`,
-      [
-        analysis.summary,
-        analysis.deepAnalysis,
-        analysis.model,
+    const file = result.rows[0];
+    if (!file) throw new Error("El documento del candidato no existe.");
+    if (dependencies.skipCompleted && file.analysis_status === "analizado")
+      return {
+        analysisStatus: "analizado",
+        errorCode: null,
+        message: "El documento ya está analizado.",
+      };
+    const extension = String(file.extension);
+    let text = "";
+    let method = "";
+    let truncated = false;
+    try {
+      if (file.extracted_text && file.extraction_method) {
+        text = String(file.extracted_text);
+        method = String(file.extraction_method);
+        truncated = Boolean(file.extraction_truncated);
+      } else {
+        const data = await readKnowledgeFile(String(file.storage_key));
+        if (
+          [
+            "mp3",
+            "ogg",
+            "opus",
+            "m4a",
+            "aac",
+            "amr",
+            "wav",
+            "webm",
+            "flac",
+            "mpeg",
+            "mpga",
+            "3gp",
+          ].includes(extension) ||
+          String(file.mime_type).startsWith("audio/")
+        ) {
+          const converted = await normalizeLegacyAudio(data, extension);
+          const transcript = await (dependencies.transcribe ?? transcribeAudio)(
+            scopedPool,
+            {
+              data: converted ?? data,
+              fileName: converted ? "audio.mp3" : String(file.original_name),
+              mimeType: converted ? "audio/mpeg" : String(file.mime_type),
+            }
+          );
+          text = transcript.text;
+          method = `transcription:${transcript.model}`;
+          if (text.length > 120_000) {
+            text = text.slice(0, 120_000);
+            truncated = true;
+          }
+        } else {
+          const extracted = await (dependencies.extract ?? extractDocumentText)(
+            data,
+            extension
+          );
+          text = extracted.text;
+          method = extracted.method;
+          truncated = extracted.truncated;
+        }
+      }
+      await lock.query(
+        `UPDATE candidate_knowledge_files SET extracted_text=$1,extraction_method=$2,extraction_truncated=$3,processing_error_code=NULL,updated_at=now() WHERE id=$4`,
+        [text, method.slice(0, 48), truncated, fileId]
+      );
+      if (method.startsWith("transcription:")) {
+        await lock.query(
+          `UPDATE conversation_messages SET transcript=$1,updated_at=now() WHERE metadata->'media'->>'candidateFileId'=$2`,
+          [text, String(fileId)]
+        );
+      }
+      const analysis = await (dependencies.analyze ?? analyzeKnowledgeDocument)(
+        scopedPool,
         fileId,
-      ]
-    );
-    await pool.query(
-      `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action)
-       VALUES ($1,'candidate_knowledge_file',$2,'candidate_file_analyzed')`,
-      [actorUserId, fileId]
-    );
-    return {
-      analysisStatus: "analizado",
-      message: "Análisis de IA generado correctamente.",
-    };
-  } catch (error) {
-    await pool.query(
-      `UPDATE candidate_knowledge_files SET analysis_status='error',updated_at=now()
-        WHERE id=$1`,
-      [fileId]
-    );
-    return {
-      analysisStatus: "error",
-      message: `El archivo se guardó, pero el análisis no pudo generarse: ${
-        error instanceof Error ? error.message : "error desconocido"
-      }`,
-    };
+        text,
+        { candidate: true }
+      );
+      await lock.query(
+        `UPDATE candidate_knowledge_files SET summary_66=$1,deep_analysis=$2,analysis_status='analizado',analyzed_model=$3,document_class=$4,processing_error_code=NULL,updated_at=now() WHERE id=$5`,
+        [
+          analysis.summary,
+          analysis.deepAnalysis,
+          analysis.model,
+          analysis.documentClass ?? "unclassified",
+          fileId,
+        ]
+      );
+      await lock.query(
+        `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action) VALUES ($1,'candidate_knowledge_file',$2,'candidate_file_analyzed')`,
+        [actorUserId, fileId]
+      );
+      return {
+        analysisStatus: "analizado",
+        errorCode: null,
+        message: truncated
+          ? "Análisis generado; el texto excedió el límite y requiere revisión del original."
+          : "Análisis de IA generado correctamente.",
+      };
+    } catch (error) {
+      const errorCode =
+        error instanceof DocumentExtractionError ||
+        error instanceof AudioInputError
+          ? error.code
+          : (error as NodeJS.ErrnoException).code === "ENOENT"
+            ? "storage_missing"
+            : "analysis_failed";
+      const status = [
+        "unsupported_format",
+        "ocr_disabled",
+        "no_extractable_text",
+        "extraction_limit",
+      ].includes(errorCode)
+        ? "no_aplica"
+        : "error";
+      await lock.query(
+        `UPDATE candidate_knowledge_files SET analysis_status=$1,processing_error_code=$2,updated_at=now() WHERE id=$3`,
+        [status, errorCode, fileId]
+      );
+      return {
+        analysisStatus: status,
+        errorCode,
+        message:
+          error instanceof DocumentExtractionError ||
+          error instanceof AudioInputError
+            ? error.message
+            : "El archivo está registrado, pero su procesamiento falló. Se conserva para reintento y revisión.",
+      };
+    }
+  } finally {
+    try {
+      if (acquired)
+        await lock.query(`SELECT pg_advisory_unlock(137,$1)`, [fileId]);
+    } finally {
+      lock.release();
+    }
   }
 }
 
@@ -423,7 +470,8 @@ export async function saveCandidateAnalysis(
       input.id,
     ]
   );
-  if (!updated.rows[0]) throw new Error("El documento del candidato no existe.");
+  if (!updated.rows[0])
+    throw new Error("El documento del candidato no existe.");
   await pool.query(
     `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action)
      VALUES ($1,'candidate_knowledge_file',$2,'candidate_file_analysis_updated')`,
@@ -472,10 +520,7 @@ export async function deleteCandidateDocument(
   );
   const row = result.rows[0];
   if (!row) throw new Error("El documento del candidato no existe.");
-  await pool.query(
-    `DELETE FROM candidate_knowledge_files WHERE id=$1`,
-    [id]
-  );
+  await pool.query(`DELETE FROM candidate_knowledge_files WHERE id=$1`, [id]);
   try {
     await removeKnowledgeFile(String(row.storage_key));
   } catch {
@@ -561,7 +606,11 @@ export async function deleteCandidateFolder(
   await pool.query(
     `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
      VALUES ($1,'candidate_knowledge_folder',$2,'candidate_folder_deleted',$3::jsonb)`,
-    [actorUserId, id, JSON.stringify({ applicationId: Number(row.application_id) })]
+    [
+      actorUserId,
+      id,
+      JSON.stringify({ applicationId: Number(row.application_id) }),
+    ]
   );
   return { id };
 }
@@ -579,6 +628,13 @@ export async function deleteCandidateFolder(
  * El análisis de IA se agenda sin bloquear la ronda de recepción y un
  * documento ya registrado por su huella no se duplica.
  */
+export type CandidateInboundRegistration = {
+  id: number;
+  created: boolean;
+  outcome: "accepted" | "duplicate" | "rejected";
+  reason?: "extension_not_allowed" | "size_limit";
+};
+
 export async function registerCandidateInboundDocument(
   pool: Pool,
   input: {
@@ -587,34 +643,62 @@ export async function registerCandidateInboundDocument(
     decoded: DecodedTransport;
     source?: CandidateDocumentSource;
   }
-): Promise<{ id: number; created: boolean }> {
+): Promise<CandidateInboundRegistration> {
   const settings = await getKnowledgeSettings(pool);
   const extension = input.decoded.extension;
-  if (!settings.allowedExtensions.includes(extension)) {
-    return { id: 0, created: false };
+  if (!settings.allowedExtensions.includes(extension))
+    return {
+      id: 0,
+      created: false,
+      outcome: "rejected",
+      reason: "extension_not_allowed",
+    };
+  if (input.decoded.sizeBytes > settings.maxSizeMb * 1024 * 1024)
+    return { id: 0, created: false, outcome: "rejected", reason: "size_limit" };
+  return persistCandidateDocument(pool, input);
+}
+
+async function persistCandidateDocument(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    fileName: string;
+    decoded: DecodedTransport;
+    source?: CandidateDocumentSource;
+    folderId?: number | null;
+    actorUserId?: number | null;
   }
-  if (input.decoded.sizeBytes > settings.maxSizeMb * 1024 * 1024) {
-    return { id: 0, created: false };
-  }
-  const duplicate = await pool.query(
-    `SELECT id FROM candidate_knowledge_files
-      WHERE application_id=$1 AND sha256=$2 LIMIT 1`,
-    [input.applicationId, input.decoded.sha256]
-  );
-  if (duplicate.rows[0]) {
-    return { id: Number(duplicate.rows[0].id), created: false };
-  }
-  const storageKey = buildCandidateStorageKey(input.applicationId, extension);
-  await writeKnowledgeFile(storageKey, input.decoded.buffer);
-  const finalName = reconstructTransportFileName(input.fileName, extension);
-  let fileId: number;
+): Promise<CandidateInboundRegistration> {
+  const extension = input.decoded.extension;
+  const client = await pool.connect();
+  let writtenKey: string | null = null;
+  let committed = false;
   try {
-    const inserted = await pool.query(
+    await client.query("BEGIN");
+    await client.query(`SELECT pg_advisory_xact_lock(138,hashtext($1))`, [
+      `${input.applicationId}:${input.decoded.sha256}`,
+    ]);
+    const duplicate = await client.query(
+      `SELECT id FROM candidate_knowledge_files WHERE application_id=$1 AND sha256=$2 LIMIT 1`,
+      [input.applicationId, input.decoded.sha256]
+    );
+    if (duplicate.rows[0]) {
+      await client.query("COMMIT");
+      committed = true;
+      return {
+        id: Number(duplicate.rows[0].id),
+        created: false,
+        outcome: "duplicate",
+      };
+    }
+    const storageKey = buildCandidateStorageKey(input.applicationId, extension);
+    await writeKnowledgeFile(storageKey, input.decoded.buffer);
+    writtenKey = storageKey;
+    const finalName = reconstructTransportFileName(input.fileName, extension);
+    const inserted = await client.query(
       `INSERT INTO candidate_knowledge_files
-         (application_id,folder_id,original_name,storage_key,mime_type,extension,
-          size_bytes,source,analysis_status,sha256,uploaded_by_user_id,uploaded_at,updated_at)
-       VALUES ($1,NULL,$2,$3,$4,$5,$6,$7,'pendiente',$8,NULL,now(),now())
-       RETURNING id`,
+      (application_id,folder_id,original_name,storage_key,mime_type,extension,size_bytes,source,analysis_status,sha256,uploaded_by_user_id,uploaded_at,updated_at)
+      VALUES ($1,$9,$2,$3,$4,$5,$6,$7,'pendiente',$8,$10,now(),now()) RETURNING id`,
       [
         input.applicationId,
         finalName,
@@ -624,36 +708,40 @@ export async function registerCandidateInboundDocument(
         input.decoded.sizeBytes,
         input.source ?? "webhook",
         input.decoded.sha256,
+        input.folderId ?? null,
+        input.actorUserId ?? null,
       ]
     );
-    fileId = Number(inserted.rows[0].id);
+    const fileId = Number(inserted.rows[0].id);
+    await client.query(
+      `INSERT INTO candidate_document_jobs(file_id) VALUES ($1) ON CONFLICT(file_id) DO NOTHING`,
+      [fileId]
+    );
+    await client.query(
+      `INSERT INTO audit_log(actor_user_id,entity_type,entity_id,action,after_json) VALUES(NULL,'candidate_knowledge_file',$1,'candidate_file_received',$2::jsonb)`,
+      [
+        fileId,
+        JSON.stringify({
+          applicationId: input.applicationId,
+          originalName: finalName,
+          extension,
+          source: input.source ?? "webhook",
+          sizeBytes: input.decoded.sizeBytes,
+          sha256: input.decoded.sha256,
+        }),
+      ]
+    );
+    await client.query("COMMIT");
+    committed = true;
+    return { id: fileId, created: true, outcome: "accepted" };
   } catch (error) {
-    try {
-      await removeKnowledgeFile(storageKey);
-    } catch {
-      // best effort
-    }
+    await client.query("ROLLBACK");
+    if (!committed && writtenKey)
+      await removeKnowledgeFile(writtenKey).catch(() => undefined);
     throw error;
+  } finally {
+    client.release();
   }
-  await pool.query(
-    `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
-     VALUES (NULL,'candidate_knowledge_file',$1,'candidate_file_received',$2::jsonb)`,
-    [
-      fileId,
-      JSON.stringify({
-        applicationId: input.applicationId,
-        originalName: finalName,
-        extension,
-        source: input.source ?? "webhook",
-        sizeBytes: input.decoded.sizeBytes,
-        sha256: input.decoded.sha256,
-      }),
-    ]
-  );
-  // El análisis no bloquea la recepción: la ronda debe seguir siendo rápida y
-  // un fallo de OpenAI no puede detener la bandeja.
-  void analyzeCandidateDocument(pool, fileId, null).catch(() => undefined);
-  return { id: fileId, created: true };
 }
 
 /**

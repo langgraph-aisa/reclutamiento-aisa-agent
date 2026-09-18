@@ -12,6 +12,8 @@ import {
   getApiChatEndpoints,
   getApiChatReceptionReadiness,
   getApiChatRuntimeSettings,
+  recentAttachmentReceipts,
+  recentAttachmentLosses,
   saveApiChatEndpointStates,
   saveApiChatPreferences,
   saveApiChatSecret,
@@ -273,9 +275,9 @@ describe("verificación real de recepción", () => {
       updated_at: new Date(),
     });
 
-    await expect(
-      verifyApiChatReception(pool as never)
-    ).rejects.toThrow("está desactivado");
+    await expect(verifyApiChatReception(pool as never)).rejects.toThrow(
+      "está desactivado"
+    );
 
     const readiness = await getApiChatReceptionReadiness(pool as never);
     expect(readiness.historyEnabled).toBe(false);
@@ -302,7 +304,7 @@ describe("catálogo oficial de endpoints ApiChat", () => {
     expect(APICHAT_OFFICIAL_ENDPOINTS.map(endpoint => endpoint.route)).toEqual([
       "sendText",
       "sendFile",
-      "sendPTT",
+      "sendAudio",
       "sendLink",
       "sendLocation",
       "messages",
@@ -544,9 +546,9 @@ describe("capacidad conversacional del catálogo de endpoints", () => {
       "Razonamiento",
       "Envío",
     ]);
-    expect(catalog.endpoints.every(endpoint => "conversationUse" in endpoint)).toBe(
-      true
-    );
+    expect(
+      catalog.endpoints.every(endpoint => "conversationUse" in endpoint)
+    ).toBe(true);
   });
 });
 
@@ -579,7 +581,7 @@ describe("estado del conducto de adjuntos", () => {
       status: "sin_evidencia",
     });
     expect(sinEvidencia).toHaveLength(1);
-    expect(sinEvidencia[0]).toContain("no tiene evidencia");
+    expect(sinEvidencia[0]).toContain("no acredita ausencia de envíos");
     // Con recepciones efectivas el conducto se declara verificado y calla.
     expect(
       apiChatAttachmentEvidenceAdvisory({
@@ -595,7 +597,7 @@ describe("estado del conducto de adjuntos", () => {
     ).toEqual([]);
   });
 
-  it("la pérdida nombra la opción del proveedor y no habla cuando no hay pérdidas", () => {
+  it("la incidencia describe la etapa sin atribuirla a una opción del proveedor", () => {
     expect(
       apiChatAttachmentTransportAdvisory({
         windowHours: 24,
@@ -613,10 +615,63 @@ describe("estado del conducto de adjuntos", () => {
       lastAt: null,
     });
     expect(advisory).toHaveLength(1);
-    expect(advisory[0]).toContain("Notify attachments in base64 format");
+    expect(advisory[0]).toContain("ilegible(s)");
+    expect(advisory[0]).not.toContain("permanezca encendida");
     // El requisito permanente se declara con el nombre literal de la opción.
     expect(APICHAT_ATTACHMENT_REQUIREMENT).toContain(
       "Notify attachments in base64 format"
     );
+  });
+
+  it("distingue lectura fallida y cero recepciones observadas", async () => {
+    const failed = {
+      query: vi.fn(async () => {
+        throw new Error("missing column");
+      }),
+    };
+    const unavailable = await recentAttachmentReceipts(failed as never);
+    expect(unavailable.available).toBe(false);
+    expect(
+      attachmentTransportStatus({
+        received: unavailable.received,
+        losses: 0,
+        available: unavailable.available,
+      })
+    ).toBe("no_disponible");
+    const empty = {
+      query: vi.fn(async () => ({ rows: [{ received: 0, last_at: null }] })),
+    };
+    expect(await recentAttachmentReceipts(empty as never)).toEqual({
+      available: true,
+      received: 0,
+      lastReceivedAt: null,
+    });
+  });
+
+  it("no transforma un fallo de registro en ausencia de contenido", async () => {
+    const pool = {
+      query: vi.fn(async () => ({
+        rows: [
+          {
+            cause: "expediente-no-registrado",
+            total: 2,
+            last_at: "2026-09-18T12:00:00Z",
+          },
+          {
+            cause: "archivo-sin-contenido",
+            total: 1,
+            last_at: "2026-09-18T13:00:00Z",
+          },
+        ],
+      })),
+    };
+    const losses = await recentAttachmentLosses(pool as never);
+    expect(losses).toMatchObject({
+      available: true,
+      total: 3,
+      withoutContent: 1,
+      registrationFailures: 2,
+      lastAt: "2026-09-18T13:00:00Z",
+    });
   });
 });

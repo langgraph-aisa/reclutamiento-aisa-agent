@@ -1,11 +1,11 @@
 {
   "name": "reclutamiento-automatizado",
-  "version": "2.0.179",
+  "version": "2.0.180",
   "type": "module",
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
-    "build": "node scripts/verify-formal-spanish.mjs && node scripts/verify-public-copy.mjs && vite build && node scripts/verify-theme-css.mjs && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "node scripts/verify-formal-spanish.mjs && node scripts/verify-public-copy.mjs && vite build && node scripts/verify-theme-css.mjs && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && esbuild server/services/receiver.ts server/services/engine.ts server/services/sender.ts --platform=node --packages=external --bundle --format=esm --outdir=dist/services",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
@@ -16,7 +16,8 @@
     "deploy:sql": "node scripts/build-conversation-deployment-sql.mjs",
     "auditar:conducto": "bash scripts/auditar-conducto-apichat.sh",
     "release:verify": "node scripts/verify-release.mjs",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "test:attachments:black-box": "vitest run server/attachments.blackbox.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

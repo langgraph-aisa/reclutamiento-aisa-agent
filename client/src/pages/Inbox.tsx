@@ -451,7 +451,7 @@ export default function Inbox() {
                           ) : null}
                           {item.media_storage_key ? (
                             <a
-                              href={`/api/inbox/files/${item.media_storage_key}`}
+                              href={`/api/inbox/files/${encodeURIComponent(item.media_storage_key)}`}
                               target="_blank"
                               rel="noreferrer"
                               className="mb-0.5 flex items-center gap-1 rounded bg-black/25 px-1.5 py-0.5 text-xs font-semibold text-white/90 hover:bg-black/40"
@@ -466,6 +466,18 @@ export default function Inbox() {
                           <p className="whitespace-pre-wrap break-words">
                             {item.body || item.transcript || "Adjunto recibido"}
                           </p>
+                          {item.transcript && item.transcript !== item.body ? (
+                            <p className="mt-1 whitespace-pre-wrap break-words text-xs text-white/90">
+                              Transcripción: {item.transcript}
+                            </p>
+                          ) : null}
+                          {item.media_processing_outcome === "rejected" ? (
+                            <p className="mt-1 text-xs text-amber-200">Archivo conservado; no incorporado al expediente por su formato o tamaño.</p>
+                          ) : item.media_processing_status === "pendiente" ? (
+                            <p className="mt-1 text-xs text-white/70">Archivo recibido. Análisis pendiente.</p>
+                          ) : item.media_processing_status === "error" ? (
+                            <p className="mt-1 text-xs text-amber-200">Archivo recibido. El análisis requiere revisión humana.</p>
+                          ) : null}
                           {item.quoted_text ? (
                             <p className="mt-0.5 rounded bg-black/25 px-1.5 py-0.5 text-[11px] italic leading-tight text-white/75">
                               ↩ «{item.quoted_text}»

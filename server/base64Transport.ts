@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+import { request as httpsRequest } from "node:https";
 
 /**
  * Transporte canónico de archivos en base64.
@@ -83,6 +86,15 @@ const EXTENSION_TO_MIME: Record<string, string> = {
   mp3: "audio/mpeg",
   ogg: "audio/ogg",
   wav: "audio/wav",
+  m4a: "audio/mp4",
+  aac: "audio/aac",
+  amr: "audio/amr",
+  flac: "audio/flac",
+  webm: "video/webm",
+  opus: "audio/ogg",
+  mpga: "audio/mpeg",
+  mpeg: "audio/mpeg",
+  "3gp": "video/3gpp",
   doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   xls: "application/vnd.ms-excel",
@@ -108,6 +120,16 @@ const MIME_TO_EXTENSION: Record<string, string> = {
   "audio/mpeg": "mp3",
   "audio/ogg": "ogg",
   "audio/wav": "wav",
+  "audio/mp4": "m4a",
+  "audio/aac": "aac",
+  "audio/amr": "amr",
+  "audio/amr-wb": "amr",
+  "audio/flac": "flac",
+  "audio/webm": "webm",
+  "video/webm": "webm",
+  "audio/opus": "opus",
+  "audio/3gpp": "3gp",
+  "video/3gpp": "3gp",
   "application/msword": "doc",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
     "docx",
@@ -127,6 +149,10 @@ const MIME_ALIASES: Record<string, string> = {
   "audio/mp3": "mp3",
   "audio/mpeg3": "mp3",
   "audio/x-mpeg-3": "mp3",
+  "audio/x-wav": "wav",
+  "audio/x-m4a": "m4a",
+  "audio/x-flac": "flac",
+  "application/ogg": "ogg",
   "video/x-m4v": "mp4",
   "application/vnd.ms-excel.sheet.macroenabled.12": "xlsx",
   "application/msword.docx": "docx",
@@ -144,7 +170,9 @@ function startsWith(data: Buffer, bytes: readonly number[], offset = 0) {
 
 function asciiAt(data: Buffer, offset: number, text: string) {
   if (data.length < offset + text.length) return false;
-  return data.subarray(offset, offset + text.length).toString("latin1") === text;
+  return (
+    data.subarray(offset, offset + text.length).toString("latin1") === text
+  );
 }
 
 /**
@@ -173,15 +201,41 @@ export function detectContentSignature(data: Buffer): ContentSignature | null {
   if (asciiAt(data, 0, "OggS")) {
     return { mimeType: "audio/ogg", extension: "ogg" };
   }
+  if (asciiAt(data, 0, "#!AMR-WB\n"))
+    return { mimeType: "audio/amr-wb", extension: "amr" };
+  if (asciiAt(data, 0, "#!AMR\n"))
+    return { mimeType: "audio/amr", extension: "amr" };
+  if (asciiAt(data, 0, "fLaC"))
+    return { mimeType: "audio/flac", extension: "flac" };
+  if (startsWith(data, [0x1a, 0x45, 0xdf, 0xa3])) {
+    const header = data.subarray(0, 65_536).toString("latin1");
+    if (header.includes("webm"))
+      return {
+        mimeType:
+          /A_(OPUS|VORBIS)/.test(header) && !header.includes("V_")
+            ? "audio/webm"
+            : "video/webm",
+        extension: "webm",
+      };
+  }
   if (asciiAt(data, 4, "ftyp")) {
+    const brand = data.subarray(8, 12).toString("latin1");
+    if (["M4A ", "M4B ", "M4P ", "F4A ", "F4B "].includes(brand))
+      return { mimeType: "audio/mp4", extension: "m4a" };
+    if (brand.startsWith("3gp"))
+      return { mimeType: "video/3gpp", extension: "3gp" };
     return { mimeType: "video/mp4", extension: "mp4" };
   }
+  if (data.length > 1 && data[0] === 0xff && (data[1] & 0xf6) === 0xf0)
+    return { mimeType: "audio/aac", extension: "aac" };
   if (asciiAt(data, 0, "ID3") || startsWith(data, [0xff, 0xfb])) {
     return { mimeType: "audio/mpeg", extension: "mp3" };
   }
   // Contenedores comprimidos: OOXML (docx/xlsx/pptx) y formatos ZIP.
   if (startsWith(data, [0x50, 0x4b, 0x03, 0x04])) {
-    const head = data.subarray(0, Math.min(data.length, 4_096)).toString("latin1");
+    const head = data
+      .subarray(0, Math.min(data.length, 4_096))
+      .toString("latin1");
     if (head.includes("word/")) {
       return {
         mimeType:
@@ -199,9 +253,7 @@ export function detectContentSignature(data: Buffer): ContentSignature | null {
     return null;
   }
   // Contenedores OLE heredados: .doc y .xls comparten la misma firma.
-  if (
-    startsWith(data, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])
-  ) {
+  if (startsWith(data, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) {
     return { mimeType: "application/octet-stream", extension: "" };
   }
   return null;
@@ -212,11 +264,11 @@ export function transportByteLimit(maxBytes: number) {
   return Math.ceil(maxBytes * BASE64_EXPANSION_RATIO) + 8;
 }
 
-export function sanitizeTransportFileName(
-  value: string,
-  fallback = "Adjunto"
-) {
-  const safe = value.replace(/[^\w.\- ]/g, "_").slice(0, 180).trim();
+export function sanitizeTransportFileName(value: string, fallback = "Adjunto") {
+  const safe = value
+    .replace(/[^\w.\- ]/g, "_")
+    .slice(0, 180)
+    .trim();
   return safe || fallback;
 }
 
@@ -255,10 +307,26 @@ export function extensionOfTransportName(fileName: string) {
   return dot < 0 ? "" : normalized.slice(dot + 1).replace(/[^a-z0-9]/g, "");
 }
 
-export function classifyTransportKind(extension: string) {
-  if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension)) return "imagen";
-  if (["mp4"].includes(extension)) return "video";
-  if (["mp3", "ogg", "wav"].includes(extension)) return "audio";
+export function classifyTransportKind(extension: string, mimeType = "") {
+  if (mimeType.startsWith("audio/")) return "audio";
+  if (["jpg", "jpeg", "png", "gif", "webp"].includes(extension))
+    return "imagen";
+  if (["mp4", "webm", "3gp"].includes(extension)) return "video";
+  if (
+    [
+      "mp3",
+      "mpga",
+      "mpeg",
+      "ogg",
+      "wav",
+      "m4a",
+      "aac",
+      "amr",
+      "flac",
+      "opus",
+    ].includes(extension)
+  )
+    return "audio";
   if (["doc", "docx", "pdf"].includes(extension)) return "documento";
   if (["xls", "xlsx", "csv"].includes(extension)) return "hoja";
   return "otro";
@@ -279,6 +347,8 @@ export function splitBase64Payload(value: string): {
   const separator = trimmed.indexOf(",");
   if (separator < 0) return { base64: "", declaredMimeType: "" };
   const meta = trimmed.slice(5, separator);
+  if (!/(?:^|;)base64(?:;|$)/i.test(meta))
+    return { base64: "", declaredMimeType: "" };
   const declaredMimeType = meta.split(";")[0]?.trim().toLowerCase() ?? "";
   return {
     base64: trimmed.slice(separator + 1),
@@ -287,11 +357,323 @@ export function splitBase64Payload(value: string): {
 }
 
 export function isValidBase64Payload(value: string) {
-  return /^[A-Za-z0-9+/=\s]*$/.test(value) && value.replace(/\s+/g, "").length > 0;
+  const compact = value.replace(/\s+/g, "");
+  return (
+    compact.length > 0 &&
+    compact.length % 4 !== 1 &&
+    /^[A-Za-z0-9+/]+={0,2}$/.test(compact) &&
+    (!compact.includes("=") || compact.length % 4 === 0)
+  );
 }
 
 export function transportSha256(data: Buffer) {
   return createHash("sha256").update(data).digest("hex");
+}
+
+export class AttachmentTransportError extends Error {
+  constructor(
+    public readonly code:
+      | "unsafe_destination"
+      | "http_error"
+      | "network_error"
+      | "size_limit"
+      | "empty_content"
+      | "redirect_limit",
+    public readonly retryable: boolean,
+    message: string
+  ) {
+    super(message);
+    this.name = "AttachmentTransportError";
+  }
+}
+
+export type AttachmentAddress = { address: string; family: number };
+export type AttachmentLookup = (
+  hostname: string
+) => Promise<readonly AttachmentAddress[]>;
+
+/** Solo direcciones unicast públicas; excluye redes locales, reservadas y de documentación. */
+export function isPublicAttachmentAddress(address: string) {
+  const family = isIP(address);
+  if (family === 4) {
+    const [a, b, c] = address.split(".").map(Number);
+    return !(
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+      (a === 192 && b === 88 && c === 99) ||
+      (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
+      (a === 203 && b === 0 && c === 113)
+    );
+  }
+  if (family === 6) {
+    const lower = address.toLowerCase();
+    const [first, second] = lower
+      .split(":")
+      .map(part => parseInt(part || "0", 16));
+    return (
+      (first & 0xe000) === 0x2000 &&
+      first !== 0x2002 &&
+      first !== 0x3fff &&
+      !(first === 0x2001 && (second < 0x200 || second === 0xdb8))
+    );
+  }
+  return false;
+}
+
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    promise
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", abort));
+  });
+}
+
+export async function resolveAttachmentDestination(
+  source: string,
+  options: {
+    lookupImpl?: AttachmentLookup;
+    allowedHosts?: readonly string[];
+    signal?: AbortSignal;
+  } = {}
+) {
+  let url: URL;
+  try {
+    url = new URL(source);
+  } catch {
+    throw new AttachmentTransportError(
+      "unsafe_destination",
+      false,
+      "La dirección del adjunto no es válida."
+    );
+  }
+  const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    (url.port && url.port !== "443") ||
+    host === "localhost" ||
+    /\.(localhost|local|internal|lan|home)$/.test(host)
+  ) {
+    throw new AttachmentTransportError(
+      "unsafe_destination",
+      false,
+      "El destino del adjunto no es un servidor HTTPS público permitido."
+    );
+  }
+  // El contrato usa {url}/media y no fija un dominio. La lista institucional,
+  // cuando se configura, restringe adicionalmente los destinos públicos.
+  const allowed =
+    options.allowedHosts ??
+    (process.env.APICHAT_MEDIA_ALLOWED_HOSTS ?? "")
+      .split(",")
+      .map(value => value.trim().toLowerCase())
+      .filter(Boolean);
+  if (
+    allowed.length &&
+    !allowed.some(entry =>
+      entry.startsWith("*.")
+        ? host.endsWith(entry.slice(1)) && host !== entry.slice(2)
+        : host === entry
+    )
+  ) {
+    throw new AttachmentTransportError(
+      "unsafe_destination",
+      false,
+      "El dominio del adjunto no pertenece a la lista permitida."
+    );
+  }
+  const resolution = isIP(host)
+    ? Promise.resolve([{ address: host, family: isIP(host) }])
+    : (
+        options.lookupImpl ??
+        (name => lookup(name, { all: true, verbatim: true }))
+      )(host);
+  const addresses = await (options.signal
+    ? abortable(resolution, options.signal)
+    : resolution);
+  if (
+    !addresses.length ||
+    addresses.some(item => !isPublicAttachmentAddress(item.address))
+  ) {
+    throw new AttachmentTransportError(
+      "unsafe_destination",
+      false,
+      "La dirección del adjunto resuelve a una red no permitida."
+    );
+  }
+  return { url, address: addresses[0] };
+}
+
+type AttachmentResponse = {
+  status: number;
+  header: (name: string) => string | null;
+  body: AsyncIterable<Uint8Array>;
+  cancel: () => void | Promise<void>;
+};
+
+async function attachmentRequest(
+  destination: Awaited<ReturnType<typeof resolveAttachmentDestination>>,
+  signal: AbortSignal,
+  fetchImpl?: typeof fetch
+): Promise<AttachmentResponse> {
+  if (fetchImpl) {
+    const response = await abortable(
+      fetchImpl(destination.url.toString(), { signal, redirect: "manual" }),
+      signal
+    );
+    const reader = response.body?.getReader();
+    return {
+      status: response.status,
+      header: name => response.headers.get(name),
+      body: (async function* () {
+        if (!reader) return;
+        while (true) {
+          const item = await abortable(reader.read(), signal);
+          if (item.done) return;
+          yield item.value;
+        }
+      })(),
+      cancel: async () => {
+        await reader?.cancel().catch(() => undefined);
+      },
+    };
+  }
+  // La conexión usa la IP validada, conservando hostname/SNI para TLS. No hay
+  // una segunda resolución DNS que pueda redirigir la conexión a la red local.
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest(
+      destination.url,
+      {
+        method: "GET",
+        signal,
+        agent: false,
+        family: destination.address.family,
+        lookup: (_hostname, _options, callback) =>
+          callback(
+            null,
+            destination.address.address,
+            destination.address.family
+          ),
+      },
+      response =>
+        resolve({
+          status: response.statusCode ?? 0,
+          header: name => {
+            const value = response.headers[name.toLowerCase()];
+            return Array.isArray(value) ? value.join(",") : (value ?? null);
+          },
+          body: response,
+          cancel: () => {
+            response.destroy();
+          },
+        })
+    );
+    request.on("error", reject);
+    request.end();
+  });
+}
+
+async function downloadAttachment(
+  source: string,
+  options: {
+    maxBytes: number;
+    timeoutMs: number;
+    fetchImpl?: typeof fetch;
+    lookupImpl?: AttachmentLookup;
+    allowedHosts?: readonly string[];
+  }
+) {
+  const signal = AbortSignal.timeout(options.timeoutMs);
+  let current = source;
+  try {
+    for (let redirect = 0; redirect <= 3; redirect++) {
+      const destination = await resolveAttachmentDestination(current, {
+        ...options,
+        signal,
+      });
+      const response = await attachmentRequest(
+        destination,
+        signal,
+        options.fetchImpl
+      );
+      try {
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+          const location = response.header("location");
+          if (!location || redirect === 3)
+            throw new AttachmentTransportError(
+              "redirect_limit",
+              false,
+              "La descarga excedió las redirecciones permitidas."
+            );
+          current = new URL(location, destination.url).toString();
+          continue;
+        }
+        if (response.status < 200 || response.status >= 300) {
+          throw new AttachmentTransportError(
+            "http_error",
+            response.status === 408 ||
+              response.status === 429 ||
+              response.status >= 500,
+            `El servidor del adjunto respondió HTTP ${response.status}.`
+          );
+        }
+        const size = Number(response.header("content-length"));
+        if (Number.isFinite(size) && size > options.maxBytes)
+          throw new AttachmentTransportError(
+            "size_limit",
+            false,
+            "El adjunto supera el límite de descarga."
+          );
+        let bytes = 0;
+        const chunks: Buffer[] = [];
+        for await (const chunk of response.body) {
+          bytes += chunk.byteLength;
+          if (bytes > options.maxBytes)
+            throw new AttachmentTransportError(
+              "size_limit",
+              false,
+              "El adjunto supera el límite durante la descarga."
+            );
+          chunks.push(Buffer.from(chunk));
+        }
+        if (!bytes)
+          throw new AttachmentTransportError(
+            "empty_content",
+            false,
+            "El servidor entregó un adjunto vacío."
+          );
+        return {
+          buffer: Buffer.concat(chunks, bytes),
+          mimeType: response.header("content-type") ?? "",
+        };
+      } finally {
+        await response.cancel();
+      }
+    }
+  } catch (error) {
+    if (error instanceof AttachmentTransportError) throw error;
+    throw new AttachmentTransportError(
+      "network_error",
+      true,
+      "La descarga del adjunto no pudo completarse; puede reintentarse."
+    );
+  }
+  throw new AttachmentTransportError(
+    "redirect_limit",
+    false,
+    "La descarga excedió las redirecciones permitidas."
+  );
 }
 
 /**
@@ -307,18 +689,21 @@ export async function decodeRemoteAttachment(
     fileName?: string;
     mimeType?: string;
     fetchImpl?: typeof fetch;
+    lookupImpl?: AttachmentLookup;
+    allowedHosts?: readonly string[];
     timeoutMs?: number;
   } = {}
 ): Promise<DecodedTransport | null> {
-  const { fileName = "archivo", mimeType = "", fetchImpl, timeoutMs = 20_000 } =
-    options;
+  const {
+    fileName = "archivo",
+    mimeType = "",
+    fetchImpl,
+    timeoutMs = 20_000,
+  } = options;
   const source = rawUrl.trim();
   if (!source) return null;
   if (source.startsWith("data:")) {
-    return decodeTransport(
-      { dataUri: source, fileName, mimeType },
-      options
-    );
+    return decodeTransport({ dataUri: source, fileName, mimeType }, options);
   }
   if (!/^https:\/\//i.test(source)) {
     // El proveedor puede notificar el adjunto como base64 **sin** el sobre
@@ -337,16 +722,16 @@ export async function decodeRemoteAttachment(
     return null;
   }
   const maxBytes = options.maxBytes ?? 20 * 1024 * 1024;
-  const request = fetchImpl ?? fetch;
-  const response = await request(source, {
-    signal: AbortSignal.timeout(timeoutMs),
+  const downloaded = await downloadAttachment(source, {
+    maxBytes,
+    timeoutMs,
+    fetchImpl,
+    lookupImpl: options.lookupImpl,
+    allowedHosts: options.allowedHosts,
   });
-  if (!response.ok) return null;
-  const declaredLength = Number(response.headers.get("content-length") ?? NaN);
-  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) return null;
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return decodeTransport(
-    { dataBase64: buffer.toString("base64"), fileName, mimeType },
+  return decodeTransportBuffer(
+    downloaded.buffer,
+    { fileName, mimeType: mimeType || downloaded.mimeType },
     options
   );
 }
@@ -389,12 +774,7 @@ export function decodeTransport(
   input: TransportInput,
   options: TransportDecodeOptions = {}
 ): DecodedTransport {
-  const {
-    allowedExtensions,
-    maxBytes = 20 * 1024 * 1024,
-    fallbackFileName = "Adjunto",
-    allowMismatch = true,
-  } = options;
+  const { maxBytes = 20 * 1024 * 1024, fallbackFileName = "Adjunto" } = options;
 
   const raw =
     typeof input === "string"
@@ -407,13 +787,36 @@ export function decodeTransport(
 
   const split = splitBase64Payload(raw.dataBase64 ?? "");
   if (!split.base64 || !isValidBase64Payload(split.base64)) {
-    throw new Error("El contenido recibido no es una codificación base64 válida.");
+    throw new Error(
+      "El contenido recibido no es una codificación base64 válida."
+    );
   }
   if (split.base64.replace(/\s+/g, "").length > transportByteLimit(maxBytes)) {
     throw new Error("El contenido codificado supera el límite admitido.");
   }
 
   const buffer = Buffer.from(split.base64.replace(/\s+/g, ""), "base64");
+  return decodeTransportBuffer(
+    buffer,
+    {
+      fileName: raw.fileName ?? fallbackFileName,
+      mimeType: raw.mimeType?.trim() || split.declaredMimeType,
+    },
+    options
+  );
+}
+
+function decodeTransportBuffer(
+  buffer: Buffer,
+  raw: { fileName?: string; mimeType?: string },
+  options: TransportDecodeOptions
+): DecodedTransport {
+  const {
+    allowedExtensions,
+    maxBytes = 20 * 1024 * 1024,
+    fallbackFileName = "Adjunto",
+    allowMismatch = true,
+  } = options;
   if (buffer.length === 0) {
     throw new Error("El contenido decodificado está vacío.");
   }
@@ -426,11 +829,9 @@ export function decodeTransport(
     fallbackFileName
   );
   const declaredExtension = extensionOfTransportName(fileName);
-  const declaredMimeType = (
-    raw.mimeType?.trim() ||
-    split.declaredMimeType ||
-    ""
-  ).toLowerCase();
+  const declaredMimeType = (raw.mimeType?.trim() || "")
+    .split(";")[0]
+    .toLowerCase();
   const detected = detectContentSignature(buffer);
   const detectedMimeType = detected?.mimeType ?? null;
 
@@ -457,7 +858,7 @@ export function decodeTransport(
 
   return {
     buffer,
-    fileName,
+    fileName: reconstructTransportFileName(fileName, extension),
     extension,
     mimeType:
       detectedMimeType && detectedMimeType !== "application/octet-stream"

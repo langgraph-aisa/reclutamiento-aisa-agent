@@ -59,9 +59,7 @@ function source(
       fingerprint: "a".repeat(64),
       rendered: POSITION_KNOWLEDGE_FALLBACK,
     },
-    methodologies: [
-      { display_name: "SIERA", content_markdown: "Marco SIERA" },
-    ],
+    methodologies: [{ display_name: "SIERA", content_markdown: "Marco SIERA" }],
     notes: [],
     cycles: [],
     summary: null,
@@ -88,7 +86,9 @@ function source(
 describe("contexto conversacional de cuatro capas", () => {
   it("compone las cuatro capas y una huella verificable", () => {
     const context = buildConversationContext(source(), new Date("2026-09-16"));
-    expect(context.layers.marco).toContain("MARCO EPISTEMOLÓGICO INSTITUCIONAL");
+    expect(context.layers.marco).toContain(
+      "MARCO EPISTEMOLÓGICO INSTITUCIONAL"
+    );
     expect(context.layers.candidato).toContain("RAG PERSONAL");
     expect(context.layers.comparativo).toContain("PLAZA VERSUS DECLARACIÓN");
     expect(context.layers.memoria).toContain("MEMORIA CONVERSACIONAL");
@@ -169,5 +169,63 @@ describe("contexto conversacional de cuatro capas", () => {
     const first = buildConversationContext(source(), new Date("2026-09-16"));
     const second = buildConversationContext(source(), new Date("2026-09-17"));
     expect(first.fingerprint).toBe(second.fingerprint);
+  });
+
+  it("manifiesta recibido y error aunque todavía no exista análisis y nunca solicita reenvío por estar pendiente", () => {
+    const input = source({
+      attachments: [
+        {
+          originalName: "CV.pdf",
+          category: "cv",
+          status: "error",
+          errorCode: "ocr_disabled",
+        },
+      ],
+      knowledgeDocuments: [],
+    });
+    const context = buildConversationContext(input);
+    expect(context.layers.candidato).toContain(
+      "CV.pdf · cv · error · procesamiento: ocr_disabled"
+    );
+    expect(context.layers.candidato).not.toContain("Sin documentos recibidos");
+    expect(
+      effectiveConversationGaps(context.gaps).some(
+        gap => gap.kind === "cv_pending"
+      )
+    ).toBe(false);
+  });
+
+  it("cambia la huella cuando cambia la evidencia documental", () => {
+    const first = buildConversationContext(
+      source({
+        knowledgeDocuments: [
+          {
+            id: 1,
+            originalName: "CV.pdf",
+            source: "webhook",
+            analysis: "Dos años.",
+          },
+        ],
+      })
+    );
+    const second = buildConversationContext(
+      source({
+        knowledgeDocuments: [
+          {
+            id: 1,
+            originalName: "CV.pdf",
+            source: "webhook",
+            analysis: "Cinco años.",
+          },
+        ],
+      })
+    );
+    expect(first.fingerprint).not.toBe(second.fingerprint);
+  });
+
+  it("preserva el manifiesto incluso si el marco institucional excede el presupuesto", () => {
+    const input = source();
+    input.knowledge.rendered = "Marco institucional ".repeat(5000);
+    expect(buildConversationContext(input).rendered).toContain("cv-jose.pdf");
   });
 });

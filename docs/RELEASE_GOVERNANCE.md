@@ -1,8 +1,21 @@
-# Gobierno de release JARVI RH 2.0.179
+# Gobierno de release JARVI RH 2.0.180
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.179**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.180**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.180
+El release **repara el transporte de adjuntos por ApiChat** —PDF, Word, audio e imágenes— entre el WhatsApp del candidato y la bandeja, y de la bandeja de vuelta al WhatsApp.
+
+**Un solo adaptador del contrato.** El callback publicado por ApiChat entrega `messages[]`; el receptor anterior esperaba un mensaje individual y podía descartar el lote respondiendo HTTP 200. A partir de esta entrega, `normalizeApiChatBatch` desenvuelve el sobre configurado, valida cada elemento y conserva las posiciones inválidas: un elemento defectuoso no elimina los válidos del mismo lote. El sondeo del historial reutiliza el mismo normalizador y pagina con cursor durable, en lugar de una ventana fija de cincuenta.
+
+**Recepción durable antes del acuse.** El webhook confirma HTTP 200 solo después de conservar el lote en PostgreSQL (`apichat_inbound_receipts`). Si la base no está disponible responde 503. Un trabajador con reclamo atómico y lease procesa después: el acuse significa conservación, no análisis. Un fallo transitorio conserva la carga y se recupera sin duplicar, porque la clave de recepción es única y la clave de almacenamiento es determinista.
+
+**Una identidad común de adjunto.** Bandeja, expediente documental y motores leen el mismo estado: el mensaje guarda la referencia al documento (`candidate_file_id`) y la bandeja proyecta la clave de almacenamiento, el nombre y el estado de procesamiento. Un archivo pendiente ya no se presenta como «no enviado»: «recibido» no significa «interpretado ni identificado como CV».
+
+**Interpretación gobernada por capacidad instalada.** PDF y DOCX producen texto; DOC usa `antiword`; los PDF e imágenes sin texto usan OCR (`pdftoppm`/`tesseract`) gobernado por interruptor; los audios se transcriben y su transcripción se vincula al original. Cada formato anuncia solo la capacidad efectiva instalada y probada. Las migraciones `0036` y `0037` añaden la recepción durable, el cursor del historial y la cola de procesamiento documental con su estado.
+
+**Dirección y observabilidad veraces.** Se preserva la dirección `from_me` del contrato y los identificadores de grupo nunca se convierten en el teléfono de una persona. La observabilidad distingue «no disponible» y «sin trazas» de cero, y el veredicto de la traza separa lo que el proveedor envió de lo que el receptor descartó.
 
 ### Alcance candidato 2.0.179
 El release **fija el orden de lectura de la ficha de Revisión Humana**: encabezado de identidad, **feed de WhatsApp** de la persona, detalle de la postulación con la matriz de evaluación, **agente del reclutador** y **RAG Personal** al cierre.
@@ -165,7 +178,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.179 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.180 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -197,7 +210,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.179.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.180.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

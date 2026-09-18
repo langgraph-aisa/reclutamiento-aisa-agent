@@ -50,6 +50,8 @@ const sources = [
   "drizzle/migrations/0033_security_roles.sql",
   "drizzle/migrations/0034_recruiter_agent.sql",
   "drizzle/migrations/0035_transport_traces.sql",
+  "drizzle/migrations/0036_apichat_inbound_receipts.sql",
+  "drizzle/migrations/0037_candidate_processing.sql",
 ];
 
 const verificationPath = "database/verificacion_servicio_conversacional.sql";

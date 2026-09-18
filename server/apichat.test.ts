@@ -399,8 +399,8 @@ describe("endpoints oficiales restantes de ApiChat", () => {
       expect.objectContaining({
         body: JSON.stringify({
           number: "50255555555",
-          file: "https://cdn.aisa.com.gt/cv-1.pdf",
-          name: "CV.pdf",
+          url: "https://cdn.aisa.com.gt/cv-1.pdf",
+          filename: "CV.pdf",
           caption: "Documento institucional",
         }),
       })
@@ -420,14 +420,24 @@ describe("endpoints oficiales restantes de ApiChat", () => {
       { fetchImpl }
     );
     expect(fetchImpl).toHaveBeenCalledWith(
-      "https://api.apichat.io/v1/sendPTT",
+      "https://api.apichat.io/v1/sendAudio",
       expect.objectContaining({
         body: JSON.stringify({
           number: "50255555555",
-          ptt: "https://cdn.aisa.com.gt/nota.ogg",
+          url: "https://cdn.aisa.com.gt/nota.ogg",
         }),
       })
     );
+  });
+
+  it.each(["/sendPTT", "/sendAudio"])("respeta el interruptor de audio %s sin enviar", async path => {
+    const fetchImpl = vi.fn();
+    await expect(sendApiChatPtt(
+      { phoneInternational: "+50255555555", audioUrl: "https://example.invalid/audio.ogg" },
+      { ...config, disabledEndpoints: [path] },
+      { fetchImpl }
+    )).rejects.toThrow("desactivado");
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it("elimina un mensaje mediante el endpoint oficial", async () => {

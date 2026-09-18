@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { runConversationReasoning } from "../conversationWorker";
 import { startCapabilityService } from "./serviceRuntime";
+import { startCandidateDocumentWorker } from "../candidateDocumentWorker";
 
 /**
  * Servicio de razonamiento.
@@ -10,6 +11,7 @@ import { startCapabilityService } from "./serviceRuntime";
  * capacidad declarada lo impide.
  */
 void startCapabilityService("reason", {
+  onStart: pool => { startCandidateDocumentWorker(() => Promise.resolve(pool)); },
   tick: async pool => {
     await runConversationReasoning(pool);
   },

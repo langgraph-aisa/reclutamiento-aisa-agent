@@ -36,9 +36,17 @@ const SETTINGS = {
 function makePool(overrides: Record<string, unknown[]> = {}) {
   const inserted: Array<{ sql: string; values: unknown[] }> = [];
   const pool = {
+    connect: async () => ({
+      query: (sql: string, values?: unknown[]) => pool.query(sql, values),
+      release: () => undefined,
+    }),
     query: vi.fn(async (sql: string, values?: unknown[]) => {
       const text = String(sql);
-      if (/FROM candidate_knowledge_files\s+WHERE application_id=\$1 AND sha256/.test(text)) {
+      if (
+        /FROM candidate_knowledge_files\s+WHERE application_id=\$1 AND sha256/.test(
+          text
+        )
+      ) {
         return { rows: overrides.duplicate ?? [] };
       }
       if (/INSERT INTO candidate_knowledge_files/.test(text)) {
@@ -121,18 +129,18 @@ describe("registro de documentos del candidato", () => {
     // es compartida y anterior a esta versión.
     expect(result.originalName).toBe("Curr_culum.pdf");
     // El binario queda en el namespace del candidato, no en el del proyecto.
-    const stored = fs.readdirSync(
-      path.join(storageRoot, "applications", "12")
-    );
+    const stored = fs.readdirSync(path.join(storageRoot, "applications", "12"));
     expect(stored).toHaveLength(1);
     expect(stored[0]?.endsWith(".pdf")).toBe(true);
     // La fila conserva la procedencia, la política y la huella del contenido.
     const values = inserted[0]?.values ?? [];
     expect(values).toContain("manual");
     expect(values).toContain("application/pdf");
-    expect(values.some(value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value))).toBe(
-      true
-    );
+    expect(
+      values.some(
+        value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
+      )
+    ).toBe(true);
   });
 
   it("corrige la extensión cuando el contenido contradice lo declarado", async () => {
@@ -188,7 +196,11 @@ describe("alimentación por webhook", () => {
     pool.query = vi.fn(async (sql: string, values?: unknown[]) => {
       const text = String(sql);
       if (/FROM integration_settings/.test(text)) return { rows: [] };
-      if (/FROM candidate_knowledge_files\s+WHERE application_id=\$1 AND sha256/.test(text)) {
+      if (
+        /FROM candidate_knowledge_files\s+WHERE application_id=\$1 AND sha256/.test(
+          text
+        )
+      ) {
         return { rows: [] };
       }
       if (/INSERT INTO candidate_knowledge_files/.test(text)) {
@@ -308,15 +320,20 @@ describe("árbol de documentos del candidato", () => {
     expect(tree.folders[0]?.fileCount).toBe(1);
     expect(tree.files).toHaveLength(2);
     expect(tree.files[0]?.kind).toBe("documento");
-    expect(tree.analysis).toEqual({ analyzed: 1, pending: 1, notApplicable: 0 });
+    expect(tree.analysis).toEqual({
+      analyzed: 1,
+      pending: 1,
+      notApplicable: 0,
+    });
   });
 });
 
 describe("contrato de procedencia", () => {
-  it("declara las tres vías admitidas del expediente", () => {
+  it("declara las vías admitidas del expediente", () => {
     expect([...CANDIDATE_DOCUMENT_SOURCES]).toEqual([
       "manual",
       "webhook",
+      "sondeo",
       "postulacion",
     ]);
   });

@@ -32,8 +32,7 @@ SET "label" = replace(replace(replace(replace(replace(replace(replace(
       "help_text",
       'Responde con información verificable.', 'Responda con información verificable.'),
       'Indica tu nivel académico alcanzado.', 'Indique su nivel académico alcanzado.'),
-      'Explica cómo debe responder.', 'Explique cómo debe responder.'),
-    "updated_at" = now()
+      'Explica cómo debe responder.', 'Explique cómo debe responder.')
 WHERE "label" ~ '(Cumples|Cuentas|tienes\?|Indica tu|resides\?|Describe tu)'
    OR "help_text" ~ '(Responde con|Indica tu|Explica cómo)';--> statement-breakpoint
 
@@ -41,6 +40,5 @@ UPDATE "form_questions"
 SET "evaluation_criteria" = replace(replace(
       "evaluation_criteria",
       'Considera calificado solo si', 'Considere que la persona está calificada solo si'),
-      'conviértelos a meses totales', 'conviértalos a meses totales'),
-    "updated_at" = now()
+      'conviértelos a meses totales', 'conviértalos a meses totales')
 WHERE "evaluation_criteria" ~ '(Considera calificado|conviértelos a meses totales)';

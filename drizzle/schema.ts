@@ -1307,7 +1307,7 @@ export const candidateKnowledgeFiles = pgTable(
     mimeType: varchar("mime_type", { length: 160 }).notNull(),
     extension: varchar("extension", { length: 16 }).notNull(),
     sizeBytes: integer("size_bytes").default(0).notNull(),
-    /** `manual`, `webhook` o `postulacion`. */
+    /** `manual`, `webhook`, `sondeo` o `postulacion`. */
     source: varchar("source", { length: 24 }).default("manual").notNull(),
     summary66: varchar("summary_66", { length: 1400 }).default("").notNull(),
     deepAnalysis: varchar("deep_analysis", { length: 6000 })
@@ -1317,6 +1317,11 @@ export const candidateKnowledgeFiles = pgTable(
       .default("pendiente")
       .notNull(),
     analyzedModel: varchar("analyzed_model", { length: 80 }),
+    extractedText: text("extracted_text").default("").notNull(),
+    extractionMethod: varchar("extraction_method", { length: 48 }),
+    extractionTruncated: boolean("extraction_truncated").default(false).notNull(),
+    processingErrorCode: varchar("processing_error_code", { length: 64 }),
+    documentClass: varchar("document_class", { length: 24 }).default("unclassified").notNull(),
     /** Esencia del CV: representación de trabajo que alimenta al agente. */
     cvEssence: varchar("cv_essence", { length: 6000 }).default("").notNull(),
     cvEssenceStatus: varchar("cv_essence_status", { length: 32 })
@@ -1361,6 +1366,76 @@ export const candidateKnowledgeFiles = pgTable(
 export type CandidateKnowledgeFolder =
   typeof candidateKnowledgeFolders.$inferSelect;
 export type CandidateKnowledgeFile = typeof candidateKnowledgeFiles.$inferSelect;
+
+export const candidateDocumentJobs = pgTable("candidate_document_jobs", {
+  fileId: integer("file_id").primaryKey().references(() => candidateKnowledgeFiles.id, { onDelete: "cascade" }),
+  state: varchar("state", { length: 24 }).default("pending").notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  availableAt: timestamp("available_at", { withTimezone: true }).defaultNow().notNull(),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  lastErrorCode: varchar("last_error_code", { length: 64 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => ({
+  availableIdx: index("candidate_document_jobs_available_idx").on(table.state, table.availableAt),
+  stateCheck: check("candidate_document_jobs_state_check", sql`${table.state} IN ('pending','running','retry','completed','failed')`),
+}));
+export type CandidateDocumentJob = typeof candidateDocumentJobs.$inferSelect;
+
+/** Recepción durable del webhook y del historial, antes del acuse HTTP. */
+export const apichatInboundReceipts = pgTable("apichat_inbound_receipts", {
+  receiptKey: varchar("receipt_key", { length: 64 }).primaryKey(),
+  providerMessageId: varchar("provider_message_id", { length: 180 }),
+  origin: varchar("origin", { length: 16 }).notNull(),
+  payload: jsonb("payload"),
+  payloadSha256: varchar("payload_sha256", { length: 64 }).notNull(),
+  status: varchar("status", { length: 16 }).default("pending").notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  leaseToken: varchar("lease_token", { length: 36 }),
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  outcome: varchar("outcome", { length: 80 }),
+  lastError: varchar("last_error", { length: 200 }),
+  receivedAt: timestamp("received_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+}, table => ({
+  workIdx: index("apichat_receipts_work_idx").on(
+    table.status,
+    table.nextAttemptAt,
+    table.receivedAt
+  ),
+  originCheck: check(
+    "apichat_inbound_receipts_origin_ck",
+    sql`${table.origin} IN ('webhook','sondeo')`
+  ),
+  statusCheck: check(
+    "apichat_inbound_receipts_status_ck",
+    sql`${table.status} IN ('pending','processing','retry','completed','rejected','dead')`
+  ),
+}));
+export type ApiChatInboundReceipt = typeof apichatInboundReceipts.$inferSelect;
+
+/** Avance paginado del historial del proveedor, por cuenta. */
+export const apichatHistoryCursors = pgTable("apichat_history_cursors", {
+  scope: varchar("scope", { length: 80 }).primaryKey(),
+  page: integer("page").default(0).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+}, table => ({
+  pageCheck: check(
+    "apichat_history_cursors_page_ck",
+    sql`${table.page} >= 0`
+  ),
+}));
+export type ApiChatHistoryCursor = typeof apichatHistoryCursors.$inferSelect;
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;

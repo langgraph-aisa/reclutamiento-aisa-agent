@@ -228,7 +228,8 @@ function publicEvaluationInput(source: EvaluationSource) {
       formulario: question.formTitle
         ? `${question.formTitle}${question.formVersion ? ` · versión ${question.formVersion}` : ""}`
         : null,
-      respuesta: source.answers[question.answerKey ?? question.fieldKey] ?? null,
+      respuesta:
+        source.answers[question.answerKey ?? question.fieldKey] ?? null,
       criterio: question.evaluationCriteria ?? null,
       instruccionEspecifica: question.aiPrompt ?? null,
       requisitoIndispensable: Boolean(question.hardFail),
@@ -418,15 +419,11 @@ async function evaluationSource(pool: Pool, applicationId: number) {
 /**
  * Expediente documental del candidato para la evaluación.
  *
- * Usa la esencia del CV cuando la migración 0027 está aplicada y degrada al
- * análisis de 66 y 325 palabras cuando no lo está, de modo que una base sin la
- * migración sigue evaluando en lugar de fallar.
+ * Conserva el manifiesto de recepción incluso si la extracción está pendiente
+ * o falló. Los errores de consulta se propagan: no equivalen a falta de evidencia.
  */
 async function loadCandidateEvidence(pool: Pool, applicationId: number) {
-  const render = (
-    rows: Array<Record<string, unknown>>,
-    withEssence: boolean
-  ) =>
+  const render = (rows: Array<Record<string, unknown>>, withEssence: boolean) =>
     rows
       .map(row => {
         const body = withEssence
@@ -440,29 +437,37 @@ async function loadCandidateEvidence(pool: Pool, applicationId: number) {
       })
       .filter(Boolean)
       .join("\n\n");
-  try {
-    const documents = await pool.query(
-      `SELECT original_name,source,cv_essence,deep_analysis,summary_66
-         FROM candidate_knowledge_files
-        WHERE application_id=$1 AND analysis_status='analizado'
-        ORDER BY uploaded_at DESC LIMIT 5`,
-      [applicationId]
-    );
-    return render(documents.rows, true);
-  } catch {
-    try {
-      const documents = await pool.query(
-        `SELECT original_name,source,deep_analysis,summary_66
-           FROM candidate_knowledge_files
-          WHERE application_id=$1 AND analysis_status='analizado'
-          ORDER BY uploaded_at DESC LIMIT 5`,
-        [applicationId]
-      );
-      return render(documents.rows, false);
-    } catch {
-      return "";
-    }
-  }
+  const documents = await pool.query(
+    `SELECT original_name,source,cv_essence,deep_analysis,summary_66,analysis_status,
+            document_class,processing_error_code,extraction_truncated
+       FROM candidate_knowledge_files WHERE application_id=$1
+      ORDER BY (document_class='cv') DESC,uploaded_at DESC,id DESC LIMIT 30`,
+    [applicationId]
+  );
+  const rejected = await pool.query(
+    `SELECT COALESCE(m.metadata->'media'->>'fileName',m.body) AS original_name,
+            m.metadata->'media'->>'processingReason' AS reason
+       FROM conversation_messages m JOIN conversations c ON c.id=m.conversation_id
+      WHERE c.application_id=$1 AND m.direction='inbound'
+        AND m.metadata->'media'->>'processingOutcome'='rejected'
+      ORDER BY m.created_at DESC LIMIT 30`,
+    [applicationId]
+  );
+  const manifest = documents.rows
+    .map(row => {
+      const manifest = `Documento recibido: ${row.original_name}; clase: ${row.document_class}; procesamiento: ${row.analysis_status}${row.processing_error_code ? ` (${row.processing_error_code})` : ""}${row.extraction_truncated ? "; extracción parcial: requiere revisión humana" : ""}.`;
+      return `${manifest}\n${row.analysis_status === "analizado" || row.cv_essence ? render([row], true) : "Contenido aún no interpretado; no infiera ausencia de experiencia o formación."}`;
+    })
+    .join("\n\n");
+  return [
+    manifest,
+    ...rejected.rows.map(
+      row =>
+        `Archivo recibido y conservado en la bandeja: ${row.original_name}; no incorporado al análisis: ${row.reason}. No infiera ausencia de formación o experiencia de este rechazo técnico.`
+    ),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 async function saveHardFail(
@@ -905,10 +910,8 @@ export async function verifyLangfuseConnection(pool: Pool) {
         "Configure y guarde las claves pública y secreta de Langfuse.",
       MISSING_PSEUDONYMIZATION_KEY:
         "Configure una clave estable de seudonimización para Langfuse.",
-      INVALID_BASE_URL:
-        "La región de Langfuse seleccionada no es válida.",
-      INVALID_ENVIRONMENT:
-        "El ambiente de Langfuse configurado no es válido.",
+      INVALID_BASE_URL: "La región de Langfuse seleccionada no es válida.",
+      INVALID_ENVIRONMENT: "El ambiente de Langfuse configurado no es válido.",
       INVALID_SAMPLE_RATE:
         "El porcentaje de muestreo de Langfuse no es válido.",
       AUTHENTICATION_FAILED:

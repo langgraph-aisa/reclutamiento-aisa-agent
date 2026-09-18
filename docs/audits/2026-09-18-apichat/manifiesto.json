@@ -1,0 +1,331 @@
+{
+  "titulo": "Manifiesto de evidencia de auditoría de adjuntos ApiChat",
+  "generadoUtc": "2026-09-18T20:35:33.549493+00:00",
+  "software": {
+    "version": "2.0.179",
+    "commit": "b450bdbcfa9c1225221936206220a46117c2d77e",
+    "estadoInicialDelCheckout": "Sin cambios informados por git status --short"
+  },
+  "alcance": {
+    "capturas": "Observadas en conversación; originales y hashes de adquisición no disponibles",
+    "produccionInspeccionada": false,
+    "mensajesEnviados": false,
+    "aplicacionModificada": false,
+    "correccionDesplegada": false,
+    "archivosRealesDeCandidatosEjecutadosEnPruebas": false,
+    "databaseUrlConfiguradaEnEntorno": false,
+    "archivosDotenvEnRaiz": false
+  },
+  "contrato": {
+    "openapi": "3.0.0",
+    "infoVersion": "1.0.0",
+    "parametroVersionRecurso": "1.7",
+    "baseUrl": "https://api.apichat.io/v1",
+    "fuentesPublicas": [
+      {
+        "url": "https://apichat.io/api-docs",
+        "recuperadoUtc": "2026-09-18T20:26:01.670613+00:00",
+        "bytes": 16888,
+        "sha256": "0255d12829632432288ee867a5544e15b23e5aae26d2bd91499c7a43c7bb6830",
+        "copiaDeSesion": "/tmp/aisa-api-docs.html",
+        "incluidoIntegroEnEntrega": false
+      },
+      {
+        "url": "https://panel.apichat.io/docs/swagger",
+        "recuperadoUtc": "2026-09-18T20:26:00.484613+00:00",
+        "bytes": 3462,
+        "sha256": "bc96cdd4d80ad04d016e6b3e79d152a361bdaf846f919388df5a8a1da8ed1865",
+        "copiaDeSesion": "/tmp/aisa-swagger.html",
+        "incluidoIntegroEnEntrega": false
+      },
+      {
+        "url": "https://panel.apichat.io/static/js/main.d843074d.chunk.js",
+        "recuperadoUtc": "2026-09-18T20:26:16.376613+00:00",
+        "bytes": 54350,
+        "sha256": "68b92e6c0597980d5b8331b521e9b675c65aa84e3f8811811fff9bd76f74bd92",
+        "copiaDeSesion": "/tmp/aisa-apichat-main.js",
+        "incluidoIntegroEnEntrega": false
+      },
+      {
+        "url": "https://panel.apichat.io/openapi.yaml?version=1.7",
+        "recuperadoUtc": "2026-09-18T20:26:31.100613+00:00",
+        "bytes": 51022,
+        "sha256": "eb487f5bb20300298fbfe53e39b9d36589e1bf3a76335534c7efb5729c33c68d",
+        "copiaDeSesion": "/tmp/aisa-apichat-openapi.yaml",
+        "incluidoIntegroEnEntrega": false
+      }
+    ],
+    "limite": "La instantánea pública consultada identifica el contrato observado, no la configuración privada ni la imagen desplegada. Las copias /tmp son temporales y no forman parte del expediente versionado; una recuperación futura debe contrastar SHA-256."
+  },
+  "fuentesLocales": [
+    {
+      "ruta": "package.json",
+      "bytes": 5037,
+      "sha256": "2f8fa799670705164fc5db836be1896879632ccb106fb39b34f72132e102c6cf"
+    },
+    {
+      "ruta": "pnpm-lock.yaml",
+      "bytes": 381704,
+      "sha256": "72e9daf834b850c843ba634567c2ddf25601eb89125d9b21c7d5523e4a548f42"
+    },
+    {
+      "ruta": "Dockerfile",
+      "bytes": 671,
+      "sha256": "8cc11c69d46b041a991913225aaf64a1c3648929df8201802ba98105a1509425"
+    },
+    {
+      "ruta": "vitest.config.ts",
+      "bytes": 499,
+      "sha256": "a0de83b3967226a98302bbb34aa2e1321890dba9ac1d1c8ce8a6b7989af87e44"
+    },
+    {
+      "ruta": "tsconfig.json",
+      "bytes": 688,
+      "sha256": "c31c8139b812b7b5736430f064d9c12ad9a29d2063b14796139c1ab36d297193"
+    },
+    {
+      "ruta": "server/_core/index.ts",
+      "bytes": 5227,
+      "sha256": "54f25d1d471bf45a131db9b6b284d880ff9d51c86464fd270aa774ee2145c088"
+    },
+    {
+      "ruta": "server/_core/voiceTranscription.ts",
+      "bytes": 9109,
+      "sha256": "9c2fd0d64bd14bb1669b9565e41d67a53e8fad857fabc9c5ad6279e58d837855"
+    },
+    {
+      "ruta": "server/apiChatWebhook.ts",
+      "bytes": 17015,
+      "sha256": "d1f77af6885264a163c7e24e4b04a75b7c52e930fbb33f30b5b5c8b453024af9"
+    },
+    {
+      "ruta": "server/inboxSync.ts",
+      "bytes": 21072,
+      "sha256": "4eef324eeed96066f86802cdeeb2d54125480eb28f6755d8f7f16d94c5b3fdbd"
+    },
+    {
+      "ruta": "server/apichat.ts",
+      "bytes": 23632,
+      "sha256": "0415ccc55beeba069c2e18fea9dcdb7358bcf7c62e1ac04deaa9d124c95c13b5"
+    },
+    {
+      "ruta": "server/apiChatSettings.ts",
+      "bytes": 29182,
+      "sha256": "86acda19322b9176dc5957e4667016061f580f05bb51ebc8b84d1ee671787c22"
+    },
+    {
+      "ruta": "server/base64Transport.ts",
+      "bytes": 16216,
+      "sha256": "5e1cbde4606db8d652a51d316714a073256cfe9bc77189606d0c9d57e7d5c9db"
+    },
+    {
+      "ruta": "server/inbox.ts",
+      "bytes": 45159,
+      "sha256": "933423a852c1e115da1d140acb65be32f0244d66bf8915abdbbcb92cab580728"
+    },
+    {
+      "ruta": "server/inboxFiles.ts",
+      "bytes": 5740,
+      "sha256": "573eba91dbf91125a2972ddc6c8340ab3137a09ee88108054a71b0fb87fd1235"
+    },
+    {
+      "ruta": "server/transportTrace.ts",
+      "bytes": 11386,
+      "sha256": "02adf21bb04d0a4aec8ab091d8b99c5391d99ea591bfacaf19b9923c59441159"
+    },
+    {
+      "ruta": "server/candidateKnowledge.ts",
+      "bytes": 23725,
+      "sha256": "508339ebfaa5c1f465f06335adcfe1da939318d02f331b479ec8f20889de4064"
+    },
+    {
+      "ruta": "server/knowledge.ts",
+      "bytes": 23900,
+      "sha256": "28aa9f93a32609cacd1e81fbf7ee2a4565bb75d7a7a5493a064786dd55ecf5c9"
+    },
+    {
+      "ruta": "server/cvAnalysis.ts",
+      "bytes": 12974,
+      "sha256": "ce28044e090bfc6d13365a6d644b8df7eea7fb436f337adbcbf29f082138fde9"
+    },
+    {
+      "ruta": "server/codecRegistry.ts",
+      "bytes": 14686,
+      "sha256": "6c28bd1c8d1735bb85687431c8470fb9df4473e98fc7aafcb146756964cd8723"
+    },
+    {
+      "ruta": "server/conversationEngine.ts",
+      "bytes": 21399,
+      "sha256": "867eb9ec8fa347bdd1f1cfb4c7cf6722c72917011ac19349e5d52cc75d40e9bf"
+    },
+    {
+      "ruta": "server/conversationContext.ts",
+      "bytes": 25792,
+      "sha256": "16c26f27d9ce0ee80b7237a2e1959cc2e56f6158950a60ff41a182876ce1694e"
+    },
+    {
+      "ruta": "server/conversationWorker.ts",
+      "bytes": 5696,
+      "sha256": "a0d87e49bf9f40cf8af0a030682f11ad8f3a23a5ec7ec793e03f6f886f54ead0"
+    },
+    {
+      "ruta": "server/agentEvaluator.ts",
+      "bytes": 32926,
+      "sha256": "a88da70a5ada5e63a1ace7cc7a2bdecd1d8d431a1842bccd11588019ca4f39dc"
+    },
+    {
+      "ruta": "server/routers.ts",
+      "bytes": 231812,
+      "sha256": "af035e76acb840a6e5d738007e8513fdcb3f448bf0863629daceb711d4bd8628"
+    },
+    {
+      "ruta": "server/db.ts",
+      "bytes": 2448,
+      "sha256": "78a973175b65a97daf130754ed04d7428abb0010ade7bd6302268d99f92c24ad"
+    },
+    {
+      "ruta": "server/services/receiver.ts",
+      "bytes": 516,
+      "sha256": "1bc70527670e6e6585e2d61b6b650a9c4c09172d9ec439ffecc3cd52bd092aba"
+    },
+    {
+      "ruta": "server/services/serviceRuntime.ts",
+      "bytes": 3394,
+      "sha256": "b4b47a76d140830f210981e50fc1ff3c93d2bc20a58fea0019407305514bede5"
+    },
+    {
+      "ruta": "server/viewerAccess.ts",
+      "bytes": 3587,
+      "sha256": "a8176746de40e9f71b616edbccc8bd0b79a60e5fe7c230a402577f150202eda2"
+    },
+    {
+      "ruta": "drizzle/schema.ts",
+      "bytes": 48932,
+      "sha256": "e63366e8454700cc9c36d7cbe045b25a6ee2bb17162903bf7f68ab8311733341"
+    },
+    {
+      "ruta": "drizzle/migrations/0026_candidate_knowledge.sql",
+      "bytes": 7670,
+      "sha256": "7139ba79b682e8516c2df7abdcec567a364cb4232486677a09889be7f6d2d568"
+    },
+    {
+      "ruta": "drizzle/migrations/0035_transport_traces.sql",
+      "bytes": 5987,
+      "sha256": "09779a41614ccdd7187d9dddd46bf4354d4eccb397be38b6dfb56a4c9e2a05f1"
+    },
+    {
+      "ruta": "client/src/pages/Inbox.tsx",
+      "bytes": 29553,
+      "sha256": "57eb96c6d3e76b6215668d13a3987c8333dd363d05c63fa6ec5828c311b05e3c"
+    },
+    {
+      "ruta": "client/src/components/review/CandidateConversationPanel.tsx",
+      "bytes": 28143,
+      "sha256": "6e31d9b0351cbbe1dc1b5da12d0a6e5cf85b33821c0880130538250a3da2d8ce"
+    },
+    {
+      "ruta": "docs/APICHAT_DIRECTO.md",
+      "bytes": 10831,
+      "sha256": "306117f476eb3159312727fb7da1e89378974c53264cb31769a6025a75fd8638"
+    },
+    {
+      "ruta": "docs/RELEASE_GOVERNANCE.md",
+      "bytes": 102853,
+      "sha256": "9e14ac8aeddc919177cf088ff217e004c0a766ad6277aeecb4c1d1a82fd39f15"
+    },
+    {
+      "ruta": "docs/GUIA_EASYPANEL_CONVERSACION_2.0.142.md",
+      "bytes": 15289,
+      "sha256": "1542038b0b3663bcb341a67d24bb32fb135e6b877401805b5dd0c1bf1fb0fb4f"
+    },
+    {
+      "ruta": "scripts/auditar-conducto-apichat.sh",
+      "bytes": 29435,
+      "sha256": "cf41453a8c197f8e1fc40a4d15af4f99b5a445a3aedaed28f577985634c568b2"
+    },
+    {
+      "ruta": "server/apiChatWebhook.test.ts",
+      "bytes": 11043,
+      "sha256": "e4f481210115a402d095ba67cb63b359c9edad7ff47cd271334301ef364fac87"
+    },
+    {
+      "ruta": "server/inboxSync.test.ts",
+      "bytes": 15506,
+      "sha256": "05827e4e9e2a46dfd7ff89bb32c784b70a5e2ceff8b16af8a184700fec054998"
+    },
+    {
+      "ruta": "server/base64Transport.test.ts",
+      "bytes": 11804,
+      "sha256": "84e4cf9e43eb1d4692a6bcd6f02128cc63ac2191d4e1e8707500e29c634cb74e"
+    },
+    {
+      "ruta": "server/transportTrace.test.ts",
+      "bytes": 7033,
+      "sha256": "4b89e603c867341ba40385e35b2f2e5c60adbb1f1da36842999362517b8f95b2"
+    },
+    {
+      "ruta": "server/candidateKnowledge.test.ts",
+      "bytes": 11460,
+      "sha256": "c5017c56fa9c2cc17ef4b2fa2354bc40bc9497b90c8e65149aa1a3f6cd13c0f3"
+    },
+    {
+      "ruta": "server/apiChatSettings.test.ts",
+      "bytes": 20191,
+      "sha256": "947e05095308a281dee72deb6e8692395b5690ab8eb794f0dd10dd119be2bb32"
+    },
+    {
+      "ruta": "server/conversationContext.test.ts",
+      "bytes": 5545,
+      "sha256": "f0babfb0c2766017fc9b4f335ed2c40d474c8bbac02ab6e7f8d6af46e6afa4d6"
+    },
+    {
+      "ruta": "server/inbox.test.ts",
+      "bytes": 17759,
+      "sha256": "f034c3c272f57584e71143045eee4555af34be956f9123a47c407bbed7e57007"
+    }
+  ],
+  "artefactos": [
+    {
+      "ruta": "docs/audits/2026-09-18-apichat/README.md",
+      "bytes": 2153,
+      "sha256": "c3ce66948454f387d3c99b07428aae2268afba4dedad0539a731ac9a0524966c"
+    },
+    {
+      "ruta": "docs/audits/2026-09-18-apichat/consultas_solo_lectura.sql",
+      "bytes": 4916,
+      "sha256": "f4473ea164ba0cd0f88d8f77ac8a2b72ef95e52ac86f7f4fca9ae6bc99794e09"
+    },
+    {
+      "ruta": "docs/audits/2026-09-18-apichat/contraejemplos.ts",
+      "bytes": 8618,
+      "sha256": "4f75ad410b0d5bf1bd4dbd089a93f1a38734d6b00d47ff4bf65ceaad37e5dfb4"
+    },
+    {
+      "ruta": "docs/audits/2026-09-18-apichat/informe.html",
+      "bytes": 57675,
+      "sha256": "3dd38d9b562af40cc1704d915dad5da8b7ae490b8479b82dbf9847462b5fb528"
+    },
+    {
+      "ruta": "docs/audits/2026-09-18-apichat/informe.md",
+      "bytes": 48394,
+      "sha256": "692e9f769914dcc5c2055d43900117407b62508d895b440be9a05b31e6d577ac"
+    },
+    {
+      "ruta": "docs/audits/2026-09-18-apichat/resultado.json",
+      "bytes": 2970,
+      "sha256": "bc4a16ccb232ed8c1eb0de53cce79ae139fe7c0ae775a26819e603b0241c43af"
+    },
+    {
+      "ruta": "docs/audits/2026-09-18-apichat/validacion.json",
+      "bytes": 1369,
+      "sha256": "aeb7da7cbe1ea246ca3055f6538ac8f4d8d5a8e2b3e21da72f42c2219c3daaa9"
+    }
+  ],
+  "validacion": {
+    "pruebasExistentesPasadas": 125,
+    "archivosPrueba": 8,
+    "contraejemplosConfirmados": 5,
+    "consultasProduccionEjecutadas": false
+  },
+  "integridad": "Huellas SHA-256 para comparación de contenido. No equivalen a firma, sellado de tiempo independiente ni prueba de origen del mensaje del candidato."
+}

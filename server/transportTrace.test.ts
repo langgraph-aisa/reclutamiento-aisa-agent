@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   TRANSPORT_TRACE_DEFAULT_PAGE,
   TRANSPORT_TRACE_LIMIT_BYTES,
@@ -7,190 +7,187 @@ import {
   loadTransportTraces,
   recordTransportTrace,
   redactTransportPayload,
+  serializeBoundedTrace,
   summarizeTransportTrace,
   transportPayloadBytes,
 } from "./transportTrace";
 
-type Call = { text: string; params: unknown[] };
-
 function fakePool(rows: unknown[] = []) {
-  const calls: Call[] = [];
-  const pool = {
-    query: async (text: string, params: unknown[] = []) => {
-      calls.push({ text, params });
-      return { rows };
-    },
-  } as unknown as Pool;
-  return { pool, calls };
+  const query = vi.fn(async (_text: string, _params: unknown[] = []) => ({
+    rows,
+  }));
+  return { pool: { query } as unknown as Pool, query };
 }
+const MEDIA = `data:application/pdf;base64,${Buffer.from("%PDF-1.7" + "contenido ".repeat(20)).toString("base64")}`;
 
-const BASE64_MINIMO = "A".repeat(512);
-const SOBRE = `data:image/png;base64,${BASE64_MINIMO}`;
-
-describe("forma del cuerpo recibido", () => {
-  it("describe claves, tipos y tamaños sin conservar contenido", () => {
-    const shape = describeTransportShape({
-      message: { id: "abc", type: "image", url: SOBRE, filename: "captura.png" },
-    });
-    expect(Object.keys(shape)).toEqual(["message"]);
-    expect(shape.message.kind).toBe("objeto");
-    // La forma del mensaje anidado no se aplana aquí: el detalle se lee por
-    // nivel para no perder la estructura que declara el proveedor.
-    const anidado = describeTransportShape({
-      id: "abc",
-      type: "image",
-      url: SOBRE,
-      filename: "captura.png",
-      viewed: true,
-      quote: null,
-      tags: ["a", "b"],
-    });
-    expect(anidado.id).toMatchObject({ kind: "texto", value: "abc" });
-    expect(anidado.type).toMatchObject({ kind: "texto", value: "image" });
-    // El contenido se declara por peso y huella: nunca por su valor.
-    expect(String(anidado.url.kind)).toMatch(/^contenido:[a-f0-9]{12}$/);
-    expect(anidado.url.bytes).toBe(SOBRE.length);
-    expect(JSON.stringify(anidado)).not.toContain(BASE64_MINIMO);
-    expect(anidado.viewed.kind).toBe("boolean");
-    expect(anidado.quote.kind).toBe("nulo");
-    expect(anidado.tags).toMatchObject({ kind: "lista", bytes: 2 });
+describe("traza minimizada de sobres del proveedor", () => {
+  it.each([
+    { messages: [{ id: "m1", type: "file", url: MEDIA }] },
+    { message: { id: "m1", type: "file", url: MEDIA } },
+    {
+      method: "call",
+      params: JSON.stringify({
+        messages: [{ id: "m1", type: "file", url: MEDIA }],
+      }),
+    },
+  ])(
+    "identifica contenido dentro del sobre y conserva la ruta del campo",
+    body => {
+      const shape = describeTransportShape(body);
+      const [path, field] = Object.entries(shape).find(([, entry]) =>
+        entry.kind.startsWith("contenido:")
+      )!;
+      expect(path).toMatch(/url$/);
+      expect(field.bytes).toBe(Buffer.byteLength(MEDIA));
+      expect(field.kind).toMatch(/^contenido:[a-f0-9]{64}$/);
+      expect(JSON.stringify(shape)).not.toContain(MEDIA);
+    }
+  );
+  it("no conserva textos, teléfonos, nombres ni secretos dentro de JSON serializado", () => {
+    const privateValues = [
+      "AnaApellido",
+      "+50212345678",
+      "correo@personal.invalid",
+      "clavePrivada",
+      "cv-AnaApellido.pdf",
+    ];
+    const body = {
+      params: JSON.stringify({
+        messages: [
+          {
+            type: "file",
+            text: privateValues[0],
+            number: privateValues[1],
+            email: privateValues[2],
+            authorization: privateValues[3],
+            filename: privateValues[4],
+            token: { nested: privateValues[3] },
+          },
+        ],
+      }),
+      numericPhone: 50212345678,
+    };
+    const serialized = JSON.stringify(redactTransportPayload(body));
+    for (const value of privateValues) expect(serialized).not.toContain(value);
+    expect(serialized).not.toContain("50212345678");
+    expect(serialized).toContain("file");
+    expect(serialized).toContain("dato omitido");
   });
-
-  it("enmascara el identificador telefónico", () => {
-    const shape = describeTransportShape({
-      number: "+50248929834",
-      from_me: false,
-    });
-    expect(shape.number.masked).toBe("«502…9834»");
-    expect(JSON.stringify(shape)).not.toContain("50248929834");
+  it("no devuelve cadenas arbitrarias ni valores numéricos como muestra", () => {
+    expect(
+      JSON.stringify(redactTransportPayload("Información privada"))
+    ).not.toContain("Información privada");
+    expect(
+      JSON.stringify(describeTransportShape({ count: 50212345678 }))
+    ).not.toContain("50212345678");
+  });
+  it("acota estructuras extensas y produce JSON válido en bytes UTF-8", () => {
+    const huge = Object.fromEntries(
+      Array.from({ length: 1500 }, (_, index) => [
+        `field_${index}`,
+        "ñ".repeat(2000),
+      ])
+    );
+    const serialized = serializeBoundedTrace(huge);
+    expect(Buffer.byteLength(serialized)).toBeLessThanOrEqual(
+      TRANSPORT_TRACE_LIMIT_BYTES
+    );
+    expect(() => JSON.parse(serialized)).not.toThrow();
+    expect(JSON.parse(serialized)).toMatchObject({ truncated: true });
+    expect(
+      Object.keys(describeTransportShape(huge)).length
+    ).toBeLessThanOrEqual(129);
   });
 });
 
-describe("redacción del cuerpo", () => {
-  it("sustituye el contenido por su peso y su huella", () => {
-    const redactado = JSON.stringify(redactTransportPayload({ url: SOBRE }));
-    expect(redactado).toContain("«contenido");
-    expect(redactado).toContain("sha256:");
-    expect(redactado).toContain("data:image/png");
-    expect(redactado).not.toContain(BASE64_MINIMO);
+describe("persistencia y lectura de trazas", () => {
+  it("asienta métricas y JSON minimizado interpretable por PostgreSQL", async () => {
+    const { pool, query } = fakePool();
+    const body = {
+      messages: [
+        { id: "m1", type: "file", url: MEDIA, caption: "TextoPrivado" },
+      ],
+    };
+    await expect(
+      recordTransportTrace(pool, {
+        origin: "webhook",
+        outcome: "registrado",
+        eventId: "m1",
+        body,
+      })
+    ).resolves.toEqual({ available: true });
+    const params = query.mock.calls[0][1];
+    expect(query.mock.calls[0][0]).toContain(
+      "INSERT INTO conversation_transport_traces"
+    );
+    for (const index of [4, 5]) {
+      expect(() => JSON.parse(String(params[index]))).not.toThrow();
+      expect(Buffer.byteLength(String(params[index]))).toBeLessThanOrEqual(
+        TRANSPORT_TRACE_LIMIT_BYTES
+      );
+      expect(String(params[index])).not.toContain("TextoPrivado");
+    }
+    expect(params[6]).toBe(transportPayloadBytes(body));
   });
-
-  it("conserva el texto breve y trunca el extenso", () => {
-    expect(redactTransportPayload("hola")).toBe("hola");
-    const largo = redactTransportPayload("x".repeat(5_000));
-    expect(String(largo)).toContain("«+");
-    expect(String(largo).length).toBeLessThan(5_000);
-  });
-
-  it("mide el peso del cuerpo antes de redactarlo", () => {
-    expect(transportPayloadBytes({ a: 1 })).toBe(Buffer.byteLength('{"a":1}'));
-    expect(transportPayloadBytes(undefined)).toBe(Buffer.byteLength("null"));
-  });
-});
-
-describe("asiento de la traza", () => {
-  it("escribe la forma, el cuerpo redactado y el desenlace", async () => {
-    const { pool, calls } = fakePool();
-    await recordTransportTrace(pool, {
-      origin: "webhook",
-      outcome: "archivo-sin-contenido",
-      providerType: "image",
-      eventId: "msg-1",
-      body: { id: "msg-1", number: "+50248929834", type: "image" },
-    });
-    expect(calls).toHaveLength(1);
-    expect(calls[0].text).toContain("INSERT INTO conversation_transport_traces");
-    expect(calls[0].params[0]).toBe("webhook");
-    expect(calls[0].params[1]).toBe("archivo-sin-contenido");
-    // El cuerpo asentado no conserva el teléfono del candidato.
-    expect(String(calls[0].params[5])).not.toContain("50248929834");
-  });
-
-  it("nunca interrumpe la recepción cuando la traza falla", async () => {
+  it("un fallo de asiento es explícito y no interrumpe la recepción", async () => {
     const pool = {
       query: async () => {
-        throw new Error("relación inexistente");
+        throw new Error("sql unavailable");
       },
     } as unknown as Pool;
     await expect(
-      recordTransportTrace(pool, { origin: "sondeo", outcome: "no-procesado:image" })
-    ).resolves.toBeUndefined();
+      recordTransportTrace(pool, { origin: "sondeo", outcome: "error" })
+    ).resolves.toEqual({ available: false });
   });
-
-  it("acota el cuerpo asentado al límite declarado", async () => {
-    const { pool, calls } = fakePool();
-    await recordTransportTrace(pool, {
-      origin: "webhook",
-      outcome: "registrado",
-      body: { texto: "y".repeat(TRANSPORT_TRACE_LIMIT_BYTES * 2) },
-    });
-    expect(String(calls[0].params[5]).length).toBeLessThanOrEqual(
-      TRANSPORT_TRACE_LIMIT_BYTES
+  it("lee sin mutar y propaga una observabilidad fallida", async () => {
+    const { pool, query } = fakePool();
+    await expect(
+      loadTransportTraces(pool, { origin: "sondeo" })
+    ).resolves.toEqual([]);
+    expect(query.mock.calls[0][1]).toEqual([
+      TRANSPORT_TRACE_DEFAULT_PAGE,
+      "sondeo",
+    ]);
+    expect(query.mock.calls[0][0]).toContain("SELECT created_at");
+    query.mockRejectedValueOnce(new Error("relation unavailable"));
+    await expect(loadTransportTraces(pool)).rejects.toThrow(
+      "relation unavailable"
     );
   });
 });
 
-describe("lectura de la traza", () => {
-  it("es solo lectura y ordena del más reciente al más antiguo", async () => {
-    const { pool, calls } = fakePool([]);
-    await loadTransportTraces(pool);
-    expect(calls).toHaveLength(1);
-    expect(calls[0].text).toContain("ORDER BY created_at DESC");
-    expect(calls[0].text).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
-    expect(calls[0].params[0]).toBe(TRANSPORT_TRACE_DEFAULT_PAGE);
-  });
-
-  it("filtra por origen cuando se le pide", async () => {
-    const { pool, calls } = fakePool([]);
-    await loadTransportTraces(pool, { origin: "sondeo" });
-    expect(calls[0].text).toContain("WHERE origin=$2");
-    expect(calls[0].params[1]).toBe("sondeo");
-  });
-
-  it("degrada a una lista vacía cuando la tabla no existe", async () => {
-    const pool = {
-      query: async () => {
-        throw new Error("relación inexistente");
-      },
-    } as unknown as Pool;
-    await expect(loadTransportTraces(pool)).resolves.toEqual([]);
-  });
-});
-
-describe("veredicto de la traza", () => {
-  const conAdjunto = {
+describe("conclusiones limitadas a la evidencia observada", () => {
+  const trace = {
     at: new Date(),
     origin: "webhook",
-    outcome: "archivo-sin-contenido",
-    providerType: "image",
-    eventId: "1",
-    payloadBytes: 2048,
-    shape: { url: { kind: "contenido:abc123def456", bytes: 1_024 } },
+    outcome: "registrado",
+    providerType: "file",
+    eventId: "m1",
+    payloadBytes: 500,
+    shape: describeTransportShape({ messages: [{ url: MEDIA }] }),
     payload: null,
   };
-
-  it("sin trazas declara que el proveedor no está llamando", () => {
-    const veredicto = summarizeTransportTrace([]);
-    expect(veredicto.state).toBe("sin-trazas");
-    expect(veredicto.verdict).toContain("no está llamando");
+  it("distingue consulta fallida de una muestra vacía", () => {
+    expect(summarizeTransportTrace([], false).state).toBe("no-disponible");
+    expect(summarizeTransportTrace([]).state).toBe("sin-trazas");
+    expect(summarizeTransportTrace([]).verdict).not.toContain(
+      "no está llamando"
+    );
   });
-
-  it("con llamadas sin contenido declara que el proveedor no lo envía", () => {
-    const veredicto = summarizeTransportTrace([
-      { ...conAdjunto, shape: { id: { kind: "texto", value: "1" } }, outcome: "texto-invalido" },
-    ]);
-    expect(veredicto.state).toBe("sin-adjuntos");
-    expect(veredicto.verdict).toContain("ninguna petición trajo contenido");
+  it("reconoce adjuntos anidados sin equiparar URL, persistencia y análisis", () => {
+    const summary = summarizeTransportTrace([trace]);
+    expect(summary.withAttachment).toBe(1);
+    expect(summary.discarded).toBe(0);
+    expect(summary.verdict).toContain("no acredita por sí sola");
   });
-
-  it("con contenido enviado declara la forma capturada", () => {
-    const veredicto = summarizeTransportTrace([
-      conAdjunto,
-      { ...conAdjunto, outcome: "registrado" },
+  it("no atribuye al proveedor la ausencia de contenido en la muestra", () => {
+    const summary = summarizeTransportTrace([
+      {
+        ...trace,
+        shape: describeTransportShape({ messages: [{ text: "hola" }] }),
+      },
     ]);
-    expect(veredicto.state).toBe("con-adjuntos");
-    expect(veredicto.withAttachment).toBe(2);
-    expect(veredicto.discarded).toBe(1);
-    expect(veredicto.verdict).toContain("sí envía contenido de archivo");
+    expect(summary.state).toBe("sin-adjuntos");
+    expect(summary.verdict).not.toContain("del lado del proveedor");
   });
 });

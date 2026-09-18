@@ -9,7 +9,9 @@ import { appRouter, auditPublishedPublicCopy } from "../routers";
 import { startInboxSyncBridge } from "../inboxSync";
 import { startConversationWorker } from "../conversationWorker";
 import { startAutomaticEvaluationWorker } from "../automaticEvaluation";
-import { registerApiChatWebhook } from "../apiChatWebhook";
+import { registerApiChatWebhook, processApiChatMessage } from "../apiChatWebhook";
+import { startApiChatReceiptWorker } from "../apiChatReceipts";
+import { startCandidateDocumentWorker } from "../candidateDocumentWorker";
 import { registerInboxFileRoutes } from "../inboxFiles";
 import { registerKnowledgeRoutes } from "../knowledgeRoutes";
 import { getPool } from "../db";
@@ -45,6 +47,8 @@ async function startServer() {
   let stopInboxSync: (() => void) | null = null;
   let stopConversationWorker: (() => void) | null = null;
   let stopAutomaticEvaluation: (() => void) | null = null;
+  let stopReceipts: (() => void) | null = null;
+  let stopDocuments: (() => void) | null = null;
   if (pool) {
     const observability = await initializeLangfuseFromDatabase(pool, {
       release: APP_VERSION,
@@ -53,6 +57,8 @@ async function startServer() {
       `[Observability] Langfuse state=${observability.state}${observability.reasonCode ? ` reason=${observability.reasonCode}` : ""}.`
     );
     stopInboxSync = startInboxSyncBridge(() => getPool());
+    stopReceipts = startApiChatReceiptWorker(() => getPool(), processApiChatMessage);
+    stopDocuments = startCandidateDocumentWorker(() => getPool());
     stopConversationWorker = startConversationWorker(() => getPool());
     // El ciclo de evaluación automática solo toma trabajo si su interruptor
     // está encendido: apagado no consume la cola ni contacta a nadie.
@@ -125,6 +131,8 @@ async function startServer() {
       stopInboxSync?.();
       stopConversationWorker?.();
       stopAutomaticEvaluation?.();
+      stopReceipts?.();
+      stopDocuments?.();
       await shutdownLangfuse();
       if (pool) await pool.end();
       console.log("[Lifecycle] Cierre ordenado completado.");

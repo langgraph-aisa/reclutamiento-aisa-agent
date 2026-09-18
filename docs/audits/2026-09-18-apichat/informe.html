@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Auditoría de adjuntos ApiChat — Talento AISA</title>
+<style>
+:root{color-scheme:light}body{max-width:1100px;margin:40px auto;padding:0 28px;font:17px/1.65 system-ui,sans-serif;color:#182431;background:#fff}h1,h2,h3{line-height:1.25;color:#173a52}h1{font-size:2rem}h2{margin-top:2.4rem;border-bottom:1px solid #cbd5e1;padding-bottom:.4rem}h3{margin-top:1.8rem}a{color:#075985;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;font-size:.85em;line-height:1.45;margin:1.5rem 0}th,td{border:1px solid #cbd5e1;padding:10px;text-align:left;vertical-align:top}th{background:#edf3f7}code{font-size:.85em;overflow-wrap:anywhere}pre{padding:16px;background:#f1f5f9;border:1px solid #cbd5e1;white-space:pre-wrap;font-size:.82em;line-height:1.45}p{margin:1em 0}.reader-note{border-left:4px solid #075985;padding:10px 18px;background:#f1f5f9;font-size:.9em}@media print{body{margin:0;padding:0;font:10.5pt/1.4 Georgia,serif;max-width:none}h1{font-size:20pt}h2{font-size:15pt}h3{font-size:12pt}table{font-size:8pt}tr,pre{break-inside:avoid}h1,h2,h3{break-after:avoid}a{color:inherit}.reader-note{display:none}@page{size:A4;margin:18mm}}
+</style></head><body><div class="reader-note">Versión para lectura e impresión. El original es <a href="informe.md">informe.md</a>. Los diagramas se conservan en notación Mermaid para reproducirlos en un visor compatible. Puede guardar este documento como PDF desde la función de impresión del navegador.</div>
+<h1>Auditoría del transporte y consumo de evidencia documental en Talento AISA</h1>
+<p><strong>Objeto:</strong> recepción de PDF, Word y audio mediante ApiChat, representación en bandeja y utilización por los motores de RR. HH.<br />
+<strong>Fecha de corte:</strong> 18 de septiembre de 2026.<br />
+<strong>Software examinado:</strong> JARVI RH 2.0.179, commit <code>b450bdbcfa9c1225221936206220a46117c2d77e</code>.<br />
+<strong>Naturaleza:</strong> auditoría documental, análisis estático y comprobación local de contraejemplos contractuales. No constituye certificación del despliegue ni atribución definitiva del incidente fotografiado.</p>
+<h2>Dictamen</h2>
+<p>El código examinado <strong>no garantiza continuidad entre mensaje recibido, archivo persistido, documento visible y evidencia disponible para el agente</strong>. Hay rupturas independientes en esas cuatro representaciones. El problema excede un códec o un ajuste de LangGraph.</p>
+<p>La incompatibilidad contractual más temprana está en el webhook: el callback publicado por ApiChat contiene <code>messages[]</code>, mientras que <code>normalizeApiChatWebhookPayload</code> espera un mensaje individual, un objeto <code>message</code> o determinados sobres <code>params</code>. Una notificación con la colección documentada termina en <code>forma-no-reconocida</code>; el controlador responde HTTP 200. El sondeo alternativo permite recuperar texto y archivos <code>file</code>, pero descarta tipos oficiales como <code>image</code> y <code>audio</code>. La combinación es compatible con observar textos en la bandeja y perder medios, aunque <strong>no prueba que ése haya sido el cuerpo recibido durante el incidente</strong>. El PDF clasificado oficialmente como <code>file</code> podría recuperarse por sondeo si aparece en la ventana consultada y se resuelve su destinatario.</p>
+<p>Más adelante, la consulta de bandeja omite los campos que necesita su componente de adjuntos. El motor conversacional obtiene la lista de documentos de <code>candidate_attachments</code>, mientras los receptores escriben <code>candidate_knowledge_files</code> y <code>conversation_messages.metadata.media</code>. Puede, por tanto, recibir instrucciones que afirman ausencia documental aunque exista un archivo en otra entidad. La utilidad de transcripción de audio está definida, pero no conectada a la recepción.</p>
+<p>La propia instrumentación presenta defectos: una consulta utiliza una columna inexistente en el esquema versionado; los errores se convierten en cero recepciones; y el resumen de trazas atribuye la pérdida al proveedor sin examinar contenido anidado. Sus indicadores actuales no permiten exonerar al artefacto ni responsabilizar a ApiChat.</p>
+<p><strong>Conclusión causal admisible:</strong> existen defectos demostrables suficientes para impedir el funcionamiento troncal solicitado. <strong>Conclusión causal todavía inadmisible:</strong> afirmar cuál eliminó ese PDF, que ApiChat nunca lo envió o que el hardware se saturó. Para ello falta correlacionar la entrega concreta del proveedor con la entrada HTTP, la persistencia y el documento.</p>
+<h2>1. Alcance, método y límites de conocimiento</h2>
+<p>Se examinaron las funciones de ingreso, sondeo, normalización, descarga, almacenamiento, persistencia, extracción, contexto conversacional, evaluación, visualización, observabilidad y despliegue. Las capturas aportadas se trataron como evidencia visual secundaria; no se dispone de sus archivos originales, metadatos de adquisición ni hashes. No se accedió a la base productiva, al panel privado de ApiChat, al contenedor desplegado ni al historial real del candidato. No se enviaron mensajes ni se ejecutaron sondas contra el aplicativo.</p>
+<p>El entorno de trabajo no presenta <code>DATABASE_URL</code> configurada ni archivos <code>.env*</code> en la raíz. La revisión de ese acceso comprobó únicamente presencia de configuración, sin extraer ni imprimir secretos. Se entregan consultas para la instancia autorizada, en lugar de presentar resultados de una base a la que no se tuvo acceso.</p>
+<p>La unidad de análisis es <strong>un evento de mensaje con un adjunto</strong>, no el candidato. Las afirmaciones se clasifican así:</p>
+<table>
+<thead>
+<tr>
+  <th>Nivel</th>
+  <th>Significado</th>
+  <th>Ejemplo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>V — Visual</td>
+  <td>Se observa en las capturas suministradas</td>
+  <td>WhatsApp muestra un PDF; la porción de bandeja mostrada contiene texto</td>
+</tr>
+<tr>
+  <td>C — Código</td>
+  <td>Se demuestra siguiendo instrucciones y esquema versionados</td>
+  <td>El normalizador no recorre <code>messages[]</code></td>
+</tr>
+<tr>
+  <td>K — Contrato</td>
+  <td>Consta en el OpenAPI oficial recuperado</td>
+  <td><code>ReceiveAudio</code> tiene tipo <code>audio</code></td>
+</tr>
+<tr>
+  <td>R — Reproducción local</td>
+  <td>Una entrada ficticia determina un resultado en la función real</td>
+  <td>El sobre contractual devuelve <code>null</code></td>
+</tr>
+<tr>
+  <td>H — Hipótesis del incidente</td>
+  <td>Explicación compatible, pendiente de correlación histórica</td>
+  <td>Ese PDF se descartó al normalizar el callback</td>
+</tr>
+<tr>
+  <td>D — Diseño propuesto</td>
+  <td>Decisión de ingeniería derivada de los hallazgos</td>
+  <td>Persistir un evento antes del acuse</td>
+</tr>
+</tbody>
+</table>
+<p>Se evita la prueba por ensayo y error sobre producción. Las comprobaciones locales verifican consecuencias deterministas del código y del contrato; no reconstruyen tráfico que no se conservó. Una investigación forense no puede sustituir evidencia de ejecución por prestigio académico o deducción. La separación entre archivos, tráfico, sistema operativo y aplicaciones es coherente con el enfoque técnico de Kent et al. (2006), utilizado aquí como apoyo metodológico, no como definición de endpoints. <a href="https://csrc.nist.gov/pubs/sp/800/86/final">NIST SP 800-86</a>.</p>
+<p>La documentación de ApiChat es la fuente exclusiva para atribuir capacidades a <strong>su API</strong>. Las mejoras locales propuestas se identifican como diseño del auditor. No se presupone que ApiChat tenga un endpoint de descarga, firma HMAC, política de reintentos o garantía de entrega que su contrato consultado no especifica.</p>
+<p>Se emplean referencias de <strong>APA 7</strong>. La página oficial consultada identifica la séptima edición como la publicación vigente; no se encontró fundamento oficial para presentar este trabajo como APA 8. El formato Markdown es un informe técnico con referencias de estilo APA, no una maqueta editorial de tesis. <a href="https://www.apa.org/pubs/books/publication-manual-7th-edition-paperback">American Psychological Association, manual oficial</a>.</p>
+<h2>2. Reconstrucción fenomenológica del caso</h2>
+<p>Se usa «fenomenológico» en un sentido operacional: reconstrucción de lo que aparece a cada participante y de las representaciones que median esa experiencia. No se afirma haber realizado entrevistas, reducción fenomenológica formal ni validación cualitativa con participantes.</p>
+<table>
+<thead>
+<tr>
+  <th>Momento visible, sin conversión de zona horaria</th>
+  <th>Perspectiva del candidato en WhatsApp</th>
+  <th>Perspectiva del aplicativo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>13:24</td>
+  <td>Grupo de imágenes y un texto que las presenta como CV</td>
+  <td>Aparece el texto en la porción de conversación mostrada</td>
+</tr>
+<tr>
+  <td>13:25</td>
+  <td>Documento PDF de aproximadamente 1 MB y texto adicional</td>
+  <td>Respuesta automática que declara no encontrar documento</td>
+</tr>
+<tr>
+  <td>13:26</td>
+  <td>Nueva petición de adjuntar PDF</td>
+  <td>La misma petición aparece en la bandeja</td>
+</tr>
+<tr>
+  <td>13:36</td>
+  <td>Respuesta que cita el PDF anterior</td>
+  <td>Aparece el texto de la respuesta</td>
+</tr>
+<tr>
+  <td>13:37</td>
+  <td>El agente vuelve a pedir el CV</td>
+  <td>Continúa la afirmación de ausencia de adjuntos</td>
+</tr>
+</tbody>
+</table>
+<p>Las imágenes no acreditan el cuerpo HTTP enviado por ApiChat, el estado de su callback, los bytes almacenados o las consultas ejecutadas. La ausencia en el recorte mostrado tampoco acredita ausencia en todo el historial. Un recibo visual de WhatsApp no prueba el commit de la base del aplicativo.</p>
+<p>El nombre y la miniatura del PDF parecen corresponder a documentación técnica; eso no permite calificar definitivamente su contenido curricular. Aun si no fuera un CV, el sistema debería distinguir <strong>archivo recibido</strong> de <strong>archivo identificado como CV</strong>. Rechazar su pertinencia semántica después de recibirlo sería un resultado diferente de decir que no existe adjunto.</p>
+<p>La repetición de solicitudes convierte una falla técnica posible en una atribución al candidato: «no lo ha enviado». Esa atribución no está respaldada cuando el sistema desconoce el estado de transporte o análisis. La respuesta correcta ante incertidumbre técnica debe expresar ese estado y preservar la evaluación hasta disponer de evidencia suficiente.</p>
+<h2>3. Contrato oficial recuperado y discrepancias</h2>
+<p>El sitio de documentación enlaza Swagger. Su JavaScript público carga <code>https://panel.apichat.io/openapi.yaml?version=1.7</code>. El documento declara <code>openapi: 3.0.0</code>, <code>info.version: 1.0.0</code> y servidor base <code>https://api.apichat.io/v1</code>. El parámetro <code>version=1.7</code> del recurso <strong>no debe confundirse</strong> con la versión semántica declarada de la API. Se registró SHA-256 <code>eb487f5bb20300298fbfe53e39b9d36589e1bf3a76335534c7efb5729c33c68d</code>, longitud 51.022 bytes y fecha de recuperación en el manifiesto.</p>
+<p>Los elementos contractuales relevantes son callback <code>messages[]</code>, medios en <code>url</code>, historial paginado de objetos <code>MessageDB</code>, configuración <code>notify_format</code> y <code>notify_attachment_base64</code>, y dirección <code>from_me</code>. La API requiere <code>client-id</code> y <code>token</code> para las peticiones al proveedor. El historial dispone de <code>page</code>, <code>limit</code>, <code>number</code>, <code>messageId</code> y <code>fromMe</code>; no se documenta como lectura destructiva. <a href="https://panel.apichat.io/openapi.yaml?version=1.7">ApiChat, OpenAPI</a>.</p>
+<table>
+<thead>
+<tr>
+  <th>Elemento oficial y localizador en el YAML recuperado</th>
+  <th>Implementación local</th>
+  <th>Evaluación</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>callbacks.Messages</code>, líneas 1754–1764; <code>requestBodies.receivedMessage</code>, 1736–1741; <code>schemas.Messages</code>, 1079–1087</td>
+  <td><code>normalizeApiChatWebhookPayload</code>, <code>apiChatWebhook.ts:120–181</code></td>
+  <td>No admite la colección contractual; tampoco procesa lotes</td>
+</tr>
+<tr>
+  <td><code>ReceiveBase</code> / <code>ReceiveAudio</code> / <code>ReceiveFile</code> / <code>ReceiveImage</code>, 1104–1204</td>
+  <td><code>processFeedRecord</code>, <code>inboxSync.ts:319–366</code></td>
+  <td>El sondeo sólo implementa la rama binaria <code>file</code>; <code>image</code> y <code>audio</code> quedan fuera</td>
+</tr>
+<tr>
+  <td><code>MediaBase</code>, 829–835</td>
+  <td>Webhook busca numerosos alias</td>
+  <td><code>url</code> tiene respaldo contractual; los alias extra son compatibilidad local no acreditada por este documento</td>
+</tr>
+<tr>
+  <td><code>AccountUpdate</code>, 1312–1356</td>
+  <td>Normalizador entiende sólo ciertos sobres</td>
+  <td><code>notify_format</code> puede crear una envoltura que el normalizador no entiende; debe leerse la configuración efectiva</td>
+</tr>
+<tr>
+  <td><code>GET /messages</code>, 554–582; parámetros 666–687; <code>MessagesDB</code>, 1004–1007</td>
+  <td><code>syncInboxOnce</code>, <code>inboxSync.ts:438–453</code></td>
+  <td>Se pide <code>limit=50</code> sin recorrer <code>page</code>; una ventana fija no equivale a reconciliación histórica</td>
+</tr>
+<tr>
+  <td><code>FromMe</code>, 1407–1410</td>
+  <td><code>classifyFeedDirection</code>, <code>inboxSync.ts:163–172</code></td>
+  <td>Se sustituye la dirección del proveedor por presencia en los IDs salientes locales</td>
+</tr>
+<tr>
+  <td><code>POST /sendAudio</code>, 338–358</td>
+  <td>Código/catálogo anuncian <code>/v1/sendPTT</code></td>
+  <td>Ese nombre no está en el contrato nativo recuperado; afecta salida y no explica por sí mismo la recepción</td>
+</tr>
+<tr>
+  <td><code>SendFile</code>, 860–871</td>
+  <td><code>sendApiChatFile</code>, <code>apichat.ts:452–453</code>, envía <code>file</code> y <code>name</code></td>
+  <td>El contrato exige <code>url</code> y define <code>filename</code>; divergencia complementaria de salida</td>
+</tr>
+</tbody>
+</table>
+<p>Hay una inconsistencia <strong>en la especificación del proveedor</strong>: el resumen de <code>/messages</code> menciona 100 elementos por página y la definición de <code>limit</code> establece máximo 50. Debe conservarse como discrepancia contractual y obtenerse aclaración; pedir 50 respeta el límite más restrictivo. No se debe afirmar que el sondeo consume y elimina mensajes: el contrato presenta la eliminación mediante un método separado.</p>
+<p>Los callbacks muestran una respuesta 200, pero no detallan reintentos ni firma de autenticación. Tampoco convierten el límite general de solicitudes al API en un límite demostrado de callbacks entrantes. Los parámetros y métodos anteriores provienen de la <a href="https://panel.apichat.io/openapi.yaml?version=1.7">especificación oficial recuperada</a>; las consecuencias sobre el programa son deducciones de esta auditoría.</p>
+<p>El aviso de <code>apiChatSettings.ts:405–406</code> afirma que desactivar la notificación base64 impide entregar el archivo. Esa afirmación no está sustentada: el contrato también admite una URL. Activar base64 puede modificar el transporte, pero no corrige un sobre rechazado ni garantiza el resto del procesamiento. El normalizador omite además <code>time</code> y <code>caption</code>, perdiendo la fecha de origen y la descripción que puede acompañar al medio.</p>
+<h2>4. Recorrido real y mapa de funciones</h2>
+<pre><code class="language-mermaid">flowchart TD
+  W[WhatsApp: mensaje y adjunto] --&gt; A[ApiChat]
+  A --&gt;|callback HTTP| P[Proxy y express.json]
+  P --&gt; N[normalizeApiChatWebhookPayload]
+  A --&gt;|GET messages| S[syncInboxOnce / processFeedRecord]
+  N --&gt; R[processApiChatWebhook]
+  R --&gt; D[decodeRemoteAttachment / decodeTransport]
+  S --&gt; D
+  D --&gt; B[writeInboxFile: copia de bandeja]
+  B --&gt; K[registerCandidateInboundDocument]
+  K --&gt; F[candidate_knowledge_files y copia RAG]
+  F --&gt; X[analyzeCandidateDocument: tarea no durable]
+  K --&gt; M[recordNormalizedInboundFile]
+  M --&gt; CM[conversation_messages.metadata.media]
+  CM --&gt; I[inboxDetail: proyección incompleta]
+  I --&gt; UI[Bandeja / visor]
+  AT[candidate_attachments: sin escritor productivo hallado] --&gt; C[loadConversationContextSource]
+  X --&gt;|sólo analizado| C
+  C --&gt; CE[Motor conversacional]
+  X --&gt;|últimos 5 analizados| E[Evaluador LangGraph]
+</code></pre>
+<table>
+<thead>
+<tr>
+  <th>Capa</th>
+  <th>Funciones / evidencia local</th>
+  <th>Transformación y límite</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Entrada HTTP</td>
+  <td><code>server/_core/index.ts:64–72</code>; <code>registerApiChatWebhook</code>, <code>apiChatWebhook.ts:420</code></td>
+  <td>JSON/urlencoded hasta 50 MiB antes del controlador</td>
+</tr>
+<tr>
+  <td>Normalización y ruta de postulación</td>
+  <td><code>normalizeApiChatWebhookPayload:120</code>; <code>conversationForPhone:184</code></td>
+  <td>Reduce el evento a un mensaje; teléfono a 12 dígitos; selecciona conversación activa más reciente</td>
+</tr>
+<tr>
+  <td>Reconciliación</td>
+  <td><code>syncInboxOnce</code>, <code>inboxSync.ts:377</code>; <code>processFeedRecord:225</code></td>
+  <td>Feed global contra una página local de conversaciones; tipos limitados</td>
+</tr>
+<tr>
+  <td>Bytes</td>
+  <td><code>decodeRemoteAttachment</code>, <code>base64Transport.ts:304</code>; <code>decodeTransport:388</code></td>
+  <td>Base64 o HTTPS; detección parcial de firma, nombre, MIME y SHA-256</td>
+</tr>
+<tr>
+  <td>Bandeja física</td>
+  <td><code>buildInboxFileKey</code>, <code>inboxFiles.ts:29</code>; <code>writeInboxFile:33</code></td>
+  <td>Clave con <code>/</code>, almacenamiento en disco local</td>
+</tr>
+<tr>
+  <td>Expediente</td>
+  <td><code>registerCandidateInboundDocument</code>, <code>candidateKnowledge.ts:582</code></td>
+  <td>Política propia, dedupe SHA, segunda copia, registro y análisis diferido</td>
+</tr>
+<tr>
+  <td>Mensaje</td>
+  <td><code>recordNormalizedInboundEventInternal</code>, <code>inbox.ts:928</code>; <code>recordNormalizedInboundFile:1158</code></td>
+  <td>Transacción de mensaje con medio dentro de JSON, posterior al almacenamiento</td>
+</tr>
+<tr>
+  <td>Extracción</td>
+  <td><code>extractKnowledgeText</code>, <code>knowledge.ts:386</code>; <code>analyzeCandidateDocument</code>, <code>candidateKnowledge.ts:304</code></td>
+  <td>Texto de PDF/DOCX; extracción vacía y ciertos errores se confunden</td>
+</tr>
+<tr>
+  <td>Contexto</td>
+  <td><code>loadConversationContextSource</code>, <code>conversationContext.ts:551</code>; <code>buildConversationUserInput</code>, <code>conversationEngine.ts:179</code></td>
+  <td>Une fuentes divergentes; excluye documentos no analizados</td>
+</tr>
+<tr>
+  <td>Evaluación</td>
+  <td><code>loadCandidateEvidence</code>, <code>agentEvaluator.ts:425</code>; grafo en <code>:261–272</code></td>
+  <td>Recibe derivados textuales, no el archivo original</td>
+</tr>
+<tr>
+  <td>Presentación</td>
+  <td><code>inboxDetail</code>, <code>inbox.ts:275</code>; <code>Inbox.tsx:452</code>; <code>inboxFiles.ts:144</code></td>
+  <td>DTO sin campos del medio y URL que no coincide con ruta</td>
+</tr>
+<tr>
+  <td>Trazabilidad</td>
+  <td><code>recordTransportTrace</code>, <code>transportTrace.ts:182</code>; <code>summarizeTransportTrace:296</code></td>
+  <td>Registro posterior al procesamiento, errores ocultos y diagnóstico no válido</td>
+</tr>
+</tbody>
+</table>
+<p>El agente evaluador sí construye un grafo <code>START → evaluate → END</code>. La conversación ordinaria llama directamente a <code>responses.parse</code> en <code>conversationEngine.ts:210</code>. Las etiquetas de observabilidad no convierten ese motor en un grafo. Ninguna de esas dos capas repara por sí misma una notificación que no se normalizó o un documento excluido del contexto.</p>
+<h2>5. Hallazgos y correcciones especificadas</h2>
+<p>Prioridad <strong>P1</strong>: bloquea la función troncal, altera atribución de evidencia o afecta su integridad. <strong>P2</strong>: agrava recuperación, capacidad, observabilidad o acceso. Son prioridades técnicas de esta auditoría, no puntuaciones CVSS. Los hallazgos C/K/R no implican que todas sus condiciones ocurrieran en producción.</p>
+<h3>H01 — P1. Rechazo del callback contractual</h3>
+<p><strong>Evidencia:</strong> K/C/R; <code>normalizeApiChatWebhookPayload</code>, <code>server/apiChatWebhook.ts:120–148</code>; ruta <code>:424–460</code>. Un objeto cuya única clave superior es <code>messages</code> no proporciona <code>id</code> ni <code>number</code> al normalizador y retorna <code>null</code>.</p>
+<p><strong>Efecto:</strong> el lote completo puede terminar sin mensajes, con HTTP 200. <strong>Corrección:</strong> un adaptador canónico debe desenvolver el formato configurado, validar la colección y generar un resultado por elemento. Un elemento defectuoso no debe eliminar los válidos del mismo lote. Mantener compatibilidad individual explícita, sin atribuir a ApiChat alias no documentados. Registrar versión del adaptador y hash del evento antes del procesamiento de medios.</p>
+<h3>H02 — P1. El sondeo no constituye respaldo equivalente</h3>
+<p><strong>Evidencia:</strong> C/K; <code>server/inboxSync.ts:319–366,438–453,485–490</code>. Sólo procesa <code>file</code> como medio; consulta una ventana de 50 sin página; resuelve números contra sólo 200 conversaciones por ronda, con recorrido local limitado a 2.000.</p>
+<p><strong>Efecto:</strong> omite medios admitidos por contrato, mensajes fuera de ventana y candidatos fuera de página. La omisión no implica destrucción de datos en ApiChat. <strong>Corrección:</strong> reutilizar el mismo normalizador y procesador de medios; paginar mediante los parámetros publicados; resolver la postulación por identidad estable en base, independientemente de la página de interfaz. Aplicar solapamiento, deduplicación y registro persistente del avance. El orden y retención del historial requieren confirmación para demostrar completitud.</p>
+<h3>H03 — P1. Acuse positivo sin evento durable</h3>
+<p><strong>Evidencia:</strong> C; <code>registerApiChatWebhook</code>, <code>server/apiChatWebhook.ts:431–460</code>; escrituras <code>:378–415</code>. La ruta responde 200 cuando no hay base y cuando se captura una excepción. No hay persistencia previa del evento ni reintento durable del webhook.</p>
+<p><strong>Efecto:</strong> el emisor puede observar una aceptación HTTP sin mensaje recuperable. Hay ventanas entre disco, expediente y mensaje. <strong>Corrección:</strong> confirmar 200 sólo después de persistir durablemente el evento aceptado; descargar y analizar con trabajadores posteriores. Si no se puede aceptar durablemente, devolver un fallo explícito; verificar con ApiChat la política de reintentos, sin presuponerla. Si un evento inválido se confirma para evitar repeticiones, debe quedar durablemente clasificado y recuperable según política.</p>
+<h3>H04 — P1. Tres representaciones de adjunto sin identidad común</h3>
+<p><strong>Evidencia:</strong> C; <code>inbox.ts:1014–1037,1173–1190</code>; <code>candidateKnowledge.ts:613–626</code>; <code>conversationContext.ts:645–648</code>; <code>conversationEngine.ts:186–188</code>. El repositorio contiene lecturas de <code>candidate_attachments</code>, pero no se halló su escritor productivo.</p>
+<p><strong>Efecto:</strong> se construye «Documentos recibidos: ninguno» desde una entidad distinta a las que alimenta la recepción. Las columnas estructuradas del mensaje también permanecen sin alimentar cuando el medio sólo reside en JSON.</p>
+<p><strong>Corrección:</strong> establecer una identidad de adjunto vinculada al evento, mensaje y postulación. Tanto bandeja como contexto deben consumir su manifiesto de estados. Una reparación inmediata puede proyectar coherentemente los registros existentes; no basta con duplicarlos en otra tabla y perpetuar dos fuentes autoritativas. La migración debe conservar procedencia y marcar vínculos inferidos como tales.</p>
+<h3>H05 — P1. La bandeja no puede construir el enlace correcto</h3>
+<p><strong>Evidencia:</strong> C/R; <code>inboxDetail</code>, <code>inbox.ts:305–310</code>; <code>Inbox.tsx:452–462</code>; <code>CandidateConversationPanel.tsx:517–527</code>; <code>inboxFiles.ts:29,144</code>.</p>
+<p><strong>Efecto:</strong> la API omite <code>media_storage_key</code> y <code>media_file_name</code>, que la UI exige. Incluso agregándolos, una clave <code>in-ID/UUID</code> interpolada sin codificar produce dos segmentos donde Express espera uno. El fallback SPA puede devolver HTML con 200; eso tampoco prueba una descarga válida.</p>
+<p><strong>Corrección inmediata específica:</strong> proyectar <code>metadata-&gt;'media'-&gt;&gt;'storageKey' AS media_storage_key</code> y <code>metadata-&gt;'media'-&gt;&gt;'fileName' AS media_file_name</code>, o entregar un DTO equivalente estable; aplicar <code>encodeURIComponent</code> a la clave completa en ambos componentes y en el URL saliente de <code>inbox.ts:851</code>. Verificar ruta, MIME y bytes, además del estado HTTP. Este defecto explica un adjunto sin enlace, <strong>no por sí solo la ausencia completa de su burbuja</strong>, pues el cuerpo textual sí se inserta.</p>
+<h3>H06 — P1. Análisis diferido sin garantía de finalización</h3>
+<p><strong>Evidencia:</strong> C; <code>candidateKnowledge.ts:655</code>; <code>conversationWorker.ts:32–43</code>; <code>conversationEngine.ts:378–386</code>; <code>conversationContext.ts:661–670</code>.</p>
+<p><strong>Efecto:</strong> el análisis se ejecuta con <code>void ...catch</code>, sin trabajo persistente. El motor puede responder antes de su finalización; al terminar no se reactiva el turno. Un reinicio puede dejar registros pendientes. Las consultas de contexto sólo incluyen documentos analizados y degradan errores SQL a listas vacías.</p>
+<p><strong>Corrección:</strong> trabajo durable con estado, intento, lease, próximo reintento y error tipado; evento de finalización que invalide contexto y programe reevaluación controlada. El agente puede contestar «archivo recibido, en procesamiento» sin esperar el resultado analítico. No debe pedir reenviar un archivo por una espera interna.</p>
+<h3>H07 — P1. Audio, DOC e imágenes carecen de interpretación integrada</h3>
+<p><strong>Evidencia:</strong> C; <code>knowledge.ts:360–397</code>; <code>candidateKnowledge.ts:317–352</code>; <code>voiceTranscription.ts:123–169</code>; búsquedas de llamadas productivas al transcriptor.</p>
+<p><strong>Efecto:</strong> PDF/DOCX con texto pueden producir análisis. DOC, imágenes y MP3 pueden almacenarse pero no generan interpretación documental; no hay OCR en este recorrido. El transcriptor existe sin conexión a los receptores. Otros audios no están admitidos en el expediente por la whitelist actual.</p>
+<p><strong>Corrección:</strong> separar admisión del medio de su procesador: PDF textual, PDF que requiere OCR, DOCX, DOC heredado y audio con transcripción. Cada formato debe anunciar sólo la capacidad efectiva instalada y probada. Integrar la utilidad de voz mediante trabajos, vincular transcripción al original y distinguir contenedor, códec e idioma. No basta activar una etiqueta del catálogo de códecs.</p>
+<h3>H08 — P1. Observabilidad produce ausencia y culpabilidad falsas</h3>
+<p><strong>Evidencia:</strong> C/R; <code>recentAttachmentReceipts</code>, <code>apiChatSettings.ts:516–529</code>, consulta <code>created_at</code>; <code>0026_candidate_knowledge.sql:54–56</code> declara <code>uploaded_at</code>. <code>transportTrace.ts:100–102,278,296–315</code> no examina objetos anidados y transforma errores de lectura en lista vacía.</p>
+<p><strong>Efecto:</strong> documentos existentes pueden contarse como cero; un cuerpo con <code>message.url</code> puede clasificarse «sin adjuntos» y responsabilizar al proveedor. <strong>Corrección:</strong> consultar <code>uploaded_at</code>; representar <code>observabilidad_no_disponible</code> por separado de cero; recorrer estructura normalizada y preservar cobertura. El veredicto debe decir «no observado en esta fuente/ventana» cuando eso sea todo lo demostrado.</p>
+<p>El sondeo registra trazas de los casos no procesados (<code>inboxSync.ts:509–521</code>), pero no de todos sus éxitos. El número de trazas tampoco representa, por tanto, el total de mensajes recibidos por ambas vías.</p>
+<h3>H09 — P1. Integridad de procedencia y descarga insuficientes</h3>
+<p><strong>Evidencia:</strong> C; ruta pública <code>apiChatWebhook.ts:420–463</code>; <code>base64Transport.ts:339–349</code>. No se valida autenticidad del webhook en este código. Cualquier URL HTTPS elegible se descarga sin control de host/IP/redirección y sin política de autenticación de medios.</p>
+<p><strong>Efecto:</strong> riesgo de inyección de evidencia, SSRF y consumo de recursos; no se ha demostrado explotación. <strong>Corrección:</strong> verificar los mecanismos que soporte realmente ApiChat, configurar controles perimetrales compatibles y restringir descargas a orígenes autorizados con validación de DNS/IP y de cada redirección. No reenviar credenciales del API a dominios arbitrarios. Añadir lectura incremental limitada, cuarentena y validación del contenido antes de interpretar o publicar el objeto.</p>
+<h3>H10 — P1. Identidad, dirección y postulación pueden divergir</h3>
+<p><strong>Evidencia:</strong> C/K; <code>apiChatWebhook.ts:145–148,199–204,298</code>; <code>inboxSync.ts:163–172,465–470</code>. El webhook recorta teléfonos a 12 dígitos; el sondeo no. El webhook elige la conversación reciente y el <code>Map</code> del sondeo puede sobrescribirla por otra anterior del mismo teléfono. Los IDs no conocidos localmente como salientes se tratan como entrantes aunque <code>from_me</code> indique lo contrario.</p>
+<p><strong>Efecto:</strong> un envío efectuado desde el teléfono de la empresa puede convertirse en evidencia del candidato, o un archivo asociarse a otra postulación. <strong>Corrección:</strong> conservar dirección oficial y evidencia de reconciliación por separado; clasificar discrepancias como indeterminadas. Normalizar números sin truncamiento destructivo y resolver explícitamente múltiples postulaciones. Incorporar cuenta/canal a identidad e idempotencia.</p>
+<h3>H11 — P2. Idempotencia posterior a efectos físicos</h3>
+<p><strong>Evidencia:</strong> C; <code>apiChatWebhook.ts:378–403</code>; <code>inbox.ts:990–1017</code>; <code>candidateKnowledge.ts:599–617</code>; esquema de <code>candidate_knowledge_files</code> sin unicidad aplicación/SHA.</p>
+<p><strong>Efecto:</strong> los replays pueden crear copias de bandeja huérfanas antes de detectar un mensaje duplicado. Dos procesos pueden superar el <code>SELECT</code> de deduplicación documental y crear duplicados. <strong>Corrección:</strong> reservar identidad del evento antes de efectos; usar restricciones y operaciones atómicas en la base. Distinguir idempotencia del mensaje de deduplicación física por hash: dos envíos legítimos del mismo archivo siguen siendo eventos diferentes.</p>
+<h3>H12 — P2. Límites y tipos incoherentes entre capas</h3>
+<p><strong>Evidencia:</strong> C; <code>index.ts:67</code>; <code>apiChatWebhook.ts:356</code>; <code>base64Transport.ts:176–177,345–349</code>; <code>candidateKnowledge.ts:591–598</code>; <code>knowledge.ts:19–35</code>.</p>
+<p><strong>Efecto:</strong> 50 MiB de JSON no contienen 50 MiB binarios en base64; el expediente admite por defecto 20 MiB. Un rechazo de política devuelve <code>{id:0,created:false}</code> y el webhook no inspecciona el resultado. Una descarga sin longitud fiable se lee entera antes de comprobar el tamaño final. La detección genérica <code>ftyp → video/mp4</code> puede confundir audio M4A.</p>
+<p><strong>Corrección:</strong> política de capacidad única por canal y formato, con rechazo tipado y visible. Límite de bytes aplicado durante streaming; separación entre tipo declarado, detectado y validado. La fórmula base64 es <code>B64(n)=4×ceil(n/3)</code>; con un cuerpo de 50 MiB, el binario debe ser menor de 37,5 MiB al añadir el sobre JSON. Esta deducción deriva de la codificación descrita por Josefsson (2006). El PDF de aproximadamente 1 MB mostrado <strong>no sustenta</strong> esta causa de tamaño. <a href="https://www.rfc-editor.org/rfc/rfc4648">RFC 4648</a>.</p>
+<h3>H13 — P2. La traza no establece una cadena de custodia suficiente</h3>
+<p><strong>Evidencia:</strong> C/R; <code>transportTrace.ts:112–119,137–168,204–205</code>; <code>inboxSync.ts:214</code>; <code>0035_transport_traces.sql:43–59</code>.</p>
+<p><strong>Efecto:</strong> textos y valores cortos pueden conservar datos personales; incluso una clave <code>secret</code> con valor alfanumérico corto se conserva en <code>shape</code>, aunque se enmascare en <code>payload</code>. Los sobres JSON serializados no se redactan estructuralmente. Truncar el JSON serializado a 65.536 caracteres puede invalidarlo y perder el asiento en el <code>catch</code>. Las huellas parciales no identifican integralmente el evento. Falta fecha original, cuenta, versión contractual y relación evento→mensaje→archivo. El respaldo del sondeo puede almacenar contenido completo; no hay consumidor de replay identificado. La retención automática de trazas es de 14 días.</p>
+<p>Además, <code>inboxSync.ts:349</code> registra el documento con <code>source: &quot;webhook&quot;</code>, aunque lo haya recuperado por consulta de historial. Ese campo no permite reconstruir el origen de adquisición; debe distinguirse de la procedencia de negocio del documento y corregirse junto con el esquema que admite sus valores.</p>
+<p><strong>Corrección:</strong> registro operativo mínimo y archivo probatorio restringido con finalidades y retenciones separadas. Hash completo del cuerpo recibido, hash del binario y metadatos de adquisición; cifrado y acceso controlado si se conserva contenido para investigación. Redactar antes de exportar y limitar estructuras preservando JSON válido. Un hash demuestra correspondencia de bytes con una referencia conservada; por sí solo no acredita origen ni momento. Preservar la evidencia del incidente antes del vencimiento de retención.</p>
+<h3>H14 — P2. «CV recibido» y evidencia analítica no son equivalentes</h3>
+<p><strong>Evidencia:</strong> C; <code>cvAnalysis.ts:171–176</code>; <code>knowledge.ts:688–696,760–761</code>; <code>conversationContext.ts:487–517,661–679</code>; <code>agentEvaluator.ts:425–465</code>.</p>
+<p><strong>Efecto:</strong> cualquier archivo no manual puede marcar CV recibido. El análisis automático usa una instrucción de conocimiento institucional, con resúmenes de 66 y 325 palabras. El contexto conversa con hasta 12 documentos y el evaluador con hasta cinco; sólo entran estados analizados. La huella del contexto omite documentos y adjuntos. El recorte global de 60.000 caracteres puede eliminar evidencia del candidato si capas anteriores consumen ese espacio.</p>
+<p><strong>Corrección:</strong> estados independientes para «archivo recibido», «CV identificado» y «evidencia interpretable»; extracción curricular con trazabilidad a páginas/fragmentos. Reservar presupuesto de contexto para evidencia y explicitar exclusiones. Incorporar IDs, hashes, estados y versiones de derivados a la huella de evaluación. La extracción de esencia curricular existe, pero su disparador administrativo no equivale a integración automática de recepción.</p>
+<h3>H15 — P2. Persistencia física y despliegue no acreditados</h3>
+<p><strong>Evidencia:</strong> C/H; <code>Dockerfile:10–22</code>; <code>knowledge.ts:195–199</code>; <code>inboxFiles.ts:19–24</code>; <code>docs/GUIA_EASYPANEL_CONVERSACION_2.0.142.md:92–102</code>.</p>
+<p><strong>Efecto condicional:</strong> el Dockerfile crea <code>/app/uploads</code>, pero el valor predeterminado de almacenamiento usa <code>/app/data/knowledge-files</code>. No se versiona aquí el montaje real. Sin volumen persistente/compartido, los metadatos pueden sobrevivir a bytes perdidos o invisibles para otra réplica. La imagen runner copia <code>dist</code>, mientras la guía separada propone ejecutar fuentes <code>server/services/*.ts</code> que esa imagen no copia.</p>
+<p><strong>Corrección:</strong> declarar y verificar ruta efectiva, montaje, UID, permisos, réplica, respaldo y restauración. Empaquetar entradas de servicio que realmente existan. No se recomienda comprar hardware sobre esta evidencia: faltan métricas de CPU, RAM, IOPS, espacio y límites del contenedor.</p>
+<h3>H16 — P2. Acceso, paginación y presión de lectura</h3>
+<p><strong>Evidencia:</strong> C; <code>inbox.ts:310</code>; <code>inboxFiles.ts:79–85,107–128</code>; <code>routers.ts:223,2287</code>; <code>Inbox.tsx:79–95</code>.</p>
+<p><strong>Efecto:</strong> se muestran los primeros 500 mensajes, no necesariamente los recientes; un reclutador autorizado para bandeja puede no satisfacer el acceso administrativo al archivo; el rango sufijo <code>bytes=-500</code> se interpreta incorrectamente. Consultar lista y detalle cada segundo y localizar medios por expresión JSON sin índice equivalente puede aumentar la carga.</p>
+<p><strong>Corrección:</strong> paginación por cursor, autorización del recurso coherente con su postulación, implementación correcta de rangos y una consulta indexable de la identidad del medio. Medir latencias y planes SQL antes de atribuir saturación o dimensionar servidores.</p>
+<h2>6. Matriz de soporte efectivo</h2>
+<p>La tabla describe rutas de código y políticas predeterminadas; una configuración productiva distinta debe comprobarse.</p>
+<table>
+<thead>
+<tr>
+  <th>Formato</th>
+  <th>Recepción/persistencia local posible</th>
+  <th>Interpretación automática actual</th>
+  <th>Consecuencia para RR. HH.</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>PDF con texto</td>
+  <td>Sí, si supera ingreso y política</td>
+  <td><code>PDFParse.getText()</code> y análisis textual</td>
+  <td>Puede aportar evidencia resumida</td>
+</tr>
+<tr>
+  <td>PDF escaneado</td>
+  <td>Sí</td>
+  <td>Sin OCR en esta ruta; texto vacío → <code>no_aplica</code></td>
+  <td>No equivale a ausencia de archivo</td>
+</tr>
+<tr>
+  <td>DOCX</td>
+  <td>Sí</td>
+  <td><code>mammoth.extractRawText()</code></td>
+  <td>Texto, con pérdida posible de estructura visual</td>
+</tr>
+<tr>
+  <td>DOC binario</td>
+  <td>Extensión admitida</td>
+  <td>Analizador sólo acepta PDF/DOCX</td>
+  <td>Conservado sin análisis</td>
+</tr>
+<tr>
+  <td>JPG/PNG</td>
+  <td>Sí</td>
+  <td>Sin OCR/visión integrada en este recorrido</td>
+  <td>Imagen presente sin evidencia textual derivada</td>
+</tr>
+<tr>
+  <td>MP3</td>
+  <td>Sí</td>
+  <td>Se marca no aplicable como documento; transcriptor no invocado</td>
+  <td>Voz sin transcripción para el agente</td>
+</tr>
+<tr>
+  <td>OGG/WAV/M4A y otros audios</td>
+  <td>Transporte y clasificación variables</td>
+  <td>Fuera de whitelist de expediente o sin trabajador de voz</td>
+  <td>Capacidad anunciada no equivale a consumo efectivo</td>
+</tr>
+</tbody>
+</table>
+<p><code>codecRegistry</code> describe herramientas como Poppler, FFmpeg, antiword y LibreOffice, pero sus entradas e interruptores no prueban instalación ni controlan estos receptores. El Dockerfile no instala esas herramientas. Esto no invalida la extracción PDF textual existente, que utiliza JavaScript; sí impide dar por implementados OCR, conversión DOC o transcodificación.</p>
+<h2>7. Marco ontológico y propiedades del transporte correcto</h2>
+<p>La propuesta usa entidades distintas para evitar equivalencias falsas:</p>
+<table>
+<thead>
+<tr>
+  <th>Entidad</th>
+  <th>Identidad mínima</th>
+  <th>Relación / propiedad</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Evento de proveedor</td>
+  <td>cuenta, ID de evento o identidad de entrega, hash de cuerpo</td>
+  <td>Puede contener varios mensajes; conserva tiempo de proveedor y de recepción</td>
+</tr>
+<tr>
+  <td>Mensaje</td>
+  <td>cuenta/canal e ID del mensaje</td>
+  <td>Tiene dirección y vínculo de conversación; puede repetirse en varios eventos</td>
+</tr>
+<tr>
+  <td>Objeto binario</td>
+  <td>ID de objeto y SHA-256 completo</td>
+  <td>Contenido inmutable; almacenamiento verificable; no depende del nombre</td>
+</tr>
+<tr>
+  <td>Adjunto</td>
+  <td>ID y vínculo mensaje–objeto</td>
+  <td>Tipo declarado/detectado, tamaño, estado, procedencia</td>
+</tr>
+<tr>
+  <td>Postulación</td>
+  <td>ID independiente de persona/teléfono</td>
+  <td>Relaciona evidencia con la plaza correcta</td>
+</tr>
+<tr>
+  <td>Derivado</td>
+  <td>ID, hash del original, procesador y versión</td>
+  <td>Texto, OCR, transcripción o análisis; nunca sustituye al original</td>
+</tr>
+<tr>
+  <td>Evidencia evaluable</td>
+  <td>derivado, localizador y estado de calidad</td>
+  <td>Permite justificar afirmaciones curriculares</td>
+</tr>
+<tr>
+  <td>Decisión</td>
+  <td>ID, conjunto de evidencias, versión de contexto/modelo</td>
+  <td>Debe declarar limitaciones o faltantes técnicos</td>
+</tr>
+</tbody>
+</table>
+<p>Estados independientes recomendados:</p>
+<pre><code class="language-text">recepción:     observado → validado → persistido | rechazado
+binario:       pendiente → descargando → disponible | error_reintentable | cuarentena
+interpretación: pendiente → extrayendo → interpretable | requiere_ocr | no_soportado | error
+clasificación: desconocido → cv | otro_documento | audio | imagen
+evaluación:    esperando_evidencia → lista → evaluada | revisión_humana
+</code></pre>
+<p>No existe una implicación válida <code>HTTP 200 ⇒ CV evaluable</code>. Tampoco <code>sin_derivado ⇒ candidato_no_envió</code>.</p>
+<p>Invariantes propuestos, susceptibles de verificación:</p>
+<ol>
+<li><strong>Conservación:</strong> cada mensaje del evento aceptado queda asociado a un estado durable, incluso si se rechaza; ningún elemento desaparece por un retorno temprano.</li>
+<li><strong>Acuse:</strong> <code>ack_aceptado(e) ⇒ evento_durable(e)</code>. El contrato de retención y recuperación debe cubrir los bytes o una referencia recuperable; una URL temporal no basta si expira antes del trabajador.</li>
+<li><strong>Identidad:</strong> webhook y sondeo generan el mismo ID lógico para el mismo mensaje/cuenta; recibirlo dos veces no duplica sus efectos de negocio.</li>
+<li><strong>Integridad:</strong> <code>SHA256(bytes_almacenados) = SHA256(bytes_validados)</code>. Cada derivado declara el objeto del que proviene.</li>
+<li><strong>Convergencia:</strong> bandeja, expediente y motor leen el mismo manifiesto de adjuntos para una postulación.</li>
+<li><strong>Veracidad:</strong> pendiente, fallo técnico y no soportado no se convierten en ausencia documental ni penalización del candidato.</li>
+<li><strong>Vivacidad condicionada:</strong> con almacenamiento/procesadores disponibles y reintentos acotados, cada trabajo termina o se deriva a revisión con causa. No se promete procesamiento exactamente una vez; se construye entrega repetible con efectos idempotentes.</li>
+<li><strong>Reproducibilidad:</strong> la huella de una evaluación incluye la evidencia realmente suministrada y sus transformaciones, no sólo respuestas de formulario.</li>
+</ol>
+<h2>8. Arquitectura de corrección compatible con el software actual</h2>
+<p>Puede implementarse con Node/TypeScript, Express, PostgreSQL y el almacenamiento existente, una vez comprobada su persistencia. No requiere introducir Kafka, otro proveedor de WhatsApp o una GPU para corregir H01–H06.</p>
+<pre><code class="language-mermaid">flowchart LR
+  A[Callback oficial / historial paginado] --&gt; N[Adaptador canónico versionado]
+  N --&gt; E[Evento durable + identidad de mensaje]
+  E --&gt; ACK[Acuse HTTP]
+  E --&gt; Q[Trabajos persistentes en PostgreSQL]
+  Q --&gt; B[Descarga limitada y validación]
+  B --&gt; O[Objeto durable con SHA-256]
+  O --&gt; M[Manifiesto de adjunto y postulación]
+  M --&gt; U[Bandeja: recibido y estado]
+  M --&gt; X[Extracción / OCR / voz]
+  X --&gt; D[Derivado versionado]
+  D --&gt; C[Contexto con evidencia y limitaciones]
+  C --&gt; G[Conversación / evaluación]
+</code></pre>
+<p>La transacción de ingreso reserva identidad y trabajo. El binario se escribe con clave temporal, se valida y se publica de forma controlada; base y filesystem no comparten una transacción ACID, por lo que hacen falta reconciliación y limpieza de objetos huérfanos. Si el cuerpo lleva base64, el evento durable necesita conservar recuperablemente esos bytes hasta su procesamiento. Si sólo lleva URL, hay que conocer su vigencia o descargar dentro de una ventana garantizada. Esas garantías no están descritas en el OpenAPI consultado.</p>
+<p>Los trabajadores se coordinan con reclamación transaccional y leases; el detalle del mecanismo debe adaptarse a los roles existentes. El webhook integrado y el receptor separado no deben lanzar tareas redundantes sin esa coordinación. La finalización de extracción publica un evento local para reconstruir contexto; la idempotencia de respuesta evita contestaciones duplicadas.</p>
+<p>La consulta de la API se mantiene dentro de sus métodos documentados: lectura de cuenta y webhook para diagnosticar configuración; historial con filtros/paginación para reconciliar. Una configuración de <code>notify_format</code> sólo se cambia después de conocer el valor efectivo y disponer de compatibilidad de transición. La autenticación específica de descarga o del callback debe confirmarse con el proveedor; no se inventan parámetros o cabeceras.</p>
+<h2>9. Software, hardware y dimensionamiento</h2>
+<p><strong>Acreditado por archivos:</strong> imagen Node 22 Alpine, aplicación TypeScript compilada a <code>dist/index.js</code>, dependencias <code>pdf-parse</code>/Mammoth, base PostgreSQL y archivos locales; tareas integradas de recepción, conversación y evaluación. Los rangos de dependencias y la imagen nominal no identifican el digest desplegado. El manifiesto incluye hashes de configuración y lockfile.</p>
+<p><strong>No acreditado:</strong> CPU/RAM disponibles, límites cgroup, almacenamiento montado, persistencia compartida, IOPS, réplicas, proxy inverso, tiempos de espera, backlog, versión efectiva de PostgreSQL o digest del contenedor. La captura identifica una superficie EasyPanel, no las propiedades del servidor.</p>
+<p>El flujo HTTPS actual acumula buffer, cadena base64 y decodificación adicional; por ello la memoria máxima supera el tamaño del archivo. No se fija un múltiplo exacto sin perfilar el runtime. Una estimación operativa debe separar tasa de llegada <code>λ</code>, duración media de procesamiento <code>W</code>, concurrencia <code>L≈λW</code>, tamaño máximo permitido y copias simultáneas. Son relaciones de dimensionamiento, no mediciones de este despliegue.</p>
+<p>El orden recomendado es reparar contrato/estados, establecer métricas y después medir carga representativa. Indicadores: latencia de acuse, retraso de trabajos, latencia hasta archivo disponible, latencia de extracción, rechazos por causa, huérfanos, duplicados evitados, memoria máxima y disponibilidad del volumen. Un hardware mayor no repara una clave JSON que nunca se lee.</p>
+<h2>10. Protocolo forense para atribuir el incidente</h2>
+<p>El archivo acompañante <code>consultas_solo_lectura.sql</code> contiene consultas parametrizables y minimizadas, sin cambios de datos. No se han ejecutado contra producción.</p>
+<ol>
+<li><strong>Fijar el objeto investigado:</strong> obtener el ID del mensaje del PDF, cuenta ApiChat, hora y zona originales; identificar la postulación mediante su ID interno. La cita posterior y la miniatura no sustituyen el mensaje original.</li>
+<li><strong>Preservar fuentes:</strong> exportación autorizada de entrega del proveedor, acceso del proxy, logs de aplicación, filas relevantes y archivo original si existe; hashes completos, fecha de adquisición, responsable, fuente y registro de accesos. Conservar originales restringidos y copias redactadas para el informe.</li>
+<li><strong>Verificar configuración por lectura:</strong> versión/imagen, migraciones, cuenta/modo nativo o compatibilidad, webhook efectivo, <code>notify_format</code>, notificación base64 y dirección. Los secretos no deben copiarse al informe.</li>
+<li><strong>Reconciliar el ID:</strong> proveedor → entrada HTTP → normalizador → mensaje → adjunto/objeto → derivado → contexto/decisión. Registrar el primer límite que cuenta con evidencia positiva y el siguiente que falla; no inferir un salto a partir de ausencia de logs.</li>
+<li><strong>Clasificar el desenlace:</strong> no entregado por proveedor; rechazado antes del controlador; sobre no reconocido; sin destino; medio no resuelto; almacenamiento fallido; mensaje sin adjunto; adjunto sin derivado; derivado excluido; defecto de UI. Cada conclusión requiere su fuente específica.</li>
+<li><strong>Recuperar tras corregir:</strong> si el historial/original conserva el evento o los bytes, reprocesar con identidad original y estado de recuperación; si el vínculo documental es inferido, declararlo. No inventar una fila con fecha/ID de envío atribuidos al candidato.</li>
+</ol>
+<table>
+<thead>
+<tr>
+  <th>Evidencia disponible</th>
+  <th>Afirmación permitida</th>
+  <th>Afirmación que no permite</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Entrega del proveedor y proxy correlacionados</td>
+  <td>El HTTP alcanzó una frontera identificada</td>
+  <td>Que llegó a PostgreSQL</td>
+</tr>
+<tr>
+  <td>Cuerpo conservado con hash y rechazo del adaptador</td>
+  <td>Ese formato fue rechazado en normalización</td>
+  <td>Que todos los mensajes del proveedor usan ese formato</td>
+</tr>
+<tr>
+  <td>Mensaje con <code>metadata.media</code>, bytes verificables y sin enlace UI</td>
+  <td>Falla de presentación</td>
+  <td>Pérdida de transporte</td>
+</tr>
+<tr>
+  <td>Documento pendiente/error y contexto sin él</td>
+  <td>Exclusión o carrera analítica</td>
+  <td>Que el candidato no envió CV</td>
+</tr>
+<tr>
+  <td>Cero trazas con consulta fallida</td>
+  <td>Instrumentación no disponible</td>
+  <td>Que ApiChat no llamó</td>
+</tr>
+</tbody>
+</table>
+<p>El script preexistente <code>scripts/auditar-conducto-apichat.sh</code> no se ejecutó: contiene sondas POST, conclusiones causales excesivas y descripciones anteriores a las trazas de 2.0.179. Un PDF sintético que entra por otra forma no exoneraría al receptor del evento real. Tampoco es prudente llamar «sólo lectura» a una sonda que puede insertar trazas.</p>
+<h2>11. Validación realizada y criterios de aceptación</h2>
+<p>Se ejecutaron ocho archivos de pruebas existentes: webhook, sondeo, transporte base64, trazas, expediente candidato, configuración ApiChat, contexto y bandeja. <strong>125 pruebas pasaron, 0 fallaron</strong>, con Vitest 2.1.9. El lanzador <code>pnpm exec</code> falló al preparar su directorio de store; se ejecutó directamente el Vitest ya instalado con Node, sin instalar dependencias.</p>
+<p>Ese resultado valida los contratos que las pruebas contienen, no la integración completa. Por ejemplo, las pruebas de trazas aceptan que una lista vacía implique que el proveedor no llama, y varios receptores/persistencias están simulados. La ausencia de casos del callback oficial permite que H01 conviva con una suite verde.</p>
+<p><code>contraejemplos.ts</code> y <code>resultado.json</code> aportan comprobaciones locales con funciones reales y datos ficticios: sobre oficial rechazado, ruta de archivo no coincidente, contenido anidado mal clasificado, truncamiento de JSON y minimización insuficiente. <strong>Su éxito confirma defectos existentes; no certifica una reparación.</strong> No usan red, base de datos ni archivos de candidatos.</p>
+<p>Para aceptar una corrección se requieren, al menos:</p>
+<table>
+<thead>
+<tr>
+  <th>Prueba contractual o de falla controlada</th>
+  <th>Resultado exigido</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Callback oficial con uno y varios medios; un elemento inválido</td>
+  <td>Todo elemento obtiene estado durable; los válidos continúan</td>
+</tr>
+<tr>
+  <td>Mismo mensaje por webhook y por historial</td>
+  <td>Un mensaje lógico; sin nuevos objetos huérfanos ni doble respuesta</td>
+</tr>
+<tr>
+  <td>PDF textual, PDF sin texto, DOCX, DOC y audios declarados</td>
+  <td>Estado real por formato; ningún archivo pendiente se presenta como ausente</td>
+</tr>
+<tr>
+  <td>Base no disponible antes de aceptación</td>
+  <td>Sin acuse positivo de recepción durable</td>
+</tr>
+<tr>
+  <td>Caída tras escribir bytes / tras commit / durante extracción</td>
+  <td>Reconciliación y reintento sin pérdida de identidad</td>
+</tr>
+<tr>
+  <td>Consulta histórica paginada y más de 200 conversaciones</td>
+  <td>Asociación correcta sin depender de la página local</td>
+</tr>
+<tr>
+  <td>Envío desde teléfono empresarial fuera del aplicativo</td>
+  <td>Dirección preservada; no se atribuye evidencia al candidato</td>
+</tr>
+<tr>
+  <td>Reclutador autorizado abre adjunto; usuario ajeno intenta abrirlo</td>
+  <td>Bytes/MIME correctos en el primero; acceso denegado en el segundo</td>
+</tr>
+<tr>
+  <td>Análisis tarda más que un turno conversacional</td>
+  <td>Acuse de recepción y estado pendiente; finalización reactiva contexto</td>
+</tr>
+<tr>
+  <td>Falla SQL de instrumentación / colección anidada / sobre grande</td>
+  <td>Error de observabilidad explícito, JSON válido y ninguna culpabilidad inferida</td>
+</tr>
+<tr>
+  <td>Reinicio/despliegue/réplica</td>
+  <td>Archivos previamente aceptados permanecen recuperables</td>
+</tr>
+<tr>
+  <td>Contexto con cambios documentales</td>
+  <td>Cambia huella y se conserva manifiesto de evidencia usada</td>
+</tr>
+</tbody>
+</table>
+<p>Estas pruebas deben ejecutarse en un entorno controlado y con datos sintéticos. La atribución del incidente requiere además los registros históricos del apartado anterior.</p>
+<h2>12. Orden de ejecución de la solución</h2>
+<p><strong>Primera entrega:</strong> corregir adaptador oficial y lotes; unificar tipos con el sondeo; corregir consulta de bandeja/URL y columna de auditoría; sustituir diagnósticos categóricos por estados de conocimiento; impedir que un error interno se traduzca en «no envió». Son cambios acotados, pero deben pasar las pruebas contractuales conjuntas.</p>
+<p><strong>Segunda entrega:</strong> ingreso durable, manifiesto único de adjunto, restricciones de identidad, procesamiento por trabajos y evento de finalización; alinear conversación y evaluador con el mismo estado. Añadir descarga limitada, controles de procedencia y reconciliación de objetos.</p>
+<p><strong>Tercera entrega:</strong> integrar voz, OCR y DOC según alcance contratado; corregir catálogo para mostrar capacidades verificadas; ajustar presupuesto de contexto, métricas y despliegue persistente. Reconciliar históricos conservados y documentar los que no puedan reconstruirse.</p>
+<p>El criterio de cierre funcional es que cada archivo aceptado sea visible con su estado, pueda recuperarse y tenga una ruta explícita a interpretación o revisión. La evaluación del candidato debe poder explicar qué evidencia recibió, cuál utilizó y qué limitaciones técnicas existían. El criterio de cierre forense es identificar, con trazas correlacionadas, el punto de ruptura del mensaje investigado.</p>
+<p>Esta entrega contiene auditoría y especificación de corrección. <strong>No modifica la aplicación ni acredita una reparación desplegada.</strong> Los defectos estáticos están establecidos; la atribución histórica y la validación productiva permanecen pendientes de evidencia de ejecución.</p>
+<h2>Referencias</h2>
+<p>American Psychological Association. (2020). <em>Publication manual of the American Psychological Association</em> (7.ª ed.). https://www.apa.org/pubs/books/publication-manual-7th-edition-paperback</p>
+<p>ApiChat. (s. f.). <em>API para WhatsApp: Documentación</em>. Recuperado el 18 de septiembre de 2026, de https://apichat.io/api-docs</p>
+<p>ApiChat. (s. f.). <em>Whatsapp API—Swagger</em> [Especificación OpenAPI 3.0.0; <code>info.version</code> 1.0.0; recurso consultado <code>version=1.7</code>]. Recuperado el 18 de septiembre de 2026, de https://panel.apichat.io/openapi.yaml?version=1.7</p>
+<p>Josefsson, S. (2006). <em>The Base16, Base32, and Base64 data encodings</em> (RFC 4648). RFC Editor. https://www.rfc-editor.org/rfc/rfc4648</p>
+<p>Kent, K., Chevalier, S., Grance, T., &amp; Dang, H. (2006). <em>Guide to integrating forensic techniques into incident response</em> (NIST Special Publication 800-86). National Institute of Standards and Technology. https://doi.org/10.6028/NIST.SP.800-86</p>
+<p><em>Reclutamiento AISA agent: JARVI RH 2.0.179</em> [Código fuente; commit b450bdbcfa9c1225221936206220a46117c2d77e]. (2026). Repositorio local sometido a auditoría. Autoría no establecida en esta revisión; archivos y huellas identificados en <code>manifiesto.json</code>.</p>
+
+</body></html>

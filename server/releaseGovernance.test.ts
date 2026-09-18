@@ -9,6 +9,12 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { normalizeApiChatBatch } from "./apiChatContract";
+import {
+  describeTransportShape,
+  redactTransportPayload,
+  summarizeTransportTrace,
+} from "./transportTrace";
 import {
   APP_VERSION,
   AUDITED_RUNTIME,
@@ -90,8 +96,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.179");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.179");
+    expect(APP_VERSION).toBe("2.0.180");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.180");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -537,9 +543,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(132);
+    expect(audit.files).toHaveLength(139);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(132);
+    expect(publicCopyAudit.files).toHaveLength(139);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -609,8 +615,10 @@ describe("black-box release contract", () => {
 
     expect(sync).toContain("INBOX_SYNC_INTERVAL_MS = 1_000");
     expect(sync).toContain("INBOX_SYNC_HISTORY_LIMIT = 50");
-    expect(sync).toContain("INBOX_SYNC_CONVERSATION_REFRESH_MS = 60_000");
-    expect(sync).toContain("INBOX_SYNC_CATALOG_PAGE_SIZE = 200");
+    expect(sync).toContain("apichat_history_cursors");
+    expect(sync).toContain("pg_try_advisory_lock");
+    expect(sync).toContain('url.searchParams.set("page"');
+    expect(sync).toContain("enqueueApiChatReceipts");
     expect(sync).toContain("INBOX_SYNC_FEED_GAP_MS = 15_000");
     expect(sync).toContain("INBOX_SYNC_BACKOFF_MS = 60_000");
     expect(sync).toContain('new URL("/v1/messages", settings.endpoint)');
@@ -640,10 +648,7 @@ describe("black-box release contract", () => {
       path.resolve("shared/assessmentGovernance.ts"),
       "utf8"
     );
-    const routers = fs.readFileSync(
-      path.resolve("server/routers.ts"),
-      "utf8"
-    );
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
     const migration = fs.readFileSync(
       path.resolve("drizzle/migrations/0015_protocol_delete_challenges.sql"),
       "utf8"
@@ -735,8 +740,7 @@ describe("black-box release contract", () => {
     expect(migration).toContain("deep_analysis");
     expect(knowledge).toContain("KNOWLEDGE_SUMMARY_WORD_LIMIT = 66");
     expect(knowledge).toContain("KNOWLEDGE_ANALYSIS_WORD_LIMIT = 325");
-    expect(knowledge).toContain("extractPdfText");
-    expect(knowledge).toContain("extractDocxText");
+    expect(knowledge).toContain("extractDocumentText");
     expect(knowledge).toContain('"application/pdf"');
     expect(page).toContain("Administrador de Proyectos");
     expect(page).toContain("+ Arrastre y Suelte");
@@ -780,10 +784,7 @@ describe("black-box release contract", () => {
       path.resolve("client/src/pages/MstEir.tsx"),
       "utf8"
     );
-    const sync = fs.readFileSync(
-      path.resolve("server/inboxSync.ts"),
-      "utf8"
-    );
+    const sync = fs.readFileSync(path.resolve("server/inboxSync.ts"), "utf8");
     const webhook = fs.readFileSync(
       path.resolve("server/apiChatWebhook.ts"),
       "utf8"
@@ -797,7 +798,7 @@ describe("black-box release contract", () => {
     expect(transport).toContain("export async function decodeRemoteAttachment");
     expect(transport).toContain("export function createTransportEnvelope");
     expect(transport).toContain("BASE64_TRANSPORT_VERSION");
-    expect(sync).toContain("decodeRemoteAttachment");
+    expect(sync).toContain("enqueueApiChatReceipts");
     expect(webhook).toContain("decodeRemoteAttachment");
     expect(inbox).toContain("decodeTransport");
     // La extensión final se verifica por contenido, no por la declaración.
@@ -822,16 +823,34 @@ describe("black-box release contract", () => {
       "utf8"
     );
     expect(inbox).toContain('createViewerToken("inbox"');
-    expect(inbox).toContain("/api/inbox/files/${key}?t=");
+    expect(inbox).toContain("/api/inbox/files/${encodeURIComponent(key)}?t=");
     expect(inboxFiles).toContain('verifyViewerToken("inbox"');
-    expect(inboxFiles).toContain("Acceso restringido a administración.");
+    expect(inboxFiles).toContain("Se requiere rol de reclutador o administrador.");
 
-    // El contenido del adjunto se resuelve en cualquier forma declarada y no
-    // solo en `url`; una pérdida asienta los campos presentes para diagnóstico.
-    expect(webhook).toContain("ATTACHMENT_CONTENT_FIELDS");
-    expect(webhook).toContain("resolveAttachmentContent");
-    expect(webhook).toContain("fieldsPresent");
-    expect(webhook).toContain("recordWebhookLoss");
+    // El callback nativo contiene messages[]. Debe conservar los tres tipos
+    // de medios y la descripción antes de encolarlos de forma durable.
+    const batch = normalizeApiChatBatch({
+      messages: ["file", "image", "audio"].map((type, index) => ({
+        id: `release-media-${index}`,
+        number: "50255550000",
+        time: 1700000000,
+        type,
+        from_me: false,
+        url: "https://media.apichat.io/fixture",
+        caption: "descripción",
+      })),
+    });
+    expect(batch.map(message => message?.type)).toEqual([
+      "file",
+      "image",
+      "audio",
+    ]);
+    expect(
+      batch.every(
+        message => message?.contentValue && message.text === "descripción"
+      )
+    ).toBe(true);
+    expect(webhook).toContain("enqueueApiChatReceipts");
     expect(transport).toContain("isValidBase64Payload(payload)");
 
     // El visor cubre todos los formatos representables.
@@ -868,10 +887,7 @@ describe("black-box release contract", () => {
       path.resolve("shared/activityAudit.ts"),
       "utf8"
     );
-    const routers = fs.readFileSync(
-      path.resolve("server/routers.ts"),
-      "utf8"
-    );
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
     const importer = fs.readFileSync(
       path.resolve("server/importForms.ts"),
       "utf8"
@@ -912,9 +928,7 @@ describe("black-box release contract", () => {
     expect(importer).toContain("importSpreadsheetForm");
     expect(importer).toContain("derivePhoneColumn");
     expect(importer).toContain("isValidInternationalPhone");
-    expect(importer).toContain(
-      "INSERT INTO application_form_submissions"
-    );
+    expect(importer).toContain("INSERT INTO application_form_submissions");
     expect(routers).toContain("listByPosition: roleProcedure");
     expect(routers).toContain("importSpreadsheet: adminProcedure");
     expect(routers).toContain("'formulario'");
@@ -1036,32 +1050,31 @@ describe("black-box release contract", () => {
       path.resolve("server/conversationContext.ts"),
       "utf8"
     );
-    const sync = fs.readFileSync(
-      path.resolve("server/inboxSync.ts"),
-      "utf8"
-    );
+    const sync = fs.readFileSync(path.resolve("server/inboxSync.ts"), "utf8");
     const webhook = fs.readFileSync(
       path.resolve("server/apiChatWebhook.ts"),
       "utf8"
     );
 
     // El módulo anterior de solo lectura se retira de Revisión Humana.
-    expect(review).not.toContain("Conocimiento vigente y ciclos de información");
+    expect(review).not.toContain(
+      "Conocimiento vigente y ciclos de información"
+    );
     expect(review).toContain("<CandidateRagPanel");
 
     // Migración expansiva: crea entidades nuevas y no toca el RAG de proyectos.
     expect(migration).toContain("candidate_knowledge_folders");
     expect(migration).toContain("candidate_knowledge_files");
-    expect(migration).toContain("ADD COLUMN IF NOT EXISTS candidate_knowledge_file_id");
+    expect(migration).toContain(
+      "ADD COLUMN IF NOT EXISTS candidate_knowledge_file_id"
+    );
     expect(migration).not.toMatch(/DROP\s+TABLE/i);
     expect(migration).not.toMatch(/ALTER\s+TABLE\s+knowledge_files/i);
     expect(migration).not.toMatch(/ALTER\s+TABLE\s+knowledge_projects/i);
     // La migración 0022 es opcional: el vínculo con las aclaraciones debe
     // agregarse solo cuando esa tabla existe, o la migración fallaría a mitad.
     expect(migration).toContain("table_name = 'candidate_knowledge_notes'");
-    expect(migration).not.toMatch(
-      /^ALTER TABLE candidate_knowledge_notes/m
-    );
+    expect(migration).not.toMatch(/^ALTER TABLE candidate_knowledge_notes/m);
 
     // El esquema declara las tablas nuevas: sin esa declaración una
     // sincronización las vería como sobrantes y podría eliminarlas.
@@ -1075,14 +1088,15 @@ describe("black-box release contract", () => {
     expect(schema).toContain("candidate_knowledge_folders_name_uq");
 
     // Mismos límites institucionales y misma política que el RAG de proyectos.
-    expect(module).toContain("KNOWLEDGE_SUMMARY_WORD_LIMIT");    expect(module).toContain("KNOWLEDGE_ANALYSIS_WORD_LIMIT");
+    expect(module).toContain("KNOWLEDGE_SUMMARY_WORD_LIMIT");
+    expect(module).toContain("KNOWLEDGE_ANALYSIS_WORD_LIMIT");
     expect(module).toContain("getKnowledgeSettings");
     expect(module).toContain("buildCandidateStorageKey");
     expect(module).toContain("analyzeKnowledgeDocument");
     expect(module).toContain("registerCandidateInboundDocument");
 
     // El expediente se alimenta desde el webhook y desde la sincronización.
-    expect(sync).toContain("registerCandidateInboundDocument");
+    expect(sync).toContain("enqueueApiChatReceipts");
     expect(webhook).toContain("registerCandidateInboundDocument");
 
     // El agente recibe el expediente analizado en la capa personal.
@@ -1110,7 +1124,9 @@ describe("black-box release contract", () => {
 
   it("scopes the WhatsApp inbox to the candidate under review", () => {
     const conversation = fs.readFileSync(
-      path.resolve("client/src/components/review/CandidateConversationPanel.tsx"),
+      path.resolve(
+        "client/src/components/review/CandidateConversationPanel.tsx"
+      ),
       "utf8"
     );
     const review = fs.readFileSync(
@@ -1212,7 +1228,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.179");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.180");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1226,7 +1242,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.179");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.180");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1310,7 +1326,9 @@ describe("black-box release contract", () => {
       "utf8"
     );
 
-    expect(blackBox).toContain(`Pruebas de caja negra · JARVI RH ${APP_VERSION}`);
+    expect(blackBox).toContain(
+      `Pruebas de caja negra · JARVI RH ${APP_VERSION}`
+    );
     expect(blackBox).toContain("BN-CONV-01");
     expect(blackBox).toContain("BN-CONV-20");
     expect(blackBox).toContain("conversation_turns");
@@ -1452,7 +1470,9 @@ describe("black-box release contract", () => {
     expect(cvAnalysis).toContain("CV_ESSENCE_DEFAULT_WORD_LIMIT = 550");
     expect(cvAnalysis).toContain("export function renderCvText");
     expect(cvAnalysis).toContain("export function composeCvClosing");
-    expect(cvAnalysis).toContain("export async function loadCvAnalysisConfiguration");
+    expect(cvAnalysis).toContain(
+      "export async function loadCvAnalysisConfiguration"
+    );
     expect(cvAnalysis).toContain("export async function cvAwaitingState");
     expect(routing).toContain("cvAnalysis: adminProcedure.query");
 
@@ -1463,9 +1483,9 @@ describe("black-box release contract", () => {
     expect(cvRequest).toContain("AS cv_contact_notice");
 
     // La guardia salarial se evalúa antes de tocar la base.
-    expect(cvRequest.indexOf("assertNoAutomatedSalaryOffer(requestMessage)")).toBeLessThan(
-      cvRequest.indexOf("pg_advisory_xact_lock")
-    );
+    expect(
+      cvRequest.indexOf("assertNoAutomatedSalaryOffer(requestMessage)")
+    ).toBeLessThan(cvRequest.indexOf("pg_advisory_xact_lock"));
 
     // La hoja administrativa nombra el módulo y expone su configuración.
     expect(config).toContain("Evaluación de CV con IA");
@@ -1478,8 +1498,12 @@ describe("black-box release contract", () => {
     // La esencia del CV se genera en el servidor, por fragmentos y acotada por
     // la configuración; el expediente entra al evaluador como capa declarada.
     expect(cvAnalysis).toContain("export function chunkCvText");
-    expect(cvAnalysis).toContain("export async function analyzeCandidateCvEssence");
-    expect(cvAnalysis).toContain("limitWords(essence, configuration.essenceWordLimit)");
+    expect(cvAnalysis).toContain(
+      "export async function analyzeCandidateCvEssence"
+    );
+    expect(cvAnalysis).toContain(
+      "limitWords(essence, configuration.essenceWordLimit)"
+    );
     expect(cvAnalysis).toContain("candidate_cv_essence_generated");
     const evaluatorSource = fs.readFileSync(
       path.resolve("server/agentEvaluator.ts"),
@@ -1549,15 +1573,21 @@ describe("black-box release contract", () => {
     );
     const inbox = fs.readFileSync(path.resolve("server/inbox.ts"), "utf8");
     const conversationPanel = fs.readFileSync(
-      path.resolve("client/src/components/review/CandidateConversationPanel.tsx"),
+      path.resolve(
+        "client/src/components/review/CandidateConversationPanel.tsx"
+      ),
       "utf8"
     );
 
     // La ventana declarada y la semántica del interruptor apagado.
     expect(automation).toContain("ASSESSMENT_START_DELAY_SECONDS = 30");
     expect(automation).toContain("export function planAssessmentCycle");
-    expect(automation).toContain("export async function scheduleAssessmentCycle");
-    expect(automation).toContain("export async function runAssessmentCycleSweep");
+    expect(automation).toContain(
+      "export async function scheduleAssessmentCycle"
+    );
+    expect(automation).toContain(
+      "export async function runAssessmentCycleSweep"
+    );
     expect(automation).toContain('state: "apagado"');
     expect(automation).toContain("assessment_cycle_started");
 
@@ -1575,7 +1605,9 @@ describe("black-box release contract", () => {
 
     // Ejecución del instrumento: decisión pura, traza por ítem y cierre.
     expect(automation).toContain("export function planAssessmentStep");
-    expect(automation).toContain("export async function runAssessmentStepSweep");
+    expect(automation).toContain(
+      "export async function runAssessmentStepSweep"
+    );
     expect(automation).toContain("export function judgeAssessmentAnswer");
     expect(automation).toContain("export function assessmentExecutionScore");
     expect(automation).toContain("ASSESSMENT_MIN_ANSWER_WORDS");
@@ -1583,9 +1615,7 @@ describe("black-box release contract", () => {
     expect(attemptsMigration).toContain(
       "CREATE TABLE IF NOT EXISTS assessment_item_attempts"
     );
-    expect(attemptsMigration).toContain(
-      "assessment_item_attempts_identity_uq"
-    );
+    expect(attemptsMigration).toContain("assessment_item_attempts_identity_uq");
 
     // Continuidad: el interruptor suspende la ejecución sin suprimir la
     // obligación, y ambos barridos comparten el mismo punto de arranque para
@@ -1594,7 +1624,9 @@ describe("black-box release contract", () => {
     expect(automation).toContain("assessmentGreetingMessageKey");
     expect(automation).toContain("assessmentItemMessageKey");
     expect(worker).toContain("runAssessmentStepSweep(pool");
-    expect(worker).toContain("const assessment = await runAssessmentCycleSweep");
+    expect(worker).toContain(
+      "const assessment = await runAssessmentCycleSweep"
+    );
     expect(worker).toContain("conversationsInProtocol");
     expect(worker).toContain("const protocol = await runAssessmentStepSweep");
     expect(worker).toContain("return { assessment, protocol, turns }");
@@ -1624,14 +1656,16 @@ describe("black-box release contract", () => {
       "utf8"
     );
 
-    expect(blackBox).toContain(`Pruebas de caja negra · JARVI RH ${APP_VERSION}`);
+    expect(blackBox).toContain(
+      `Pruebas de caja negra · JARVI RH ${APP_VERSION}`
+    );
     expect(blackBox).toContain("BN-SPLIT-01");
     expect(blackBox).toContain("BN-SPLIT-12");
     expect(guide).toContain("CONVERSATION_SERVICE_CAPABILITY");
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.179");
+    expect(governance).toContain("Alcance candidato 2.0.180");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -1640,7 +1674,10 @@ describe("black-box release contract", () => {
       path.resolve("server/apiChatSettings.ts"),
       "utf8"
     );
-    const config = fs.readFileSync(path.resolve("client/src/pages/Config.tsx"), "utf8");
+    const config = fs.readFileSync(
+      path.resolve("client/src/pages/Config.tsx"),
+      "utf8"
+    );
     const blackBox = fs.readFileSync(
       path.resolve(`docs/PRUEBAS_CAJA_NEGRA_${APP_VERSION}.md`),
       "utf8"
@@ -1708,7 +1745,9 @@ describe("black-box release contract", () => {
     );
 
     // Preactivación sembrada por la migración.
-    expect(migration).toContain("ON CONFLICT (provider, setting_key) DO NOTHING");
+    expect(migration).toContain(
+      "ON CONFLICT (provider, setting_key) DO NOTHING"
+    );
     expect(migration).toContain("'conversation', 'agent_enabled'");
     expect(migration).toContain("'conversation', 'service_mode'");
 
@@ -1760,9 +1799,15 @@ describe("black-box release contract", () => {
     );
 
     // Las migraciones y la verificación autocertificada viajan juntas.
-    expect(deploy).toContain("Origen: drizzle/migrations/0022_conversational_agent.sql");
-    expect(deploy).toContain("Origen: drizzle/migrations/0023_conversation_service_split.sql");
-    expect(deploy).toContain("Origen: drizzle/migrations/0024_conversation_activation.sql");
+    expect(deploy).toContain(
+      "Origen: drizzle/migrations/0022_conversational_agent.sql"
+    );
+    expect(deploy).toContain(
+      "Origen: drizzle/migrations/0023_conversation_service_split.sql"
+    );
+    expect(deploy).toContain(
+      "Origen: drizzle/migrations/0024_conversation_activation.sql"
+    );
     // El artefacto no deja fuera las tablas del expediente, del ciclo ni de su
     // traza: lo que se aplica en un solo paso es lo que se verifica al final.
     expect(deploy).toContain(
@@ -1779,7 +1824,9 @@ describe("black-box release contract", () => {
     expect(deploy).toContain(
       "Origen: drizzle/migrations/0035_transport_traces.sql"
     );
-    expect(deploy).toContain("CREATE TABLE IF NOT EXISTS conversation_transport_traces");
+    expect(deploy).toContain(
+      "CREATE TABLE IF NOT EXISTS conversation_transport_traces"
+    );
     expect(deploy).toContain("trim_conversation_transport_traces");
     expect(deploy).toContain("Migracion 0030 - identidad unica del intento");
     expect(deploy).toContain("CREATE TABLE IF NOT EXISTS conversation_outbox");
@@ -1823,7 +1870,9 @@ describe("black-box release contract", () => {
 
     // El informe es de solo lectura: la única escritura del módulo es el asiento
     // del fallo de salida, y su identificador de entidad es un entero literal.
-    const report = audit.slice(audit.indexOf("export async function apiChatChannelReport"));
+    const report = audit.slice(
+      audit.indexOf("export async function apiChatChannelReport")
+    );
     expect(report).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/);
     expect(audit).toContain("VALUES (NULL,$1,0,'apichat_send_failure'");
     // El nombre del archivo no se conserva: se diagnostica sin exponer contenido.
@@ -1855,7 +1904,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.179");
+    expect(governance).toContain("Alcance candidato 2.0.180");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });
@@ -1883,26 +1932,46 @@ describe("black-box release contract", () => {
     // distinción que separa una conjetura de una prueba.
     expect(webhook).toContain("recordTransportTrace");
     expect(webhook).toContain('origin: "webhook"');
-    // El sondeo deja de descartar en silencio lo que no sabe transportar.
-    expect(sync).toContain("recordTransportTrace");
-    expect(sync).toContain('origin: "sondeo"');
-    expect(sync).toContain("no-procesado:");
+    // El sondeo conserva los mismos recibos durables que el webhook.
+    expect(sync).toContain('enqueueApiChatReceipts(pool, payload, "sondeo")');
 
     // Privacidad: el contenido se sustituye por peso y huella, el teléfono se
     // enmascara y el cuerpo se acota.
     expect(trace).toContain("TRANSPORT_TRACE_LIMIT_BYTES = 65_536");
     expect(trace).toContain("sha256");
-    expect(trace).toContain("maskDigits");
-    expect(trace).toContain("«contenido");
-    // La lectura es de solo lectura y degrada cuando la tabla no existe.
+    expect(trace).toContain("serializeBoundedTrace");
+    const privateBody = {
+      params: JSON.stringify({
+        messages: [
+          {
+            type: "file",
+            url: "data:application/pdf;base64,JVBERi0xLjc=",
+            text: "contenido-privado",
+            token: "secreto-privado",
+          },
+        ],
+      }),
+    };
+    expect(JSON.stringify(redactTransportPayload(privateBody))).not.toContain(
+      "contenido-privado"
+    );
+    expect(JSON.stringify(redactTransportPayload(privateBody))).not.toContain(
+      "secreto-privado"
+    );
+    expect(
+      Object.values(describeTransportShape(privateBody)).some(field =>
+        field.kind.startsWith("contenido:")
+      )
+    ).toBe(true);
+    // Una consulta fallida es distinta de una muestra sin eventos.
     const lectura = trace.slice(
       trace.indexOf("export async function loadTransportTraces")
     );
     expect(lectura).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/);
-    expect(lectura).toContain(".catch(");
+    expect(summarizeTransportTrace([], false).state).toBe("no-disponible");
+    expect(summarizeTransportTrace([]).state).toBe("sin-trazas");
 
-    // El veredicto distingue el proveedor que no llama del que llama sin
-    // adjunto: son dos causas distintas y exigen acciones distintas.
+    // La muestra no autoriza atribuir una causa al proveedor.
     expect(trace).toContain("sin-trazas");
     expect(trace).toContain("sin-adjuntos");
     expect(trace).toContain("con-adjuntos");

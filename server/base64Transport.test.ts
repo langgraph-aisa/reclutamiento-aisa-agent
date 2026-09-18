@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   BASE64_TRANSPORT_VERSION,
   classifyTransportKind,
@@ -14,7 +14,11 @@ import {
   splitBase64Payload,
   toDataUri,
   transportByteLimit,
+  resolveAttachmentDestination,
+  isPublicAttachmentAddress,
 } from "./base64Transport";
+
+const publicLookup = async () => [{ address: "93.184.216.34", family: 4 }];
 
 const pdfBytes = Buffer.concat([
   Buffer.from("%PDF-1.7\n", "utf8"),
@@ -143,12 +147,16 @@ describe("transporte base64: detección por contenido", () => {
       detectContentSignature(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00]))
         ?.extension
     ).toBe("jpg");
-    expect(detectContentSignature(Buffer.from("GIF89a....", "utf8"))?.extension).toBe(
-      "gif"
-    );
+    expect(
+      detectContentSignature(Buffer.from("GIF89a....", "utf8"))?.extension
+    ).toBe("gif");
     expect(
       detectContentSignature(
-        Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WEBP")])
+        Buffer.concat([
+          Buffer.from("RIFF"),
+          Buffer.alloc(4),
+          Buffer.from("WEBP"),
+        ])
       )?.extension
     ).toBe("webp");
     expect(
@@ -160,9 +168,9 @@ describe("transporte base64: detección por contenido", () => {
         ])
       )?.extension
     ).toBe("mp4");
-    expect(detectContentSignature(Buffer.from("ID3datos", "utf8"))?.extension).toBe(
-      "mp3"
-    );
+    expect(
+      detectContentSignature(Buffer.from("ID3datos", "utf8"))?.extension
+    ).toBe("mp3");
   });
 
   it("distingue docx y xlsx dentro de un contenedor ZIP", () => {
@@ -171,7 +179,9 @@ describe("transporte base64: detección por contenido", () => {
   });
 
   it("devuelve nulo cuando el formato no tiene firma verificable", () => {
-    expect(detectContentSignature(Buffer.from("a,b,c\n1,2,3\n", "utf8"))).toBeNull();
+    expect(
+      detectContentSignature(Buffer.from("a,b,c\n1,2,3\n", "utf8"))
+    ).toBeNull();
   });
 });
 
@@ -179,7 +189,9 @@ describe("transporte base64: utilidades de nombre y tipo", () => {
   it("reconstruye el nombre con la extensión final verificada", () => {
     expect(reconstructTransportFileName("foto.jpg", "pdf")).toBe("foto.pdf");
     expect(reconstructTransportFileName("archivo", "png")).toBe("archivo.png");
-    expect(reconstructTransportFileName("manual.pdf", "pdf")).toBe("manual.pdf");
+    expect(reconstructTransportFileName("manual.pdf", "pdf")).toBe(
+      "manual.pdf"
+    );
   });
 
   it("sanea nombres con caracteres no admitidos", () => {
@@ -240,7 +252,9 @@ describe("transporte base64: sobre de envío", () => {
     expect(envelope.extension).toBe("pdf");
     expect(envelope.mimeType).toBe("application/pdf");
     expect(envelope.sizeBytes).toBe(pdfBytes.length);
-    expect(Buffer.from(envelope.dataBase64, "base64").equals(pdfBytes)).toBe(true);
+    expect(Buffer.from(envelope.dataBase64, "base64").equals(pdfBytes)).toBe(
+      true
+    );
     // El sobre se decodifica de vuelta al mismo objeto.
     const roundTrip = decodeTransport({
       dataBase64: envelope.dataBase64,
@@ -268,7 +282,7 @@ describe("transporte base64: recepción remota", () => {
       })) as unknown as typeof fetch;
     const decoded = await decodeRemoteAttachment(
       "https://ejemplo.invalid/adjunto",
-      { fileName: "remoto", fetchImpl }
+      { fileName: "remoto", fetchImpl, lookupImpl: publicLookup }
     );
     expect(decoded?.buffer.equals(pdfBytes)).toBe(true);
     expect(decoded?.extension).toBe("pdf");
@@ -276,17 +290,184 @@ describe("transporte base64: recepción remota", () => {
 
   it("rechaza una respuesta remota fallida", async () => {
     const fetchImpl = (async () =>
-      new Response("no encontrado", { status: 404 })) as unknown as typeof fetch;
-    const decoded = await decodeRemoteAttachment(
-      "https://ejemplo.invalid/adjunto",
-      { fileName: "remoto", fetchImpl }
-    );
-    expect(decoded).toBeNull();
+      new Response("no encontrado", {
+        status: 404,
+      })) as unknown as typeof fetch;
+    await expect(
+      decodeRemoteAttachment("https://ejemplo.invalid/adjunto", {
+        fileName: "remoto",
+        fetchImpl,
+        lookupImpl: publicLookup,
+      })
+    ).rejects.toMatchObject({ code: "http_error", retryable: false });
   });
 
   it("rechaza un esquema no admitido", async () => {
     const decoded = await decodeRemoteAttachment("ftp://ejemplo.invalid/a.pdf");
     expect(decoded).toBeNull();
+  });
+});
+
+describe("descarga de medios con frontera de red y cuota", () => {
+  it.each([
+    "127.0.0.1",
+    "10.0.0.1",
+    "169.254.169.254",
+    "172.16.0.1",
+    "192.168.1.1",
+    "100.64.0.1",
+    "0.0.0.0",
+    "224.0.0.1",
+    "::1",
+    "::ffff:127.0.0.1",
+    "fc00::1",
+    "fe80::1",
+    "2001:db8::1",
+  ])("rechaza la dirección no pública %s", address => {
+    expect(isPublicAttachmentAddress(address)).toBe(false);
+  });
+
+  it("admite direcciones públicas y aplica una lista institucional de dominios", async () => {
+    expect(isPublicAttachmentAddress("93.184.216.34")).toBe(true);
+    expect(isPublicAttachmentAddress("2001:4860:4860::8888")).toBe(true);
+    await expect(
+      resolveAttachmentDestination("https://media.apichat.io/media/a", {
+        lookupImpl: publicLookup,
+        allowedHosts: ["*.apichat.io"],
+      })
+    ).resolves.toHaveProperty("url");
+    await expect(
+      resolveAttachmentDestination(
+        "https://media.apichat.io.attacker.invalid/a",
+        { lookupImpl: publicLookup, allowedHosts: ["*.apichat.io"] }
+      )
+    ).rejects.toMatchObject({ code: "unsafe_destination" });
+  });
+
+  it("rechaza DNS mixto antes de abrir la conexión", async () => {
+    const fetchImpl = vi.fn();
+    await expect(
+      decodeRemoteAttachment("https://media.apichat.io/a", {
+        fetchImpl,
+        lookupImpl: async () => [
+          { address: "93.184.216.34", family: 4 },
+          { address: "127.0.0.1", family: 4 },
+        ],
+      })
+    ).rejects.toMatchObject({ code: "unsafe_destination", retryable: false });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "https://user:password@media.apichat.io/a",
+    "https://media.apichat.io:8443/a",
+    "https://127.0.0.1/a",
+  ])("rechaza credenciales, puertos y destinos locales: %s", async url => {
+    const fetchImpl = vi.fn();
+    await expect(
+      decodeRemoteAttachment(url, { fetchImpl, lookupImpl: publicLookup })
+    ).rejects.toMatchObject({ code: "unsafe_destination" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("revalida una redirección y nunca visita su destino privado", async () => {
+    const fetchImpl = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(null, {
+          status: 302,
+          headers: { location: "https://127.0.0.1/internal" },
+        })
+    );
+    await expect(
+      decodeRemoteAttachment("https://media.apichat.io/a", {
+        fetchImpl,
+        lookupImpl: publicLookup,
+      })
+    ).rejects.toMatchObject({ code: "unsafe_destination" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][1]).toMatchObject({ redirect: "manual" });
+    expect(fetchImpl.mock.calls[0][1]).not.toHaveProperty("headers");
+  });
+
+  it("corta y cancela un flujo que excede el límite sin Content-Length", async () => {
+    const cancel = vi.fn();
+    let produced = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        produced++;
+        controller.enqueue(new Uint8Array(8));
+        if (produced === 100) controller.close();
+      },
+      cancel,
+    });
+    const fetchImpl = vi.fn(async () => new Response(stream));
+    await expect(
+      decodeRemoteAttachment("https://media.apichat.io/a", {
+        fetchImpl,
+        lookupImpl: publicLookup,
+        maxBytes: 10,
+      })
+    ).rejects.toMatchObject({ code: "size_limit", retryable: false });
+    expect(cancel).toHaveBeenCalled();
+    expect(produced).toBeLessThan(100);
+  });
+
+  it("clasifica errores HTTP temporales y de red para reintento", async () => {
+    await expect(
+      decodeRemoteAttachment("https://media.apichat.io/a", {
+        fetchImpl: async () => new Response(null, { status: 503 }),
+        lookupImpl: publicLookup,
+      })
+    ).rejects.toMatchObject({ code: "http_error", retryable: true });
+    await expect(
+      decodeRemoteAttachment("https://media.apichat.io/a", {
+        fetchImpl: async () => {
+          throw new Error("socket failed");
+        },
+        lookupImpl: publicLookup,
+      })
+    ).rejects.toMatchObject({ code: "network_error", retryable: true });
+  });
+});
+
+describe("contenedores de audio y nombres reconstruidos", () => {
+  it.each([
+    [
+      Buffer.concat([Buffer.alloc(4), Buffer.from("ftypM4A ")]),
+      "m4a",
+      "audio/mp4",
+    ],
+    [Buffer.from("#!AMR\\n".replace("\\n", "\n")), "amr", "audio/amr"],
+    [Buffer.from("fLaCdata"), "flac", "audio/flac"],
+    [Buffer.from([0xff, 0xf1, 0x50, 0x80]), "aac", "audio/aac"],
+    [
+      Buffer.concat([
+        Buffer.from([0x1a, 0x45, 0xdf, 0xa3]),
+        Buffer.from("webm A_OPUS"),
+      ]),
+      "webm",
+      "audio/webm",
+    ],
+    [Buffer.from("RIFF0000WAVEdata"), "wav", "audio/wav"],
+  ])(
+    "identifica el contenedor y declara MIME coherente",
+    (bytes, extension, mimeType) => {
+      const decoded = decodeTransport({
+        dataBase64: (bytes as Buffer).toString("base64"),
+        fileName: "grabacion",
+      });
+      expect(decoded.extension).toBe(extension);
+      expect(decoded.mimeType).toBe(mimeType);
+      expect(decoded.fileName).toBe(`grabacion.${extension}`);
+      expect(classifyTransportKind(decoded.extension, decoded.mimeType)).toBe(
+        "audio"
+      );
+    }
+  );
+
+  it("rechaza data URI sin indicador base64 y padding inválido", () => {
+    expect(() => decodeTransport("data:text/plain,hello")).toThrow();
+    expect(() => decodeTransport("a=b===")).toThrow();
   });
 });
 

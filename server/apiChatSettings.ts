@@ -186,7 +186,8 @@ export const APICHAT_ENDPOINT_CONSUMERS = [
   "moderacion",
 ] as const;
 
-export type ApiChatEndpointConsumer = (typeof APICHAT_ENDPOINT_CONSUMERS)[number];
+export type ApiChatEndpointConsumer =
+  (typeof APICHAT_ENDPOINT_CONSUMERS)[number];
 
 /**
  * Catálogo oficial de endpoints con su capacidad conversacional declarada.
@@ -222,8 +223,8 @@ export const APICHAT_OFFICIAL_ENDPOINTS = [
   {
     method: "POST",
     path: "/sendPTT",
-    route: "sendPTT",
-    description: "Envío de una nota de voz (PTT) a un chat nuevo o existente.",
+    route: "sendAudio",
+    description: "Envío de audio mediante la ruta nativa /v1/sendAudio.",
     capability: "send",
     consumers: ["bandeja"],
     requiredForAgent: false,
@@ -306,11 +307,14 @@ export function computeApiChatCapabilityReadiness(input: {
   conversationMode: "single" | "split";
 }): ApiChatCapabilityReadiness[] {
   const enabledPaths = new Set(
-    input.endpoints.filter(endpoint => endpoint.enabled).map(endpoint => endpoint.path)
+    input.endpoints
+      .filter(endpoint => endpoint.enabled)
+      .map(endpoint => endpoint.path)
   );
   const requiredPaths = (capability: ApiChatEndpointCapability) =>
     APICHAT_OFFICIAL_ENDPOINTS.filter(
-      endpoint => endpoint.capability === capability && endpoint.requiredForAgent
+      endpoint =>
+        endpoint.capability === capability && endpoint.requiredForAgent
     ).map(endpoint => endpoint.path);
   const disabledRequired = (capability: ApiChatEndpointCapability) =>
     requiredPaths(capability).filter(path => !enabledPaths.has(path));
@@ -358,7 +362,9 @@ export function apiChatCapabilityAdvisories(input: {
 }) {
   const advisories: string[] = [];
   const disabled = new Set(
-    input.endpoints.filter(endpoint => !endpoint.enabled).map(endpoint => endpoint.path)
+    input.endpoints
+      .filter(endpoint => !endpoint.enabled)
+      .map(endpoint => endpoint.path)
   );
   if (!input.baseEnabled) {
     advisories.push(
@@ -403,14 +409,16 @@ export function apiChatCapabilityAdvisories(input: {
 export const APICHAT_ATTACHMENT_WINDOW_HOURS = 24;
 
 export const APICHAT_ATTACHMENT_REQUIREMENT =
-  "En el panel de ApiChat, la opción «Notify attachments in base64 format» debe permanecer encendida: sin ella el proveedor no entrega el archivo, el candidato cree haberlo enviado y el expediente queda vacío sin ningún error visible.";
+  "El contrato nativo entrega los adjuntos en el campo url, como URL de medios o base64 con MIME. «Notify attachments in base64 format» selecciona la representación; no es un requisito universal de recepción. El webhook y su formato deben coincidir con el adaptador configurado.";
 
 export type ApiChatAttachmentLosses = {
+  available?: boolean;
   windowHours: number;
   withoutContent: number;
   unreadable: number;
   total: number;
   lastAt: string | Date | null;
+  registrationFailures?: number;
 };
 
 /**
@@ -426,11 +434,13 @@ export async function recentAttachmentLosses(
 ): Promise<ApiChatAttachmentLosses> {
   const windowHours = options.windowHours ?? APICHAT_ATTACHMENT_WINDOW_HOURS;
   const empty: ApiChatAttachmentLosses = {
+    available: false,
     windowHours,
     withoutContent: 0,
     unreadable: 0,
     total: 0,
     lastAt: null,
+    registrationFailures: 0,
   };
   if (!pool) return empty;
   try {
@@ -448,13 +458,21 @@ export async function recentAttachmentLosses(
         GROUP BY 1`,
       [String(windowHours)]
     );
-    const losses = { ...empty };
+    const losses = { ...empty, available: true };
     for (const row of result.rows) {
       const total = Number(row.total ?? 0);
       losses.total += total;
       if (row.cause === "archivo-ilegible") losses.unreadable += total;
-      else losses.withoutContent += total;
-      if (row.last_at && !losses.lastAt) losses.lastAt = row.last_at;
+      else if (row.cause === "archivo-sin-contenido")
+        losses.withoutContent += total;
+      else if (row.cause === "expediente-no-registrado")
+        losses.registrationFailures =
+          (losses.registrationFailures ?? 0) + total;
+      if (
+        row.last_at &&
+        (!losses.lastAt || new Date(row.last_at) > new Date(losses.lastAt))
+      )
+        losses.lastAt = row.last_at;
     }
     return losses;
   } catch {
@@ -470,9 +488,13 @@ export async function recentAttachmentLosses(
 export function apiChatAttachmentTransportAdvisory(
   losses: ApiChatAttachmentLosses
 ): string[] {
+  if (losses.available === false)
+    return [
+      "La consulta de incidencias de recepción no está disponible; no es posible interpretar un contador vacío como ausencia de fallos.",
+    ];
   if (!losses.total) return [];
   return [
-    `La recepción de adjuntos no está verificada: el receptor asentó ${losses.total} pérdida(s) de archivo en las últimas ${losses.windowHours} horas (${losses.withoutContent} sin contenido y ${losses.unreadable} ilegible(s)). Confirme que la opción «Notify attachments in base64 format» del panel de ApiChat permanezca encendida y envíe un archivo de prueba desde un teléfono autorizado.`,
+    `El receptor asentó ${losses.total} incidencia(s) de archivo en las últimas ${losses.windowHours} horas (${losses.withoutContent} sin contenido, ${losses.unreadable} ilegible(s) y ${losses.registrationFailures ?? 0} fallo(s) de registro en el expediente). La causa debe verificarse por identificador de evento y estado del procesamiento.`,
   ];
 }
 
@@ -487,9 +509,13 @@ export function apiChatAttachmentTransportAdvisory(
 export function apiChatAttachmentEvidenceAdvisory(
   transport: ApiChatAttachmentTransport
 ): string[] {
+  if (transport.status === "no_disponible")
+    return [
+      "La observabilidad de adjuntos no está disponible. Deben revisarse el esquema y los permisos antes de concluir si hubo recepciones.",
+    ];
   if (transport.status !== "sin_evidencia") return [];
   return [
-    `El conducto de adjuntos no tiene evidencia en las últimas ${transport.windowHours} horas: no se asentó ninguna pérdida, pero tampoco se recibió ningún archivo. Una prueba con un archivo real desde un teléfono autorizado es lo único que convierte esta incógnita en una verificación.`,
+    `No hay adjuntos registrados en las últimas ${transport.windowHours} horas. Esta ventana no acredita ausencia de envíos; deben revisarse los eventos recibidos y sus estados.`,
   ];
 }
 
@@ -504,8 +530,12 @@ export function apiChatAttachmentEvidenceAdvisory(
 export async function recentAttachmentReceipts(
   pool: Pool | null,
   options: { windowHours?: number } = {}
-): Promise<{ received: number; lastReceivedAt: string | Date | null }> {
-  const empty = { received: 0, lastReceivedAt: null };
+): Promise<{
+  available: boolean;
+  received: number;
+  lastReceivedAt: string | Date | null;
+}> {
+  const empty = { available: false, received: 0, lastReceivedAt: null };
   if (!pool) return empty;
   const windowHours = options.windowHours ?? APICHAT_ATTACHMENT_WINDOW_HOURS;
   try {
@@ -513,14 +543,15 @@ export async function recentAttachmentReceipts(
       received: number;
       last_at: string | Date | null;
     }>(
-      `SELECT count(*)::int AS received,max(created_at) AS last_at
+      `SELECT count(*)::int AS received,max(uploaded_at) AS last_at
          FROM candidate_knowledge_files
-        WHERE source='webhook'
-          AND created_at >= now() - ($1 || ' hours')::interval`,
+        WHERE source IN ('webhook','sondeo')
+          AND uploaded_at >= now() - ($1 || ' hours')::interval`,
       [String(windowHours)]
     );
     const row = result.rows[0];
     return {
+      available: true,
       received: Number(row?.received ?? 0),
       lastReceivedAt: row?.last_at ?? null,
     };
@@ -531,6 +562,7 @@ export async function recentAttachmentReceipts(
 }
 
 export type ApiChatAttachmentTransportStatus =
+  | "no_disponible"
   | "verificado"
   | "con_perdidas"
   | "sin_evidencia";
@@ -543,7 +575,9 @@ export type ApiChatAttachmentTransportStatus =
 export function attachmentTransportStatus(input: {
   received: number;
   losses: number;
+  available?: boolean;
 }): ApiChatAttachmentTransportStatus {
+  if (input.available === false) return "no_disponible";
   if (input.losses > 0) return "con_perdidas";
   return input.received > 0 ? "verificado" : "sin_evidencia";
 }
@@ -574,11 +608,15 @@ export async function getApiChatEndpoints(pool: Pool | null) {
   const attachmentReceipts = await recentAttachmentReceipts(pool);
   const attachmentTransport: ApiChatAttachmentTransport = {
     ...attachmentLosses,
+    available:
+      attachmentLosses.available !== false && attachmentReceipts.available,
     received: attachmentReceipts.received,
     lastReceivedAt: attachmentReceipts.lastReceivedAt,
     status: attachmentTransportStatus({
       received: attachmentReceipts.received,
       losses: attachmentLosses.total,
+      available:
+        attachmentLosses.available !== false && attachmentReceipts.available,
     }),
   };
   return {
@@ -651,10 +689,7 @@ export async function saveApiChatEndpointStates(
       `INSERT INTO audit_log
          (actor_user_id,entity_type,entity_id,action,after_json)
        VALUES ($1,'apichat_configuration',0,'endpoints_updated',$2::jsonb)`,
-      [
-        actorUserId,
-        JSON.stringify({ endpoints }),
-      ]
+      [actorUserId, JSON.stringify({ endpoints })]
     );
     await client.query("COMMIT");
     return getApiChatEndpoints(pool);
@@ -740,6 +775,11 @@ export async function verifyApiChatReception(
     } catch {
       payload = null;
     }
+  }
+  if (!Array.isArray(payload)) {
+    throw new Error(
+      "ApiChat respondió al diagnóstico con un cuerpo incompatible con MessagesDB; la recepción no quedó verificada."
+    );
   }
   const verifiedAt = new Date().toISOString();
   await pool.query(
