@@ -5,6 +5,7 @@ import { CandidateReviewSummary } from "@/components/review/CandidateReviewSumma
 import { RecruiterAgentPanel } from "@/components/review/RecruiterAgentPanel";
 import { CandidateCvAnalysisPanel } from "@/components/review/CandidateCvAnalysisPanel";
 import { CandidateViewerPanel } from "@/components/review/CandidateViewerPanel";
+import { CollapsibleSection } from "@/components/review/CollapsibleSection";
 import { ReviewEvidencePanels } from "@/components/review/ReviewEvidencePanels";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
@@ -230,22 +231,24 @@ function CandidateDetail({
           />
         </div>
         <div className="space-y-4">
-          <div className="rounded-2xl bg-white/8 p-4">
-            <p className="text-xs uppercase tracking-[.14em] text-white/55">
-              Resumen de perfil
-            </p>
-            <p className="mt-3 text-sm leading-6 text-white/80">
+          <CollapsibleSection
+            id="resumen-perfil"
+            title="Resumen de perfil"
+            className="rounded-2xl bg-white/8 p-4 text-white"
+          >
+            <p className="text-sm leading-6 text-white/80">
               {data.application.profile_summary ?? "Sin resumen todavía."}
             </p>
-          </div>
-          <div className="rounded-2xl bg-white/8 p-4">
-            <p className="text-xs uppercase tracking-[.14em] text-white/55">
-              Motivo de evaluación
-            </p>
-            <p className="mt-3 text-sm leading-6 text-white/80">
+          </CollapsibleSection>
+          <CollapsibleSection
+            id="motivo-evaluacion"
+            title="Motivo de evaluación"
+            className="rounded-2xl bg-white/8 p-4 text-white"
+          >
+            <p className="text-sm leading-6 text-white/80">
               {data.application.evaluation_reason ?? "Pendiente de evaluación."}
             </p>
-          </div>
+          </CollapsibleSection>
           <Button
             variant="outline"
             className="w-full rounded-xl border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
@@ -265,9 +268,11 @@ function CandidateDetail({
           </Button>
         </div>
         <div className="rounded-2xl bg-white/8 p-4">
-          <p className="text-xs uppercase tracking-[.14em] text-white/55">
-            Bitácora
-          </p>
+          <CollapsibleSection
+            id="bitacora"
+            title="Bitácora"
+            className="text-white"
+          >
           {data.audit?.length ? (
             <div className="mt-3 space-y-2">
               {data.audit.slice(0, 5).map((event: any) => (
@@ -346,11 +351,14 @@ function CandidateDetail({
                   )}
                 </div>
               )}
+          </CollapsibleSection>
         </div>
         <div className="rounded-2xl bg-white/8 p-4">
-          <p className="text-xs uppercase tracking-[.14em] text-white/55">
-            Formularios y anuncios · respuestas
-          </p>
+          <CollapsibleSection
+            id="formularios-respuestas"
+            title="Formularios y anuncios · respuestas"
+            className="text-white"
+          >
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {(data.submissions ?? []).map((submission: any) => {
               const formAnswers = (data.answers ?? []).filter(
@@ -418,14 +426,20 @@ function CandidateDetail({
               </p>
             )}
           </div>
+          </CollapsibleSection>
         </div>
-        <CandidateCvAnalysisPanel
-          applicationId={data.application.id}
-          reevaluating={evaluateWithAgent.isPending}
-          onReevaluate={() =>
-            evaluateWithAgent.mutate({ applicationId: data.application.id })
-          }
-        />
+        <CollapsibleSection
+          id="analisis-cv"
+          title="Análisis de CV de Agente IA"
+        >
+          <CandidateCvAnalysisPanel
+            applicationId={data.application.id}
+            reevaluating={evaluateWithAgent.isPending}
+            onReevaluate={() =>
+              evaluateWithAgent.mutate({ applicationId: data.application.id })
+            }
+          />
+        </CollapsibleSection>
       </CardContent>
     </Card>
   );
