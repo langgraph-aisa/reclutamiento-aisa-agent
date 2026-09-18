@@ -118,6 +118,28 @@ export default function Config() {
     Record<string, boolean>
   >({});
 
+  // Registro de códecs y decodificadores del transporte. El borrador conserva
+  // la decisión del operador hasta que se guarda, y el resumen del servidor
+  // describe el estado **guardado**, no el que se está editando.
+  const codecCatalog = trpc.codecs.catalog.useQuery();
+  const saveCodecs = trpc.codecs.save.useMutation({
+    onSuccess: async () => {
+      await codecCatalog.refetch();
+      setCodecNotice("Registro de códecs guardado.");
+    },
+  });
+  const [codecDraft, setCodecDraft] = useState<Record<string, boolean> | null>(
+    null
+  );
+  const [codecNotice, setCodecNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!codecCatalog.data || codecDraft) return;
+    setCodecDraft(
+      Object.fromEntries(
+        codecCatalog.data.entries.map(entry => [entry.id, entry.enabled])
+      )
+    );
+  }, [codecCatalog.data, codecDraft]);
   const conversationActivation = trpc.config.conversationActivation.useQuery();
   const saveConversationActivation =
     trpc.config.saveConversationActivation.useMutation({
@@ -656,6 +678,105 @@ export default function Config() {
                     configuradas y el modo sea API nativa.
                   </p>
                 ) : null}
+                <div className="mt-3 rounded-2xl border border-border/70 bg-muted/30 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-semibold text-primary">
+                        Códecs y decodificadores del transporte
+                      </h4>
+                      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                        Contenedor y códec por separado, agrupados por familia y
+                        entregados activados. Apagar una entrada con conducto en
+                        uso produce una advertencia: el efecto sería una pérdida
+                        sin error.
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className="rounded-full text-[10px]"
+                      >
+                        {codecCatalog.data?.complete ? "Completo" : "Parcial"}
+                      </Badge>
+                      <Button
+                        size="sm"
+                        disabled={!codecDraft || saveCodecs.isPending}
+                        onClick={() =>
+                          codecDraft &&
+                          saveCodecs.mutate({ enabled: codecDraft })
+                        }
+                      >
+                        Guardar códecs
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                    {(codecCatalog.data?.families ?? []).map(family => (
+                      <div
+                        key={family.family}
+                        className="rounded-xl border border-border/60 bg-background/60 p-2.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] font-semibold text-primary">
+                            {family.label}
+                          </p>
+                          <span className="text-[10px] text-muted-foreground">
+                            {family.enabled} de {family.total}
+                          </span>
+                        </div>
+                        <ul className="mt-2 space-y-1.5">
+                          {(codecCatalog.data?.entries ?? [])
+                            .filter(entry => entry.family === family.family)
+                            .map(entry => (
+                              <li
+                                key={entry.id}
+                                className="flex items-start justify-between gap-2"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-[11px] font-medium">
+                                    {entry.container} · {entry.codec}
+                                  </p>
+                                  <p className="text-[10px] leading-4 text-muted-foreground">
+                                    {entry.decoder} · {entry.requirement} ·{" "}
+                                    {entry.useLabel}
+                                  </p>
+                                </div>
+                                <Switch
+                                  checked={
+                                    codecDraft?.[entry.id] ?? entry.enabled
+                                  }
+                                  aria-label={`${entry.container} ${entry.codec}`}
+                                  onCheckedChange={next =>
+                                    setCodecDraft(draft => ({
+                                      ...(draft ?? {}),
+                                      [entry.id]: next,
+                                    }))
+                                  }
+                                />
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                  {(codecCatalog.data?.advisories ?? []).length ? (
+                    <ul className="mt-2 space-y-1">
+                      {(codecCatalog.data?.advisories ?? []).map(advisory => (
+                        <li
+                          key={advisory}
+                          className="text-[11px] leading-4 text-amber-900"
+                        >
+                          · {advisory}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {codecNotice ? (
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      {codecNotice}
+                    </p>
+                  ) : null}
+                </div>
                 <div className="mt-3 rounded-2xl border border-border/70 bg-muted/30 p-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <h4 className="text-xs font-semibold text-primary">

@@ -128,6 +128,10 @@ WITH controles AS (
          (SELECT count(*)::text FROM pg_indexes
            WHERE schemaname = 'public'
              AND indexname = 'audit_log_entity_action_idx')
+  UNION ALL
+  SELECT 21, 'Migracion 0032 - registro de codecs activado', '25',
+         (SELECT count(*)::text FROM integration_settings
+           WHERE provider = 'codecs' AND setting_value = 'true')
 )
 SELECT orden, control, esperado, obtenido,
        CASE WHEN orden = 9 THEN 'INFORMATIVO'

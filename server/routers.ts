@@ -71,6 +71,7 @@ import {
   getEvaluationAutomation,
   requestEvaluationAutomationCode,
 } from "./automaticEvaluation";
+import { codecRegistry, saveCodecSettings } from "./codecRegistry";
 import {
   AGENT_SECRET_KEYS,
   getAgentConfiguration,
@@ -2798,6 +2799,32 @@ export const appRouter = router({
             ),
           });
         }
+      }),
+  }),
+
+  /**
+   * Registro de códecs y decodificadores del transporte.
+   *
+   * La lectura la hace el panel de configuración; la escritura es
+   * administrativa y queda auditada. El catálogo se declara completo a
+   * propósito: el operador ve todo lo que puede llegar por el webhook, no solo
+   * lo que el artefacto ya sabe procesar.
+   */
+  codecs: router({
+    catalog: roleProcedure.query(async () => codecRegistry(await getPool())),
+    save: adminProcedure
+      .input(
+        z.object({
+          enabled: z.record(z.string().min(1).max(80), z.boolean()),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        await saveCodecSettings(pool, {
+          enabled: input.enabled,
+          actorUserId: ctx.user.id,
+        });
+        return codecRegistry(pool);
       }),
   }),
 

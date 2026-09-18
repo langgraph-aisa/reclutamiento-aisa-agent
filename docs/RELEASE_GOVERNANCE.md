@@ -1,8 +1,22 @@
-# Gobierno de release JARVI RH 2.0.171
+# Gobierno de release JARVI RH 2.0.172
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.171**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.172**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.172
+
+El release **entrega el registro de códecs y decodificadores del transporte**, administrable desde Configuración. El artefacto no es un transporte propio: recibe lo que WhatsApp admite. Por eso el catálogo **separa contenedor de códec** —lo que el webhook declara de lo que hay que decodificar de verdad— y declara, por entrada, **qué hace el artefacto con ella hoy**: `rag`, `transcripcion`, `visor` o `sin-conducto`. Esa última columna es la que impide prometer una capacidad inexistente: el video y los formatos sin tubería se declaran como tales.
+
+**Veinticinco entradas, cuatro familias, entregadas activadas.** Audio —Opus, Vorbis, AAC, AMR-NB/WB, MP3 y Opus en WebM—; video —H.264, H.265/HEVC, MPEG-4 Part 2, H.263 y `.mov`—; imagen —JPEG, PNG y WebP—; y documentos —PDF con sus filtros internos, DOCX, DOC, XLSX, XLS, PPTX, TXT, CSV, ODT y ODS—. La migración `0032_codec_registry.sql` siembra las veinticinco con su interruptor encendido, de modo que la instalación nazca completa.
+
+**El mantenimiento distingue el daño.** Apagar una entrada **con conducto en uso** produce una advertencia que nombra el formato y su consecuencia: mientras permanezca apagada, ese contenido no podrá procesarse y **la pérdida no producirá error**. Apagar una entrada **sin conducto** —el video, una presentación, un OpenDocument— es mantenimiento legítimo y **no advierte**. Esa distinción es la razón de ser del registro: sin ella, el interruptor sería un modo silencioso de romper el expediente.
+
+**Sin desincronización posible.** El estado vive en `integration_settings` con una clave por entrada, y la escritura guarda **todas** las entradas: el catálogo y la configuración no pueden discrepar. La siembra usa `DO NOTHING`, así que reaplicar la migración **nunca revierte un apagado deliberado**. El asiento de auditoría usa el identificador convencional de los ajustes con el detalle en el cuerpo —la misma forma que las cuatro superficies de configuración que ya existían—, de modo que el defecto de tipo corregido en 2.0.169 no puede repetirse aquí.
+
+**Sin afectar el transporte.** El registro **no altera** el webhook, la reconciliación, el despacho, el ciclo de pruebas ni el RAG: declara y audita el mantenimiento. Su única consecuencia operativa es la advertencia, que es información para el operador y no un cambio de conducta del sistema.
+
+**El artefacto único de despliegue reúne las migraciones `0022` a `0032`** y su verificación autocertificada crece a **veintiún controles**: el registro nace activado en la instalación, sin paso manual.
 
 ### Alcance candidato 2.0.171
 
@@ -44,7 +58,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.171 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.172 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -76,7 +90,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.171.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.172.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 
