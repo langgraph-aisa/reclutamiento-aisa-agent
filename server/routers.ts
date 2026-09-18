@@ -4036,7 +4036,14 @@ export const appRouter = router({
             minimumScore: z.number().int().min(0).max(100).optional(),
             evaluatedOnly: z.boolean().optional(),
             sortBy: z
-              .enum(["submitted_at", "name", "score", "status", "position"])
+              .enum([
+                "submitted_at",
+                "name",
+                "score",
+                "status",
+                "position",
+                "human_review",
+              ])
               .default("submitted_at"),
             sortDirection: z.enum(["asc", "desc"]).default("desc"),
           })
@@ -4093,6 +4100,10 @@ export const appRouter = router({
           score: `COALESCE(${scoreExpression},-1)`,
           status: "a.status::text",
           position: "LOWER(p.title)",
+          // Un expediente sin revisión humana no se hunde por su valor nulo:
+          // se ordena por el extremo que le corresponde en cada dirección.
+          human_review:
+            "COALESCE(human_review.human_review_at,'epoch'::timestamptz)",
         } as const;
         const sortBy = input?.sortBy ?? "submitted_at";
         const sortDirection = input?.sortDirection === "asc" ? "ASC" : "DESC";
@@ -4108,6 +4119,8 @@ export const appRouter = router({
              e.evaluation_id,e.evaluation_status,e.latest_reason,e.latest_profile_summary,
              e.ai_payload,e.ai_model,e.evaluation_created_at,
              ${scoreExpression} AS evaluation_score,
+             human_review.human_review_at,human_review.human_review_action,
+             human_review.human_review_actor,
              COALESCE(answer_set.answers,'[]'::jsonb) AS answers,
              COALESCE(submission_set.submissions,'[]'::jsonb) AS submissions
            FROM applications a
@@ -4141,6 +4154,17 @@ export const appRouter = router({
                JOIN form_questions q ON q.id=aa.question_id
               WHERE aa.application_id=a.id
            ) answer_set ON true
+           LEFT JOIN LATERAL (
+             SELECT al.created_at AS human_review_at,al.action AS human_review_action,
+                    u.name AS human_review_actor
+               FROM audit_log al
+               LEFT JOIN users u ON u.id=al.actor_user_id
+              WHERE al.entity_type='application' AND al.entity_id=a.id
+                AND al.actor_user_id IS NOT NULL
+                AND al.action IN ('status_changed','comment_added')
+              ORDER BY al.created_at DESC,al.id DESC
+              LIMIT 1
+           ) human_review ON true
            LEFT JOIN LATERAL (
              SELECT jsonb_agg(
                       jsonb_build_object(

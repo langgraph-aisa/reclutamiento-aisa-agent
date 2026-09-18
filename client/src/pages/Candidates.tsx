@@ -2,6 +2,7 @@ import {
   answersFor,
   formatAnswer,
   formatDate,
+  humanReviewStamp,
   scoreFor,
 } from "@/components/review/CandidateReviewSummary";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import {
   ArrowUp,
   Bot,
   Check,
+  ClipboardCheck,
   Eye,
   FilterX,
   Loader2,
@@ -186,6 +188,36 @@ export default function Candidates() {
     );
   };
 
+  /**
+   * Un filtro configurado abre la matriz por la mejor calificación.
+   *
+   * Sin filtro la hoja es un registro de ingreso y se lee por fecha. Con filtro
+   * es una lista de trabajo, y el evaluador necesita ver primero a quien mejor
+   * puntuó. Por eso aplicar un filtro devuelve el orden a «Evaluación IA»
+   * descendente, y retirar todos los filtros devuelve el registro a su fecha.
+   */
+  const prioritiseByScore = () => {
+    setSortBy("score");
+    setSortDirection("desc");
+  };
+
+  /** Aplica un filtro y devuelve la matriz a su orden de prioridad. */
+  const filtered =
+    <T,>(setter: (value: T) => void) =>
+    (value: T) => {
+      setter(value);
+      prioritiseByScore();
+    };
+
+  const onFilterChange = {
+    search: filtered(setSearchText),
+    status: filtered(setStatus),
+    position: filtered(setPositionId),
+    minimumScore: filtered(setMinimumScore),
+    from: filtered(setFrom),
+    to: filtered(setTo),
+  };
+
   const clearFilters = () => {
     setSearchText("");
     setStatus("all");
@@ -227,12 +259,12 @@ export default function Candidates() {
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               value={searchText}
-              onChange={event => setSearchText(event.target.value)}
+              onChange={event => onFilterChange.search(event.target.value)}
               className="rounded-xl pl-9"
               placeholder="Nombre, teléfono, correo o plaza"
             />
           </div>
-          <Select value={status} onValueChange={setStatus}>
+          <Select value={status} onValueChange={onFilterChange.status}>
             <SelectTrigger className="w-full min-w-0 rounded-xl">
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
@@ -245,7 +277,7 @@ export default function Candidates() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={positionId} onValueChange={setPositionId}>
+          <Select value={positionId} onValueChange={onFilterChange.position}>
             <SelectTrigger className="w-full min-w-0 rounded-xl">
               <SelectValue placeholder="Plaza" />
             </SelectTrigger>
@@ -258,7 +290,7 @@ export default function Candidates() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={minimumScore} onValueChange={setMinimumScore}>
+          <Select value={minimumScore} onValueChange={onFilterChange.minimumScore}>
             <SelectTrigger className="w-full min-w-0 rounded-xl">
               <SelectValue placeholder="Punteo" />
             </SelectTrigger>
@@ -273,14 +305,14 @@ export default function Candidates() {
           <Input
             type="date"
             value={from}
-            onChange={event => setFrom(event.target.value)}
+            onChange={event => onFilterChange.from(event.target.value)}
             className="w-full min-w-0 rounded-xl"
             aria-label="Fecha inicial"
           />
           <Input
             type="date"
             value={to}
-            onChange={event => setTo(event.target.value)}
+            onChange={event => onFilterChange.to(event.target.value)}
             className="w-full min-w-0 rounded-xl"
             aria-label="Fecha final"
           />
@@ -288,7 +320,10 @@ export default function Candidates() {
             type="button"
             variant={evaluatedOnly ? "default" : "outline"}
             className="w-full min-w-0 rounded-xl px-3"
-            onClick={() => setEvaluatedOnly(current => !current)}
+            onClick={() => {
+              setEvaluatedOnly(current => !current);
+              prioritiseByScore();
+            }}
             aria-pressed={evaluatedOnly}
           >
             <Bot className="mr-2 h-4 w-4" /> Con IA
@@ -337,37 +372,12 @@ export default function Candidates() {
               <thead className="sticky top-0 z-30 bg-muted/95 shadow-[0_1px_0_hsl(var(--border))] backdrop-blur">
                 <tr>
                   <SortableHead
-                    label="Candidato / plaza"
-                    column="name"
-                    active={sortBy}
-                    direction={sortDirection}
-                    onSort={changeSort}
-                    className="sticky left-0 z-40 w-[190px] min-w-[190px] max-w-[190px] bg-[#dce8f0] shadow-[8px_0_18px_-16px_rgba(15,23,42,.9)] dark:bg-[#1b2a3a] sm:w-[210px] sm:min-w-[210px] sm:max-w-[210px]"
-                  />
-                  <th className="min-w-[150px] border-r px-3 py-2 text-left font-semibold">
-                    Teléfono
-                  </th>
-                  {questionColumns.map(column => (
-                    <th
-                      key={column.fieldKey}
-                      className="min-w-[170px] max-w-[220px] border-r px-3 py-2 text-left align-bottom sm:min-w-[190px] sm:max-w-[240px]"
-                      title={column.label}
-                    >
-                      <span className="block font-mono text-[11px] font-bold text-primary">
-                        {column.fieldKey}
-                      </span>
-                      <span className="mt-1 block line-clamp-2 font-normal text-muted-foreground">
-                        {column.label}
-                      </span>
-                    </th>
-                  ))}
-                  <SortableHead
                     label="Evaluación IA"
                     column="score"
                     active={sortBy}
                     direction={sortDirection}
                     onSort={changeSort}
-                    className="min-w-[140px]"
+                    className="sticky left-0 z-40 w-[210px] min-w-[210px] max-w-[210px] bg-[#dce8f0] shadow-[8px_0_18px_-16px_rgba(15,23,42,.9)] dark:bg-[#1b2a3a] sm:w-[230px] sm:min-w-[230px] sm:max-w-[230px]"
                   />
                   <th className="min-w-[150px] border-r px-3 py-2 text-left font-semibold">
                     Motivo
@@ -391,6 +401,31 @@ export default function Candidates() {
                     onSort={changeSort}
                     className="min-w-[145px]"
                   />
+                  <SortableHead
+                    label="Candidato / plaza"
+                    column="name"
+                    active={sortBy}
+                    direction={sortDirection}
+                    onSort={changeSort}
+                    className="w-[190px] min-w-[190px] max-w-[190px] sm:w-[210px] sm:min-w-[210px] sm:max-w-[210px]"
+                  />
+                  <th className="min-w-[150px] border-r px-3 py-2 text-left font-semibold">
+                    Teléfono
+                  </th>
+                  {questionColumns.map(column => (
+                    <th
+                      key={column.fieldKey}
+                      className="min-w-[170px] max-w-[220px] border-r px-3 py-2 text-left align-bottom sm:min-w-[190px] sm:max-w-[240px]"
+                      title={column.label}
+                    >
+                      <span className="block font-mono text-[11px] font-bold text-primary">
+                        {column.fieldKey}
+                      </span>
+                      <span className="mt-1 block line-clamp-2 font-normal text-muted-foreground">
+                        {column.label}
+                      </span>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -402,6 +437,7 @@ export default function Candidates() {
                     ])
                   );
                   const isSelected = candidate.id === selected?.id;
+                  const stamp = humanReviewStamp(candidate.human_review_at);
                   return (
                     <tr
                       key={candidate.id}
@@ -410,7 +446,57 @@ export default function Candidates() {
                       className={`group cursor-pointer ${isSelected ? "bg-sky-50 dark:bg-[#162333]" : "bg-card hover:bg-muted/45"}`}
                     >
                       <td
-                        className={`sticky left-0 z-20 w-[190px] min-w-[190px] max-w-[190px] border-b border-r px-3 py-2 align-top shadow-[8px_0_18px_-16px_rgba(15,23,42,.9)] sm:w-[210px] sm:min-w-[210px] sm:max-w-[210px] ${isSelected ? "bg-[#c8dfec] dark:bg-[#24384d]" : "bg-[#eaf2f7] group-hover:bg-[#dce8f0] dark:bg-[#162333] dark:group-hover:bg-[#1b2a3a]"}`}
+                        className={`sticky left-0 z-20 w-[210px] min-w-[210px] max-w-[210px] border-b border-r px-3 py-2 align-top shadow-[8px_0_18px_-16px_rgba(15,23,42,.9)] sm:w-[230px] sm:min-w-[230px] sm:max-w-[230px] ${isSelected ? "bg-[#c8dfec] dark:bg-[#24384d]" : "bg-[#eaf2f7] group-hover:bg-[#dce8f0] dark:bg-[#162333] dark:group-hover:bg-[#1b2a3a]"}`}
+                      >
+                        <Link
+                          href={`/admin/human-review?application=${candidate.id}`}
+                          onClick={event => event.stopPropagation()}
+                          className="flex w-full items-center justify-center rounded-xl border bg-background px-3 py-2 font-bold text-primary hover:border-sky-300 hover:bg-sky-50 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
+                          aria-label={`Abrir la ficha de ${candidate.full_name ?? "la persona"} en Revisión Humana`}
+                          title="Abrir la ficha completa en Revisión Humana"
+                        >
+                          <Bot className="mr-2 h-4 w-4" />
+                          {scoreFor(candidate) ?? "—"}
+                        </Link>
+                        {stamp ? (
+                          <Link
+                            href={`/admin/human-review?application=${candidate.id}`}
+                            onClick={event => event.stopPropagation()}
+                            className="mt-2 flex w-full items-center justify-center gap-1 rounded-full border border-rose-400 bg-rose-600 px-2 py-1 text-center text-[10px] font-bold leading-tight text-white hover:bg-rose-700 focus-visible:ring-2 focus-visible:ring-ring dark:border-rose-400 dark:bg-rose-700 dark:hover:bg-rose-600"
+                            aria-label={`Revisión humana ya guardada el día ${stamp.date} a las ${stamp.time} por ${candidate.human_review_actor ?? "una persona"}`}
+                            title={`Revisión humana guardada por ${candidate.human_review_actor ?? "una persona"}`}
+                          >
+                            <ClipboardCheck
+                              className="h-3 w-3 shrink-0"
+                              aria-hidden="true"
+                            />
+                            <span className="truncate">
+                              Revisión Humana ({stamp.time}) {stamp.date}
+                            </span>
+                          </Link>
+                        ) : null}
+                      </td>
+                      <td className="border-b border-r px-3 py-2 text-center align-top">
+                        <Link
+                          href={`/admin/human-review?application=${candidate.id}`}
+                          onClick={event => event.stopPropagation()}
+                          className="inline-flex items-center rounded-xl border bg-background px-3 py-2 font-semibold text-primary hover:border-sky-300 hover:bg-sky-50 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
+                          title="Abrir la ficha completa en Revisión Humana"
+                        >
+                          <MessageSquareText className="mr-2 h-4 w-4" /> Ver
+                        </Link>
+                      </td>
+                      <RowReviewControls
+                        key={`${candidate.id}:${candidate.status}`}
+                        candidate={candidate}
+                        pending={updateStatus.isPending}
+                        onSave={saveReview}
+                      />
+                      <td className="border-b border-r px-3 py-2 align-top text-muted-foreground">
+                        {formatDate(candidate.submitted_at)}
+                      </td>
+                      <td
+                        className={`w-[190px] min-w-[190px] max-w-[190px] border-b border-r px-3 py-2 align-top sm:w-[210px] sm:min-w-[210px] sm:max-w-[210px] ${isSelected ? "bg-[#c8dfec] dark:bg-[#24384d]" : "bg-[#eaf2f7] group-hover:bg-[#dce8f0] dark:bg-[#162333] dark:group-hover:bg-[#1b2a3a]"}`}
                       >
                         <div className="flex min-w-0 items-start gap-2">
                           <button
@@ -487,37 +573,6 @@ export default function Candidates() {
                           </td>
                         );
                       })}
-                      <td className="border-b border-r px-3 py-2 text-center align-top">
-                        <Link
-                          href={`/admin/human-review?application=${candidate.id}`}
-                          onClick={event => event.stopPropagation()}
-                          className="inline-flex min-w-20 items-center justify-center rounded-xl border bg-background px-3 py-2 font-bold text-primary hover:border-sky-300 hover:bg-sky-50 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
-                          aria-label={`Abrir la ficha de ${candidate.full_name ?? "la persona"} en Revisión Humana`}
-                          title="Abrir la ficha completa en Revisión Humana"
-                        >
-                          <Bot className="mr-2 h-4 w-4" />
-                          {scoreFor(candidate) ?? "—"}
-                        </Link>
-                      </td>
-                      <td className="border-b border-r px-3 py-2 text-center align-top">
-                        <Link
-                          href={`/admin/human-review?application=${candidate.id}`}
-                          onClick={event => event.stopPropagation()}
-                          className="inline-flex items-center rounded-xl border bg-background px-3 py-2 font-semibold text-primary hover:border-sky-300 hover:bg-sky-50 dark:hover:border-neutral-500 dark:hover:bg-neutral-800"
-                          title="Abrir la ficha completa en Revisión Humana"
-                        >
-                          <MessageSquareText className="mr-2 h-4 w-4" /> Ver
-                        </Link>
-                      </td>
-                      <RowReviewControls
-                        key={`${candidate.id}:${candidate.status}`}
-                        candidate={candidate}
-                        pending={updateStatus.isPending}
-                        onSave={saveReview}
-                      />
-                      <td className="border-b px-3 py-2 align-top text-muted-foreground">
-                        {formatDate(candidate.submitted_at)}
-                      </td>
                     </tr>
                   );
                 })}

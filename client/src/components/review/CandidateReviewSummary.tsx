@@ -255,6 +255,44 @@ export function formatDate(value: string | Date | null | undefined) {
   }).format(date);
 }
 
+/**
+ * Sello de la última revisión guardada por una persona.
+ *
+ * Su fuente es el asiento de auditoría de la revisión —`status_changed` o
+ * `comment_added` con actor identificado—, no la fecha del último cambio de la
+ * postulación. Esa distinción importa: una escritura del agente o del
+ * sincronizador no es una revisión humana, y presentarla como tal haría creer
+ * que un expediente fue evaluado por una persona cuando nadie lo abrió.
+ *
+ * La zona horaria es la de la institución: la hora visible debe ser la del
+ * turno que revisó, no la del navegador que consulta.
+ */
+export function humanReviewStamp(value: string | Date | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const options = { timeZone: "America/Guatemala" } as const;
+  const parts = new Intl.DateTimeFormat("es-GT", {
+    ...options,
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).formatToParts(date);
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find(part => part.type === type)?.value ?? "";
+  const month = read("month").replace(/\./g, "").slice(0, 3).toUpperCase();
+  const day = read("day").padStart(2, "0");
+  const year = read("year");
+  const time = new Intl.DateTimeFormat("es-GT", {
+    ...options,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+  if (!month || !day || !year) return null;
+  return { time, date: `${day} ${month} ${year}`, iso: date.toISOString() };
+}
+
 /** Ubicación declarada: zona, municipio, departamento y país. */
 export function declaredLocationLabel(candidate: any) {
   const parts = [

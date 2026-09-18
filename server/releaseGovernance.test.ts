@@ -96,8 +96,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.182");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.182");
+    expect(APP_VERSION).toBe("2.0.183");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.183");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -1228,7 +1228,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.182");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.183");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1242,7 +1242,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.182");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.183");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1665,7 +1665,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.182");
+    expect(governance).toContain("Alcance candidato 2.0.183");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -1904,7 +1904,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.182");
+    expect(governance).toContain("Alcance candidato 2.0.183");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });
@@ -1991,5 +1991,63 @@ describe("black-box release contract", () => {
     expect(scripts.scripts["auditar:conducto"]).toContain(
       "scripts/auditar-conducto-apichat.sh"
     );
+  });
+
+  it("abre la matriz por la evaluación y sella la revisión humana", () => {
+    const matrix = fs.readFileSync(
+      path.resolve("client/src/pages/Candidates.tsx"),
+      "utf8"
+    );
+    const summary = fs.readFileSync(
+      path.resolve("client/src/components/review/CandidateReviewSummary.tsx"),
+      "utf8"
+    );
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+
+    // El orden de lectura declarado: evaluación, motivo, criterio, estado e
+    // ingreso primero; la identidad y las respuestas después. Es un contrato
+    // verificable porque el reordenamiento es reversible por descuido.
+    const head = matrix.slice(
+      matrix.indexOf("<thead"),
+      matrix.indexOf("</thead>")
+    );
+    const order = [
+      "Evaluación IA",
+      "Motivo",
+      "Comentario humano",
+      "Estado / acción",
+      "Ingreso",
+      "Candidato / plaza",
+      "Teléfono",
+    ];
+    const positions = order.map(label => head.indexOf(label));
+    expect(positions.every(index => index >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    // La columna fija acompaña a la nueva primera columna: dejarla en la
+    // identidad superpondría cinco columnas al desplazarse en horizontal.
+    expect(head).toContain('className="sticky left-0 z-40');
+    expect(matrix).not.toContain("className={`sticky left-0 z-20 w-[190px]");
+
+    // El sello es un botón rosa con la hora y la fecha de la última revisión
+    // guardada por una persona, en la zona horaria de la institución.
+    expect(matrix).toContain("Revisión Humana ({stamp.time}) {stamp.date}");
+    expect(matrix).toContain("bg-rose-600");
+    expect(matrix).toContain("humanReviewStamp(candidate.human_review_at)");
+    expect(summary).toContain("export function humanReviewStamp");
+    expect(summary).toContain("America/Guatemala");
+
+    // Un filtro configurado devuelve la matriz a la mejor calificación.
+    expect(matrix).toContain("prioritiseByScore");
+    expect(matrix).toContain('setSortBy("score")');
+    expect(matrix).toContain("onFilterChange");
+
+    // El sello se deriva del asiento de la revisión humana, no de cualquier
+    // escritura sobre la postulación: una acción del agente o del sincronizador
+    // no acredita que una persona haya revisado el expediente.
+    expect(routers).toContain("human_review.human_review_at");
+    expect(routers).toContain("human_review_actor");
+    expect(routers).toContain("al.actor_user_id IS NOT NULL");
+    expect(routers).toContain("'status_changed','comment_added'");
+    expect(routers).toContain("human_review:");
   });
 });

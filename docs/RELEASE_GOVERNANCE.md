@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.182
+# Gobierno de release JARVI RH 2.0.183
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.182**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.183**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.183
+El release **reordena la matriz de Candidatos y hace visible la revisión humana ya guardada**. Dos capacidades y una precisión, y ninguna toca el esquema.
+
+**La hoja abre por la evaluación.** El orden de lectura pasa a ser Evaluación IA, Motivo, Comentario humano, Estado / acción e Ingreso, y la identidad —persona, plaza, teléfono— con las respuestas queda después. La razón es la del puesto de trabajo: el evaluador no recorre un registro de ingreso, decide sobre un dictamen. La columna fija acompaña a la nueva primera columna, porque dejarla en la identidad superpondría cinco columnas al desplazarse en horizontal: es el defecto que el reordenamiento podía introducir de forma silenciosa.
+
+**Un filtro configurado ordena por la mejor calificación.** Sin filtro la hoja es un registro y se lee por fecha de ingreso. Con filtro es una lista de trabajo, de modo que aplicar cualquiera de los seis filtros devuelve el orden a «Evaluación IA» descendente y el evaluador ve primero a quien mejor puntuó. Retirar todos los filtros devuelve el registro a su fecha, porque entonces vuelve a ser un registro.
+
+**El sello de la revisión humana.** Cuando una persona guarda una revisión, la matriz muestra un botón rosa con la hora y la fecha de ese guardado —«Revisión Humana (16:45) 18 SEP 2026»— para que el evaluador distinga de un vistazo lo ya revisado de lo pendiente. Su fuente es el asiento de auditoría de la revisión: actor identificado y acción `status_changed` o `comment_added`. Esa precisión es el punto entero de la capacidad. Una escritura del agente evaluador, del sincronizador de mensajería o de la bandeja no acredita que una persona haya abierto el expediente, y presentarla como revisión humana haría creer lo contrario. La hora se presenta en la zona horaria de la institución, no en la del navegador que consulta.
+
+**Sin migración.** La matriz ya recibía el punteo y el estado, y el sello se deriva del asiento que la revisión humana ya escribía en `audit_log`. El orden por la fecha del sello queda disponible en el contrato de la lectura sin añadir esquema, y los expedientes no revisados se ordenan al final en lugar de hundirse por su valor nulo.
 
 ### Alcance candidato 2.0.182
 El release **cierra la continuidad entre recibir el adjunto, mostrarlo y usarlo como evidencia**. Repara los cuatro residuos que la entrega anterior dejó fuera de su alcance, y ninguno era un defecto de lógica: los tres primeros pertenecen al ciclo de vida de los trabajadores y el cuarto a la provisión del despliegue, que es exactamente donde una suite verde no alcanza a mirar.
@@ -206,7 +217,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.182 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.183 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -238,7 +249,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.182.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.183.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 
