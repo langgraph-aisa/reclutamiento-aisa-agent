@@ -167,10 +167,14 @@ describe("informe consolidado del canal", () => {
   it("es solo lectura y no ejecuta ninguna escritura", async () => {
     const { pool, calls } = fakePool([]);
     await apiChatChannelReport(pool);
-    expect(calls).toHaveLength(4);
+    // Cuatro consultas del canal más la lectura de la traza del conducto.
+    expect(calls).toHaveLength(5);
     for (const call of calls) {
       expect(call.text).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
     }
+    expect(calls.some(call => call.text.includes("conversation_transport_traces"))).toBe(
+      true
+    );
   });
 
   it("consolida recepciones, pérdidas y fallos en una sola lectura", async () => {
@@ -300,6 +304,9 @@ describe("informe consolidado del canal", () => {
     const { pool, calls } = fakePool([]);
     const report = await apiChatChannelReport(pool, { windowHours: 24 });
     expect(report.windowHours).toBe(24);
-    expect(calls[0].params[0]).toBe("24");
+    const recepcion = calls.find(call =>
+      call.text.includes("FROM conversation_messages")
+    );
+    expect(recepcion?.params[0]).toBe("24");
   });
 });

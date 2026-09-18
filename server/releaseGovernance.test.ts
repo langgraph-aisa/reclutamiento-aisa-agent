@@ -90,8 +90,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.178");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.178");
+    expect(APP_VERSION).toBe("2.0.179");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.179");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -537,9 +537,9 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(131);
+    expect(audit.files).toHaveLength(132);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(131);
+    expect(publicCopyAudit.files).toHaveLength(132);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -1212,7 +1212,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.178");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.179");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1226,7 +1226,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.178");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.179");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1323,6 +1323,24 @@ describe("black-box release contract", () => {
     expect(routing).toContain("conversationPanelState");
     expect(routing).toContain("runConversationTurn");
     expect(review).toContain("ReviewEvidencePanels");
+    // El orden de lectura de la ficha es un contrato: encabezado de identidad,
+    // feed de WhatsApp, detalle de la postulación con su matriz, agente del
+    // reclutador y RAG Personal. Cada superficie ocupa su lugar y no un bloque
+    // común, porque cada una se lee en un momento distinto de la revisión.
+    const readingOrder = [
+      "<CandidateReviewSummary",
+      "<CandidateConversationFeed",
+      "<CandidateDetail",
+      "<RecruiterAgentPanel",
+      "<CandidatePersonalKnowledgePanel",
+    ].map(marker => review.indexOf(marker));
+    expect(readingOrder[0]).toBeGreaterThan(-1);
+    for (const [index, position] of readingOrder.entries()) {
+      expect(position).toBeGreaterThan(-1);
+      if (index > 0) {
+        expect(position).toBeGreaterThan(readingOrder[index - 1]);
+      }
+    }
     expect(review).toContain("<CandidateReviewSummary");
     expect(identityHeader).toContain("salaryLabel");
     expect(identityHeader).toContain("declaredLocationLabel");
@@ -1613,7 +1631,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.178");
+    expect(governance).toContain("Alcance candidato 2.0.179");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -1756,6 +1774,13 @@ describe("black-box release contract", () => {
     expect(deploy).toContain(
       "Origen: drizzle/migrations/0030_assessment_item_attempts.sql"
     );
+    // La traza del conducto viaja con el resto: es la que convierte «sin
+    // evidencia» en un diagnóstico del proveedor.
+    expect(deploy).toContain(
+      "Origen: drizzle/migrations/0035_transport_traces.sql"
+    );
+    expect(deploy).toContain("CREATE TABLE IF NOT EXISTS conversation_transport_traces");
+    expect(deploy).toContain("trim_conversation_transport_traces");
     expect(deploy).toContain("Migracion 0030 - identidad unica del intento");
     expect(deploy).toContain("CREATE TABLE IF NOT EXISTS conversation_outbox");
     expect(deploy).toContain("INSERT INTO integration_settings");
@@ -1830,8 +1855,72 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.178");
+    expect(governance).toContain("Alcance candidato 2.0.179");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
+  });
+
+  it("traza la forma del cuerpo recibido sin conservar contenido del candidato", () => {
+    const trace = fs.readFileSync(
+      path.resolve("server/transportTrace.ts"),
+      "utf8"
+    );
+    const webhook = fs.readFileSync(
+      path.resolve("server/apiChatWebhook.ts"),
+      "utf8"
+    );
+    const sync = fs.readFileSync(path.resolve("server/inboxSync.ts"), "utf8");
+    const audit = fs.readFileSync(
+      path.resolve("server/apiChatAudit.ts"),
+      "utf8"
+    );
+    const migration = fs.readFileSync(
+      path.resolve("drizzle/migrations/0035_transport_traces.sql"),
+      "utf8"
+    );
+
+    // La traza registra la carga y no solo el resultado de interpretarla: es la
+    // distinción que separa una conjetura de una prueba.
+    expect(webhook).toContain("recordTransportTrace");
+    expect(webhook).toContain('origin: "webhook"');
+    // El sondeo deja de descartar en silencio lo que no sabe transportar.
+    expect(sync).toContain("recordTransportTrace");
+    expect(sync).toContain('origin: "sondeo"');
+    expect(sync).toContain("no-procesado:");
+
+    // Privacidad: el contenido se sustituye por peso y huella, el teléfono se
+    // enmascara y el cuerpo se acota.
+    expect(trace).toContain("TRANSPORT_TRACE_LIMIT_BYTES = 65_536");
+    expect(trace).toContain("sha256");
+    expect(trace).toContain("maskDigits");
+    expect(trace).toContain("«contenido");
+    // La lectura es de solo lectura y degrada cuando la tabla no existe.
+    const lectura = trace.slice(
+      trace.indexOf("export async function loadTransportTraces")
+    );
+    expect(lectura).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/);
+    expect(lectura).toContain(".catch(");
+
+    // El veredicto distingue el proveedor que no llama del que llama sin
+    // adjunto: son dos causas distintas y exigen acciones distintas.
+    expect(trace).toContain("sin-trazas");
+    expect(trace).toContain("sin-adjuntos");
+    expect(trace).toContain("con-adjuntos");
+
+    // La migración declara retención y se autocertifica.
+    expect(migration).toContain("trim_conversation_transport_traces");
+    expect(migration).toContain("make_interval");
+    expect(migration).toContain("GATE 0035 OK");
+
+    // El panel expone la forma capturada y el instrumento queda publicado.
+    expect(audit).toContain("loadTransportTraces");
+    expect(audit).toContain("summarizeTransportTrace");
+    expect(audit).toContain("transport:");
+    const scripts = JSON.parse(
+      fs.readFileSync(path.resolve("package.json"), "utf8")
+    ) as { scripts: Record<string, string> };
+    expect(scripts.scripts["auditar:conducto"]).toContain(
+      "scripts/auditar-conducto-apichat.sh"
+    );
   });
 });

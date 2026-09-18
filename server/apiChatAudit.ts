@@ -1,4 +1,9 @@
 import type { Pool } from "pg";
+import {
+  loadTransportTraces,
+  summarizeTransportTrace,
+  type TransportTrace,
+} from "./transportTrace";
 
 /**
  * Auditoría del canal de ApiChat.
@@ -155,6 +160,16 @@ export type ApiChatChannelReport = {
     lastError: string | null;
     at: string | Date;
   }>;
+  /**
+   * Traza del conducto: la forma del cuerpo que el proveedor envía. Es la pieza
+   * que distingue «el proveedor no lo mandó» de «lo mandó y lo descartamos»,
+   * distinción que el resto del informe no puede hacer porque el receptor solo
+   * asentaba el resultado de interpretar la carga, nunca la carga.
+   */
+  transport: {
+    summary: ReturnType<typeof summarizeTransportTrace>;
+    traces: TransportTrace[];
+  };
   log: ApiChatAuditEntry[];
 };
 
@@ -169,6 +184,9 @@ export async function apiChatChannelReport(
 ): Promise<ApiChatChannelReport> {
   const windowHours = options.windowHours ?? APICHAT_AUDIT_WINDOW_HOURS;
   const detail = APICHAT_AUDIT_DETAIL_LIMIT;
+  const traces = await loadTransportTraces(pool, {
+    limit: APICHAT_AUDIT_DETAIL_LIMIT,
+  });
   const [received, losses, failures, stuck] = await Promise.all([
     pool
       .query<{ message_type: string; total: number }>(
@@ -226,8 +244,7 @@ export async function apiChatChannelReport(
   const inboundReceived = received.rows.reduce(
     (total, row) => total + Number(row.total ?? 0),
     0
-  );
-  const inboundLosses = losses.rows.reduce(
+  );  const inboundLosses = losses.rows.reduce(
     (total, row) => total + Number(row.total ?? 0),
     0
   );
@@ -298,6 +315,10 @@ export async function apiChatChannelReport(
       lastAt: row.last_at,
     })),
     failures: failureRows,
+    transport: {
+      summary: summarizeTransportTrace(traces),
+      traces,
+    },
     log,
   };
 }

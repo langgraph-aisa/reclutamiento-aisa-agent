@@ -151,6 +151,15 @@ WITH controles AS (
          (SELECT count(*)::text FROM information_schema.tables
            WHERE table_schema = 'public'
              AND table_name = 'recruiter_agent_messages')
+  UNION ALL
+  SELECT 26, 'Migracion 0035 - traza del conducto de transporte', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'conversation_transport_traces')
+  UNION ALL
+  SELECT 27, 'Migracion 0035 - retencion declarada de la traza', '1',
+         (SELECT count(*)::text FROM pg_proc
+           WHERE proname = 'trim_conversation_transport_traces')
 )
 SELECT orden, control, esperado, obtenido,
        CASE WHEN orden = 9 THEN 'INFORMATIVO'

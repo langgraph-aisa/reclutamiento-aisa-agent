@@ -6,7 +6,10 @@ import { RecruiterAgentPanel } from "@/components/review/RecruiterAgentPanel";
 import { CandidateCvAnalysisPanel } from "@/components/review/CandidateCvAnalysisPanel";
 import { CandidateViewerPanel } from "@/components/review/CandidateViewerPanel";
 import { CollapsibleSection } from "@/components/review/CollapsibleSection";
-import { ReviewEvidencePanels } from "@/components/review/ReviewEvidencePanels";
+import {
+  CandidateConversationFeed,
+  CandidatePersonalKnowledgePanel,
+} from "@/components/review/ReviewEvidencePanels";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { useEffect } from "react";
@@ -127,18 +130,28 @@ export default function HumanReview() {
         <CandidateReviewSummary candidate={workspaceRow} />
       ) : null}
 
-      {/* El agente del reclutador aparece justo debajo del encabezado del
-          candidato: es el auxiliar que analiza **este** expediente y no otro. */}
-      <RecruiterAgentPanel applicationId={applicationId} />
+      {/* El feed de WhatsApp va inmediatamente después del encabezado de
+          identidad: es el contexto de la persona antes de leer su matriz. */}
+      <CandidateConversationFeed
+        applicationId={applicationId}
+        candidateName={detail.data.application.full_name ?? null}
+      />
 
+      {/* El detalle de la postulación conserva la matriz de evaluación arriba y
+          los cinco bloques de lectura plegados debajo. */}
       <CandidateDetail
         data={detail.data}
         onClose={() => setLocation("/admin/candidates")}
       />
 
-      <ReviewEvidencePanels
+      {/* El agente se lee después del detalle: analiza **este** expediente y no
+          otro, y su respuesta se apoya en lo que se acaba de leer. */}
+      <RecruiterAgentPanel applicationId={applicationId} />
+
+      {/* El RAG Personal cierra la hoja: es el conocimiento que la conversación
+          y el agente alimentan, y el que sostiene ambos. */}
+      <CandidatePersonalKnowledgePanel
         applicationId={applicationId}
-        positionId={null}
         candidateName={detail.data.application.full_name ?? null}
       />
     </div>

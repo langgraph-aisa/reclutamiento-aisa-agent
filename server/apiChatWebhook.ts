@@ -10,6 +10,10 @@ import {
 import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
 import { decodeRemoteAttachment } from "./base64Transport";
 import { registerCandidateInboundDocument } from "./candidateKnowledge";
+import {
+  recordTransportTrace,
+  trimTransportTraces,
+} from "./transportTrace";
 
 /**
  * Receptor del webhook de ApiChat (canal push en tiempo real).
@@ -420,18 +424,40 @@ export function registerApiChatWebhook(
   app.post(
     "/api/apichat/webhook",
     async (req: Request, res: Response) => {
+      let outcome: { ok: true; skipped?: string; registered?: boolean } = {
+        ok: true,
+        skipped: "error-interno",
+      };
+      let pool: Pool | null = null;
       try {
-        const pool = await poolProvider();
-        const outcome = pool
+        pool = await poolProvider();
+        outcome = pool
           ? await processApiChatWebhook(pool, req.body)
           : { ok: true as const, skipped: "base-no-disponible" };
-        res.status(200).json(outcome);
       } catch (error) {
         console.warn(
           `[ApiChatWebhook] ${error instanceof Error ? error.message : "error desconocido"}`
         );
-        res.status(200).json({ ok: true, skipped: "error-interno" });
       }
+      if (pool) {
+        // La traza se asienta con la **forma** del cuerpo recibido, no con el
+        // resultado de interpretarlo: es el único lugar donde la carga útil del
+        // proveedor queda registrada. Sin ella, un adjunto enviado con una
+        // forma no prevista es indistinguible de un adjunto nunca enviado, y
+        // esa indistingubilidad es la que dejó el transporte sin diagnosticar.
+        // Se traza también el descarte: los ocho desenlaces del receptor quedan
+        // visibles, incluidos los siete que antes no dejaban rastro.
+        const parsed = normalizeApiChatWebhookPayload(req.body);
+        await recordTransportTrace(pool, {
+          origin: "webhook",
+          outcome: outcome.registered ? "registrado" : (outcome.skipped ?? "sin-veredicto"),
+          providerType: parsed?.type ?? null,
+          eventId: parsed?.id ?? null,
+          body: req.body,
+        });
+        await trimTransportTraces(pool);
+      }
+      res.status(200).json(outcome);
     }
   );
 }

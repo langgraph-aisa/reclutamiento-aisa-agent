@@ -12,6 +12,7 @@ import {
 } from "./inbox";
 import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
 import { decodeRemoteAttachment } from "./base64Transport";
+import { recordTransportTrace } from "./transportTrace";
 import { registerCandidateInboundDocument } from "./candidateKnowledge";
 
 export const INBOX_SYNC_INTERVAL_MS = 1_000;
@@ -507,6 +508,17 @@ export async function syncInboxOnce(
         if (outcome.inserted) inserted += 1;
       } else {
         skipped += 1;
+        // El feed entrega tipos que este puente no sabe transportar —imagen,
+        // audio, video, documento— y hasta ahora los descartaba **sin asiento**:
+        // la pérdida era invisible porque el mensaje entró por el camino que no
+        // lo entiende. La traza deja la forma del registro y su tipo declarado.
+        await recordTransportTrace(pool, {
+          origin: "sondeo",
+          outcome: `no-procesado:${String(message?.type ?? "sin-tipo").slice(0, 32)}`,
+          providerType: String(message?.type ?? "") || null,
+          eventId: id,
+          body: record,
+        });
       }
     } catch (error) {
       skipped += 1;

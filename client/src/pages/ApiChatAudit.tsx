@@ -187,6 +187,58 @@ export default function ApiChatAudit() {
 
           <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
             <h2 className="text-sm font-semibold text-primary">
+              TRAZA DEL CONDUCTO · FORMA DEL CUERPO RECIBIDO
+            </h2>
+            <p className="mt-1 text-xs leading-5">
+              {report.data?.transport.summary.verdict}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Registra la forma de cada petición —claves, tipos y tamaños— y un
+              cuerpo redactado. No conserva contenido del candidato: los campos
+              de archivo se sustituyen por su peso y su huella.
+            </p>
+            {(report.data?.transport.traces ?? []).length ? (
+              <ul className="mt-3 space-y-2">
+                {(report.data?.transport.traces ?? []).map((trace, index) => (
+                  <li
+                    key={`${trace.origin}-${trace.eventId ?? index}-${index}`}
+                    className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-xs"
+                  >
+                    <p className="font-mono text-[10px] text-muted-foreground">
+                      {formatMoment(trace.at)} · {trace.origin} ·{" "}
+                      {trace.outcome}
+                      {trace.providerType ? ` · tipo ${trace.providerType}` : ""}
+                      {trace.eventId ? ` · id ${trace.eventId}` : ""} ·{" "}
+                      {trace.payloadBytes} bytes
+                    </p>
+                    <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                      {Object.entries(trace.shape ?? {}).map(([key, field]) => (
+                        <div key={key} className="flex gap-1">
+                          <dt className="font-mono text-[10px] text-primary">
+                            {key}
+                          </dt>
+                          <dd className="text-[10px] text-muted-foreground">
+                            {field.masked ??
+                              field.value ??
+                              `${field.kind}${field.bytes ? ` · ${field.bytes} car` : ""}`}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Sin trazas todavía. Envíe un archivo real desde un teléfono
+                autorizado: la forma capturada dirá en qué campo viaja el
+                contenido y con qué desenlace entró.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-primary">
               LOG DE ERRORES DEL MECANISMO DE COMUNICACIÓN
             </h2>
             <p className="mt-1 text-[11px] text-muted-foreground">

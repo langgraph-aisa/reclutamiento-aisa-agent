@@ -1,8 +1,29 @@
-# Gobierno de release JARVI RH 2.0.178
+# Gobierno de release JARVI RH 2.0.179
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.178**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.179**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.179
+El release **fija el orden de lectura de la ficha de Revisión Humana**: encabezado de identidad, **feed de WhatsApp** de la persona, detalle de la postulación con la matriz de evaluación, **agente del reclutador** y **RAG Personal** al cierre.
+
+**Cada superficie ocupa su lugar y no un bloque común.** Hasta 2.0.178 la conversación y el RAG Personal compartían una misma sección de dos columnas al pie de la hoja. Ahora el feed de WhatsApp se lee inmediatamente después del encabezado, porque es el contexto de la persona antes de juzgar su matriz, y el RAG Personal cierra la hoja, porque es el conocimiento que la conversación y el agente alimentan.
+
+**Una sola lectura, dos superficies.** El módulo de evidencia conserva una única consulta del estado conversacional y la ofrece a las dos superficies con la misma clave: React Query resuelve una sola petición y ambas se suscriben a ella, de modo que separarlas no duplica el sondeo ni el trabajo del servidor. Esta propiedad es observable —una sola petición para las dos superficies— y por eso se declara.
+
+**El orden es un contrato verificable.** La puerta de release audita la secuencia de las cinco superficies en la hoja; reordenarlas sin actualizar la capacidad declarada detiene el release.
+
+**Sin cambio de conducta en lo ya entregado.** La grilla de lectura de 2.0.178 conserva sus cinco barras plegadas y la auditoría del canal de ApiChat de 2.0.177 queda intacta.
+
+**La traza del conducto cierra el punto ciego del diagnóstico.** El receptor declaraba ocho desenlaces y solo dos dejaban rastro —la pérdida de contenido y el expediente no registrado—, de modo que un adjunto enviado con una forma no prevista era **indistinguible** de un adjunto nunca enviado. El informe del canal podía decir «sin evidencia», pero no «el proveedor envió esto y lo descartamos aquí», y esa confusión entre ausencia de pérdida y ausencia de dato es la que dejó el transporte de archivos sin diagnosticar.
+
+**La traza registra la carga, no el resultado de interpretarla.** Por cada petición que entra al conducto se asienta la **forma del cuerpo recibido** —claves, tipos JSON y tamaños— con su desenlace literal, incluidos los siete descartes que antes no dejaban rastro: forma no reconocida, sin conversación, saliente ya registrado, texto inválido, enlace inválido, tipo sin tubería y base no disponible. La distinción entre el hecho y su interpretación es exactamente la que convierte una conjetura en una prueba.
+
+**Privacidad de la traza.** No se conserva contenido del candidato: todo valor que parezca contenido —sobre `data:`, base64 con firma real o URL de archivo— se sustituye por su peso, su huella y su tipo declarado, los identificadores telefónicos se enmascaran y el cuerpo se acota a 64 KiB. La traza sirve para saber **qué campos llegaron y de qué tamaño**, que es lo que faltaba, y no para archivar documentos.
+
+**El sondeo del historial deja de descartar en silencio.** El puente de sondeo solo reconocía `file` como adjunto, mientras el webhook reconocía siete tipos. Un tipo que un camino admite y el otro descarta produce una pérdida invisible, porque el mensaje entra por el camino que no lo entiende y el otro camino nunca lo ve. A partir de esta entrega, todo registro no procesado queda asentado con su tipo declarado.
+
+**Migración `0035` con retención declarada.** La tabla de trazas conserva catorce días y su recorte corre a lo sumo una vez por hora: la traza es un instrumento de diagnóstico y no un archivo histórico. El artefacto único de despliegue crece a las migraciones `0022` a `0035` con veintisiete controles autocertificados.
 
 ### Alcance candidato 2.0.178
 
@@ -144,7 +165,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.178 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.179 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -176,7 +197,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.178.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.179.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 
