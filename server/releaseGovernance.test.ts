@@ -2012,21 +2012,23 @@ describe("black-box release contract", () => {
       matrix.indexOf("</thead>")
     );
     const order = [
+      "Candidato / plaza",
       "Evaluación IA",
       "Motivo",
       "Comentario humano",
       "Estado / acción",
       "Ingreso",
-      "Candidato / plaza",
       "Teléfono",
     ];
     const positions = order.map(label => head.indexOf(label));
     expect(positions.every(index => index >= 0)).toBe(true);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
-    // La columna fija acompaña a la nueva primera columna: dejarla en la
-    // identidad superpondría cinco columnas al desplazarse en horizontal.
+    // La columna fija es la identidad y va primero: el evaluador no pierde de
+    // vista a quién pertenece la fila mientras se desplaza en horizontal, y la
+    // evaluación queda inmediatamente después.
     expect(head).toContain('className="sticky left-0 z-40');
-    expect(matrix).not.toContain("className={`sticky left-0 z-20 w-[190px]");
+    expect(matrix).toContain("sticky left-0 z-20 w-[190px]");
+    expect(matrix).not.toContain("sticky left-0 z-20 w-[210px]");
 
     // El sello es un botón rosa con la hora y la fecha de la última revisión
     // guardada por una persona, en la zona horaria de la institución.

@@ -37,7 +37,7 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 ### 17SEP2026 · JARVI RH 2.0.183
 
-- La hoja de Candidatos abre por la evaluación: el orden pasa a Evaluación IA, Motivo, Comentario humano, Estado / acción e Ingreso; la identidad y las respuestas quedan después. Sin migración.
+- La hoja de Candidatos fija la identidad en el primer lugar y abre por la evaluación: Candidato / plaza, Evaluación IA, Motivo, Comentario humano, Estado / acción e Ingreso. Sin migración.
 - Un filtro configurado devuelve la matriz a la mejor calificación; retirar los filtros devuelve el registro a su fecha.
 - Una revisión guardada por una persona sella la fila con un botón rosa de hora y fecha, derivado del asiento de esa revisión.
 
