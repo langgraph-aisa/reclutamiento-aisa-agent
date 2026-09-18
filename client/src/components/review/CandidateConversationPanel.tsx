@@ -10,6 +10,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  QuickSendFields,
+  type QuickSendPayload,
+} from "@/components/inbox/QuickSendFields";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -193,12 +197,6 @@ export function CandidateConversationPanel({
   >(null);
   const [quickLink, setQuickLink] = useState("");
   const [quickCaption, setQuickCaption] = useState("");
-  const [quickLatitude, setQuickLatitude] = useState("");
-  const [quickLongitude, setQuickLongitude] = useState("");
-  const [quickAddress, setQuickAddress] = useState("");
-  const [quickFileUrl, setQuickFileUrl] = useState("");
-  const [quickFileName, setQuickFileName] = useState("");
-  const [quickAudioUrl, setQuickAudioUrl] = useState("");
 
   const closeQuickAction = useCallback(() => setQuickKind(null), []);
   const refreshAfterSend = useCallback(async () => {
@@ -277,38 +275,40 @@ export function CandidateConversationPanel({
     setQuickKind(kind);
     setQuickLink("");
     setQuickCaption("");
-    setQuickLatitude("");
-    setQuickLongitude("");
-    setQuickAddress("");
-    setQuickFileUrl("");
-    setQuickFileName("");
-    setQuickAudioUrl("");
   };
 
   const submitQuickAction = () => {
+    if (!selectedId || quickKind !== "link") return;
+    sendLink.mutate({
+      conversationId: selectedId,
+      link: quickLink,
+      caption: quickCaption.trim() || undefined,
+    });
+  };
+
+  const submitQuickPayload = (payload: QuickSendPayload) => {
     if (!selectedId) return;
-    if (quickKind === "link") {
-      sendLink.mutate({
-        conversationId: selectedId,
-        link: quickLink,
-        caption: quickCaption.trim() || undefined,
-      });
-    } else if (quickKind === "location") {
-      sendLocation.mutate({
-        conversationId: selectedId,
-        latitude: Number(quickLatitude),
-        longitude: Number(quickLongitude),
-        address: quickAddress.trim() || undefined,
-      });
-    } else if (quickKind === "file") {
+    if (payload.kind === "file") {
       sendFile.mutate({
         conversationId: selectedId,
-        fileUrl: quickFileUrl,
-        fileName: quickFileName.trim() || undefined,
-        caption: quickCaption.trim() || undefined,
+        dataBase64: payload.dataBase64,
+        fileName: payload.fileName,
+        caption: payload.caption,
       });
-    } else if (quickKind === "ptt") {
-      sendPtt.mutate({ conversationId: selectedId, audioUrl: quickAudioUrl });
+    } else if (payload.kind === "ptt") {
+      sendPtt.mutate({
+        conversationId: selectedId,
+        dataBase64: payload.dataBase64,
+        mimeType: payload.mimeType,
+        fileName: payload.fileName,
+      });
+    } else {
+      sendLocation.mutate({
+        conversationId: selectedId,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        address: payload.address,
+      });
     }
   };
 
@@ -669,103 +669,44 @@ export function CandidateConversationPanel({
                   </DialogDescription>
                 </DialogHeader>
                 {quickKind === "link" ? (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label>URL HTTPS</Label>
-                      <Input
-                        value={quickLink}
-                        onChange={event => setQuickLink(event.target.value)}
-                        placeholder="https://…"
-                        inputMode="url"
-                      />
+                  <>
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <Label>URL HTTPS</Label>
+                        <Input
+                          value={quickLink}
+                          onChange={event => setQuickLink(event.target.value)}
+                          placeholder="https://…"
+                          inputMode="url"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Texto de vista previa</Label>
+                        <Textarea
+                          value={quickCaption}
+                          onChange={event => setQuickCaption(event.target.value)}
+                          rows={2}
+                          placeholder="Opcional"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Texto de vista previa</Label>
-                      <Textarea
-                        value={quickCaption}
-                        onChange={event => setQuickCaption(event.target.value)}
-                        rows={2}
-                        placeholder="Opcional"
-                      />
-                    </div>
-                  </div>
-                ) : quickKind === "location" ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Latitud</Label>
-                      <Input
-                        value={quickLatitude}
-                        onChange={event => setQuickLatitude(event.target.value)}
-                        inputMode="decimal"
-                        placeholder="-90 a 90"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Longitud</Label>
-                      <Input
-                        value={quickLongitude}
-                        onChange={event => setQuickLongitude(event.target.value)}
-                        inputMode="decimal"
-                        placeholder="-180 a 180"
-                      />
-                    </div>
-                    <div className="space-y-2 sm:col-span-2">
-                      <Label>Dirección</Label>
-                      <Input
-                        value={quickAddress}
-                        onChange={event => setQuickAddress(event.target.value)}
-                        placeholder="Opcional"
-                      />
-                    </div>
-                  </div>
-                ) : quickKind === "file" ? (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label>URL del archivo (HTTPS)</Label>
-                      <Input
-                        value={quickFileUrl}
-                        onChange={event => setQuickFileUrl(event.target.value)}
-                        placeholder="https://…"
-                        inputMode="url"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Nombre del archivo</Label>
-                      <Input
-                        value={quickFileName}
-                        onChange={event => setQuickFileName(event.target.value)}
-                        placeholder="Opcional"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Texto adjunto</Label>
-                      <Textarea
-                        value={quickCaption}
-                        onChange={event => setQuickCaption(event.target.value)}
-                        rows={2}
-                        placeholder="Opcional"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label>URL del audio (HTTPS)</Label>
-                    <Input
-                      value={quickAudioUrl}
-                      onChange={event => setQuickAudioUrl(event.target.value)}
-                      placeholder="https://…"
-                      inputMode="url"
-                    />
-                  </div>
-                )}
-                <DialogFooter>
-                  <Button variant="ghost" onClick={closeQuickAction}>
-                    Cancelar
-                  </Button>
-                  <Button disabled={quickPending} onClick={submitQuickAction}>
-                    {quickPending ? "Enviando…" : "Enviar"}
-                  </Button>
-                </DialogFooter>
+                    <DialogFooter>
+                      <Button variant="ghost" onClick={closeQuickAction}>
+                        Cancelar
+                      </Button>
+                      <Button disabled={quickPending} onClick={submitQuickAction}>
+                        {quickPending ? "Enviando…" : "Enviar"}
+                      </Button>
+                    </DialogFooter>
+                  </>
+                ) : quickKind ? (
+                  <QuickSendFields
+                    kind={quickKind}
+                    pending={quickPending}
+                    onCancel={closeQuickAction}
+                    onSubmit={submitQuickPayload}
+                  />
+                ) : null}
               </DialogContent>
             </Dialog>
           </>

@@ -8,6 +8,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerApiChatWebhook, processApiChatMessage } from "./apiChatWebhook";
+import { sendInboxFile, sendInboxPtt } from "./inbox";
 import { runApiChatReceiptSweep } from "./apiChatReceipts";
 import { registerInboxFileRoutes } from "./inboxFiles";
 import { issueLocalSession, LOCAL_SESSION_COOKIE } from "./localAuth";
@@ -17,12 +18,20 @@ import { runCandidateDocumentSweep } from "./candidateDocumentWorker";
 
 const enabled = Boolean(process.env.MEDIA_TEST_DATABASE_URL);
 const sha = (value: Buffer) => createHash("sha256").update(value).digest("hex");
+const nativeSettings = {
+  mode: "native" as const,
+  endpoint: "https://api.apichat.io/v1",
+  token: "secret",
+  clientId: "client-1",
+  disabledEndpoints: [] as string[],
+};
 describe.runIf(enabled)("Caja negra HTTP / PostgreSQL / archivos reales", () => {
   let database: Awaited<ReturnType<typeof createMediaTestDatabase>>;
   let server: Server;
   let base: string;
   let directory: string;
   let cookie: string;
+  let adminUserId: number;
   let conversationId: number;
   let applicationId: number;
   let available = true;
@@ -49,6 +58,7 @@ describe.runIf(enabled)("Caja negra HTTP / PostgreSQL / archivos reales", () => 
     vi.stubEnv("DOCUMENT_OCR_ENABLED", "false");
     const pool = database.pool;
     const user = (await pool.query("INSERT INTO users(open_id,role,active) VALUES('test-admin','admin',true) RETURNING id")).rows[0].id;
+    adminUserId = Number(user);
     cookie = LOCAL_SESSION_COOKIE + "=" + await issueLocalSession(user);
     const position = (await pool.query("INSERT INTO job_positions(public_slug,code,title,agent_key) VALUES('http-test','http-test','Ingeniero','test') RETURNING id")).rows[0].id;
     const form = (await pool.query("INSERT INTO application_forms(job_position_id,title) VALUES($1,'Prueba') RETURNING id", [position])).rows[0].id;
@@ -163,6 +173,59 @@ describe.runIf(enabled)("Caja negra HTTP / PostgreSQL / archivos reales", () => 
     expect((await messages()).filter(row => row.body === "Recuperación")).toHaveLength(1);
     const receipt = (await database.pool.query("SELECT payload,status FROM apichat_inbound_receipts WHERE provider_message_id='retry-1'")).rows[0];
     expect(receipt).toEqual({ payload: null, status: "completed" });
+  });
+  it("adjunta un archivo elegido del equipo y lo publica con una dirección firmada", async () => {
+    await database.pool.query("UPDATE conversations SET human_takeover=true,agent_enabled=false WHERE id=$1", [conversationId]);
+    const sendFile = vi.fn(async () => ({ providerMessageId: "OUT-FILE-1", statusCode: 200 }));
+    const documento = Buffer.from("%PDF-1.7\nPropuesta saliente de prueba\n%%EOF");
+    const result = await sendInboxFile(
+      database.pool,
+      {
+        conversationId,
+        dataBase64: documento.toString("base64"),
+        fileName: "propuesta.pdf",
+        caption: "Propuesta adjunta",
+        actorUserId: adminUserId,
+        publicBaseUrl: "https://bandeja.example",
+      },
+      { settings: async () => nativeSettings, sendFile }
+    );
+    expect(result.status).toBe("sent");
+    const url = String((sendFile.mock.calls[0]![0] as { fileUrl: string }).fileUrl);
+    expect(url).toMatch(/^https:\/\/bandeja\.example\/api\/inbox\/files\/out-\d+%2F[a-f0-9-]+\?t=/);
+    const row = (await database.pool.query(
+      "SELECT message_type,direction,original_file_name,mime_type,storage_key FROM conversation_messages WHERE provider_message_id='OUT-FILE-1'"
+    )).rows[0];
+    expect(row).toMatchObject({ message_type: "file", direction: "outbound", original_file_name: "propuesta.pdf", mime_type: "application/pdf" });
+    const token = new URL(url).searchParams.get("t");
+    const download = await fetch(base + "/api/inbox/files/" + encodeURIComponent(row.storage_key) + "?t=" + token);
+    expect(download.status).toBe(200);
+    expect(sha(Buffer.from(await download.arrayBuffer()))).toBe(sha(documento));
+  });
+  it("graba una nota de voz y la envía como PTT", async () => {
+    await database.pool.query("UPDATE conversations SET human_takeover=true,agent_enabled=false WHERE id=$1", [conversationId]);
+    const sendPtt = vi.fn(async () => ({ providerMessageId: "OUT-PTT-1", statusCode: 200 }));
+    const ogg = Buffer.concat([Buffer.from("OggS"), Buffer.alloc(96, 5)]);
+    const result = await sendInboxPtt(
+      database.pool,
+      {
+        conversationId,
+        dataBase64: ogg.toString("base64"),
+        mimeType: "audio/webm",
+        fileName: "nota-de-voz.webm",
+        actorUserId: adminUserId,
+        publicBaseUrl: "https://bandeja.example",
+      },
+      { settings: async () => nativeSettings, sendPtt }
+    );
+    expect(result.status).toBe("sent");
+    const url = String((sendPtt.mock.calls[0]![0] as { audioUrl: string }).audioUrl);
+    expect(url).toMatch(/\/api\/inbox\/files\/out-\d+%2F[a-f0-9-]+\?t=/);
+    const row = (await database.pool.query(
+      "SELECT message_type,original_file_name,mime_type,storage_key FROM conversation_messages WHERE provider_message_id='OUT-PTT-1'"
+    )).rows[0];
+    expect(row).toMatchObject({ message_type: "ptt", original_file_name: "nota-de-voz.ogg", mime_type: "audio/ogg" });
+    expect(String(row.storage_key)).toMatch(/^out-\d+\//);
   });
 });
 

@@ -170,6 +170,7 @@ import {
   deleteInboxMessage,
   inboxDetail,
   listInbox,
+  resolvePublicBaseUrl,
   sendInboxFile,
   sendInboxLink,
   sendInboxLocation,
@@ -2388,18 +2389,24 @@ export const appRouter = router({
       }),
     sendFile: roleProcedure
       .input(
-        z.object({
-          conversationId: z.number().int().positive(),
-          fileUrl: z.string().url().max(2_000),
-          fileName: z.string().trim().max(260).optional(),
-          caption: z.string().trim().max(1_000).optional(),
-        })
+        z
+          .object({
+            conversationId: z.number().int().positive(),
+            fileUrl: z.string().url().max(2_000).optional(),
+            dataBase64: z.string().min(1).max(28_000_000).optional(),
+            fileName: z.string().trim().max(260).optional(),
+            caption: z.string().trim().max(1_000).optional(),
+          })
+          .refine(input => Boolean(input.fileUrl || input.dataBase64), {
+            message: "Adjunte un archivo o indique su URL.",
+          })
       )
       .mutation(async ({ input, ctx }) => {
         try {
           return await sendInboxFile(await requirePool(), {
             ...input,
             actorUserId: ctx.user.id,
+            publicBaseUrl: resolvePublicBaseUrl(ctx.req.headers),
           });
         } catch (error) {
           throw new TRPCError({
@@ -2413,16 +2420,24 @@ export const appRouter = router({
       }),
     sendPtt: roleProcedure
       .input(
-        z.object({
-          conversationId: z.number().int().positive(),
-          audioUrl: z.string().url().max(2_000),
-        })
+        z
+          .object({
+            conversationId: z.number().int().positive(),
+            audioUrl: z.string().url().max(2_000).optional(),
+            dataBase64: z.string().min(1).max(22_000_000).optional(),
+            mimeType: z.string().trim().max(120).optional(),
+            fileName: z.string().trim().max(180).optional(),
+          })
+          .refine(input => Boolean(input.audioUrl || input.dataBase64), {
+            message: "Grabe una nota de voz o indique su URL.",
+          })
       )
       .mutation(async ({ input, ctx }) => {
         try {
           return await sendInboxPtt(await requirePool(), {
             ...input,
             actorUserId: ctx.user.id,
+            publicBaseUrl: resolvePublicBaseUrl(ctx.req.headers),
           });
         } catch (error) {
           throw new TRPCError({

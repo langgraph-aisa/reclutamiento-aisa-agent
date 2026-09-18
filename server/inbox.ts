@@ -38,7 +38,7 @@ export type InboxOutboundDraft =
       address?: string;
     }
   | { type: "file"; fileUrl: string; fileName?: string; caption?: string; media?: InboxStoredMedia }
-  | { type: "ptt"; audioUrl: string };
+  | { type: "ptt"; audioUrl: string; media?: InboxStoredMedia };
 
 type InboxStoredMedia = {
   fileName: string;
@@ -583,7 +583,10 @@ async function sendInboxMessageInternal(
       );
     }
     const messageKey = `human:${String(conversation.id)}:${randomUUID()}`;
-    const media = input.draft.type === "file" ? input.draft.media : undefined;
+    const media =
+      input.draft.type === "file" || input.draft.type === "ptt"
+        ? input.draft.media
+        : undefined;
     const inserted = await client.query(
       `INSERT INTO conversation_messages
          (conversation_id,direction,message_type,body,message_key,delivery_status,metadata,
@@ -824,6 +827,39 @@ export function sendInboxLocation(
   );
 }
 
+/**
+ * Resuelve la base pública del servicio para entregar al proveedor una
+ * dirección que él pueda descargar. Prefiere el encabezado del proxy inverso y
+ * admite la anulación explícita por entorno cuando el proxy no lo declara.
+ */
+export function resolvePublicBaseUrl(
+  headers: Record<string, string | string[] | undefined>
+): string {
+  const first = (value: string | string[] | undefined) =>
+    (Array.isArray(value) ? value[0] : value)?.split(",")[0]?.trim() ?? "";
+  const host = first(headers["x-forwarded-host"]) || first(headers.host);
+  const proto = first(headers["x-forwarded-proto"]) || "https";
+  const fromHeaders = host ? `${proto}://${host}` : "";
+  return (fromHeaders || process.env.APICHAT_PUBLIC_BASE_URL || "").replace(
+    /\/+$/,
+    ""
+  );
+}
+
+/** Extensiones admitidas para una nota de voz saliente. */
+const VOICE_OUT_EXTENSIONS = [
+  "webm",
+  "ogg",
+  "opus",
+  "mp3",
+  "m4a",
+  "mp4",
+  "wav",
+  "aac",
+  "amr",
+  "flac",
+] as const;
+
 export async function sendInboxFile(
   pool: Pool,
   input: {
@@ -942,11 +978,94 @@ export async function sendInboxFile(
   );
 }
 
-export function sendInboxPtt(
+export async function sendInboxPtt(
   pool: Pool,
-  input: { conversationId: number; audioUrl: string; actorUserId: number },
+  input: {
+    conversationId: number;
+    audioUrl?: string;
+    /** Nota de voz grabada en el navegador (base64, sin sobre `data:`). */
+    dataBase64?: string;
+    mimeType?: string;
+    fileName?: string;
+    actorUserId: number;
+    publicBaseUrl?: string;
+  },
   dependencies: InboxSendDependencies = {}
 ) {
+  if (input.dataBase64) {
+    // La nota de voz grabada atraviesa el mismo transporte canónico que los
+    // documentos: se decodifica, se verifica por contenido y se escribe en el
+    // volumen antes de anunciar su URL al proveedor.
+    let decoded;
+    try {
+      decoded = decodeTransport(
+        {
+          dataBase64: input.dataBase64,
+          fileName: input.fileName ?? "nota-de-voz.webm",
+          mimeType: input.mimeType,
+        },
+        {
+          allowedExtensions: VOICE_OUT_EXTENSIONS,
+          maxBytes: 16_000_000,
+          fallbackFileName: "nota-de-voz.webm",
+        }
+      );
+    } catch (error) {
+      const reason =
+        error instanceof Error
+          ? error.message
+          : "La nota de voz no es una codificación base64 válida.";
+      await recordApiChatSendFailure(pool, {
+        stage: "decodificacion",
+        reason,
+        conversationId: input.conversationId,
+        fileName: input.fileName ?? null,
+        messageType: "ptt",
+      });
+      throw new Error(reason);
+    }
+    const key = buildInboxFileKey("out", input.conversationId);
+    await writeInboxFile(key, decoded.buffer);
+    const base = (input.publicBaseUrl ?? "").replace(/\/$/, "");
+    if (!base) {
+      const reason =
+        "No fue posible resolver la dirección pública del servicio.";
+      await recordApiChatSendFailure(pool, {
+        stage: "direccion-publica",
+        reason,
+        conversationId: input.conversationId,
+        fileName: input.fileName ?? null,
+        messageType: "ptt",
+      });
+      throw new Error(reason);
+    }
+    const fileName = reconstructTransportFileName(
+      input.fileName ?? "Nota de voz",
+      decoded.extension
+    );
+    return sendInboxMessage(
+      pool,
+      {
+        conversationId: input.conversationId,
+        actorUserId: input.actorUserId,
+        draft: {
+          type: "ptt",
+          audioUrl: `${base}/api/inbox/files/${encodeURIComponent(key)}?t=${createViewerToken("inbox", key)}`,
+          media: {
+            fileName,
+            mimeType: decoded.mimeType,
+            sizeBytes: decoded.sizeBytes,
+            storageKey: key,
+            sha256: decoded.sha256,
+          },
+        },
+      },
+      dependencies
+    );
+  }
+  if (!input.audioUrl) {
+    throw new Error("Indique la URL del audio o grabe la nota de voz.");
+  }
   return sendInboxMessage(
     pool,
     {
