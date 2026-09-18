@@ -23,6 +23,7 @@ import MstEir from "./pages/MstEir";
 import Profiles from "./pages/Profiles";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
+import SecurityRoles from "./pages/SecurityRoles";
 
 const HumanReview = lazy(() => import("./pages/HumanReview"));
 const PrivacyTerms = lazy(() => import("./pages/PrivacyTerms"));
@@ -82,6 +83,11 @@ function Router() {
       <Route path="/admin/users">
         <AdminShell>
           <Users />
+        </AdminShell>
+      </Route>
+      <Route path="/admin/security-roles">
+        <AdminShell>
+          <SecurityRoles />
         </AdminShell>
       </Route>
       <Route path="/admin/candidates">

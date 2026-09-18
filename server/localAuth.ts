@@ -263,3 +263,33 @@ export async function sendEvaluationAutomationNotice(payload: {
     html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#0b2f53"><h1 style="font-size:22px">Talento AISA</h1><p>${estados}</p><p>Al momento del aviso hay <strong>${payload.processed}</strong> postulaciones con nota y <strong>${payload.pending}</strong> pendientes en cola.</p><p style="color:#64748b;font-size:13px">Las demás formas de evaluación no resultan afectadas.</p></div>`,
   });
 }
+
+/**
+ * Código de autorización de un acto sensible del módulo de seguridad.
+ *
+ * El asunto y el texto nombran el acto y su alcance —nunca el contenido de un
+ * registro ni un dato de candidato—, de modo que el operador reconoce qué está
+ * autorizando y el correo no se convierte en una fuga.
+ */
+export async function sendSecurityCode(payload: {
+  email: string;
+  code: string;
+  expiresInMinutes?: number;
+  purpose: "permisos" | "cambio";
+  detail: string;
+}) {
+  const { from, transporter } = await createSmtpTransporter();
+  const expiresInMinutes = payload.expiresInMinutes ?? LOGIN_CODE_TTL_MINUTES;
+  const act =
+    payload.purpose === "permisos"
+      ? "cambiar los permisos de un usuario"
+      : "autorizar una edición o un borrado";
+  const detail = escapeMailText(payload.detail.slice(0, 300));
+  await transporter.sendMail({
+    from,
+    to: payload.email,
+    subject: `Código para ${act} · Talento AISA`,
+    text: `Su código es ${payload.code}. Al ingresarlo se confirma ${act}. Alcance: ${payload.detail.slice(0, 300)}. Expira en ${expiresInMinutes} minutos. Si usted no solicitó este cambio, ignore este mensaje y revise la actividad de su cuenta.`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px;color:#0b2f53"><h1 style="font-size:22px">Talento AISA</h1><p>Utilice el siguiente código para confirmar que desea ${act}:</p><p style="font-size:34px;letter-spacing:8px;font-weight:700;margin:28px 0">${payload.code}</p><p>Alcance del acto: <strong>${detail}</strong></p><p>El código expira en <strong>${expiresInMinutes} minutos</strong> y solo puede utilizarse una vez.</p><p style="color:#64748b;font-size:13px">Si usted no solicitó este cambio, ignore este mensaje y revise la actividad de su cuenta.</p></div>`,
+  });
+}

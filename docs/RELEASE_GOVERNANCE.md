@@ -1,8 +1,28 @@
-# Gobierno de release JARVI RH 2.0.173
+# Gobierno de release JARVI RH 2.0.174
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.173**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.174**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.174
+
+El release **entrega el módulo Roles de Seguridad**: el control de acceso por usuario, con cinco columnas, dos alcances y confirmación por correo.
+
+**El permiso es por usuario.** Cada cuenta recibe exactamente lo que la institución le concede, y **sin concesión no hay acceso**: la ausencia de fila es ausencia de permiso, no un valor por omisión. Las cinco columnas son **Vista**, **Lectura**, **Escritura**, **Edición** y **Eliminación**, y se gobiernan en **dos alcances** que no se mezclan: las **entradas del menú** —tomadas de la fuente única del proyecto, `ADMIN_PAGE_LABELS`, para no crear una segunda lista de qué módulos existen— y los **dominios de la base** —`candidatos`, `expediente`, `configuracion` y sus pares—, declarados como conceptos de negocio y no como tablas, porque una lista de tablas envejecería con cada migración.
+
+**El administrador conserva todo por rol y sus casillas no se editan.** Un error en esa grilla dejaría a la institución sin administración; la vista lo declara en lugar de permitirlo.
+
+**El ojito queda ejercido de punta a punta.** Apagar la vista retira la entrada del menú de esa cuenta: el filtro del menú ya existía y ahora consulta el permiso. Apagar la vista apaga también la lectura —un módulo que no se ve no puede leerse— y conceder la lectura concede la vista, de modo que el estado guardado no puede describir un permiso que la interfaz no sepa ejercer.
+
+**Toda asignación exige un código que viaja solo por correo.** La migración `0033_security_roles.sql` crea `user_permissions` y `security_challenges`: código guardado como hash, vigencia, **cinco intentos** —el número que la institución ya se dio en los dos desafíos precedentes—, espera entre reenvíos y desafío anterior invalidado al emitir uno nuevo, de modo que solo el último código vale. La asignación de permisos es, por su naturaleza, una **edición del control de acceso**, y por eso queda sujeta al mismo requisito que toda edición y toda eliminación del artefacto.
+
+**Bitácora en la vista.** El panel «Log Usuarios · últimas 20 acciones» lee la traza institucional del usuario seleccionado, de modo que el administrador ve el efecto de lo que concede sin salir del módulo.
+
+**Alineación con los estándares que el artefacto declara.** ISO/IEC 27001:2022 en control de acceso —concesión explícita y ausencia cerrada— y en registro de eventos —actor, entidad y momento en `audit_log`—; ISO/IEC/IEEE 29119-1:2022 en la decisión de acceso, que es función pura y se prueba sin base de datos; ISO 22301:2019 en la continuidad del cambio, que es inmediato y no corta procesos; ISO/IEC 20000-1:2018 en la declaración del módulo; e ISO/IEC 42001:2023 en que **el agente no puede concederse acceso a sí mismo**: todo el módulo es `adminProcedure`.
+
+**Límite declarado.** El ojito está **ejercido**; la exigencia de lectura, escritura, edición y eliminación **dentro de cada procedimiento de cada módulo** es un paso pendiente y se declara como tal. Guardar las cuatro columnas sin exigirlas todavía sería, exactamente, el defecto que este proyecto corrigió tres veces: una entidad declarada y nunca ejercida. Se declara, no se presenta como entregado.
+
+**El artefacto único de despliegue reúne las migraciones `0022` a `0033`** y su verificación autocertificada crece a **veintitrés controles**.
 
 ### Alcance candidato 2.0.173
 
@@ -72,7 +92,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.173 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.174 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -104,7 +124,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.173.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.174.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

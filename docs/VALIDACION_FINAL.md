@@ -1,4 +1,4 @@
-# Validación final · JARVI RH 2.0.173
+# Validación final · JARVI RH 2.0.174
 
 Fecha de ejecución: 2026-09-17. Rama objetivo: `main`.
 
@@ -14,7 +14,7 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.173` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.174` |
 | Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 123 archivos       |
 | Auditoría de recepción (`database/auditoria_recepcion_inbox.sql`) | Aprobado · 7 bloques de solo lectura, sin efectos sobre los datos |
 | Feed global con reconciliación (`server/inboxSync.test.ts`) | Aprobado · 10 de 10 pruebas |

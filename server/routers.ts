@@ -13,6 +13,7 @@ import {
   maskEmail,
   sendDeleteCode,
   sendLoginCode,
+  sendSecurityCode,
   setLocalSession,
   verifyLoginCode,
 } from "./localAuth";
@@ -72,6 +73,19 @@ import {
   requestEvaluationAutomationCode,
 } from "./automaticEvaluation";
 import { codecRegistry, saveCodecSettings } from "./codecRegistry";
+import {
+  PERMISSION_ACTIONS,
+  PERMISSION_LABELS,
+  SECURITY_RESOURCES,
+  loadUserPermissions,
+  permissionDecision,
+  permissionMapKey,
+  recentUserActions,
+  requestSecurityChallenge,
+  saveUserPermissions,
+  securityModules,
+  verifySecurityChallenge,
+} from "./securityRoles";
 import {
   AGENT_SECRET_KEYS,
   getAgentConfiguration,
@@ -2825,6 +2839,175 @@ export const appRouter = router({
           actorUserId: ctx.user.id,
         });
         return codecRegistry(pool);
+      }),
+  }),
+
+  /**
+   * Roles de Seguridad · permisos por usuario.
+   *
+   * Todo el módulo es `adminProcedure`: el agente y un reclutador no pueden
+   * concederse acceso a sí mismos. La escritura exige un código de seis dígitos
+   * que viaja solo por correo, de modo que ningún permiso cambia sin
+   * confirmación institucional.
+   */
+  security: router({
+    /**
+     * Visibilidad de las entradas del menú para la **cuenta que consulta**.
+     *
+     * Es la única lectura del módulo que no exige ser administrador: cada
+     * cuenta necesita saber qué puede ver, y el administrador conserva todo por
+     * rol. Devuelve únicamente la concesión de vista; las demás acciones no
+     * viajan al menú porque el menú no las ejerce.
+     */
+    visibility: roleProcedure.query(async ({ ctx }) => {
+      const pool = await requirePool();
+      if (ctx.user.role === "admin") return { admin: true, visible: [] as string[] };
+      const permissions = await loadUserPermissions(pool, ctx.user.id);
+      const visible = securityModules()
+        .filter(module =>
+          permissionDecision({
+            role: ctx.user.role,
+            grants: Object.entries(permissions).map(([key, grant]) => {
+              const [scope, resourceKey] = key.split(":");
+              return {
+                scope: scope ?? "",
+                resourceKey: resourceKey ?? "",
+                grant,
+              };
+            }),
+            scope: "modulo",
+            key: module.key,
+            action: "view",
+          })
+        )
+        .map(module => module.key);
+      return { admin: false, visible };
+    }),
+    overview: adminProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const [permissions, recentActions, account] = await Promise.all([
+          loadUserPermissions(pool, input.userId),
+          recentUserActions(pool, input.userId),
+          pool.query<{ email: string; name: string; role: string }>(
+            `SELECT email,name,role FROM users WHERE id=$1 LIMIT 1`,
+            [input.userId]
+          ),
+        ]);
+        return {
+          modules: securityModules(),
+          resources: SECURITY_RESOURCES,
+          actions: PERMISSION_ACTIONS.map(action => ({
+            action,
+            label: PERMISSION_LABELS[action],
+          })),
+          permissions,
+          recentActions,
+          account: account.rows[0] ?? null,
+        };
+      }),
+    requestCode: adminProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const target = await pool.query<{ email: string; name: string }>(
+          `SELECT email,name FROM users WHERE id=$1 LIMIT 1`,
+          [input.userId]
+        );
+        const row = target.rows[0];
+        if (!row)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "El usuario no existe.",
+          });
+        const requester = await pool.query<{ email: string }>(
+          `SELECT email FROM users WHERE id=$1 LIMIT 1`,
+          [ctx.user.id]
+        );
+        const email = requester.rows[0]?.email;
+        if (!email)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "La cuenta no registra un correo para la confirmación.",
+          });
+        try {
+          return await requestSecurityChallenge(pool, {
+            requestedByUserId: ctx.user.id,
+            requestedByEmail: email,
+            purpose: "permisos",
+            targetUserId: input.userId,
+            detail: `permisos de ${row.name} (${row.email})`,
+            requestedIp: requestIp(ctx.req),
+            sendCode: sendSecurityCode,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible solicitar el código de confirmación.",
+          });
+        }
+      }),
+    confirm: adminProcedure
+      .input(
+        z.object({
+          userId: z.number().int().positive(),
+          code: z.string().trim().regex(/^\d{6}$/),
+          grants: z
+            .array(
+              z.object({
+                scope: z.enum(["modulo", "recurso"]),
+                key: z.string().trim().min(1).max(120),
+                grant: z.object({
+                  view: z.boolean(),
+                  read: z.boolean(),
+                  write: z.boolean(),
+                  edit: z.boolean(),
+                  delete: z.boolean(),
+                }),
+              })
+            )
+            .max(200),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const target = await pool.query<{ role: string }>(
+          `SELECT role FROM users WHERE id=$1 LIMIT 1`,
+          [input.userId]
+        );
+        if (target.rows[0]?.role === "admin")
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "El administrador conserva todos los módulos por rol: sus casillas no se editan.",
+          });
+        const verdict = await verifySecurityChallenge(pool, {
+          requestedByUserId: ctx.user.id,
+          purpose: "permisos",
+          code: input.code,
+        });
+        if (!verdict.granted)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              verdict.reason === "codigo_invalido"
+                ? `El código no corresponde al desafío vigente. Intentos restantes: ${verdict.attemptsRemaining}.`
+                : verdict.reason === "expirado"
+                  ? "El código caducó. Solicite uno nuevo."
+                  : verdict.reason === "agotado"
+                    ? "El desafío agotó sus cinco intentos. Solicite uno nuevo."
+                    : "No hay un desafío vigente. Solicite el código.",
+          });
+        const permissions = await saveUserPermissions(pool, {
+          userId: input.userId,
+          grants: input.grants,
+          actorUserId: ctx.user.id,
+        });
+        return { applied: true as const, permissions };
       }),
   }),
 

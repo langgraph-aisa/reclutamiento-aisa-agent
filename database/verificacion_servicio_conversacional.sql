@@ -132,6 +132,15 @@ WITH controles AS (
   SELECT 21, 'Migracion 0032 - registro de codecs activado', '25',
          (SELECT count(*)::text FROM integration_settings
            WHERE provider = 'codecs' AND setting_value = 'true')
+  UNION ALL
+  SELECT 22, 'Migracion 0033 - permisos por usuario', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public' AND table_name = 'user_permissions')
+  UNION ALL
+  SELECT 23, 'Migracion 0033 - desafio de confirmacion', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'security_challenges')
 )
 SELECT orden, control, esperado, obtenido,
        CASE WHEN orden = 9 THEN 'INFORMATIVO'

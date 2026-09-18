@@ -25,11 +25,13 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
+import { trpc } from "@/lib/trpc";
 import { RELEASE_LABEL } from "@shared/release";
 import {
   BarChart3,
   Bot,
   ChevronDown,
+  ShieldCheck,
   BrainCircuit,
   BriefcaseBusiness,
   ClipboardList,
@@ -109,6 +111,12 @@ const menuItems = [
     adminOnly: true,
   },
   { icon: KeyRound, label: "Mi cuenta", path: "/admin/account" },
+  {
+    icon: ShieldCheck,
+    label: "Roles de Seguridad",
+    path: "/admin/security-roles",
+    adminOnly: true,
+  },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -205,9 +213,20 @@ function DashboardLayoutContent({
   // tras la flecha, que es un detalle de construcción y no una decisión.
   const [repositoryOpen, setRepositoryOpen] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const visibleMenuItems = menuItems.filter(
-    item => !item.adminOnly || user?.role === "admin"
-  );
+  // El ojito gobierna el menú: una entrada sin concesión de vista desaparece
+  // para esa cuenta. El administrador conserva todo por rol, y mientras la
+  // consulta no responde se muestra el menú completo —ocultar de más sería
+  // peor que mostrar de más—.
+  const visibility = trpc.security.visibility.useQuery(undefined, {
+    retry: false,
+    refetchInterval: 60_000,
+  });
+  const visibleMenuItems = menuItems.filter(item => {
+    if (item.adminOnly && user?.role !== "admin") return false;
+    if (visibility.data?.admin) return true;
+    if (!visibility.data) return true;
+    return visibility.data.visible.includes(item.path);
+  });
   const activeMenuItem = visibleMenuItems.find(item =>
     item.path === "/admin"
       ? location === item.path
