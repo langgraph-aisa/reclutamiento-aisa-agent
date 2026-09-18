@@ -90,8 +90,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.177");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.177");
+    expect(APP_VERSION).toBe("2.0.178");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.178");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -1212,7 +1212,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.177");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.178");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1226,7 +1226,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.177");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.178");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1486,9 +1486,21 @@ describe("black-box release contract", () => {
       "utf8"
     );
     expect(review).toContain("<CandidateCvAnalysisPanel");
-    expect(review.indexOf("Formularios y anuncios · respuestas")).toBeLessThan(
-      review.indexOf("<CandidateCvAnalysisPanel")
-    );
+    // La grilla de lectura declara su orden: dos columnas en las que el panel
+    // de análisis de CV es contiguo a las respuestas de formularios, sin ningún
+    // bloque intermedio. El orden se fija aquí porque la cercanía entre ambos
+    // es la que exige BN-CVES-08 y una grilla la garantiza por posición, no por
+    // vecindad textual.
+    const sectionOrder = [
+      ...review.matchAll(/<CollapsibleSection\s+id="([^"]+)"/g),
+    ].map(match => match[1]);
+    expect(sectionOrder).toEqual([
+      "resumen-perfil",
+      "bitacora",
+      "motivo-evaluacion",
+      "analisis-cv",
+      "formularios-respuestas",
+    ]);
   });
 
   it("declara el ciclo automático de pruebas treinta segundos después del formulario", () => {
@@ -1601,7 +1613,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.177");
+    expect(governance).toContain("Alcance candidato 2.0.178");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -1818,7 +1830,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.177");
+    expect(governance).toContain("Alcance candidato 2.0.178");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

@@ -68,13 +68,10 @@ export function CandidateCvAnalysisPanel({
   const words = essence ? essence.split(/\s+/).filter(Boolean).length : 0;
 
   return (
-    <div className="rounded-2xl bg-white/8 p-4">
+    <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-[.14em] text-white/55">
-            Análisis de CV de Agente IA
-          </p>
-          <p className="mt-2 text-sm font-semibold text-white/85">
+          <p className="text-sm font-semibold text-white/85">
             {STATE_TEXT[state]?.label ?? state}
           </p>
           <p className="mt-1 text-xs leading-5 text-white/60">

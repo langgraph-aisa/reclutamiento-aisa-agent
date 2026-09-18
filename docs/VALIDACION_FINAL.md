@@ -1,8 +1,10 @@
-# Validación final · JARVI RH 2.0.177
+# Validación final · JARVI RH 2.0.178
 
 Fecha de ejecución: 2026-09-17. Rama objetivo: `main`.
 
 ## Alcance verificado
+
+Esta hoja registra el **reordenamiento de la ficha de Revisión Humana bajo el diseño de la Vista 360° del Candidato**: la acción de re-evaluar sube al encabezado, junto a la identidad del expediente, y los cinco bloques de lectura —Resumen de perfil, Bitácora, Motivo de evaluación, Análisis de CV de Agente IA y Formularios y anuncios · respuestas— comparten una grilla de dos columnas con barras idénticas y arranque plegado, de modo que la matriz de evaluación queda a la vista y el contenido se despliega dentro de su propia barra. El orden de la grilla es un contrato verificable: el panel de análisis de CV queda contiguo a las respuestas de formularios que alimenta. Sin cambio de esquema: el artefacto permanece en las migraciones `0022` a `0034` con veinticinco controles, y la auditoría del canal de ApiChat de 2.0.177 queda intacta.
 
 Esta hoja registra la **auditoría del canal de ApiChat**: el módulo que se lee en el menú inmediatamente después del Agente de IA LangGraph y clasifica el conducto en cuatro estados —verificado, con pérdidas, con fallos de envío y sin evidencia—. Consolida las pérdidas de recepción del webhook, los fallos de entrega de la cola y las entregas detenidas, y cierra el log de errores derivados del mecanismo de comunicación. El fallo que ocurría antes de que existiera una fila de mensaje —dirección pública ausente, contenido ilegible— deja de ser invisible. El informe es de solo lectura: no reintenta envíos, no cambia estados y no altera ninguna evaluación, y toda consulta degrada a una incógnita si la tabla no existe. Sin cambio de esquema: reutiliza la bitácora existente.
 
@@ -16,7 +18,7 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.177` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.178` |
 | Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 123 archivos       |
 | Auditoría de recepción (`database/auditoria_recepcion_inbox.sql`) | Aprobado · 7 bloques de solo lectura, sin efectos sobre los datos |
 | Feed global con reconciliación (`server/inboxSync.test.ts`) | Aprobado · 10 de 10 pruebas |
@@ -62,7 +64,7 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Migración `0029` en PostgreSQL 17 | Aprobado · dos columnas del cierre evaluado, autocertificación exacta y reaplicación sin error |
 | Migración del RAG del candidato (`0026_candidate_knowledge.sql`) | Aprobado · expansiva e idempotente · no altera `knowledge_files` ni `knowledge_projects` |
 | Migración `0026` en PostgreSQL 17 real | Aprobado · aplicada sobre esquema existente con y sin `candidate_knowledge_notes`; dos ejecuciones consecutivas sin error; los seis bloques de verificación en `OK` o `no aplica` || Restricciones del expediente en PostgreSQL 17 real | Aprobado · carpeta duplicada, procedencia inválida, huella no hexadecimal, referencia de almacenamiento duplicada y carpeta inexistente se rechazan; borrar la postulación elimina el expediente en cascada y el RAG de proyectos permanece intacto |
-| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.177` |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.178` |
 | Paneles plegables de la ficha (`client/src/components/review/CollapsibleSection.tsx`) | Aprobado · las cinco secciones se pliegan, la preferencia se recuerda por sección y por operador, y el plegado funciona aunque el almacenamiento del navegador no esté disponible |
 | Accesibilidad del plegado | Aprobado · el botón declara `aria-expanded` y `aria-controls` con el identificador del contenido, de modo que el estado no depende del color ni de la flecha |
 | Agente del reclutador (`server/recruiterAgent.ts`, `server/recruiterAgent.test.ts`) | Aprobado · once pruebas: catálogo de modelos acotado, instrucciones que prohíben inventar y revelar el método, cadena DORA con credencial principal y de respaldo declaradas, pregunta asentada aunque el proveedor falle, y rechazo de pregunta vacía sin llamar al proveedor |
@@ -85,6 +87,7 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Identidad y versión (`server/releaseGovernance.test.ts`) | Aprobado · la etiqueta visible bajo el usuario, el README, la caja negra y `package.json` declaran la misma versión; ninguna superficie administrativa escribe el literal a mano |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 29 de 29 pruebas   |
 | Auditoría del canal de ApiChat (`server/apiChatAudit.ts`, `server/apiChatAudit.test.ts`) | Aprobado · 14 de 14 pruebas · el informe es de solo lectura —ninguna de sus cuatro consultas escribe—, la precedencia de estados es explícita, el fallo de envío sin fila de mensaje se asienta con identificador entero y sin el nombre del archivo del candidato, y la ausencia de tablas degrada a una incógnita |
+| Grilla de lectura de la ficha (`client/src/pages/HumanReview.tsx`, `client/src/components/review/CollapsibleSection.tsx`) | Aprobado · el orden de las cinco secciones se audita por posición en la grilla y el panel de CV queda contiguo a las respuestas de formularios; las barras arrancan plegadas y el estado se recuerda por sección y por operador |
 | Regresión Vitest (`pnpm test`)                     | Aprobado · 469 de 469 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |

@@ -194,7 +194,7 @@ function CandidateDetail({
 
   return (
     <Card className="rounded-3xl border-0 bg-[#0b2d4b] text-white shadow-lift dark:bg-[#162333]">
-      <CardHeader className="flex flex-row items-start justify-between">
+      <CardHeader className="grid gap-4 lg:grid-cols-2 lg:items-start lg:gap-6">
         <div>
           <Badge className="rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-200">
             Detalle de postulación
@@ -207,48 +207,17 @@ function CandidateDetail({
             {data.application.phone_international}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          onClick={onClose}
-          className="rounded-full text-white hover:bg-white/10 hover:text-white"
-        >
-          Cerrar
-        </Button>
-      </CardHeader>
-      <CardContent className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-        <div className="lg:col-span-2">
-          <CandidateViewerPanel
-            candidate={{
-              id: data.application.id,
-              position_title: data.application.position_title,
-              profile_summary: data.application.profile_summary,
-              submitted_at: data.application.submitted_at,
-              evaluation_reason: data.application.evaluation_reason,
-              classification: agentPayload?.classification ?? null,
-              ai_model: latestEvaluation?.ai_model ?? null,
-              ai_payload: agentPayload ?? null,
-            }}
-          />
-        </div>
-        <div className="space-y-4">
-          <CollapsibleSection
-            id="resumen-perfil"
-            title="Resumen de perfil"
-            className="rounded-2xl bg-white/8 p-4 text-white"
+        {/* La re-evaluación se decide en el encabezado, sobre la identidad del
+            expediente: es una acción sobre la postulación completa y no sobre
+            un bloque de lectura. */}
+        <div className="flex flex-col gap-3">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            className="self-end rounded-full text-white hover:bg-white/10 hover:text-white"
           >
-            <p className="text-sm leading-6 text-white/80">
-              {data.application.profile_summary ?? "Sin resumen todavía."}
-            </p>
-          </CollapsibleSection>
-          <CollapsibleSection
-            id="motivo-evaluacion"
-            title="Motivo de evaluación"
-            className="rounded-2xl bg-white/8 p-4 text-white"
-          >
-            <p className="text-sm leading-6 text-white/80">
-              {data.application.evaluation_reason ?? "Pendiente de evaluación."}
-            </p>
-          </CollapsibleSection>
+            Cerrar
+          </Button>
           <Button
             variant="outline"
             className="w-full rounded-xl border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
@@ -267,47 +236,65 @@ function CandidateDetail({
                 : "Evaluar con agente IA"}
           </Button>
         </div>
-        <div className="rounded-2xl bg-white/8 p-4">
-          <CollapsibleSection
-            id="bitacora"
-            title="Bitácora"
-            className="text-white"
-          >
-          {data.audit?.length ? (
-            <div className="mt-3 space-y-2">
-              {data.audit.slice(0, 5).map((event: any) => (
-                <div key={event.id} className="rounded-xl bg-white/6 p-3">
-                  <p className="text-sm font-semibold text-white/85">
-                    {event.action === "comment_added"
-                      ? "Comentario agregado"
-                      : "Estado actualizado"}
-                  </p>
-                  {event.before_json?.status !== event.after_json?.status && (
-                    <p className="mt-1 text-xs text-white/65">
-                      {statusLabel(event.before_json?.status)} →{" "}
-                      {statusLabel(event.after_json?.status)}
-                    </p>
-                  )}
-                  <p className="mt-2 text-sm text-white/80">
-                    {event.comment || "Sin comentario"}
-                  </p>
-                  <p className="mt-1 text-xs text-white/50">
-                    {event.actor_name ?? "Sistema"}
-                    {event.created_at
-                      ? ` · ${new Date(event.created_at).toLocaleString()}`
-                      : ""}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-white/60">
-              Sin cambios registrados.
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <CandidateViewerPanel
+          candidate={{
+            id: data.application.id,
+            position_title: data.application.position_title,
+            profile_summary: data.application.profile_summary,
+            submitted_at: data.application.submitted_at,
+            evaluation_reason: data.application.evaluation_reason,
+            classification: agentPayload?.classification ?? null,
+            ai_model: latestEvaluation?.ai_model ?? null,
+            ai_payload: agentPayload ?? null,
+          }}
+        />
+        {/* Los cinco bloques de lectura comparten una grilla de dos columnas y
+            las mismas barras plegables: la matriz de evaluación queda a la
+            vista y el detalle se despliega solo cuando se necesita. */}
+        <div className="grid gap-5 lg:grid-cols-2">
+          <CollapsibleSection id="resumen-perfil" title="Resumen de perfil">
+            <p className="text-sm leading-6 text-white/80">
+              {data.application.profile_summary ?? "Sin resumen todavía."}
             </p>
-          )}
-          {data.application.status === "calificado" &&
+          </CollapsibleSection>
+          <CollapsibleSection id="bitacora" title="Bitácora">
+            {data.audit?.length ? (
+              <div className="space-y-2">
+                {data.audit.slice(0, 5).map((event: any) => (
+                  <div key={event.id} className="rounded-xl bg-white/6 p-3">
+                    <p className="text-sm font-semibold text-white/85">
+                      {event.action === "comment_added"
+                        ? "Comentario agregado"
+                        : "Estado actualizado"}
+                    </p>
+                    {event.before_json?.status !== event.after_json?.status && (
+                      <p className="mt-1 text-xs text-white/65">
+                        {statusLabel(event.before_json?.status)} →{" "}
+                        {statusLabel(event.after_json?.status)}
+                      </p>
+                    )}
+                    <p className="mt-2 text-sm text-white/80">
+                      {event.comment || "Sin comentario"}
+                    </p>
+                    <p className="mt-1 text-xs text-white/50">
+                      {event.actor_name ?? "Sistema"}
+                      {event.created_at
+                        ? ` · ${new Date(event.created_at).toLocaleString()}`
+                        : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-white/60">
+                Sin cambios registrados.
+              </p>
+            )}
+            {data.application.status === "calificado" &&
               data.application.whatsapp_status !== "enviado" && (
-                <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+                <div className="mt-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
                   <p className="font-semibold">
                     WhatsApp:{" "}
                     {data.application.whatsapp_status === "error"
@@ -352,14 +339,25 @@ function CandidateDetail({
                 </div>
               )}
           </CollapsibleSection>
-        </div>
-        <div className="rounded-2xl bg-white/8 p-4">
+          <CollapsibleSection id="motivo-evaluacion" title="Motivo de evaluación">
+            <p className="text-sm leading-6 text-white/80">
+              {data.application.evaluation_reason ?? "Pendiente de evaluación."}
+            </p>
+          </CollapsibleSection>
+          <CollapsibleSection id="analisis-cv" title="Análisis de CV de Agente IA">
+            <CandidateCvAnalysisPanel
+              applicationId={data.application.id}
+              reevaluating={evaluateWithAgent.isPending}
+              onReevaluate={() =>
+                evaluateWithAgent.mutate({ applicationId: data.application.id })
+              }
+            />
+          </CollapsibleSection>
           <CollapsibleSection
             id="formularios-respuestas"
             title="Formularios y anuncios · respuestas"
-            className="text-white"
           >
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
             {(data.submissions ?? []).map((submission: any) => {
               const formAnswers = (data.answers ?? []).filter(
                 (answer: any) =>
@@ -428,18 +426,6 @@ function CandidateDetail({
           </div>
           </CollapsibleSection>
         </div>
-        <CollapsibleSection
-          id="analisis-cv"
-          title="Análisis de CV de Agente IA"
-        >
-          <CandidateCvAnalysisPanel
-            applicationId={data.application.id}
-            reevaluating={evaluateWithAgent.isPending}
-            onReevaluate={() =>
-              evaluateWithAgent.mutate({ applicationId: data.application.id })
-            }
-          />
-        </CollapsibleSection>
       </CardContent>
     </Card>
   );

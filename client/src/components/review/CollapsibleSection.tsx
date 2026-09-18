@@ -1,13 +1,17 @@
-import { ChevronDown } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 /**
  * Sección plegable de la ficha.
  *
- * La ficha acumula cinco bloques de lectura —resumen de perfil, motivo,
- * bitácora, análisis de CV y respuestas de formularios— que desplazan la matriz
- * de evaluación hacia abajo. Plegados, la matriz queda a la vista y el detalle
- * se despliega solo cuando el operador lo necesita.
+ * La ficha acumula cinco bloques de lectura —resumen de perfil, bitácora,
+ * motivo, análisis de CV y respuestas de formularios— que desplazan la matriz
+ * de evaluación hacia abajo. La barra es idéntica en los cinco: rótulo en
+ * versal alineado a la izquierda y botón circular al extremo derecho, de modo
+ * que la columna forme una sola línea de lectura.
+ *
+ * Los bloques arrancan plegados: lo primero que se lee es la matriz de
+ * evaluación y el detalle se despliega solo cuando el operador lo necesita.
  *
  * El estado se recuerda **por sección y por operador**, en el almacenamiento
  * local del navegador: es una preferencia de lectura, no una decisión del
@@ -18,7 +22,7 @@ export function CollapsibleSection({
   title,
   children,
   className = "",
-  defaultOpen = true,
+  defaultOpen = false,
 }: {
   id: string;
   title: string;
@@ -44,26 +48,30 @@ export function CollapsibleSection({
   }
 
   return (
-    <div className={className}>
+    <div className={`rounded-xl bg-white/8 ${className}`.trim()}>
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
         aria-controls={`${id}-contenido`}
-        className="flex w-full items-center justify-between gap-2 text-left"
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-left"
       >
-        <span className="text-xs uppercase tracking-[.14em] opacity-70">
+        <span className="text-xs font-semibold uppercase tracking-[.14em] text-white/85">
           {title}
         </span>
-        <ChevronDown
+        <span
           aria-hidden="true"
-          className={`h-4 w-4 shrink-0 opacity-70 transition-transform ${
-            open ? "rotate-180" : ""
-          }`}
-        />
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-white/25 bg-black/20 text-white/85"
+        >
+          {open ? (
+            <Minus className="h-3.5 w-3.5" />
+          ) : (
+            <Plus className="h-3.5 w-3.5" />
+          )}
+        </span>
       </button>
       {open ? (
-        <div id={`${id}-contenido`} className="mt-3">
+        <div id={`${id}-contenido`} className="px-3.5 pb-3.5">
           {children}
         </div>
       ) : null}
