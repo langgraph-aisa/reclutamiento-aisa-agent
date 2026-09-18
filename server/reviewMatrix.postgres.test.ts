@@ -232,6 +232,57 @@ describe.runIf(enabled)(
       expect(rows.map(row => row.id)).toEqual([lowId, highId]);
       expect(rows.every(row => Boolean(row.human_review_at))).toBe(true);
     });
+
+    it("marca el instante real del guardado y conserva la revisión más reciente", async () => {
+      const { appRouter } = await import("./routers");
+      const caller = appRouter.createCaller(context());
+      const observed = (
+        await caller.candidates.reviewWorkspace({ applicationId: highId })
+      )[0].human_review_at;
+      expect(observed).toBeTruthy();
+
+      // El sello es el instante del guardado y no una fecha de archivo: si
+      // estuviera quemado, no caería en esta ventana respecto del reloj real.
+      const drift = Math.abs(Date.now() - new Date(observed).getTime());
+      expect(drift).toBeLessThan(120_000);
+
+      // Un asiento humano anterior no sustituye al más reciente: se conserva la
+      // última revisión, no la primera ni una cualquiera del expediente.
+      const backdated = new Date(Date.now() - 86_400_000).toISOString();
+      await database.pool.query(
+        `INSERT INTO audit_log(actor_user_id,entity_type,entity_id,action,created_at)
+         VALUES($1,'application',$2,'comment_added',$3::timestamptz)`,
+        [reviewerId, highId, backdated]
+      );
+      const stillLatest = (
+        await caller.candidates.reviewWorkspace({ applicationId: highId })
+      )[0].human_review_at;
+      expect(new Date(stillLatest).getTime()).toBe(
+        new Date(observed).getTime()
+      );
+
+      // Una revisión nueva avanza el sello: no retrocede ni se congela.
+      await caller.candidates.setStatus({
+        id: highId,
+        status: "pre_calificado",
+        comment: "Segunda revisión del expediente.",
+      });
+      const advanced = (
+        await caller.candidates.reviewWorkspace({ applicationId: highId })
+      )[0].human_review_at;
+      expect(new Date(advanced).getTime()).toBeGreaterThan(
+        new Date(backdated).getTime()
+      );
+      expect(Math.abs(Date.now() - new Date(advanced).getTime())).toBeLessThan(
+        120_000
+      );
+      // Y el sello declara la última revisión, con su acción correspondiente.
+      expect(
+        (
+          await caller.candidates.reviewWorkspace({ applicationId: highId })
+        )[0].human_review_action
+      ).toBe("status_changed");
+    });
   },
   180_000
 );
