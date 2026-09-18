@@ -116,21 +116,19 @@ Estos 25 fallos **no son regresiones de ejecución del recorrido** —el recorri
 
 ## 6. Incompletitudes remanentes
 
-### 6.1 Pruebas legadas no migradas (19 casos)
+### 6.1 Pruebas legadas no migradas (19 casos) — **resuelto**
 
-`inboxSync.test.ts` (12) y `apiChatWebhook.test.ts` (7) prueban la API anterior: el tipo exportado `InboxSyncRecorder`, la inyección `recorder` y la forma de retorno previa de `processApiChatWebhook`. La refactorización cambió esos contratos sin actualizar las pruebas. El comportamiento nuevo está cubierto por la caja negra (13 pruebas) y por `candidateProcessing.test.ts`/`transportObservability.postgres.test.ts`, pero **no hay aún una suite unitaria verde del contrato nuevo** en esas dos capas. Corrección necesaria: reescribir ambos archivos contra `normalizeApiChatBatch`, `enqueueApiChatReceipts`, `runApiChatReceiptSweep` y `processApiChatMessage`.
+`inboxSync.test.ts` (12) y `apiChatWebhook.test.ts` (7) probaban la API anterior: el tipo exportado `InboxSyncRecorder`, la inyección `recorder` y la forma de retorno previa de `processApiChatWebhook`. Ambos archivos fueron reescritos contra el contrato nuevo: `normalizeApiChatBatch`/`normalizeApiChatWebhookPayload` (normalizador), `classifyFeedDirection` (dirección), `syncInboxOnce` con `enqueueApiChatReceipts` simulado, paginación y cursor, y `processApiChatWebhook` con dirección preservada y lotes mixtos. Resultado: 24 pruebas verdes.
 
-### 6.2 Deriva documental del release (6 verificaciones)
+### 6.2 Deriva documental del release (6 verificaciones) — **resuelto**
 
-`releaseGovernance.test.ts` falla por documentación no sincronizada con el código:
+- `knowledge.ts` renombró `extractPdfText`/`extractDocxText` → `extractDocumentText`; el contrato de prueba se actualizó.
+- `README.md` incorporó el historial `### 17SEP2026 · JARVI RH 2.0.180` y comprimió las entradas 2.0.130/2.0.131 para respetar el techo del registro.
+- `RELEASE_GOVERNANCE.md` incorporó `Alcance candidato 2.0.180`.
+- El conteo de cadenas de tratamiento formal pasó de 132 a 139 (más cobertura); el contrato se actualizó y se corrigió el único hallazgo de imperativo informal (`entrega(s) detenida(s)` → `envío(s) detenido(s)`).
+- El texto de `inboxFiles.ts` (`Se requiere rol de reclutador o administrador.`) quedó reflejado en el contrato de prueba.
 
-- `knowledge.ts` renombró `extractPdfText`/`extractDocxText` → `extractDocumentText` sin actualizar el contrato de prueba.
-- `README.md` no incorporó el historial `### 17SEP2026 · JARVI RH 2.0.180`.
-- `RELEASE_GOVERNANCE.md` no actualizó `Alcance candidato 2.0.180`.
-- El conteo de cadenas de tratamiento formal pasó de 132 a 139 (más cobertura, conteo obsoleto).
-- Un texto de `inboxFiles.ts` cambió su redacción sin reflejarse en el contrato de prueba.
-
-Son asuntos de higiene de release; no afectan el recorrido de datos, pero bloquean la puerta de caja negra del CI (`pnpm test` y `release:verify` no quedarán verdes hasta sincronizarlos).
+Con esto, `releaseGovernance.test.ts` queda en 31/31 y las puertas `pnpm test`, `pnpm check` y `release:verify` en verde.
 
 ---
 
@@ -157,9 +155,13 @@ Son asuntos de higiene de release; no afectan el recorrido de datos, pero bloque
 
 1. **La solución es arquitectónicamente correcta** para el objeto auditado: restaura la cadena «mensaje → evento durable → objeto → adjunto → derivado → contexto/decisión» con identidad e idempotencia, y lo demuestra en caja negra con bytes, estados y permisos reales.
 2. **La entrega no era ejecutable tal cual**: no compilaba y, aun compilando, no habría registrado ningún mensaje en PostgreSQL. La afirmación de «100 %» era, por tanto, infundada al cierre de la sesión de reparación.
-3. **Esta validación subsanó** los dos defectos de ejecución (D1, D2), la firma del mock de aceptación (D3) y el artefacto de despliegue (D4). Con ello, la caja negra pasa 13/13.
-4. **No se puede declarar el sistema validado al 100 %** mientras subsistan las 19 pruebas legadas sin migrar, las 6 verificaciones de release desincronizadas y, sobre todo, las evidencias que solo el despliegue puede aportar: binarios de OCR/audio/DOC, configuración efectiva del webhook (`notify_format`, base64), volumen persistente y correlación histórica del PDF del incidente.
+3. **Esta validación subsanó** los dos defectos de ejecución (D1, D2), la firma del mock de aceptación (D3), el artefacto de despliegue (D4), las 19 pruebas legadas, las 6 verificaciones de release y declaró las tablas nuevas en `drizzle/schema.ts`. Con ello, la caja negra pasa 13/13 y la suite unitaria queda en 544/544 (13 omitidas por exigir PostgreSQL).
+4. **Estado final verificado en este entorno:** `tsc --noEmit` sin errores; suite unitaria 544 pasadas / 0 fallidas; caja negra HTTP/PostgreSQL 13/13; `deploy:sql --check` sincronizado; tratamiento formal y copia pública verificados en 139 archivos sin hallazgos. Las evidencias que solo el despliegue puede aportar (configuración efectiva del webhook `notify_format`/base64, volumen persistente, binarios en el host y correlación histórica del PDF del incidente) siguen siendo condición de cierre productivo, no de esta validación.
 5. **La causa histórica del PDF fotografiado sigue sin atribuirse**: nada de lo anterior identifica de forma inequívoca cuál de las capas lo eliminó; se requiere el protocolo forense del informe original (exportación del proveedor, proxy, trazas y filas correlacionadas por ID).
+
+### Cierre
+
+La reparación quedó consolidada y publicada en `main` (commit `8888768`, «feat: repara el transporte de adjuntos de ApiChat JARVI RH 2.0.180»). No se desplegó en producción.
 
 ## Referencias
 
