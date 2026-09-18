@@ -1,8 +1,22 @@
-# Gobierno de release JARVI RH 2.0.172
+# Gobierno de release JARVI RH 2.0.173
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.172**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.173**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.173
+
+El release **corrige los tres hallazgos de la auditoría del transporte de adjuntos**: el envío fallaba siempre, la recepción dependía de una suposición y una pérdida parcial era silenciosa.
+
+**Hallazgo A · la entrega al proveedor exigía sesión.** `sendInboxFile` entregaba a ApiChat la dirección `${base}/api/inbox/files/${key}`, servida por una ruta que **exige sesión de administrador**. Los servidores del proveedor no tienen sesión: recibían **403** y nunca descargaban el archivo, de modo que **ningún envío de PDF, Word, audio o imagen llegaba al candidato** —mientras el artefacto lo registraba como enviado, porque lo confirmado era la aceptación de la petición, no la entrega—. La dirección lleva ahora una **capacidad firmada** (`createViewerToken("inbox", key)`) y la ruta acepta el vale como vía alternativa a la sesión. El acceso no se relaja: el vale está acotado a **ese** archivo, caduca, y se verifica en tiempo constante; la sesión administrativa sigue siendo válida.
+
+**Hallazgo B · la recepción leía un solo campo y rechazaba el base64 sin sobre.** El normalizador leía únicamente `message.url`, y `decodeRemoteAttachment` descartaba todo lo que no fuera un sobre `data:` o una URL `https://`. La opción del proveedor se llama literalmente «Notify attachments in **base64** format»: si el contenido llega como base64 —con o sin sobre, en `url` o en un campo propio— el receptor **lo perdía**. Ahora el contenido se resuelve en trece campos declarados y el transporte **decodifica base64 sin sobre**, con un umbral que impide confundir un pie de foto con un archivo. Ninguna de las dos formas queda sin cubrir.
+
+**Hallazgo C · el fallo del expediente era silencioso.** El registro del documento en el RAG estaba envuelto en un `catch` vacío: si fallaba, el mensaje quedaba en la bandeja **sin documento y sin que nada lo dijera**. La intención era correcta —el acuse no debe romperse— y la forma era defectuosa. Ahora el fallo se asienta con su causa (`expediente-no-registrado`) y el archivo permanece en el volumen para reintentarlo.
+
+**Diagnóstico observable.** Cuando una carga no trae contenido utilizable, el asiento nombra **los campos que sí traía** (`fieldsPresent`), sin su contenido: el contrato del proveedor deja de suponerse y pasa a observarse. Es lo que permite responder, con un solo archivo enviado desde un teléfono, cuál de las dos formas usa la cuenta.
+
+**La prueba que faltaba.** Las pruebas de la frontera usaban cargas escritas por nosotros, de modo que certificaban **nuestra suposición** sobre el proveedor y no al proveedor. Se añaden las formas que faltaban: base64 sin sobre, base64 partido en líneas, texto breve que no debe confundirse con un archivo, adjunto en un campo distinto de `url` y asiento del diagnóstico.
 
 ### Alcance candidato 2.0.172
 
@@ -58,7 +72,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.172 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.173 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -90,7 +104,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.172.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.173.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

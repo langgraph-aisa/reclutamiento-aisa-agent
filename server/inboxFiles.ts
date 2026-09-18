@@ -4,6 +4,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { getPool, getUserById } from "./db";
 import { readLocalSession } from "./localAuth";
+import { verifyViewerToken } from "./viewerAccess";
 
 /**
  * Almacenamiento de archivos de la bandeja conversacional.
@@ -96,18 +97,27 @@ function sendRange(
 }
 
 async function resolveInboxAttachment(req: Request, res: Response) {
-  const localUserId = await readLocalSession(req);
-  const user = localUserId ? await getUserById(localUserId) : null;
-  if (!user?.active || user.role !== "admin") {
-    res.status(403).json({ error: "Acceso restringido a administración." });
-    return null;
+  const key = String(req.params.key ?? "");
+  // La entrega al proveedor **no puede traer sesión**: ApiChat descarga la
+  // dirección desde sus servidores, y la ruta administrativa le devolvía 403.
+  // El acceso viaja como capacidad firmada, acotada a este archivo y con
+  // caducidad corta: la sesión sigue siendo la vía primaria y el vale no eleva
+  // privilegios, autoriza la lectura de un recurso concreto mientras siga
+  // vigente.
+  const capability = verifyViewerToken("inbox", key, req.query.t);
+  if (!capability) {
+    const localUserId = await readLocalSession(req);
+    const user = localUserId ? await getUserById(localUserId) : null;
+    if (!user?.active || user.role !== "admin") {
+      res.status(403).json({ error: "Acceso restringido a administración." });
+      return null;
+    }
   }
   const pool = await getPool();
   if (!pool) {
     res.status(503).json({ error: "Base de datos no disponible." });
     return null;
   }
-  const key = String(req.params.key ?? "");
   const result = await pool.query(
     `SELECT m.id,
             COALESCE(metadata->'media'->>'fileName',m.body) AS original_name,

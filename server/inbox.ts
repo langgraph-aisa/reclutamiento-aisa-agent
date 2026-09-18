@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { createViewerToken } from "./viewerAccess";
 import type { Pool } from "pg";
 import {
   ApiChatDeliveryUnknownError,
@@ -829,7 +830,7 @@ export function sendInboxFile(
         throw new Error(
           "No fue posible resolver la dirección pública del servicio."
         );
-      return `${base}/api/inbox/files/${key}`;
+      return `${base}/api/inbox/files/${key}?t=${createViewerToken("inbox", key)}`;
     };
     const wrapped = async (): Promise<{
       fileUrl: string;

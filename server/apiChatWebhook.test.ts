@@ -83,6 +83,7 @@ describe("webhook de ApiChat", () => {
       type: "text",
       text: "Gracias",
       from_me: true,
+      contentFieldsPresent: [],
     });
   });
 
@@ -97,6 +98,7 @@ describe("webhook de ApiChat", () => {
       type: "text",
       text: "hola",
       from_me: false,
+      contentFieldsPresent: [],
     });
   });
 
@@ -118,6 +120,7 @@ describe("webhook de ApiChat", () => {
       text: "Recibido",
       from_me: true,
       quotedMessageId: "3EB0ORIG",
+      contentFieldsPresent: [],
     });
   });
 
@@ -282,6 +285,73 @@ describe("webhook de ApiChat", () => {
     expect(detail.cause).toBe("archivo-sin-contenido");
     expect(detail.messageType).toBe("audio");
     expect(recordNormalizedInboundFile).not.toHaveBeenCalled();
+  });
+
+  it("registra un adjunto que llega como base64 sin sobre", async () => {
+    // La opción del panel se llama «Notify attachments in base64 format»: el
+    // contenido puede llegar sin el sobre `data:` y el receptor debe admitirlo.
+    const { pool } = webhookPool({
+      conversations: [
+        {
+          conversation_id: 5,
+          application_id: 41,
+          phone_international: "+50230939134",
+        },
+      ],
+      outbound: [],
+    });
+    const base64 = Buffer.from(
+      `%PDF-1.7\nCV del candidato\n${"contenido ".repeat(12)}\n%%EOF`
+    ).toString("base64");
+    const outcome = await processApiChatWebhook(pool, {
+      message: {
+        id: "3EB0B64",
+        number: "50230939134",
+        type: "file",
+        filename: "cv.pdf",
+        base64,
+      },
+      from_me: false,
+    });
+    expect(outcome).toEqual({ ok: true, registered: true });
+    expect(recordNormalizedInboundFile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ fileName: "cv.pdf" })
+    );
+  });
+
+  it("asienta los campos de contenido presentes cuando la carga no trae archivo", async () => {
+    const { pool, query } = webhookPool({
+      conversations: [
+        {
+          conversation_id: 5,
+          application_id: 41,
+          phone_international: "+50230939134",
+        },
+      ],
+      outbound: [],
+    });
+    const outcome = await processApiChatWebhook(pool, {
+      message: {
+        id: "3EB0SIN",
+        number: "50230939134",
+        type: "document",
+        mimetype: "application/pdf",
+        media_url: "sin-contenido-utilizable",
+      },
+      from_me: false,
+    });
+    expect(outcome).toEqual({ ok: true, skipped: "archivo-sin-contenido" });
+    const audit = query.mock.calls.find(([sql]) =>
+      String(sql).includes("apichat_webhook_loss")
+    );
+    const detail = JSON.parse(String((audit?.[1] as unknown[])[0])) as {
+      cause: string;
+      fieldsPresent: string[];
+    };
+    expect(detail.cause).toBe("archivo-sin-contenido");
+    // El diagnóstico nombra lo que la carga **sí** traía, sin su contenido.
+    expect(detail.fieldsPresent).toContain("media_url");
   });
 
   it("registra una imagen entrante por el conducto de adjuntos", async () => {

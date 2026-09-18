@@ -32,7 +32,85 @@ export type ApiChatWebhookMessage = {
   url?: string;
   mime_type?: string;
   quotedMessageId?: string;
+  /** Campo del que se resolvió el contenido del adjunto, para diagnóstico. */
+  contentField?: string;
+  /** Contenido resuelto: sobre `data:`, URL o base64 sin sobre. */
+  contentValue?: string;
+  /** Campos de contenido presentes en la carga, sin su contenido. */
+  contentFieldsPresent?: string[];
 };
+
+/**
+ * Campos donde el proveedor puede depositar el contenido de un adjunto.
+ *
+ * El artefacto no puede depender de un solo nombre: la carga útil depende del
+ * plan y de la configuración del panel, y leer únicamente `url` fue una de las
+ * causas de la pérdida. El orden es deliberado: primero lo que ya se usaba, y
+ * después las variantes que el proveedor documenta.
+ */
+const ATTACHMENT_CONTENT_FIELDS = [
+  "url",
+  "base64",
+  "dataBase64",
+  "data_uri",
+  "dataUri",
+  "media",
+  "media_url",
+  "file_url",
+  "fileUrl",
+  "file",
+  "body",
+  "content",
+  "data",
+] as const;
+
+/**
+ * Clasifica un valor candidato. Se exige que **parezca** contenido —sobre
+ * `data:`, URL o base64 largo— para no confundir un pie de foto con un archivo.
+ */
+function classifyAttachmentContent(value: string) {
+  const text = value.trim();
+  if (!text) return null;
+  if (text.startsWith("data:")) return "sobre-data" as const;
+  if (/^https:\/\//i.test(text)) return "url" as const;
+  const compact = text.replace(/\s+/g, "");
+  if (compact.length >= 64 && /^[A-Za-z0-9+/]+={0,2}$/.test(compact))
+    return "base64" as const;
+  return null;
+}
+
+/** Nombres de los campos candidatos presentes en la carga, sin su contenido. */
+function attachmentContentFieldsPresent(
+  message: Record<string, unknown>,
+  container: Record<string, unknown>
+) {
+  const present: string[] = [];
+  for (const field of ATTACHMENT_CONTENT_FIELDS) {
+    for (const source of [message, container]) {
+      const value = source[field];
+      if (typeof value === "string" && value.trim()) {
+        present.push(field);
+        break;
+      }
+    }
+  }
+  return present;
+}
+
+function resolveAttachmentContent(
+  message: Record<string, unknown>,
+  container: Record<string, unknown>
+) {
+  for (const field of ATTACHMENT_CONTENT_FIELDS) {
+    for (const source of [message, container]) {
+      const value = source[field];
+      if (typeof value !== "string") continue;
+      const kind = classifyAttachmentContent(value);
+      if (kind) return { field, kind, value: value.trim() };
+    }
+  }
+  return null;
+}
 
 /** Extrae el mensaje del cuerpo admitido por el proveedor (jsonrpc/params o directo). */
 export function normalizeApiChatWebhookPayload(
@@ -73,6 +151,7 @@ export function normalizeApiChatWebhookPayload(
             ""
         ).trim() || undefined
       : undefined;
+  const content = resolveAttachmentContent(message, container);
   return {
     id,
     number,
@@ -87,8 +166,15 @@ export function normalizeApiChatWebhookPayload(
           : undefined,
     url: typeof message.url === "string" ? message.url : undefined,
     mime_type:
-      typeof message.mime_type === "string" ? message.mime_type : undefined,
+      typeof message.mime_type === "string"
+        ? message.mime_type
+        : typeof message.mimetype === "string"
+          ? message.mimetype
+          : undefined,
     quotedMessageId,
+    contentField: content?.field,
+    contentValue: content?.value,
+    contentFieldsPresent: attachmentContentFieldsPresent(message, container),
   };
 }
 
@@ -163,11 +249,17 @@ export const ATTACHMENT_MESSAGE_TYPES = new Set([
 async function recordWebhookLoss(
   pool: Pool,
   input: {
-    cause: "archivo-sin-contenido" | "archivo-ilegible";
+    cause:
+      | "archivo-sin-contenido"
+      | "archivo-ilegible"
+      | "expediente-no-registrado";
     messageType: string;
     providerMessageId: string;
     declaredMimeType: string;
     declaredSizeBytes: number | null;
+    reason?: string | null;
+    /** Nombres de los campos de contenido presentes; nunca su contenido. */
+    fieldsPresent?: string[];
   }
 ) {
   try {
@@ -181,6 +273,8 @@ async function recordWebhookLoss(
           providerMessageId: input.providerMessageId.slice(0, 80),
           declaredMimeType: input.declaredMimeType.slice(0, 120),
           declaredSizeBytes: input.declaredSizeBytes,
+          reason: input.reason?.slice(0, 200) ?? null,
+          fieldsPresent: (input.fieldsPresent ?? []).slice(0, 20),
         }),
       ]
     );
@@ -231,7 +325,9 @@ export async function processApiChatWebhook(
   }
   if (ATTACHMENT_MESSAGE_TYPES.has(message.type.trim().toLowerCase())) {
     const fileName = (message.filename ?? "archivo").slice(0, 260);
-    const rawUrl = (message.url ?? "").trim();
+    // El contenido se toma del campo que lo traiga —sobre `data:`, URL o base64
+    // sin sobre— y no solo de `url`, que era la suposición que perdía archivos.
+    const rawUrl = (message.contentValue ?? message.url ?? "").trim();
     // Un mensaje de archivo sin contenido utilizable es una **pérdida**, no un
     // descarte: el candidato cree haber enviado el archivo y el expediente no
     // lo recibe. Queda asentada con su causa para que sea visible.
@@ -242,6 +338,7 @@ export async function processApiChatWebhook(
         providerMessageId: message.id,
         declaredMimeType: message.mime_type ?? "",
         declaredSizeBytes: null,
+        fieldsPresent: message.contentFieldsPresent ?? [],
       });
       return { ok: true, skipped: "archivo-sin-contenido" };
     }
@@ -285,8 +382,19 @@ export async function processApiChatWebhook(
         decoded,
         source: "webhook",
       });
-    } catch {
-      // El expediente no debe interrumpir el acuse del webhook.
+    } catch (error) {
+      // El expediente no debe interrumpir el acuse del webhook, pero su fallo
+      // tampoco puede ser silencioso: el mensaje quedaría en la bandeja sin
+      // documento en el RAG y nada lo diría. Se asienta la pérdida con su
+      // causa y el archivo permanece en el volumen para reintentarlo.
+      await recordWebhookLoss(pool, {
+        cause: "expediente-no-registrado",
+        messageType: message.type,
+        providerMessageId: message.id,
+        declaredMimeType: message.mime_type ?? "",
+        declaredSizeBytes: decoded.buffer.byteLength,
+        reason: error instanceof Error ? error.message.slice(0, 200) : null,
+      });
     }
     await recordNormalizedInboundFile(pool, {
       applicationId: conversation.applicationId,

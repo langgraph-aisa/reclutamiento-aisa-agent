@@ -289,3 +289,36 @@ describe("transporte base64: recepción remota", () => {
     expect(decoded).toBeNull();
   });
 });
+
+describe("transporte base64: contenido sin sobre", () => {
+  it("decodifica un adjunto notificado como base64 sin el sobre `data:`", async () => {
+    // La opción del proveedor se llama «Notify attachments in base64 format» y
+    // el contenido puede llegar sin sobre: rechazarlo por no ser URL era una
+    // de las causas de la pérdida.
+    const pdfBytes = Buffer.from(
+      `%PDF-1.7\nCV del candidato\n${"relleno de contenido ".repeat(12)}\n%%EOF`
+    );
+    const decoded = await decodeRemoteAttachment(pdfBytes.toString("base64"), {
+      fileName: "cv.pdf",
+      mimeType: "application/pdf",
+    });
+    expect(decoded?.buffer.equals(pdfBytes)).toBe(true);
+    expect(decoded?.extension).toBe("pdf");
+  });
+
+  it("admite base64 partido en líneas", async () => {
+    const pdfBytes = Buffer.from(
+      `%PDF-1.7\nDocumento con saltos\n${"contenido adicional ".repeat(10)}\n%%EOF`
+    );
+    const wrapped = pdfBytes.toString("base64").replace(/(.{20})/g, "$1\n");
+    const decoded = await decodeRemoteAttachment(wrapped, {
+      fileName: "partido.pdf",
+    });
+    expect(decoded?.buffer.equals(pdfBytes)).toBe(true);
+  });
+
+  it("no confunde un texto breve con un archivo", async () => {
+    expect(await decodeRemoteAttachment("Gracias por el aviso")).toBeNull();
+    expect(await decodeRemoteAttachment("Sí, confirmado")).toBeNull();
+  });
+});

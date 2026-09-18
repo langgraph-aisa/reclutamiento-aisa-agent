@@ -90,8 +90,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.172");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.172");
+    expect(APP_VERSION).toBe("2.0.173");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.173");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -813,6 +813,27 @@ describe("black-box release contract", () => {
     expect(routes).toContain("VIEWER_SECURITY_HEADERS");
     expect(viewer).toContain('"X-Content-Type-Options": "nosniff"');
 
+    // La entrega al proveedor no puede exigir sesión: ApiChat descarga la
+    // dirección desde sus servidores y la ruta administrativa le devolvía 403.
+    // El acceso viaja como capacidad firmada, acotada al archivo y con
+    // caducidad corta, y la sesión de administración sigue siendo válida.
+    const inboxFiles = fs.readFileSync(
+      path.resolve("server/inboxFiles.ts"),
+      "utf8"
+    );
+    expect(inbox).toContain('createViewerToken("inbox"');
+    expect(inbox).toContain("/api/inbox/files/${key}?t=");
+    expect(inboxFiles).toContain('verifyViewerToken("inbox"');
+    expect(inboxFiles).toContain("Acceso restringido a administración.");
+
+    // El contenido del adjunto se resuelve en cualquier forma declarada y no
+    // solo en `url`; una pérdida asienta los campos presentes para diagnóstico.
+    expect(webhook).toContain("ATTACHMENT_CONTENT_FIELDS");
+    expect(webhook).toContain("resolveAttachmentContent");
+    expect(webhook).toContain("fieldsPresent");
+    expect(webhook).toContain("recordWebhookLoss");
+    expect(transport).toContain("isValidBase64Payload(payload)");
+
     // El visor cubre todos los formatos representables.
     expect(knowledge).toContain("export async function renderDocxHtml");
     expect(knowledge).toContain("export async function renderCsvPreview");
@@ -1191,7 +1212,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.172");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.173");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1205,7 +1226,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.172");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.173");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1580,7 +1601,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.172");
+    expect(governance).toContain("Alcance candidato 2.0.173");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });

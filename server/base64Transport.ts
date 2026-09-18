@@ -320,7 +320,22 @@ export async function decodeRemoteAttachment(
       options
     );
   }
-  if (!/^https:\/\//.test(source)) return null;
+  if (!/^https:\/\//i.test(source)) {
+    // El proveedor puede notificar el adjunto como base64 **sin** el sobre
+    // `data:` —es literalmente lo que declara la opción «Notify attachments in
+    // base64 format» del panel—. Rechazarlo por no ser una URL era una de las
+    // causas de la pérdida: el archivo llegaba y el receptor lo descartaba.
+    const payload = source.replace(/\s+/g, "");
+    // El umbral evita confundir un pie de foto con un archivo: una carga real
+    // codificada supera con holgura los 64 caracteres.
+    if (payload.length >= 64 && isValidBase64Payload(payload)) {
+      return decodeTransport(
+        { dataBase64: payload, fileName, mimeType },
+        options
+      );
+    }
+    return null;
+  }
   const maxBytes = options.maxBytes ?? 20 * 1024 * 1024;
   const request = fetchImpl ?? fetch;
   const response = await request(source, {
