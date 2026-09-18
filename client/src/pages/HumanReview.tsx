@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CandidateReviewSummary } from "@/components/review/CandidateReviewSummary";
+import { RecruiterAgentPanel } from "@/components/review/RecruiterAgentPanel";
 import { CandidateCvAnalysisPanel } from "@/components/review/CandidateCvAnalysisPanel";
 import { CandidateViewerPanel } from "@/components/review/CandidateViewerPanel";
 import { ReviewEvidencePanels } from "@/components/review/ReviewEvidencePanels";
@@ -124,6 +125,10 @@ export default function HumanReview() {
       {workspaceRow ? (
         <CandidateReviewSummary candidate={workspaceRow} />
       ) : null}
+
+      {/* El agente del reclutador aparece justo debajo del encabezado del
+          candidato: es el auxiliar que analiza **este** expediente y no otro. */}
+      <RecruiterAgentPanel applicationId={applicationId} />
 
       <CandidateDetail
         data={detail.data}

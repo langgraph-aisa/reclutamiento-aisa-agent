@@ -74,6 +74,15 @@ import {
 } from "./automaticEvaluation";
 import { codecRegistry, saveCodecSettings } from "./codecRegistry";
 import {
+  RECRUITER_AGENT_MAX_QUESTION_CHARS,
+  RECRUITER_AGENT_MODELS,
+  askRecruiterAgent,
+  effectiveRecruiterModel,
+  loadRecruiterHistory,
+  recruiterThreadFor,
+  setRecruiterThreadModel,
+} from "./recruiterAgent";
+import {
   PERMISSION_ACTIONS,
   PERMISSION_LABELS,
   SECURITY_RESOURCES,
@@ -89,6 +98,7 @@ import {
 import {
   AGENT_SECRET_KEYS,
   getAgentConfiguration,
+  getAgentRuntimeSettings,
   saveAgentPreferences,
   saveAgentSecret,
 } from "./agentSettings";
@@ -2850,6 +2860,78 @@ export const appRouter = router({
    * que viaja solo por correo, de modo que ningún permiso cambia sin
    * confirmación institucional.
    */
+  /**
+   * Agente del reclutador.
+   *
+   * Análisis interno del expediente de un candidato. **No expone ninguna
+   * escritura** sobre la evaluación, el estado ni la decisión: solo consulta,
+   * responde y registra el hilo. La carga de documentos alimenta el RAG
+   * personal por el procedimiento que ya existe en el expediente.
+   */
+  recruiterAgent: router({
+    thread: roleProcedure
+      .input(z.object({ applicationId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const settings = await getAgentRuntimeSettings(pool);
+        const thread = await recruiterThreadFor(pool, input.applicationId);
+        return {
+          messages: await loadRecruiterHistory(pool, input.applicationId),
+          model: effectiveRecruiterModel({
+            conversationModel: thread.model,
+            institutionalModel: settings.model,
+          }),
+          models: RECRUITER_AGENT_MODELS,
+        };
+      }),
+    ask: roleProcedure
+      .input(
+        z.object({
+          applicationId: z.number().int().positive(),
+          question: z
+            .string()
+            .trim()
+            .min(1)
+            .max(RECRUITER_AGENT_MAX_QUESTION_CHARS),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const outcome = await askRecruiterAgent(pool, {
+          applicationId: input.applicationId,
+          actorUserId: ctx.user.id,
+          question: input.question,
+        });
+        if (!outcome.ok)
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: outcome.reason,
+          });
+        return outcome;
+      }),
+    setModel: roleProcedure
+      .input(
+        z.object({
+          applicationId: z.number().int().positive(),
+          model: z.string().trim().max(120).nullable(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const outcome = await setRecruiterThreadModel(pool, {
+          applicationId: input.applicationId,
+          model: input.model,
+          actorUserId: ctx.user.id,
+        });
+        if (!outcome.ok)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: outcome.reason,
+          });
+        return outcome;
+      }),
+  }),
+
   security: router({
     /**
      * Visibilidad de las entradas del menú para la **cuenta que consulta**.

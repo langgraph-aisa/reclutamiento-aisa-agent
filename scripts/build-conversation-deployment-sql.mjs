@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
  *  10. drizzle/migrations/0031_evaluation_automation.sql
  *  11. drizzle/migrations/0032_codec_registry.sql
  *  12. drizzle/migrations/0033_security_roles.sql
+ *  12. drizzle/migrations/0034_recruiter_agent.sql
  *  13. database/verificacion_servicio_conversacional.sql
  *
  * Salida:
@@ -46,6 +47,7 @@ const sources = [
   "drizzle/migrations/0031_evaluation_automation.sql",
   "drizzle/migrations/0032_codec_registry.sql",
   "drizzle/migrations/0033_security_roles.sql",
+  "drizzle/migrations/0034_recruiter_agent.sql",
 ];
 
 const verificationPath = "database/verificacion_servicio_conversacional.sql";

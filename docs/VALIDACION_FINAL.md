@@ -1,4 +1,4 @@
-# Validación final · JARVI RH 2.0.174
+# Validación final · JARVI RH 2.0.175
 
 Fecha de ejecución: 2026-09-17. Rama objetivo: `main`.
 
@@ -14,7 +14,7 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.174` |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.175` |
 | Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 123 archivos       |
 | Auditoría de recepción (`database/auditoria_recepcion_inbox.sql`) | Aprobado · 7 bloques de solo lectura, sin efectos sobre los datos |
 | Feed global con reconciliación (`server/inboxSync.test.ts`) | Aprobado · 10 de 10 pruebas |
@@ -60,7 +60,10 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Migración `0029` en PostgreSQL 17 | Aprobado · dos columnas del cierre evaluado, autocertificación exacta y reaplicación sin error |
 | Migración del RAG del candidato (`0026_candidate_knowledge.sql`) | Aprobado · expansiva e idempotente · no altera `knowledge_files` ni `knowledge_projects` |
 | Migración `0026` en PostgreSQL 17 real | Aprobado · aplicada sobre esquema existente con y sin `candidate_knowledge_notes`; dos ejecuciones consecutivas sin error; los seis bloques de verificación en `OK` o `no aplica` || Restricciones del expediente en PostgreSQL 17 real | Aprobado · carpeta duplicada, procedencia inválida, huella no hexadecimal, referencia de almacenamiento duplicada y carpeta inexistente se rechazan; borrar la postulación elimina el expediente en cascada y el RAG de proyectos permanece intacto |
-| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.174` |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.176` |
+| Agente del reclutador (`server/recruiterAgent.ts`, `server/recruiterAgent.test.ts`) | Aprobado · once pruebas: catálogo de modelos acotado, instrucciones que prohíben inventar y revelar el método, cadena DORA con credencial principal y de respaldo declaradas, pregunta asentada aunque el proveedor falle, y rechazo de pregunta vacía sin llamar al proveedor |
+| Migración `0034` en PostgreSQL 17 real | Aprobado · seis controles en `OK`, reaplicación sin error, un hilo por postulación y procedencia de credencial acotada a principal o respaldo |
+| Luz del cuadro de preguntas (`client/src/index.css`) | Aprobado · barrido verde cuando el agente está listo y rojo mientras espera, derivado del estado real y con respeto a `prefers-reduced-motion` |
 | Entrega firmada al proveedor (`server/inbox.ts`, `server/inboxFiles.ts`) | Aprobado · la dirección lleva capacidad firmada acotada al archivo y la ruta acepta el vale como vía alternativa a la sesión administrativa |
 | Contenido sin sobre (`server/base64Transport.ts`, `server/base64Transport.test.ts`) | Aprobado · base64 sin `data:`, base64 partido en líneas y texto breve que no se confunde con un archivo |
 | Recepción en cualquier campo (`server/apiChatWebhook.ts`, `server/apiChatWebhook.test.ts`) | Aprobado · trece campos declarados, adjunto en un campo distinto de `url`, y asiento que nombra los campos presentes sin su contenido |
@@ -77,12 +80,12 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Asiento de auditoría del interruptor (`server/assessmentAutomation.ts`, `server/assessmentAutomation.test.ts`) | Aprobado · el identificador es un literal entero y la clave viaja dentro del detalle; se revisaron las sesenta y una inserciones de auditoría del artefacto y ninguna otra superficie de configuración repite el defecto |
 | Identidad y versión (`server/releaseGovernance.test.ts`) | Aprobado · la etiqueta visible bajo el usuario, el README, la caja negra y `package.json` declaran la misma versión; ninguna superficie administrativa escribe el literal a mano |
 | Caja negra (`pnpm test:black-box`)                 | Aprobado · 29 de 29 pruebas   |
-| Regresión Vitest (`pnpm test`)                     | Aprobado · 434 de 434 pruebas |
+| Regresión Vitest (`pnpm test`)                     | Aprobado · 455 de 455 pruebas |
 | Contratos TypeScript (`pnpm check`)                | Aprobado                      |
 | Esquema Drizzle (`drizzle/schema.ts`)            | Aprobado · `publicToken`, `applicationFormSubmissions` y `source`/`import_meta` alineados con `0018` y `0019` |
 | Migración conversacional (`0022_conversational_agent.sql`) | Aprobado · idempotente, sin secretos ni datos personales |
 | Migración de despliegue separado (`0023_conversation_service_split.sql`) | Aprobado · idempotente, roles sin contraseña |
-| Artefacto único de despliegue (`database/005_servicio_conversacional_listo.sql`) | Aprobado · reúne las migraciones `0022` a `0032`, con veintiún controles autocertificados; aplicado desde cero en PostgreSQL 17 el dictamen final quedó `GATE GLOBAL OK` |
+| Artefacto único de despliegue (`database/005_servicio_conversacional_listo.sql`) | Aprobado · reúne las migraciones `0022` a `0034`, con veinticinco controles autocertificados; aplicado desde cero en PostgreSQL 17 el dictamen final quedó `GATE GLOBAL OK` |
 | Retiro de n8n (`n8n-workflows/` y scripts)         | Confirmado · ausentes         |
 | Build cliente/servidor (`pnpm build`)              | Aprobado                      |
 

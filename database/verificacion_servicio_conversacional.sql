@@ -141,6 +141,16 @@ WITH controles AS (
          (SELECT count(*)::text FROM information_schema.tables
            WHERE table_schema = 'public'
              AND table_name = 'security_challenges')
+  UNION ALL
+  SELECT 24, 'Migracion 0034 - hilo del agente del reclutador', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'recruiter_agent_threads')
+  UNION ALL
+  SELECT 25, 'Migracion 0034 - mensajes del hilo', '1',
+         (SELECT count(*)::text FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'recruiter_agent_messages')
 )
 SELECT orden, control, esperado, obtenido,
        CASE WHEN orden = 9 THEN 'INFORMATIVO'

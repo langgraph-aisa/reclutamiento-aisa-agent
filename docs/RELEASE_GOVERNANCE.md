@@ -1,8 +1,26 @@
-# Gobierno de release JARVI RH 2.0.174
+# Gobierno de release JARVI RH 2.0.175
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.174**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.175**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.175
+
+El release **entrega el agente del reclutador**: el auxiliar interior que analiza **exclusivamente al candidato** de la postulación que se está revisando. Su alcance es deliberadamente estrecho y está declarado en tres reglas.
+
+**No es un motor nuevo: es un tercer disparador del razonamiento institucional.** Responde con la instrucción institucional del agente, el conocimiento de la plaza y el expediente del candidato —nada más—. La instrucción se compone con una función pura y declara explícitamente que el agente **no concede puntajes, no cambia estados y no propone modificaciones a la interfaz**: consulta, explica, compara y advierte. La vía de escritura no existe en el módulo, de modo que no puede alterar una decisión ni por error ni por omisión.
+
+**No es libre: está bajo el régimen de gobernanza.** El modelo se elige **en la conversación** dentro de un catálogo que declara el servidor, y un modelo fuera del catálogo **no se usa**: la conversación cae al modelo institucional. La configuración del evaluador —la que firma las decisiones— no se toca desde aquí.
+
+**Resiliencia DORA: nunca deja de responder.** La pregunta se asienta **antes** de llamar al proveedor, de modo que un fallo no borra lo que el reclutador preguntó. La respuesta usa la credencial principal y, si falla, la de respaldo; el mensaje **declara cuál respondió** con una insignia visible. Un agente que responde con la credencial de respaldo y lo oculta no es resiliente: es opaco.
+
+**El historial pertenece al candidato.** El hilo vive en su propia entidad —`recruiter_agent_threads` y `recruiter_agent_messages`, migración `0034`— y **no** en `conversations`: reutilizar la conversación de WhatsApp habría hecho que el análisis interno apareciera en la bandeja como si el candidato hubiera escrito. Al salir y volver, el reclutador ve exactamente la conversación de esa postulación, con autor, fecha y procedencia de la credencial.
+
+**La luz del cuadro de preguntas no decora.** Verde recorriendo la caja cuando el agente está listo; rojo mientras espera la respuesta del modelo. Se deriva de la mutación en curso, de modo que no puede mentir, y respeta `prefers-reduced-motion`.
+
+**Los documentos que se adjuntan alimentan el RAG personal** por el procedimiento que el expediente ya tenía: una sola tubería, la misma política de extensiones y peso, y el mismo análisis de IA.
+
+**Límite declarado.** Los **paneles plegables** de la ficha —Resumen de perfil, Bitácora, Motivo de evaluación, Análisis de CV de Agente IA y Formulario y anuncio · respuestas— **no están entregados en esta versión**: la ficha conserva su disposición actual y la matriz de evaluación permanece visible tal como está. Es la única parte del pedido que queda pendiente, y se declara aquí en lugar de presentarse como hecha.
 
 ### Alcance candidato 2.0.174
 
@@ -92,7 +110,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.174 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.175 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -124,7 +142,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.174.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.175.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

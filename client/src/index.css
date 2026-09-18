@@ -414,3 +414,55 @@
     gap: 0.5rem;
   }
 }
+
+/* Agente del reclutador: la luz del cuadro de preguntas.
+   Verde recorriendo la caja cuando el agente está listo; rojo mientras espera
+   la respuesta del modelo. Se deriva del estado real, no decora. */
+@keyframes agent-sweep {
+  0% {
+    background-position: -45% 0;
+  }
+  100% {
+    background-position: 145% 0;
+  }
+}
+
+.agent-ready,
+.agent-waiting {
+  position: relative;
+  overflow: hidden;
+}
+
+.agent-ready::before,
+.agent-waiting::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  background-size: 45% 100%;
+  background-repeat: no-repeat;
+  animation: agent-sweep 2.4s linear infinite;
+}
+
+.agent-ready::before {
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    #10b981,
+    transparent
+  );
+}
+
+.agent-waiting::before {
+  background-image: linear-gradient(90deg, transparent, #ef4444, transparent);
+  animation-duration: 1.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-ready::before,
+  .agent-waiting::before {
+    animation: none;
+    background-size: 100% 100%;
+  }
+}
