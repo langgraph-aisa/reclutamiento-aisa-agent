@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.184
+# Gobierno de release JARVI RH 2.0.185
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.184**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.185**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.185
+El release **lleva al panel las dos variables que el artefacto necesita para recibir y para entregar**, con el mismo tratamiento que ya reciben las demás credenciales. Una capacidad de superficie y una de ejecución, y ninguna toca el esquema.
+
+**La credencial entrante del webhook se declara en el panel.** La ruta de recepción exigía una variable de entorno del despliegue, de modo que rotarla obligaba a reconstruir la imagen y su valor no participaba del cifrado ni del enmascarado que protege a las demás credenciales. Pasa a ser una cajilla más, con la misma raíz de cifrado AES-256-GCM, la misma máscara de confirmación, el mismo registro de auditoría al rotarla y el mismo botón de retirada. La ruta la resuelve en cada petición: **lo declarado en el artefacto tiene precedencia y la variable de entorno queda como respaldo**, de manera que una instalación que ya la definiera en el despliegue sigue operando sin cambios y ninguna credencial queda expuesta en un archivo de configuración.
+
+**La dirección pública de los archivos salientes se declara en el panel.** El proveedor debe descargar los documentos que la bandeja envía, y esa base se deducía del encabezado del proxy inverso con la variable de entorno como respaldo. Ahora la institución puede declararla desde la interfaz: **la dirección declarada manda sobre el encabezado** y, si se retira, la base vuelve a deducirse del proxy. Se valida como dirección absoluta con TLS y sin parámetros ni fragmentos, y se guarda en claro porque no es un secreto: enmascararla impediría al operador comprobar cuál está vigente sin retirarla y volverla a escribir.
+
+**Sin migración.** Ambas viven en la configuración de integración que ya existía; la credencial se cifra con su contexto de proveedor y clave, y la dirección se almacena como valor de operación. Diez pruebas nuevas fijan la precedencia, el respaldo, el enmascarado y el rechazo de direcciones inválidas.
 
 ### Alcance candidato 2.0.184
 El release **hace que el peso del archivo deje de agotar los reintentos y que un recibo agotado diga por qué murió**. Dos precisiones sobre el conducto del adjunto, y ninguna toca el esquema.
@@ -228,7 +237,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.184 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.185 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -260,7 +269,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.184.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.185.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

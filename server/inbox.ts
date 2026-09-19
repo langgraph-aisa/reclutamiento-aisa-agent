@@ -827,21 +827,25 @@ export function sendInboxLocation(
 
 /**
  * Resuelve la base pública del servicio para entregar al proveedor una
- * dirección que él pueda descargar. Prefiere el encabezado del proxy inverso y
- * admite la anulación explícita por entorno cuando el proxy no lo declara.
+ * dirección que él pueda descargar. La dirección declarada desde el panel tiene
+ * precedencia porque es una decisión de la institución; si no está declarada se
+ * deduce del proxy inverso y, en su defecto, de la variable de entorno.
  */
 export function resolvePublicBaseUrl(
-  headers: Record<string, string | string[] | undefined>
+  headers: Record<string, string | string[] | undefined>,
+  declared = ""
 ): string {
   const first = (value: string | string[] | undefined) =>
     (Array.isArray(value) ? value[0] : value)?.split(",")[0]?.trim() ?? "";
   const host = first(headers["x-forwarded-host"]) || first(headers.host);
   const proto = first(headers["x-forwarded-proto"]) || "https";
   const fromHeaders = host ? `${proto}://${host}` : "";
-  return (fromHeaders || process.env.APICHAT_PUBLIC_BASE_URL || "").replace(
-    /\/+$/,
+  return (
+    declared.trim() ||
+    fromHeaders ||
+    process.env.APICHAT_PUBLIC_BASE_URL ||
     ""
-  );
+  ).replace(/\/+$/, "");
 }
 
 /** Extensiones admitidas para una nota de voz saliente. */

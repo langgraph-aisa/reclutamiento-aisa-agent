@@ -11,6 +11,7 @@ import { writeInboxFile } from "./inboxFiles";
 import { decodeRemoteAttachment, AttachmentTransportError } from "./base64Transport";
 import { registerCandidateInboundDocument } from "./candidateKnowledge";
 import { recordTransportTrace, trimTransportTraces } from "./transportTrace";
+import { resolveApiChatWebhookSecret } from "./apiChatSettings";
 import {
   ATTACHMENT_MESSAGE_TYPES, normalizeApiChatBatch, normalizeApiChatWebhookPayload,
   type ApiChatWebhookMessage,
@@ -113,8 +114,7 @@ export async function processApiChatWebhook(pool: Pool, body: unknown): Promise<
   return { ok: true, registered: results.some(result => result.registered), results };
 }
 
-function authorized(req: Request) {
-  const secret = process.env.APICHAT_WEBHOOK_SECRET;
+function authorized(req: Request, secret: string) {
   // El secreto viaja en la URL del webhook configurada en ApiChat, que sí es
   // parte del contrato público. No se presupone una firma HMAC del proveedor.
   if (!secret) return process.env.NODE_ENV !== "production";
@@ -125,14 +125,18 @@ function authorized(req: Request) {
 
 export function registerApiChatWebhook(app: Express, poolProvider: () => Promise<Pool | null>) {
   app.post("/api/apichat/webhook", async (req: Request, res: Response) => {
-    if (!authorized(req)) {
-      res.status(process.env.APICHAT_WEBHOOK_SECRET ? 401 : 503).json({ ok: false, error: "Autenticación del webhook no disponible o inválida." });
-      return;
-    }
     let pool: Pool | null = null;
     try {
       pool = await poolProvider();
       if (!pool) { res.status(503).json({ ok: false, error: "base-no-disponible" }); return; }
+      // La credencial se resuelve en cada petición: la declarada en el panel
+      // tiene precedencia y la variable de entorno actúa como respaldo, de modo
+      // que rotar el secreto no exige reconstruir la imagen.
+      const secret = await resolveApiChatWebhookSecret(pool);
+      if (!authorized(req, secret)) {
+        res.status(secret ? 401 : 503).json({ ok: false, error: "Autenticación del webhook no disponible o inválida." });
+        return;
+      }
       const result = await enqueueApiChatReceipts(pool, req.body, "webhook");
       await recordTransportTrace(pool, { origin: "webhook", outcome: result.accepted ? "aceptado-durable" : "forma-no-reconocida", body: req.body });
       void trimTransportTraces(pool);

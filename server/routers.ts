@@ -112,7 +112,9 @@ import {
   getApiChatReceptionReadiness,
   saveApiChatEndpointStates,
   saveApiChatPreferences,
+  saveApiChatPublicBaseUrl,
   saveApiChatSecret,
+  resolveApiChatPublicBaseUrl,
   verifyApiChatConnection,
   verifyApiChatReception,
 } from "./apiChatSettings";
@@ -2404,10 +2406,14 @@ export const appRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         try {
-          return await sendInboxFile(await requirePool(), {
+          const pool = await requirePool();
+          return await sendInboxFile(pool, {
             ...input,
             actorUserId: ctx.user.id,
-            publicBaseUrl: resolvePublicBaseUrl(ctx.req.headers),
+            publicBaseUrl: resolvePublicBaseUrl(
+              ctx.req.headers,
+              await resolveApiChatPublicBaseUrl(pool)
+            ),
           });
         } catch (error) {
           throw new TRPCError({
@@ -2435,10 +2441,14 @@ export const appRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         try {
-          return await sendInboxPtt(await requirePool(), {
+          const pool = await requirePool();
+          return await sendInboxPtt(pool, {
             ...input,
             actorUserId: ctx.user.id,
-            publicBaseUrl: resolvePublicBaseUrl(ctx.req.headers),
+            publicBaseUrl: resolvePublicBaseUrl(
+              ctx.req.headers,
+              await resolveApiChatPublicBaseUrl(pool)
+            ),
           });
         } catch (error) {
           throw new TRPCError({
@@ -6296,6 +6306,25 @@ export const appRouter = router({
             message: safeIntegrationMessage(
               error,
               "No fue posible guardar la configuración de ApiChat."
+            ),
+          });
+        }
+      }),
+    savePublicBaseUrl: adminProcedure
+      .input(z.object({ publicBaseUrl: z.string().trim().max(500) }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveApiChatPublicBaseUrl(
+            await requirePool(),
+            input.publicBaseUrl,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar la dirección pública."
             ),
           });
         }

@@ -34,7 +34,11 @@ import {
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-type ApiChatSecretKey = "client_id" | "token" | "account_id";
+type ApiChatSecretKey =
+  | "client_id"
+  | "token"
+  | "account_id"
+  | "webhook_secret";
 
 /** Etiquetas operativas del catálogo de endpoints conversacionales. */
 const ENDPOINT_CAPABILITY_LABELS: Record<string, string> = {
@@ -79,6 +83,13 @@ export default function Config() {
     },
     onError: error => toast.error(error.message),
   });
+  const saveApiChatPublicBaseUrl =
+    trpc.config.savePublicBaseUrl.useMutation({
+      onSuccess: async () => {
+        await apiChatConfiguration.refetch();
+      },
+      onError: error => toast.error(error.message),
+    });
   const verifyApiChat = trpc.config.verifyApiChat.useMutation({
     onSuccess: result => {
       if (result.isConnected)
@@ -244,6 +255,20 @@ export default function Config() {
       await saveApiChatSecret.mutateAsync({ key, value });
       toast.success(
         value ? "Credencial cifrada y guardada" : "Credencial eliminada"
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const persistApiChatPublicBaseUrl = async (value: string) => {
+    try {
+      await saveApiChatPublicBaseUrl.mutateAsync({ publicBaseUrl: value });
+      toast.success(
+        value.trim()
+          ? "Dirección pública declarada"
+          : "Dirección pública retirada"
       );
       return true;
     } catch {
@@ -1084,6 +1109,34 @@ export default function Config() {
                   onRemove={() => persistApiChatSecret("token", null)}
                   onVerify={() => verifyApiChat.mutate()}
                 />
+                <CredentialField
+                  label="Secreto del webhook"
+                  description="Credencial que el artefacto exige en la ruta de recepción; debe coincidir con el ?key= de la dirección registrada en ApiChat"
+                  placeholder="Ingrese el secreto entrante"
+                  state={apiChatConfiguration.data?.secrets.webhook_secret}
+                  pending={saveApiChatSecret.isPending}
+                  onSave={value =>
+                    persistApiChatSecret("webhook_secret", value)
+                  }
+                  onRemove={() =>
+                    persistApiChatSecret("webhook_secret", null)
+                  }
+                />
+                <CredentialField
+                  label="Dirección pública"
+                  description="Base con la que el proveedor descarga los archivos salientes; vacía, se deduce del proxy inverso"
+                  placeholder="https://su-dominio"
+                  secret={false}
+                  state={{
+                    configured: Boolean(
+                      apiChatConfiguration.data?.publicBaseUrl
+                    ),
+                    masked: apiChatConfiguration.data?.publicBaseUrl ?? "",
+                  }}
+                  pending={saveApiChatPublicBaseUrl.isPending}
+                  onSave={persistApiChatPublicBaseUrl}
+                  onRemove={() => persistApiChatPublicBaseUrl("")}
+                />
                 {apiChat.mode === "legacy" ? (
                   <CredentialField
                     label="ID de cuenta"
@@ -1522,12 +1575,19 @@ function CredentialField({
   onSave,
   onRemove,
   onVerify,
+  secret = true,
 }: {
   label: string;
   description: string;
   placeholder: string;
   state?: { configured: boolean; masked: string | null };
   pending: boolean;
+  /**
+   * Cuando el valor no es un secreto —una dirección pública, por ejemplo— el
+   * campo se muestra legible: enmascararlo impediría al operador comprobar cuál
+   * está vigente sin retirarlo y volverlo a escribir.
+   */
+  secret?: boolean;
   onSave: (value: string) => Promise<boolean>;
   onRemove: () => Promise<boolean>;
   onVerify?: () => void;
@@ -1559,27 +1619,29 @@ function CredentialField({
       )}
       <div className="relative">
         <Input
-          type={visible ? "text" : "password"}
+          type={secret && !visible ? "password" : "text"}
           value={value}
           onChange={event => setValue(event.target.value)}
           className="rounded-xl pr-10 font-mono text-xs"
-          autoComplete="new-password"
+          autoComplete={secret ? "new-password" : "off"}
           placeholder={
             state?.configured ? "Ingrese una nueva para rotar" : placeholder
           }
         />
-        <button
-          type="button"
-          className="absolute right-3 top-2.5 text-muted-foreground hover:text-primary"
-          onClick={() => setVisible(current => !current)}
-          aria-label={visible ? `Ocultar ${label}` : `Mostrar ${label}`}
-        >
-          {visible ? (
-            <EyeOff className="h-4 w-4" />
-          ) : (
-            <Eye className="h-4 w-4" />
-          )}
-        </button>
+        {secret && (
+          <button
+            type="button"
+            className="absolute right-3 top-2.5 text-muted-foreground hover:text-primary"
+            onClick={() => setVisible(current => !current)}
+            aria-label={visible ? `Ocultar ${label}` : `Mostrar ${label}`}
+          >
+            {visible ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
+        )}
       </div>
       <div className="flex flex-wrap gap-2">
         <Button

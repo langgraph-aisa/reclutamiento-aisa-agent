@@ -15,12 +15,28 @@ import {
 import { conversationServiceMode } from "./conversationRuntime";
 
 export const APICHAT_PROVIDER = "apichat";
+/**
+ * Credenciales gobernadas desde el panel.
+ *
+ * `webhook_secret` es la única que no viaja al proveedor: es la que el
+ * artefacto **exige** en la ruta de recepción. Se guarda con el mismo cifrado y
+ * el mismo enmascarado que las demás para que su manejo no dependa de un
+ * archivo de entorno del despliegue.
+ */
 export const APICHAT_SECRET_KEYS = [
   "client_id",
   "token",
   "account_id",
+  "webhook_secret",
 ] as const;
 export type ApiChatSecretKey = (typeof APICHAT_SECRET_KEYS)[number];
+
+/**
+ * Dirección pública con la que la bandeja anuncia al proveedor los archivos
+ * salientes. Vive en la configuración y no en el entorno: es un valor de
+ * operación que la institución cambia sin reconstruir la imagen.
+ */
+export const APICHAT_PUBLIC_BASE_URL_KEY = "public_base_url";
 
 /** Ruta oficial que alimenta la recepción y el historial de la bandeja. */
 export const APICHAT_HISTORY_ENDPOINT_PATH = "/messagesHistory";
@@ -121,6 +137,13 @@ export async function getApiChatConfiguration(pool: Pool | null) {
     )[0];
   return {
     ...preferencesFromRows(rows),
+    // La dirección pública se devuelve en claro porque no es un secreto: el
+    // operador necesita leerla para comprobar cuál está vigente.
+    publicBaseUrl: (
+      rows.find(
+        row => !row.is_secret && row.setting_key === APICHAT_PUBLIC_BASE_URL_KEY
+      )?.setting_value ?? ""
+    ).trim(),
     secrets: Object.fromEntries(
       APICHAT_SECRET_KEYS.map(key => [key, secretState(rows, key)])
     ) as Record<
@@ -145,6 +168,64 @@ export function validateApiChatPreferences(
     endpoint: validated.endpoint,
     connectTo: validated.connectTo ?? "",
   };
+}
+
+/**
+ * Valida la dirección pública con la que el proveedor descarga los archivos
+ * salientes. Vacía significa «no declarada»: en ese caso la base se deduce del
+ * proxy inverso y, si tampoco hay cabeceras, de la variable de entorno.
+ */
+export function validateApiChatPublicBaseUrl(value: string) {
+  const trimmed = value.trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error("La dirección pública debe ser una dirección absoluta.");
+  }
+  if (url.protocol !== "https:")
+    throw new Error("La dirección pública debe usar HTTPS.");
+  if (url.search || url.hash)
+    throw new Error(
+      "La dirección pública no admite parámetros de consulta ni fragmentos."
+    );
+  return trimmed;
+}
+
+/**
+ * Credencial que la ruta de recepción exige al proveedor.
+ *
+ * La configuración del panel tiene precedencia y la variable de entorno actúa
+ * como respaldo, de modo que una instalación que ya la definiera en el
+ * despliegue sigue operando sin cambios. Nunca lanza: si la lectura falla, el
+ * respaldo conserva la protección de la ruta.
+ */
+export async function resolveApiChatWebhookSecret(pool: Pool | null) {
+  const fallback = (process.env.APICHAT_WEBHOOK_SECRET ?? "").trim();
+  if (!pool) return fallback;
+  try {
+    const rows = await settingRows(pool);
+    const stored = encryptedSecret(rows, "webhook_secret");
+    return stored?.trim() || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Dirección pública vigente: la del panel, o la del entorno si aquélla no está declarada. */
+export async function resolveApiChatPublicBaseUrl(pool: Pool | null) {
+  const fallback = (process.env.APICHAT_PUBLIC_BASE_URL ?? "").trim();
+  if (!pool) return fallback;
+  try {
+    const rows = await settingRows(pool);
+    const stored = rows.find(
+      row => !row.is_secret && row.setting_key === APICHAT_PUBLIC_BASE_URL_KEY
+    )?.setting_value;
+    return stored?.trim() || fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export async function getApiChatRuntimeSettings(
@@ -898,6 +979,52 @@ export async function saveApiChatSecret(
       configured: Boolean(value),
       masked: value ? maskAgentSecret(value.trim()) : null,
     };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Guarda la dirección pública que el proveedor descarga para los archivos
+ * salientes. Vacía la retira: la base vuelve a deducirse del proxy inverso.
+ */
+export async function saveApiChatPublicBaseUrl(
+  pool: Pool,
+  value: string,
+  actorUserId: number
+) {
+  const publicBaseUrl = validateApiChatPublicBaseUrl(value);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    if (publicBaseUrl) {
+      await upsertSetting(
+        client,
+        APICHAT_PUBLIC_BASE_URL_KEY,
+        publicBaseUrl,
+        false
+      );
+    } else {
+      await client.query(
+        `DELETE FROM integration_settings WHERE provider=$1 AND setting_key=$2`,
+        [APICHAT_PROVIDER, APICHAT_PUBLIC_BASE_URL_KEY]
+      );
+    }
+    await client.query(
+      `INSERT INTO audit_log
+         (actor_user_id,entity_type,entity_id,action,after_json)
+       VALUES ($1,'apichat_configuration',0,$2,$3::jsonb)`,
+      [
+        actorUserId,
+        publicBaseUrl ? "public_base_url_declared" : "public_base_url_removed",
+        JSON.stringify({ publicBaseUrl: publicBaseUrl || null }),
+      ]
+    );
+    await client.query("COMMIT");
+    return { publicBaseUrl };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
