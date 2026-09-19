@@ -6,6 +6,42 @@ import { AttachmentTransportError } from "./base64Transport";
 export type ReceiptOrigin = "webhook" | "sondeo";
 export type ReceiptResult = { ok: true; registered?: boolean; skipped?: string };
 export type ReceiptProcessor = (pool: Pool, message: ApiChatWebhookMessage, origin: ReceiptOrigin) => Promise<ReceiptResult>;
+
+/**
+ * Fallo de recepción con causa declarada.
+ *
+ * La cola distinguía «el archivo no llegó» de «llegó y murió», pero el asiento
+ * conservaba el nombre de la clase de excepción: `Error`. El operador no podía
+ * saber si el fallo era un destino ausente, una dirección expirada o una base
+ * de datos caída, de modo que la superficie de auditoría llenaba su lista de
+ * notificaciones sin resolver con motivos indistinguibles entre sí.
+ */
+export class ReceptionError extends Error {
+  constructor(
+    public readonly code: string,
+    public readonly retryable: boolean,
+    message: string
+  ) {
+    super(message);
+    this.name = "ReceptionError";
+  }
+}
+
+/**
+ * Motivo tipado de un fallo de recepción: la causa y su naturaleza, nunca el
+ * nombre de la clase. Un despliegue que lea el asiento debe poder decidir con
+ * él si conviene reprocesar o corregir la configuración.
+ */
+export function receiptFailureReason(error: unknown) {
+  if (error instanceof AttachmentTransportError)
+    return `${error.code}:${error.retryable ? "reintentable" : "permanente"}`;
+  if (error instanceof ReceptionError)
+    return `${error.code}:${error.retryable ? "reintentable" : "permanente"}`;
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  if (typeof code === "string" && /^[0-9A-Z]{5}$/.test(code))
+    return `base_de_datos:${code}`;
+  return error instanceof Error ? error.name : "ProcessingError";
+}
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 export function apiChatReceiptKey(message: ApiChatWebhookMessage) {
   return hash(`${process.env.APICHAT_ACCOUNT_SCOPE ?? "default"}:${message.number}:${message.id}`);
@@ -68,7 +104,17 @@ export async function runApiChatReceiptSweep(pool: Pool, processMessage: Receipt
     if (!receipt) break;
     try {
       const result = await processMessage(pool, receipt.payload, receipt.origin);
-      if (result.skipped === "sin-conversacion") throw new Error("conversation_unavailable");
+      // Una conversación ausente no es una pérdida de transporte: es un chat que
+      // no pertenece al reclutamiento. Se le concede una ventana corta por si la
+      // postulación se está creando en ese instante y después se clasifica sin
+      // ambigüedad, en lugar de ocupar la lista de pendientes durante veintiún
+      // minutos por cada número ajeno.
+      if (result.skipped === "sin-conversacion")
+        throw new ReceptionError(
+          "sin_destinatario",
+          Number(receipt.attempts) < 3,
+          "La conversación del teléfono no existe en el catálogo."
+        );
       const terminal = result.registered || result.skipped === "duplicado" || result.skipped === "saliente-ya-registrado";
       await pool.query(
         `UPDATE apichat_inbound_receipts
@@ -78,19 +124,22 @@ export async function runApiChatReceiptSweep(pool: Pool, processMessage: Receipt
       );
       completed += 1;
     } catch (error) {
-      const exhausted = Number(receipt.attempts) >= 8;
-      // No se copia texto del candidato, URL ni secretos en el diagnóstico. El
-      // transporte sí clasifica el fallo con un código y una condición de
-      // reintento: conservarlos distingue «la dirección expiró» de «el destino
-      // no está permitido» sin deducirlo del nombre de la clase de error.
-      const reason = error instanceof AttachmentTransportError
-        ? `${error.code}:${error.retryable ? "reintentable" : "permanente"}`
-        : error instanceof Error
-          ? error.name
-          : "ProcessingError";
+      const exhausted =
+        Number(receipt.attempts) >= 8 ||
+        // Un fallo declarado permanente no ocupa la cola: reintentarlo ocho
+        // veces retrasa veintiún minutos la decisión del operador sobre una
+        // causa que no va a cambiar. El destino ausente calcula su propia
+        // condición por intento, de modo que agota en su ventana corta y no en
+        // la larga. El respaldo de ocho intentos queda para lo transitorio.
+        ((error instanceof AttachmentTransportError ||
+          error instanceof ReceptionError) &&
+          !error.retryable);
+      // El asiento declara la causa y su naturaleza, y el desenlace deja de
+      // quedar vacío: la superficie de auditoría ya no muestra «sin desenlace».
+      const reason = receiptFailureReason(error);
       await pool.query(
         `UPDATE apichat_inbound_receipts
-            SET status=$3,last_error=$4,lease_token=NULL,updated_at=now(),
+            SET status=$3,outcome=$4,last_error=$4,lease_token=NULL,updated_at=now(),
                 next_attempt_at=now()+make_interval(secs=>$5)
           WHERE receipt_key=$1 AND lease_token=$2`,
         [receipt.receipt_key, token, exhausted ? "dead" : "retry", reason,

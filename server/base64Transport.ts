@@ -379,6 +379,10 @@ export class AttachmentTransportError extends Error {
       | "size_limit"
       | "empty_content"
       | "content_unresolved"
+      /** El proveedor anunció el archivo con su tipo declarado pero sin carga. */
+      | "payload_missing"
+      /** La carga llegó pero no es una codificación válida. */
+      | "payload_invalid"
       | "redirect_limit",
     public readonly retryable: boolean,
     message: string
@@ -704,7 +708,28 @@ export async function decodeRemoteAttachment(
   const source = rawUrl.trim();
   if (!source) return null;
   if (source.startsWith("data:")) {
-    return decodeTransport({ dataUri: source, fileName, mimeType }, options);
+    // El contrato declara `url` como «URL del contenido o archivo codificado en
+    // base64 con su tipo». Cuando el sobre llega sin la coma ni la codificación,
+    // el proveedor anunció el archivo sin entregarlo: es una ausencia de
+    // contenido y se declara con su código propio, en lugar de degradarse al
+    // nombre de una excepción genérica que el operador no puede interpretar.
+    if (!splitBase64Payload(source).base64.trim())
+      throw new AttachmentTransportError(
+        "payload_missing",
+        false,
+        "El proveedor anunció el archivo con su tipo declarado pero sin contenido."
+      );
+    try {
+      return decodeTransport({ dataUri: source, fileName, mimeType }, options);
+    } catch (error) {
+      throw new AttachmentTransportError(
+        "payload_invalid",
+        false,
+        error instanceof Error
+          ? error.message
+          : "La carga recibida no es una codificación válida."
+      );
+    }
   }
   if (!/^https:\/\//i.test(source)) {
     // El proveedor puede notificar el adjunto como base64 **sin** el sobre

@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.185
+# Gobierno de release JARVI RH 2.0.186
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.185**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.186**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.186
+El release **hace decidible un reproceso y nombra la ausencia de contenido**, cerrando la clasificación de fallos que el conducto dejaba a medias. Una capacidad de diagnóstico y ninguna de transporte; no toca el esquema.
+
+**El asiento de recepción declara la causa y su naturaleza.** La cola distinguía «no llegó» de «llegó y murió», pero conservaba el nombre de la clase de excepción, de modo que la superficie de auditoría mostraba la misma palabra para un destino ausente, una dirección expirada y una base de datos caída, y la columna de desenlace quedaba vacía. Ahora un clasificador declara el motivo tipado: los fallos del transporte conservan su código con su condición de reintento, un chat sin conversación se asienta como `sin_destinatario` con una ventana corta, un fallo de PostgreSQL se asienta como `base_de_datos:<SQLSTATE>` y la columna de desenlace deja de quedar vacía. La superficie de auditoría puede decidir si conviene reprocesar o corregir la configuración sin leer el código.
+
+**Lo permanente no ocupa la cola.** Un fallo declarado permanente se clasificaba igual que uno transitorio y consumía ocho intentos —veintiún minutos— sobre una causa que no va a cambiar. Ahora lo permanente agota de inmediato, salvo el destino ausente, que calcula su propia condición por intento y agota en tres para no retener mensajes de números ajenos al reclutamiento.
+
+**La ausencia de contenido se nombra.** El contrato declara `url` como «URL del contenido o archivo codificado en base64 con su tipo». Cuando el sobre llega sin la codificación, el transporte lo declaraba como una excepción genérica; ahora se asienta `payload_missing:permanente`, y una carga que no se decodifica como `payload_invalid:permanente`. Son los dos desenlaces del adjunto anunciado sin contenido, y cada uno tiene un nombre.
+
+**Sin migración.** Es una clasificación de fallos, no un cambio de esquema. Nueve pruebas nuevas fijan la clasificación.
 
 ### Alcance candidato 2.0.185
 El release **lleva al panel las dos variables que el artefacto necesita para recibir y para entregar**, con el mismo tratamiento que ya reciben las demás credenciales. Una capacidad de superficie y una de ejecución, y ninguna toca el esquema.
@@ -237,7 +248,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.185 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.186 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -269,7 +280,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.185.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.186.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

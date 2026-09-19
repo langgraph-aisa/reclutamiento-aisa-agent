@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.185</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.186</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.185-0b2d4b" alt="JARVI RH 2.0.185" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.186-0b2d4b" alt="JARVI RH 2.0.186" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse%20SDK-5.11.1-orange" alt="Langfuse SDK 5.11.1" />
@@ -24,7 +24,7 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.185 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.186 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
 Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH integra plazas, formularios y protocolos versionados, evaluación asistida por IA, revisión humana, conversaciones ApiChat, solicitud controlada de currículum y auditoría administrativa. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar, fijar remuneración o atribuir rasgos psicológicos: el personal autorizado conserva la decisión.
@@ -34,6 +34,11 @@ Talento AISA vincula capacidades técnicas con proyectos industriales, energéti
 ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
+
+### 17SEP2026 · JARVI RH 2.0.186
+
+- Un fallo de recepción declara su causa y su naturaleza —destino ausente, carga sin contenido o error de base— y lo permanente no ocupa la cola. Sin migración.
+- El asiento deja de quedar sin desenlace.
 
 ### 17SEP2026 · JARVI RH 2.0.185
 
@@ -68,7 +73,7 @@ ACTUALIZACIÓN DE LA VERSIÓN
 ### 17SEP2026 · JARVI RH 2.0.179
 
 - La ficha de Revisión Humana fija su orden de lectura: encabezado, feed de WhatsApp, matriz, agente del reclutador y RAG Personal al cierre.
-- Traza del conducto: el receptor registra la forma del cuerpo que envía ApiChat —claves, tipos y tamaños— y su desenlace, incluidos los siete descartes que antes no dejaban rastro. Sin contenido del candidato: los campos de archivo se sustituyen por su peso y su huella. Migración `0035`.
+- Traza del conducto: el receptor registra la forma del cuerpo que envía ApiChat —claves, tipos y tamaños— y su desenlace. Sin contenido del candidato: los campos de archivo se sustituyen por su peso y su huella. Migración `0035`.
 
 ### 17SEP2026 · JARVI RH 2.0.178
 
@@ -81,12 +86,12 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 ### 17SEP2026 · JARVI RH 2.0.176
 
-- Paneles plegables en la ficha de evaluación: los cinco bloques de lectura se pliegan por sección y por operador, y la matriz de evaluación queda a la vista.
+- Paneles plegables en la ficha de evaluación: los cinco bloques se pliegan por sección y la matriz queda a la vista.
 
 ### 17SEP2026 · JARVI RH 2.0.175
 
 - Agente del reclutador bajo el encabezado del candidato: analiza solo ese expediente, no modifica ninguna opción de la interfaz y su modelo se elige en la conversación dentro del catálogo institucional.
-- Resiliencia DORA: si la credencial principal falla responde con la de respaldo y la insignia declara cuál respondió; el historial pertenece al candidato y los documentos adjuntos alimentan su RAG personal.
+- Resiliencia DORA: si la credencial principal falla responde con la de respaldo y la insignia declara cuál respondió.
 
 ### 17SEP2026 · JARVI RH 2.0.174
 
@@ -126,7 +131,7 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 ### 17SEP2026 · JARVI RH 2.0.165
 
-- La esencia del CV se genera por fragmentos con el límite configurado, se persiste con su estado y alimenta al agente evaluador como capa declarada.
+- La esencia del CV se genera por fragmentos con el límite configurado y alimenta al agente evaluador.
 - La ficha estrena el panel de análisis de CV junto a las respuestas de formularios, con la re-evaluación que actualiza el puntaje.
 
 ### 17SEP2026 · JARVI RH 2.0.164
@@ -161,7 +166,7 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 ### 17SEP2026 · JARVI RH 2.0.158
 
-- El resumen de actividad y control ISO cierra cada hoja administrativa: deja de encabezar la vista y pasa al pie.
+- El resumen de actividad y control ISO cierra cada hoja administrativa al pie.
 
 ### 17SEP2026 · JARVI RH 2.0.157
 
@@ -473,7 +478,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md), [transporte base64 y visor](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md) y [caja negra 2.0.185](docs/PRUEBAS_CAJA_NEGRA_2.0.185.md).
+`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md), [transporte base64 y visor](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md) y [caja negra 2.0.186](docs/PRUEBAS_CAJA_NEGRA_2.0.186.md).
 
 ## 8. Capa cognitiva, resiliencia y alcance verificable
 
