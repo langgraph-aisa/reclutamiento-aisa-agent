@@ -45,45 +45,50 @@ function replaceVersion(relativePath, content) {
     `${currentVersion.replaceAll(".", "\\.")}(?!\\.md)`,
     "g"
   );
-  // Los encabezados y párrafos de alcance describen releases ya entregados:
-  // avanzarlos renombraría la historia y haría que una entrega anterior
-  // apareciera como la vigente. La prosa de gobierno no escribe la versión
-  // vigente: se consulta con `pnpm release:bump -- --dry-run`.
-  const historicalHeading = /^#{1,6}\s*Alcance\b/;
-  const historicalParagraph = /^El alcance de \d/;
-  const historicalCandidate = /^La especificación candidata de \d/;
-  // Los rótulos de fuentes primarias documentan los recursos que entraron con
-  // una entrega concreta: avanzarlos atribuiría a la versión vigente una
-  // bibliografía que no incorporó.
-  const historicalSources = /^#{1,6}\s*Fuentes primarias\b/;
-  const escapedCurrentVersion = currentVersion.replaceAll(".", "\\.");
-  // El documento de caja negra se renombra en cada entrega: su referencia en el
-  // cuerpo del README debe acompañar el renombrado en lugar de quedar congelada
-  // apuntando a un archivo que ya no existe.
-  const blackBoxReference = new RegExp(
-    `PRUEBAS_CAJA_NEGRA_${escapedCurrentVersion}\\.md`,
-    "g"
-  );
-  const substitute = value =>
-    value
+  // Un alcance ya entregado se congela entero, no solo su encabezado: el
+  // cuerpo narra hechos con la versión que los entregó. Congelar únicamente la
+  // línea del título dejaba el cuerpo expuesto y cada incremento reescribía el
+  // literal dentro de la narración histórica —la entrega 2.0.166 llegó a citar
+  // 2.0.189—, corrupción acumulativa que delata
+  // `scripts/verify-documentary-integrity.mjs`.
+  const frozenHeading = /^(#{1,6})\s*(?:Alcance\b|Fuentes primarias\b)/;
+  const anyHeading = /^(#{1,6})\s/;
+  // Una anotación posterior nombra la entrega que resolvió el límite que la
+  // sección declara; es prosa deliberada y no se toca.
+  const historicalParagraph = /^(?:El alcance de|La especificación candidata de)\s+\d/;
+  // La hoja de caja negra se renombra en cada entrega: toda referencia debe
+  // acompañar el renombrado, porque solo existe una hoja vigente. Congelarla
+  // dejaba la puerta de caja negra inalcanzable desde el gobierno.
+  const blackBoxReference = /PRUEBAS_CAJA_NEGRA_\d+\.\d+\.\d+\.md/g;
+  const nextBlackBoxReference = `PRUEBAS_CAJA_NEGRA_${nextVersion}.md`;
+  const substitute = value => {
+    let frozenLevel = null;
+    return value
       .split("\n")
       .map(line => {
-        if (
-          historicalHeading.test(line) ||
-          historicalParagraph.test(line) ||
-          historicalCandidate.test(line) ||
-          historicalSources.test(line)
-        ) {
+        const frozen = frozenHeading.exec(line);
+        if (frozen) {
+          frozenLevel = frozen[1].length;
           return line;
         }
+        const heading = anyHeading.exec(line);
+        if (heading) {
+          if (frozenLevel !== null) {
+            if (heading[1].length > frozenLevel) return line;
+            frozenLevel = null;
+          }
+          return line
+            .replace(versionPattern, nextVersion)
+            .replace(blackBoxReference, nextBlackBoxReference);
+        }
+        if (frozenLevel !== null) return line;
+        if (historicalParagraph.test(line)) return line;
         return line
           .replace(versionPattern, nextVersion)
-          .replace(
-            blackBoxReference,
-            `PRUEBAS_CAJA_NEGRA_${nextVersion}.md`
-          );
+          .replace(blackBoxReference, nextBlackBoxReference);
       })
       .join("\n");
+  };
   if (relativePath !== "README.md") {
     return substitute(content);
   }

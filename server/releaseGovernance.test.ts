@@ -3,6 +3,7 @@ import { VerticalNavigator } from "../client/src/components/VerticalNavigator";
 import { ThemeProvider } from "../client/src/contexts/ThemeContext";
 import { auditFormalSpanish } from "../scripts/verify-formal-spanish.mjs";
 import { auditPublicCopyControls } from "../scripts/verify-public-copy.mjs";
+import { auditDocumentaryIntegrity } from "../scripts/verify-documentary-integrity.mjs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { execFileSync } from "node:child_process";
@@ -96,8 +97,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.188");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.188");
+    expect(APP_VERSION).toBe("2.0.189");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.189");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -547,7 +548,7 @@ describe("black-box release contract", () => {
     // (servidor, cliente y esquema). La cuenta crece con cada módulo nuevo y
     // este número es su acta: si sube sin que se agregue un archivo, o baja sin
     // que se retire, el cambio no fue intencional y la puerta lo delata.
-    // 2.0.188: +2 por el desenlace tipado del adjunto (compartido y servidor).
+    // 2.0.189: +2 por el desenlace tipado del adjunto (compartido y servidor).
     expect(audit.files).toHaveLength(146);
     expect(audit.findings).toEqual([]);
     expect(publicCopyAudit.files).toHaveLength(146);
@@ -1233,7 +1234,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.188");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.189");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1247,7 +1248,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 19SEP2026 · JARVI RH 2.0.188");
+    expect(readme).toContain("### 19SEP2026 · JARVI RH 2.0.189");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1670,9 +1671,23 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.188");
+    expect(governance).toContain("Alcance candidato 2.0.189");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
+  });
+  it("conserva la integridad del relato de release en cada entrega", () => {
+    // El encabezado de un alcance histórico se congelaba, pero no su cuerpo: el
+    // incremento de versión reescribía el literal dentro de la narración y una
+    // entrega de 2.0.166 llegó a citar 2.0.189. La hoja de especificación del
+    // release se renombra en cada entrega y sus referencias quedaron apuntando
+    // a documentos inexistentes. Ambas cosas se auditan aquí.
+    const findings = auditDocumentaryIntegrity();
+    expect(
+      findings.map(
+        finding =>
+          `${finding.document}:${finding.line} [${finding.rule}] ${finding.detail}`
+      )
+    ).toEqual([]);
   });
   it("administra los endpoints de ApiChat por capacidad conversacional", () => {
     const settings = fs.readFileSync(
@@ -1909,7 +1924,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.188");
+    expect(governance).toContain("Alcance candidato 2.0.189");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

@@ -1,6 +1,6 @@
 {
   "name": "reclutamiento-automatizado",
-  "version": "2.0.188",
+  "version": "2.0.189",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:black-box": "vitest run server/releaseGovernance.test.ts",
     "text:verify": "node scripts/verify-formal-spanish.mjs && node scripts/verify-public-copy.mjs",
+    "docs:verify": "node scripts/verify-documentary-integrity.mjs",
     "release:bump": "node scripts/bump-release.mjs",
     "deploy:sql": "node scripts/build-conversation-deployment-sql.mjs",
     "auditar:conducto": "bash scripts/auditar-conducto-apichat.sh",

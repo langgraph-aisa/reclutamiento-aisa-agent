@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { auditFormalSpanish } from "./verify-formal-spanish.mjs";
 import { auditPublicCopyControls } from "./verify-public-copy.mjs";
+import { auditDocumentaryIntegrity } from "./verify-documentary-integrity.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -109,6 +110,21 @@ if (publicCopyAudit.findings.length > 0) {
   fail(
     `La auditoría de textos públicos falló: ${publicCopyAudit.findings.join("; ")}`
   );
+}
+
+// El relato de release se incrementa en cada entrega: el literal de versión no
+// puede reescribir la narración histórica ni dejar referencias a documentos que
+// ya no existen. Esta auditoría se invoca aquí para que la puerta de release la
+// ejecute, y no únicamente cuando se corre la caja negra.
+const documentaryAudit = auditDocumentaryIntegrity();
+if (documentaryAudit.length > 0) {
+  const details = documentaryAudit
+    .map(
+      finding =>
+        `${finding.document}:${finding.line} [${finding.rule}] ${finding.detail}`
+    )
+    .join("; ");
+  fail(`La integridad documental del relato de release falló: ${details}`);
 }
 
 if (process.argv.includes("--compare-git")) {

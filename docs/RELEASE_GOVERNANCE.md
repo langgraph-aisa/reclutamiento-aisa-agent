@@ -1,11 +1,11 @@
-# Gobierno de release JARVI RH 2.0.188
+# Gobierno de release JARVI RH 2.0.189
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.188**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.189**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
 
 ### Alcance candidato 2.0.188
-El release **convierte el rechazo del adjunto en una decisión reversible y devuelve la evidencia al agente**, cerrando la cadena que 2.0.188 dejó abierta en su último eslabón. Tres capacidades —recuperación documental, lectura institucional del desenlace y acuse del expediente— y ninguna toca el esquema.
+El release **convierte el rechazo del adjunto en una decisión reversible y devuelve la evidencia al agente**, cerrando la cadena que 2.0.187 dejó abierta en su último eslabón. Tres capacidades —recuperación documental, lectura institucional del desenlace y acuse del expediente— y ninguna toca el esquema.
 
 **El rechazo de política deja de ser terminal.** La política de conocimiento se aplicaba una sola vez, en el instante de la recepción, y su veredicto era definitivo: el proveedor entregaba el PDF, el receptor lo decodificaba, lo escribía en el volumen de la bandeja y **después** lo rechazaba porque la extensión no estaba habilitada o el peso superaba el máximo. A partir de ahí el mensaje declaraba `processingOutcome='rejected'` para siempre, el recibo se cerraba con su carga ya borrada y **ninguna operación del sistema volvía sobre esa decisión**. El candidato aparecía sin evidencia documental y el evaluador recibía la frase «no incorporado al análisis» como si describiera al candidato y no a una configuración administrativa. Ahora la recepción y el ingreso son dos hechos distintos: mientras el binario exista, la incorporación se reintenta sin exigir al candidato un envío nuevo. La recuperación lee el binario conservado, reconstruye por contenido su extensión, tipo y huella —nunca confía en lo declarado por el emisor—, lo publica en el expediente con el mismo análisis del RAG personal, vuelve a ejecutar el agente evaluador con la evidencia nueva y **corrige el asiento**: el mensaje deja de declarar una exclusión superada, porque una creencia falsa en la bandeja seguiría afirmando lo que el expediente ya desmiente.
 
@@ -14,6 +14,13 @@ El release **convierte el rechazo del adjunto en una decisión reversible y devu
 **El expediente se acusa una sola vez.** El agradecimiento y el aviso de contacto declarados en «Evaluación de CV con IA» se enviaban como parte del ciclo de la solicitud, pero no existía una operación que los emitiera cuando el expediente se completaba por otra vía. Ahora el acuse se compone con la misma función que el cierre de la solicitud —para que no existan dos redacciones del agradecimiento— y se envía por el camino humano de la bandeja: la conversación con el candidato es una superficie con control humano y el sistema no escribe al candidato sin que alguien sostenga el teclado. La idempotencia se asienta en la auditoría y no en la clave del mensaje, porque el envío humano sobrescribe esa clave con el identificador del proveedor.
 
 **Sin migración.** Las tres capacidades reutilizan las tablas `0035` a `0037` y el volumen de la bandeja. Doce pruebas nuevas fijan la incorporación, el análisis, la re-evaluación del agente, la detección por huella, la ausencia de binario y la idempotencia del acuse.
+
+### Alcance candidato 2.0.189
+El release **publica el análisis fenomenológico, ontológico y epistémico del fallo del adjunto conservado** y lo enlaza desde el gobierno, de modo que la recuperación entregada en 2.0.188 quede fundada, declarada y refutable. Ninguna capacidad toca el esquema.
+
+**El fallo se lee y se declara.** El documento [ANALISIS_RECUPERACION_ADJUNTO_2.0.188.md](ANALISIS_RECUPERACION_ADJUNTO_2.0.188.md) fija lo que aparecía —un enunciado único para cuatro causas, ofrecido como cierre y por tanto indistinguible de una decisión—, separa los dos hechos que el conducto confundía —la entrega del proveedor es un hecho del mundo; la admisión del expediente es un veredicto de la configuración—, declara que el déficit del agente evaluador fue de conocimiento y no de razonamiento, y restituye la refutabilidad: el visor entrega el documento con vale firmado y el evaluador humano lee la misma base que leyó el agente, de modo que su dictamen prevalece sobre un fundamento verificable.
+
+**Sin migración.** Es un release de gobierno y de documentación; reutiliza las tablas `0035` a `0037` y el volumen de la bandeja. Cuatro casos nuevos de caja negra —`BN-ANALISIS-01` a `BN-ANALISIS-04`— fijan que la secuencia declarada coincida con las operaciones observables.
 
 ### Alcance candidato 2.0.187
 El release **lleva la pregunta del artefacto a la frontera donde está la causa**: la configuración efectiva del proveedor. Cinco capacidades —diagnóstico, conformidad del contrato, evidencia simétrica y recuperación— y ninguna toca el esquema.
@@ -276,7 +283,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.188 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.167 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -308,7 +315,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.188.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.167.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 
@@ -627,4 +634,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.139.md](PRUEBAS_CAJA_NEGRA_2.0.139.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.189.md](PRUEBAS_CAJA_NEGRA_2.0.189.md).
