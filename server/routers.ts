@@ -194,6 +194,10 @@ import {
 } from "./inbox";
 import { manualInboxSync } from "./inboxSync";
 import { markInboxRead } from "./inbox";
+import {
+  EXPEDIENTE_SIGNAL_COLUMNS,
+  EXPEDIENTE_SIGNAL_JOINS,
+} from "./expedienteSignal";
 import { conversationPanelState } from "./conversationPanel";
 import { runConversationTurn } from "./conversationEngine";
 import { dispatchQueuedReplies } from "./conversationOutbox";
@@ -4199,6 +4203,7 @@ export const appRouter = router({
              ${scoreExpression} AS evaluation_score,
              human_review.human_review_at,human_review.human_review_action,
              human_review.human_review_actor,
+             ${EXPEDIENTE_SIGNAL_COLUMNS},
              COALESCE(answer_set.answers,'[]'::jsonb) AS answers,
              COALESCE(submission_set.submissions,'[]'::jsonb) AS submissions
            FROM applications a
@@ -4243,6 +4248,7 @@ export const appRouter = router({
               ORDER BY al.created_at DESC,al.id DESC
               LIMIT 1
            ) human_review ON true
+           ${EXPEDIENTE_SIGNAL_JOINS}
            LEFT JOIN LATERAL (
              SELECT jsonb_agg(
                       jsonb_build_object(

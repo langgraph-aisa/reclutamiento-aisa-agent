@@ -81,8 +81,14 @@ function replaceVersion(relativePath, content) {
             .replace(versionPattern, nextVersion)
             .replace(blackBoxReference, nextBlackBoxReference);
         }
-        if (frozenLevel !== null) return line;
-        if (historicalParagraph.test(line)) return line;
+        // La hoja de caja negra se renombra en cada entrega y solo existe una
+        // vigente: la referencia la acompaña incluso dentro de un alcance
+        // congelado, porque un enlace congelado apuntaría a una hoja retirada y
+        // la puerta quedaría inalcanzable. El literal de versión, en cambio, sí
+        // permanece congelado: narra el hecho con la entrega que lo entregó.
+        if (frozenLevel !== null || historicalParagraph.test(line)) {
+          return line.replace(blackBoxReference, nextBlackBoxReference);
+        }
         return line
           .replace(versionPattern, nextVersion)
           .replace(blackBoxReference, nextBlackBoxReference);
@@ -129,4 +135,39 @@ fs.renameSync(
   path.join(repositoryRoot, nextBlackBoxPath)
 );
 
-console.log(`JARVI RH actualizado: ${currentVersion} -> ${nextVersion}`);
+// La hoja de caja negra es única: no solo los documentos sincronizados la
+// enlazan. Cualquier documento de `docs/` que la cite debe apuntar a la
+// vigente, porque conservar el nombre retirado deja la puerta inalcanzable
+// —defecto que delata `pnpm docs:verify`—.
+const staleBlackBox = /PRUEBAS_CAJA_NEGRA_\d+\.\d+\.\d+\.md/g;
+const staleBlackBoxCheck = /PRUEBAS_CAJA_NEGRA_\d+\.\d+\.\d+\.md/;
+const collectDocuments = directory =>
+  fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    if (entry.name === "node_modules" || entry.name.startsWith(".")) return [];
+    const full = path.join(directory, entry.name);
+    if (entry.isDirectory()) return collectDocuments(full);
+    return /\.md$/.test(entry.name) ? [full] : [];
+  });
+let repointedDocuments = 0;
+for (const document of [
+  ...collectDocuments(path.join(repositoryRoot, "docs")),
+  path.join(repositoryRoot, "README.md"),
+]) {
+  const content = fs.readFileSync(document, "utf8");
+  if (!staleBlackBoxCheck.test(content)) continue;
+  const next = content.replace(
+    staleBlackBox,
+    `PRUEBAS_CAJA_NEGRA_${nextVersion}.md`
+  );
+  if (next !== content) {
+    fs.writeFileSync(document, next);
+    repointedDocuments += 1;
+  }
+}
+
+console.log(
+  `JARVI RH actualizado: ${currentVersion} -> ${nextVersion}` +
+    (repointedDocuments
+      ? ` (${repointedDocuments} documento(s) reorientados a la hoja vigente)`
+      : "")
+);

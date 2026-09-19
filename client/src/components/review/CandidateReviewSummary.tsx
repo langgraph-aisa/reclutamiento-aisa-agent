@@ -8,12 +8,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ExpedienteSignalBadges } from "@/components/review/ExpedienteSignalBadges";
 import { trpc } from "@/lib/trpc";
 import {
   APPLICATION_STATUS_OPTIONS,
   applicationStatusLabel,
   applicationStatusTone,
 } from "@shared/applicationStatus";
+import { institutionalStamp } from "@shared/expedienteSignal";
 import {
   Banknote,
   Check,
@@ -145,6 +147,14 @@ export function CandidateReviewSummary({ candidate }: { candidate: any }) {
               Punteo IA
             </p>
           </div>
+          {/* La señalización acompaña al punteo porque es su fecha de validez:
+              un puntaje sin el estado de la revisión ni de los cambios
+              posteriores no dice si sigue vigente. */}
+          <ExpedienteSignalBadges
+            candidate={candidate}
+            className="max-w-[220px] justify-center"
+            max={4}
+          />
         </div>
         <div className="human-review-quick-grid min-w-0">
           <Select value={nextStatus} onValueChange={setNextStatus}>
@@ -268,29 +278,7 @@ export function formatDate(value: string | Date | null | undefined) {
  * turno que revisó, no la del navegador que consulta.
  */
 export function humanReviewStamp(value: string | Date | null | undefined) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  const options = { timeZone: "America/Guatemala" } as const;
-  const parts = new Intl.DateTimeFormat("es-GT", {
-    ...options,
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).formatToParts(date);
-  const read = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find(part => part.type === type)?.value ?? "";
-  const month = read("month").replace(/\./g, "").slice(0, 3).toUpperCase();
-  const day = read("day").padStart(2, "0");
-  const year = read("year");
-  const time = new Intl.DateTimeFormat("es-GT", {
-    ...options,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date);
-  if (!month || !day || !year) return null;
-  return { time, date: `${day} ${month} ${year}`, iso: date.toISOString() };
+  return institutionalStamp(value, "America/Guatemala");
 }
 
 /** Ubicación declarada: zona, municipio, departamento y país. */

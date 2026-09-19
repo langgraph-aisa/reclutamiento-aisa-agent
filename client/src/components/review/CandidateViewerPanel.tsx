@@ -2,6 +2,7 @@ import {
   formatDate,
   scoreFor,
 } from "@/components/review/CandidateReviewSummary";
+import { ExpedienteSignalBadges } from "@/components/review/ExpedienteSignalBadges";
 import { VerticalNavigator } from "@/components/VerticalNavigator";
 import {
   adjacentReviewBlockPage,
@@ -92,6 +93,14 @@ export function CandidateViewerPanel({ candidate }: { candidate: any }) {
                 {candidate.ai_model ?? "Modelo no informado"}
               </p>
             ) : null}
+            {/* La matriz es el fundamento del dictamen: si el expediente cambió
+                después de la revisión humana, el reclutador debe saberlo aquí,
+                donde lee la evidencia, y no sólo en el encabezado. */}
+            <ExpedienteSignalBadges
+              candidate={candidate}
+              className="mt-2"
+              max={4}
+            />
           </div>
           <div className="flex flex-wrap items-start justify-end gap-2">
             {selection === "ai" && blockRange.pageCount > 1 ? (

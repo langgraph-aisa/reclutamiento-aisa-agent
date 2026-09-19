@@ -19,7 +19,9 @@ import {
   QuickSendFields,
   type QuickSendPayload,
 } from "@/components/inbox/QuickSendFields";
+import { ExpedienteSignalBadges } from "@/components/review/ExpedienteSignalBadges";
 import { trpc } from "@/lib/trpc";
+import { expedienteSignals } from "@shared/expedienteSignal";
 import { Bot, CheckCircle2, Clock3, ExternalLink, FileText, Link2, MapPin, Phone, Search, Send, ShieldAlert, Trash2, UserRound, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -240,6 +242,11 @@ export default function Inbox() {
   }, [conversations.data, selectedId]);
 
   const current = detail.data?.conversation;
+  // La señalización del expediente viaja en la lista de conversaciones y no en
+  // el detalle: la fila es la que lleva la revisión humana y el último evento.
+  const currentRow = (conversations.data ?? []).find(
+    row => row.id === current?.id
+  );
   const humanKeyboard = Boolean(
     current?.human_takeover && !current?.agent_enabled
   );
@@ -365,10 +372,15 @@ export default function Inbox() {
                       </span>
                     </>
                   ) : null}
+                  <ExpedienteSignalBadges
+                    candidate={row}
+                    className="ml-auto justify-end"
+                    max={2}
+                  />
                   <Link
                     href={`/admin/human-review?application=${row.application_id}`}
                     onClick={event => event.stopPropagation()}
-                    className="ml-auto rounded-full border border-border/70 px-3 py-1 text-xs font-semibold text-primary hover:bg-muted"
+                    className={`rounded-full border border-border/70 px-3 py-1 text-xs font-semibold text-primary hover:bg-muted ${row.human_review_at ? "" : "ml-auto"}`}
                   >
                     Detalle
                   </Link>
@@ -516,6 +528,24 @@ export default function Inbox() {
                   </Button>
                 </div>
                 {!humanKeyboard ? <p className="inline-flex items-center gap-2 text-xs text-amber-800"><ShieldAlert className="h-4 w-4" /> JARVI HR mantiene el control; la transferencia exige finalización o excepción administrativa.</p> : <p className="inline-flex items-center gap-2 text-xs text-emerald-800"><CheckCircle2 className="h-4 w-4" /> Control humano activo y registrado.</p>}
+
+                {/* El pie de la conversación es donde el evaluador cierra la
+                    lectura: aquí debe constar si el expediente pasó por revisión
+                    humana y qué cambió después, para que no confunda un
+                    expediente ya dictaminado con uno que sigue abierto. La caja
+                    no se dibuja cuando no hay nada que declarar. */}
+                {expedienteSignals(currentRow).length ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border/70 bg-muted/40 px-3 py-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">
+                      Señalización del expediente
+                    </span>
+                    <ExpedienteSignalBadges
+                      candidate={currentRow}
+                      className="justify-end"
+                      max={4}
+                    />
+                  </div>
+                ) : null}
 
                 <Dialog open={quickKind !== null} onOpenChange={open => { if (!open) closeQuickAction(); }}>
                   <DialogContent>

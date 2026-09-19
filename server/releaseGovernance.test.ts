@@ -12,6 +12,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { normalizeApiChatBatch } from "./apiChatContract";
 import {
+  expedienteChangedAfterReview,
+  expedienteSignals,
+} from "../shared/expedienteSignal";
+import {
   describeTransportShape,
   redactTransportPayload,
   summarizeTransportTrace,
@@ -97,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.189");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.189");
+    expect(APP_VERSION).toBe("2.0.190");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.190");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -548,10 +552,11 @@ describe("black-box release contract", () => {
     // (servidor, cliente y esquema). La cuenta crece con cada módulo nuevo y
     // este número es su acta: si sube sin que se agregue un archivo, o baja sin
     // que se retire, el cambio no fue intencional y la puerta lo delata.
-    // 2.0.189: +2 por el desenlace tipado del adjunto (compartido y servidor).
-    expect(audit.files).toHaveLength(146);
+    // 2.0.190: +3 por la señalización del expediente (compartido, servidor y
+    // distintivo del cliente).
+    expect(audit.files).toHaveLength(149);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(146);
+    expect(publicCopyAudit.files).toHaveLength(149);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -1234,7 +1239,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.189");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.190");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1248,7 +1253,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 19SEP2026 · JARVI RH 2.0.189");
+    expect(readme).toContain("### 19SEP2026 · JARVI RH 2.0.190");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1671,14 +1676,14 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.189");
+    expect(governance).toContain("Alcance candidato 2.0.190");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
   it("conserva la integridad del relato de release en cada entrega", () => {
     // El encabezado de un alcance histórico se congelaba, pero no su cuerpo: el
     // incremento de versión reescribía el literal dentro de la narración y una
-    // entrega de 2.0.166 llegó a citar 2.0.189. La hoja de especificación del
+    // entrega de 2.0.166 llegó a citar 2.0.190. La hoja de especificación del
     // release se renombra en cada entrega y sus referencias quedaron apuntando
     // a documentos inexistentes. Ambas cosas se auditan aquí.
     const findings = auditDocumentaryIntegrity();
@@ -1688,6 +1693,35 @@ describe("black-box release contract", () => {
           `${finding.document}:${finding.line} [${finding.rule}] ${finding.detail}`
       )
     ).toEqual([]);
+  });
+  it("reorienta toda referencia a la hoja de caja negra vigente", () => {
+    // Solo existe una hoja de caja negra: la de la versión vigente. Un enlace
+    // que conserve el nombre retirado deja la puerta inalcanzable, y el
+    // incrementador debe reorientarlo aunque viva dentro de un alcance
+    // histórico congelado o fuera de los documentos que sincroniza.
+    const sheets = fs
+      .readdirSync(path.resolve("docs"))
+      .filter(name => name.startsWith("PRUEBAS_CAJA_NEGRA_"));
+    expect(sheets).toEqual([`PRUEBAS_CAJA_NEGRA_${APP_VERSION}.md`]);
+
+    const bumper = fs.readFileSync(
+      path.resolve("scripts/bump-release.mjs"),
+      "utf8"
+    );
+    expect(bumper).toContain("repointedDocuments");
+    expect(bumper).toContain("collectDocuments");
+
+    // La referencia al margen de los documentos sincronizados también apunta a
+    // la hoja vigente: es el caso que dejaba el enlace roto.
+    const relational = fs.readFileSync(
+      path.resolve("docs/VALIDACION_FINAL.md"),
+      "utf8"
+    );
+    const cited = relational.match(/PRUEBAS_CAJA_NEGRA_\d+\.\d+\.\d+\.md/g) ?? [];
+    expect(cited).not.toHaveLength(0);
+    expect([...new Set(cited)]).toEqual([
+      `PRUEBAS_CAJA_NEGRA_${APP_VERSION}.md`,
+    ]);
   });
   it("administra los endpoints de ApiChat por capacidad conversacional", () => {
     const settings = fs.readFileSync(
@@ -1924,7 +1958,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.189");
+    expect(governance).toContain("Alcance candidato 2.0.190");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });
@@ -2071,6 +2105,166 @@ describe("black-box release contract", () => {
     expect(routers).toContain("al.actor_user_id IS NOT NULL");
     expect(routers).toContain("'status_changed','comment_added'");
     expect(routers).toContain("human_review:");
+  });
+});
+
+/**
+ * Señalización del expediente en las tres hojas donde el reclutador decide.
+ *
+ * La ficha de Candidatos declaraba la revisión humana con un sello; esta suite
+ * fija que la misma señal —y lo que cambió después— llegue a la Bandeja de
+ * entrada y a la ficha del candidato, con una sola procedencia. Tres invariantes:
+ * la señal no se deriva en el cliente, la revisión humana sigue siendo un asiento
+ * con actor identificado, y un cambio posterior a la revisión se declara en
+ * lugar de presentarse como un expediente ya cerrado.
+ */
+describe("señalización del expediente del candidato", () => {
+  it("declara una procedencia única y la consume en las tres hojas", () => {
+    const badgeSource = fs.readFileSync(
+      path.resolve("client/src/components/review/ExpedienteSignalBadges.tsx"),
+      "utf8"
+    );
+    const sharedSource = fs.readFileSync(
+      path.resolve("shared/expedienteSignal.ts"),
+      "utf8"
+    );
+    const serverSource = fs.readFileSync(
+      path.resolve("server/expedienteSignal.ts"),
+      "utf8"
+    );
+    const summarySource = fs.readFileSync(
+      path.resolve("client/src/components/review/CandidateReviewSummary.tsx"),
+      "utf8"
+    );
+    const viewerSource = fs.readFileSync(
+      path.resolve("client/src/components/review/CandidateViewerPanel.tsx"),
+      "utf8"
+    );
+    const inboxSource = fs.readFileSync(
+      path.resolve("client/src/pages/Inbox.tsx"),
+      "utf8"
+    );
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+    const inbox = fs.readFileSync(path.resolve("server/inbox.ts"), "utf8");
+
+    // La procedencia vive en el servidor: el cliente traduce, no deriva.
+    expect(serverSource).toContain("FROM audit_log al");
+    expect(serverSource).toContain("u.id=al.actor_user_id");
+    expect(serverSource).toContain("candidate_knowledge_files");
+    expect(serverSource).toContain("FROM evaluations ev");
+    // La bandeja y la ficha comparten el mismo fragmento: una consulta que
+    // inventara su propia procedencia mostraría otra señal para el mismo hecho.
+    expect(inbox).toContain("EXPEDIENTE_SIGNAL_PROJECTION");
+    expect(inbox).toContain("EXPEDIENTE_SIGNAL_LATERALS");
+    expect(routers).toContain("EXPEDIENTE_SIGNAL_COLUMNS");
+    expect(routers).toContain("EXPEDIENTE_SIGNAL_JOINS");
+
+    // El sello de revisión humana conserva su forma y su fuente.
+    expect(sharedSource).toContain("export function institutionalStamp");
+    expect(sharedSource).toContain("America/Guatemala");
+    expect(summarySource).toContain(
+      'institutionalStamp(value, "America/Guatemala")'
+    );
+    expect(badgeSource).toContain("bg-rose-600");
+
+    // Las tres hojas montan la señalización, y la ficha la lleva en el
+    // encabezado y en la matriz de evaluación.
+    expect(inboxSource).toContain("ExpedienteSignalBadges");
+    expect(summarySource).toContain("ExpedienteSignalBadges");
+    expect(viewerSource).toContain("ExpedienteSignalBadges");
+  });
+
+  it("reconoce el vocabulario de eventos y declara el cambio posterior", () => {
+    // La revisión humana queda sin cambios posteriores: no hay aviso.
+    const reviewed = {
+      human_review_at: "2026-09-18T23:30:00.000Z",
+      human_review_actor: "José Ardón",
+      evaluation_count: 1,
+      last_evaluation_at: "2026-09-18T20:00:00.000Z",
+      expediente_event_action: null,
+      expediente_event_at: null,
+      expediente_event_actor: null,
+    };
+    const reviewedSignals = expedienteSignals(reviewed);
+    expect(reviewedSignals.map(signal => signal.kind)).toEqual([
+      "human_review",
+    ]);
+    expect(reviewedSignals[0].tone).toBe("rose");
+    expect(reviewedSignals[0].label).toBe("Revisión Humana");
+    expect(expedienteChangedAfterReview(reviewed)).toBe(false);
+
+    // Un adjunto recuperado después de la revisión cambia el expediente.
+    const recovered = {
+      ...reviewed,
+      expediente_event_action: "candidate_file_recovered",
+      expediente_event_at: "2026-09-19T01:00:00.000Z",
+      expediente_event_actor: "JARVI HR",
+    };
+    const recoveredSignals = expedienteSignals(recovered);
+    expect(recoveredSignals.map(signal => signal.kind)).toEqual([
+      "human_review",
+      "attachment_recovered",
+    ]);
+    expect(recoveredSignals[1].label).toBe("Adjunto recuperado");
+    expect(recoveredSignals[1].afterReview).toBe(true);
+    expect(expedienteChangedAfterReview(recovered)).toBe(true);
+
+    // Una re-evaluación del agente también cuenta como cambio.
+    const reEvaluated = {
+      ...reviewed,
+      evaluation_count: 2,
+      last_evaluation_at: "2026-09-19T02:00:00.000Z",
+    };
+    expect(expedienteSignals(reEvaluated).map(signal => signal.kind)).toEqual([
+      "human_review",
+      "re_evaluation",
+    ]);
+    expect(expedienteChangedAfterReview(reEvaluated)).toBe(true);
+
+    // Una acción desconocida no se señaliza: la señal no se inventa.
+    const unknown = {
+      ...reviewed,
+      expediente_event_action: "accion_no_declarada",
+      expediente_event_at: "2026-09-19T03:00:00.000Z",
+    };
+    expect(expedienteSignals(unknown).map(signal => signal.kind)).toEqual([
+      "human_review",
+    ]);
+    expect(expedienteChangedAfterReview(unknown)).toBe(false);
+
+    // Sin revisión humana no hay sello, y el cambio no se declara contra nada.
+    const unreviewed = {
+      human_review_at: null,
+      evaluation_count: 0,
+      last_evaluation_at: null,
+      expediente_event_action: "candidate_file_received",
+      expediente_event_at: "2026-09-19T04:00:00.000Z",
+    };
+    const unreviewedSignals = expedienteSignals(unreviewed);
+    expect(unreviewedSignals.map(signal => signal.kind)).toEqual([
+      "document_incorporated",
+    ]);
+    expect(expedienteChangedAfterReview(unreviewed)).toBe(false);
+
+    // Regresión: dos eventos del mismo segundo no son simultáneos. El conductor
+    // entrega `Date`, y convertir por texto descartaría los milisegundos: la
+    // recuperación que sigue a la revisión en el mismo segundo se leería como
+    // simultánea y el cambio posterior dejaría de declararse.
+    const sameSecond = {
+      human_review_at: new Date("2026-09-19T18:37:40.818Z"),
+      human_review_actor: "José Ardón",
+      evaluation_count: 1,
+      last_evaluation_at: new Date("2026-09-18T20:00:00.000Z"),
+      expediente_event_action: "candidate_file_recovered",
+      expediente_event_at: new Date("2026-09-19T18:37:40.886Z"),
+      expediente_event_actor: "José Ardón",
+    };
+    expect(expedienteChangedAfterReview(sameSecond)).toBe(true);
+    expect(
+      expedienteSignals(sameSecond).find(
+        signal => signal.kind === "attachment_recovered"
+      )?.afterReview
+    ).toBe(true);
   });
 });
 

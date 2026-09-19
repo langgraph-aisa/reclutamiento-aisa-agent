@@ -1,8 +1,21 @@
-# Gobierno de release JARVI RH 2.0.189
+# Gobierno de release JARVI RH 2.0.190
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.189**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.190**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.190
+El release **vuelve la señalización del expediente un vocabulario compartido** y la lleva a las hojas donde el reclutador decide. Ninguna capacidad toca el esquema.
+
+**La señal se deriva una sola vez.** La ficha de Candidatos ya declaraba la revisión humana con un sello rosa, pero esa lectura vivía en su propia consulta: la Bandeja de entrada no la tenía y el evaluador no podía reconocer, sin abrir la ficha, qué conversación correspondía a un expediente ya dictaminado. Ahora la procedencia se declara en un solo lugar del servidor —`server/expedienteSignal.ts`— y la consumen la bandeja y la ficha, de modo que las dos hojas afirmen el mismo hecho. Si cada consulta inventara su propia procedencia, la interfaz mostraría señales distintas para el mismo expediente y la señalización dejaría de ser una prueba.
+
+**La revisión humana es un asiento, no una fecha de escritura.** Su fuente es `audit_log` con actor identificado: una escritura del agente, del sincronizador o de la recuperación automática no acredita que una persona haya revisado el expediente. La distinción no es formal —determina si el sello puede leerse como dictamen—, y por eso la consulta exige `actor_user_id IS NOT NULL` y un vocabulario acotado de acciones.
+
+**El cambio posterior invalida el sello como cierre.** Un expediente revisado que después recibe un adjunto recuperado, un documento incorporado, un análisis actualizado o una nueva pasada del agente evaluador ya no está cubierto por el dictamen anterior. La señal lo declara —con su verbo, su hora y su fecha institucionales— en lugar de dejar creer que el sello sigue vigente, y añade un aviso explícito de cambios tras la revisión para que el reclutador vuelva a mirar la evidencia antes de dictaminar.
+
+**Dónde aparece.** En la Bandeja de entrada, en la fila de cada conversación de «Últimas conversaciones» y en el pie de la caja de conversación, para que el evaluador tenga presente el estado del expediente en el momento en que lee y responde. En la ficha del candidato, en el encabezado —junto al punteo, del que es su fecha de validez— y en la matriz de evaluación IA, donde el reclutador lee la evidencia que funda el dictamen.
+
+**Sin migración.** Reutiliza las tablas `0035` a `0037` y `audit_log`. Tres pruebas nuevas fijan el contrato sobre PostgreSQL real y cinco casos de caja negra —`BN-SENAL-01` a `BN-SENAL-05`— fijan que la señal llegue a las tres hojas con una sola procedencia.
 
 ### Alcance candidato 2.0.188
 El release **convierte el rechazo del adjunto en una decisión reversible y devuelve la evidencia al agente**, cerrando la cadena que 2.0.187 dejó abierta en su último eslabón. Tres capacidades —recuperación documental, lectura institucional del desenlace y acuse del expediente— y ninguna toca el esquema.
@@ -634,4 +647,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.189.md](PRUEBAS_CAJA_NEGRA_2.0.189.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.190.md](PRUEBAS_CAJA_NEGRA_2.0.190.md).

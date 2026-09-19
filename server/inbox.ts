@@ -19,6 +19,10 @@ import { decodeTransport, reconstructTransportFileName } from "./base64Transport
 import { isUndefinedTableError } from "./governanceObservability";
 import { withLangfuseObservation } from "./observability/langfuse";
 import {
+  EXPEDIENTE_SIGNAL_LATERALS,
+  EXPEDIENTE_SIGNAL_PROJECTION,
+} from "./expedienteSignal";
+import {
   assertNoAutomatedSalaryOffer,
   extractExplicitSalaryExpectation,
 } from "./salaryPolicy";
@@ -220,6 +224,7 @@ export async function listInbox(
             session.current_item_index AS assessment_item_index,
             message.body AS last_message_body,message.direction AS last_message_direction,
             message.message_type AS last_message_type,
+            ${EXPEDIENTE_SIGNAL_PROJECTION},
             COALESCE(forms.form_count,0) AS form_count,forms.form_titles
        FROM conversations conv
        JOIN applications a ON a.id=conv.application_id
@@ -246,6 +251,7 @@ export async function listInbox(
            FROM conversation_messages m WHERE m.conversation_id=conv.id
           ORDER BY m.created_at DESC,m.id DESC LIMIT 1
        ) message ON true
+       ${EXPEDIENTE_SIGNAL_LATERALS}
        LEFT JOIN LATERAL (
          SELECT count(*)::int AS form_count,
                 string_agg(f.title,' · ' ORDER BY s.submitted_at DESC,s.id DESC) AS form_titles

@@ -15,6 +15,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    # La caja negra del conducto, la matriz de revisión, la señalización del
+    # expediente y el procesamiento de candidatos sólo se ejecutan contra
+    # PostgreSQL real. Sin este servicio esas pruebas se omiten en silencio y la
+    # puerta declararía verde un comportamiento que nadie observó.
+    env:
+      MEDIA_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/aisa_test
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aisa_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Obtener repositorio y dos versiones
         uses: actions/checkout@v4
