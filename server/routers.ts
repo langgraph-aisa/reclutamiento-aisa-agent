@@ -156,6 +156,11 @@ import {
   saveCandidateDocument,
   saveCandidateFolder,
 } from "./candidateKnowledge";
+import {
+  dispatchExpedienteAppreciation,
+  listConservedAttachments,
+  recoverConservedAttachments,
+} from "./candidateConservedRecovery";
 import { applicationStatuses } from "./policy";
 import {
   APPLICATION_CONSENTS,
@@ -2780,6 +2785,59 @@ export const appRouter = router({
           });
         }
       }),
+    /**
+     * Adjuntos conservados en la bandeja que no constan en el expediente.
+     *
+     * Se leen del mismo conjunto que cuenta el diagnóstico del conducto como
+     * rechazo de ingreso: la ficha declara lo que el diagnóstico numera.
+     */
+    conservedAttachments: roleProcedure
+      .input(z.object({ applicationId: z.number().int().positive() }))
+      .query(async ({ input }) =>
+        listConservedAttachments(await requirePool(), input.applicationId)
+      ),
+    /**
+     * Incorpora al expediente los adjuntos conservados y ejecuta su análisis.
+     *
+     * La operación restituye la segunda decisión que el conducto no tenía: el
+     * veredicto de política deja de ser terminal mientras el binario exista.
+     */
+    recoverConservedAttachments: roleProcedure
+      .input(
+        z.object({
+          applicationId: z.number().int().positive(),
+          analyze: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await recoverConservedAttachments(await requirePool(), {
+            applicationId: input.applicationId,
+            actorUserId: ctx.user.id,
+            analyze: input.analyze ?? true,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible incorporar los adjuntos conservados.",
+          });
+        }
+      }),
+    /**
+     * Acuse del expediente al candidato. Idempotente y con control humano: la
+     * conversación debe estar tomada por una persona para que el mensaje salga.
+     */
+    acknowledgeExpediente: roleProcedure
+      .input(z.object({ applicationId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) =>
+        dispatchExpedienteAppreciation(await requirePool(), {
+          applicationId: input.applicationId,
+          actorUserId: ctx.user.id,
+        })
+      ),
   }),
 
   governance: router({

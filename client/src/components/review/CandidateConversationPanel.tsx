@@ -537,7 +537,7 @@ export function CandidateConversationPanel({
                         </p>
                       ) : null}
                       {item.media_processing_outcome === "rejected" ? (
-                        <p className="mt-1 text-xs text-amber-200">Archivo conservado; no incorporado al expediente por su formato o tamaño.</p>
+                        <p className="mt-1 text-xs text-amber-200">Archivo conservado en la bandeja; aún no incorporado al expediente por su formato o peso. La incorporación se ejecuta desde el RAG Personal del candidato y no exige un envío nuevo.</p>
                       ) : item.media_processing_status === "pendiente" ? (
                         <p className="mt-1 text-xs text-white/70">Archivo recibido. Análisis pendiente.</p>
                       ) : item.media_processing_status === "error" ? (

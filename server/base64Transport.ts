@@ -832,6 +832,24 @@ export function decodeTransport(
   );
 }
 
+/**
+ * Describe un binario que ya se posee, aplicando la misma semántica de tipo,
+ * nombre y huella que la decodificación de transporte.
+ *
+ * Existe por una razón concreta: el binario de un adjunto puede conservarse
+ * —en la bandeja— sin haberse incorporado al expediente, y la decisión de
+ * incorporarlo se toma después. Sin esta función, la segunda decisión tendría
+ * que confiar en la extensión y el tipo declarados por quien envió, que es
+ * justamente lo que el transporte canónico existe para no hacer.
+ */
+export function describeTransportBuffer(
+  buffer: Buffer,
+  raw: { fileName?: string; mimeType?: string },
+  options: TransportDecodeOptions = {}
+): DecodedTransport {
+  return decodeTransportBuffer(buffer, raw, options);
+}
+
 function decodeTransportBuffer(
   buffer: Buffer,
   raw: { fileName?: string; mimeType?: string },

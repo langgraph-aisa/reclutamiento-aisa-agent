@@ -56,6 +56,19 @@ export async function writeInboxFile(key: string, data: Buffer) {
   return target;
 }
 
+/**
+ * Lectura del binario conservado.
+ *
+ * La bandeja es también una fuente de recuperación: un adjunto que llegó y no
+ * se incorporó al expediente por política administrativa conserva aquí sus
+ * bytes, de modo que la incorporación puede reintentarse sin exigir al
+ * candidato un envío nuevo. La ausencia del archivo se propaga como error de
+ * sistema de archivos, que el llamador declara con su propio código.
+ */
+export async function readInboxFile(key: string) {
+  return fs.promises.readFile(inboxFilePath(key));
+}
+
 export async function removeInboxFile(key: string) {
   await fs.promises.rm(inboxFilePath(key), { force: true });
 }

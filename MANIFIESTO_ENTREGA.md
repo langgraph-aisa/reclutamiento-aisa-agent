@@ -17,8 +17,8 @@
 | Control | Resultado |
 |---|---|
 | TypeScript | Aprobado |
-| Vitest | 287/287 |
-| Caja negra | 20/20 |
+| Vitest | 677/677 |
+| Caja negra | 38/38 |
 | Catálogo de endpoints por capacidad | Aprobado · 16 de 16 |
 | Fronteras conversacionales | Aprobado · 11 de 11 |
 | Build | Aprobado |
@@ -26,6 +26,10 @@
 | PDF | Compilación estricta y verificación aprobadas |
 
 El paquete excluye `.env`, credenciales, `node_modules`, `dist`, `.git`, registros y artefactos temporales. Las pruebas SMTP, PostgreSQL y ApiChat de extremo a extremo deben realizarse dentro de EasyPanel con las credenciales de la organización.
+
+## Recuperación del expediente 2.0.188
+
+El rechazo del adjunto deja de ser terminal. Cuando el proveedor entrega un PDF y la política de conocimiento lo rechaza porque su extensión no está habilitada o su peso supera el máximo, el binario **permanece conservado en el volumen de la bandeja** y ahora puede incorporarse al expediente del candidato sin exigir un envío nuevo: la operación reconstruye por contenido su extensión, tipo y huella, lo publica en el RAG personal, ejecuta su análisis con el mismo método que la carga manual, vuelve a ejecutar el agente evaluador con la evidencia nueva y deja el documento disponible en el visor para el dictamen humano. El asiento del mensaje se corrige: la bandeja deja de declarar una exclusión superada. El desenlace tipado del conducto —extensión no habilitada, peso sobre el límite, contenido no disponible, codificación no interpretable— se traduce a una sentencia que declara la causa y el remedio, compartida por la bandeja, la ficha y el expediente, de modo que la política administrativa no se lea como un defecto del candidato. El agradecimiento y el aviso de contacto declarados en «Evaluación de CV con IA» se emiten una sola vez como acuse del expediente, por el mismo medio y con la conversación tomada. **Sin migración**: reutiliza las tablas `0035` a `0037` y el volumen de la bandeja; las superficies de la interfaz viven en `Revisión Humana › RAG Personal`.
 
 ## Servicio conversacional 2.0.141
 

@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.187
+# Gobierno de release JARVI RH 2.0.188
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.187**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.188**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.188
+El release **convierte el rechazo del adjunto en una decisión reversible y devuelve la evidencia al agente**, cerrando la cadena que 2.0.188 dejó abierta en su último eslabón. Tres capacidades —recuperación documental, lectura institucional del desenlace y acuse del expediente— y ninguna toca el esquema.
+
+**El rechazo de política deja de ser terminal.** La política de conocimiento se aplicaba una sola vez, en el instante de la recepción, y su veredicto era definitivo: el proveedor entregaba el PDF, el receptor lo decodificaba, lo escribía en el volumen de la bandeja y **después** lo rechazaba porque la extensión no estaba habilitada o el peso superaba el máximo. A partir de ahí el mensaje declaraba `processingOutcome='rejected'` para siempre, el recibo se cerraba con su carga ya borrada y **ninguna operación del sistema volvía sobre esa decisión**. El candidato aparecía sin evidencia documental y el evaluador recibía la frase «no incorporado al análisis» como si describiera al candidato y no a una configuración administrativa. Ahora la recepción y el ingreso son dos hechos distintos: mientras el binario exista, la incorporación se reintenta sin exigir al candidato un envío nuevo. La recuperación lee el binario conservado, reconstruye por contenido su extensión, tipo y huella —nunca confía en lo declarado por el emisor—, lo publica en el expediente con el mismo análisis del RAG personal, vuelve a ejecutar el agente evaluador con la evidencia nueva y **corrige el asiento**: el mensaje deja de declarar una exclusión superada, porque una creencia falsa en la bandeja seguiría afirmando lo que el expediente ya desmiente.
+
+**El desenlace se tipa y se lee.** La bandeja declaraba un solo enunciado para cuatro causas distintas con cuatro remedios distintos —la extensión no está habilitada, el peso supera el máximo, el proveedor anunció el archivo sin su contenido o la lectura del formato falló—, de modo que la única acción posible era suponer. Ahora el código tipado que el conducto ya escribía se traduce a una sentencia que **declara la causa y el remedio**, y esa lectura se comparte entre la bandeja, la ficha del candidato y el expediente para que las tres superficies afirmen lo mismo. La distinción que el texto conserva es deliberada: **recibido no es incorporado**, e **incorporable no es interpretado**. Un rechazo de política conserva el binario y admite incorporación; una ausencia de contenido en el proveedor no la admite y exige un envío nuevo.
+
+**El expediente se acusa una sola vez.** El agradecimiento y el aviso de contacto declarados en «Evaluación de CV con IA» se enviaban como parte del ciclo de la solicitud, pero no existía una operación que los emitiera cuando el expediente se completaba por otra vía. Ahora el acuse se compone con la misma función que el cierre de la solicitud —para que no existan dos redacciones del agradecimiento— y se envía por el camino humano de la bandeja: la conversación con el candidato es una superficie con control humano y el sistema no escribe al candidato sin que alguien sostenga el teclado. La idempotencia se asienta en la auditoría y no en la clave del mensaje, porque el envío humano sobrescribe esa clave con el identificador del proveedor.
+
+**Sin migración.** Las tres capacidades reutilizan las tablas `0035` a `0037` y el volumen de la bandeja. Doce pruebas nuevas fijan la incorporación, el análisis, la re-evaluación del agente, la detección por huella, la ausencia de binario y la idempotencia del acuse.
 
 ### Alcance candidato 2.0.187
 El release **lleva la pregunta del artefacto a la frontera donde está la causa**: la configuración efectiva del proveedor. Cinco capacidades —diagnóstico, conformidad del contrato, evidencia simétrica y recuperación— y ninguna toca el esquema.
@@ -265,7 +276,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.187 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.188 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -297,7 +308,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.187.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.188.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

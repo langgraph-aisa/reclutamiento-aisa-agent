@@ -18,6 +18,7 @@ import {
   removeKnowledgeFile,
   readKnowledgeFile,
   writeKnowledgeFile,
+  type KnowledgeSettings,
 } from "./knowledge";
 import {
   decodeTransport,
@@ -628,11 +629,57 @@ export async function deleteCandidateFolder(
  * El análisis de IA se agenda sin bloquear la ronda de recepción y un
  * documento ya registrado por su huella no se duplica.
  */
+export type CandidatePolicyRefusal = {
+  reason: "extension_not_allowed" | "size_limit";
+  /** Extensión final reconstruida por contenido, no la declarada por el emisor. */
+  extension: string;
+  sizeBytes: number;
+  /** Fotografía de la política vigente en el instante de la decisión. */
+  allowedExtensions: string[];
+  maxSizeMb: number;
+};
+
+/**
+ * Veredicto de la política de conocimiento sobre un archivo ya identificado.
+ *
+ * Se aísla en una función porque la decisión se toma en dos momentos distintos
+ * de la vida del archivo —la recepción y la recuperación posterior— y las dos
+ * deben juzgar con el mismo criterio y declarar el mismo motivo. Un rechazo sin
+ * motivo tipado convierte una decisión administrativa en un silencio, y un
+ * silencio se lee como ausencia.
+ */
+export function candidatePolicyRefusal(
+  settings: KnowledgeSettings,
+  extension: string,
+  sizeBytes: number
+): CandidatePolicyRefusal | null {
+  const policy = {
+    allowedExtensions: [...settings.allowedExtensions],
+    maxSizeMb: settings.maxSizeMb,
+  };
+  if (!settings.allowedExtensions.includes(extension))
+    return { reason: "extension_not_allowed", extension, sizeBytes, ...policy };
+  if (sizeBytes > settings.maxSizeMb * 1024 * 1024)
+    return { reason: "size_limit", extension, sizeBytes, ...policy };
+  return null;
+}
+
 export type CandidateInboundRegistration = {
   id: number;
   created: boolean;
   outcome: "accepted" | "duplicate" | "rejected";
   reason?: "extension_not_allowed" | "size_limit";
+  /** Motivo completo con la política vigente, para que el rechazo sea accionable. */
+  refusal?: CandidatePolicyRefusal;
+  /**
+   * Condición del documento ya presente, declarada sólo en el duplicado.
+   *
+   * El llamador necesita distinguir «el expediente ya contenía este contenido y
+   * su análisis» de «lo contenía sin analizar»: en el primer caso la evidencia
+   * ya entró al dictamen del agente y repetirlo gastaría una llamada para
+   * producir el mismo resultado.
+   */
+  analysisStatus?: string | null;
 };
 
 export async function registerCandidateInboundDocument(
@@ -645,20 +692,31 @@ export async function registerCandidateInboundDocument(
   }
 ): Promise<CandidateInboundRegistration> {
   const settings = await getKnowledgeSettings(pool);
-  const extension = input.decoded.extension;
-  if (!settings.allowedExtensions.includes(extension))
+  const refusal = candidatePolicyRefusal(
+    settings,
+    input.decoded.extension,
+    input.decoded.sizeBytes
+  );
+  if (refusal)
     return {
       id: 0,
       created: false,
       outcome: "rejected",
-      reason: "extension_not_allowed",
+      reason: refusal.reason,
+      refusal,
     };
-  if (input.decoded.sizeBytes > settings.maxSizeMb * 1024 * 1024)
-    return { id: 0, created: false, outcome: "rejected", reason: "size_limit" };
   return persistCandidateDocument(pool, input);
 }
 
-async function persistCandidateDocument(
+/**
+ * Persiste un documento ya identificado por el transporte canónico.
+ *
+ * Se expone porque la incorporación no ocurre solo en la recepción: un adjunto
+ * conservado en la bandeja y rechazado por política puede incorporarse después,
+ * y esa segunda vía debe compartir exactamente la misma escritura, la misma
+ * deduplicación por huella y el mismo trabajo de análisis diferido.
+ */
+export async function persistCandidateDocument(
   pool: Pool,
   input: {
     applicationId: number;
@@ -679,7 +737,7 @@ async function persistCandidateDocument(
       `${input.applicationId}:${input.decoded.sha256}`,
     ]);
     const duplicate = await client.query(
-      `SELECT id FROM candidate_knowledge_files WHERE application_id=$1 AND sha256=$2 LIMIT 1`,
+      `SELECT id,analysis_status FROM candidate_knowledge_files WHERE application_id=$1 AND sha256=$2 LIMIT 1`,
       [input.applicationId, input.decoded.sha256]
     );
     if (duplicate.rows[0]) {
@@ -689,6 +747,9 @@ async function persistCandidateDocument(
         id: Number(duplicate.rows[0].id),
         created: false,
         outcome: "duplicate",
+        analysisStatus: duplicate.rows[0].analysis_status
+          ? String(duplicate.rows[0].analysis_status)
+          : null,
       };
     }
     const storageKey = buildCandidateStorageKey(input.applicationId, extension);

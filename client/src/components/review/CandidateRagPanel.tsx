@@ -238,6 +238,42 @@ export function CandidateRagPanel({
     onError: error => toast.error(error.message),
   });
 
+  /**
+   * Adjuntos conservados en la bandeja que no constan en el expediente.
+   *
+   * El rechazo de política dejó de ser terminal: mientras el binario exista, la
+   * segunda decisión permite incorporarlo y analizarlo sin pedir un reenvío.
+   */
+  const conserved = trpc.candidateKnowledge.conservedAttachments.useQuery(
+    { applicationId },
+    { refetchInterval: 30_000, refetchIntervalInBackground: false }
+  );
+  const recover = trpc.candidateKnowledge.recoverConservedAttachments.useMutation({
+    onSuccess: report => {
+      toast.success(report.verdict, { duration: 12_000 });
+      refresh();
+      void conserved.refetch();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const acknowledge = trpc.candidateKnowledge.acknowledgeExpediente.useMutation({
+    onSuccess: outcome => {
+      if (outcome.status === "sent")
+        toast.success("Agradecimiento y aviso de contacto entregados al candidato.");
+      else if (outcome.status === "already_acknowledged")
+        toast.info("El agradecimiento ya constaba en el expediente; no se repitió.");
+      else if (outcome.status === "unknown_candidate")
+        toast.error("La postulación no tiene candidato registrado.");
+      else if (outcome.status === "keyboard_not_held")
+        toast.error(
+          "Tome la conversación con el control humano activo para que el mensaje salga por este mismo medio."
+        );
+      else toast.error(outcome.error);
+      void conserved.refetch();
+    },
+    onError: error => toast.error(error.message),
+  });
+
   /** El visor resuelve el documento fuera del ciclo de tRPC; el vale lo autoriza. */
   const viewerToken = trpc.candidateKnowledge.viewerToken.useQuery(
     { fileId: selectedFileId ?? 0 },
@@ -406,6 +442,83 @@ export function CandidateRagPanel({
             </p>
           </div>
         ) : null}
+
+        {/* Adjuntos conservados fuera del expediente */}
+        {conserved.data?.length ? (
+          <div className="rounded-xl border border-emerald-300 bg-emerald-50/70 p-3 dark:border-emerald-500/40 dark:bg-emerald-500/10">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-900 dark:text-emerald-200">
+                Adjuntos conservados fuera del expediente ({conserved.data.length})
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                className="ml-auto h-7 rounded-full text-[11px]"
+                disabled={recover.isPending}
+                onClick={() => recover.mutate({ applicationId, analyze: true })}
+              >
+                {recover.isPending ? (
+                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                ) : (
+                  <Sparkles className="mr-1.5 h-3 w-3" />
+                )}
+                {recover.isPending
+                  ? "Incorporando y analizando…"
+                  : "Incorporar al expediente y reevaluar"}
+              </Button>
+            </div>
+            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+              El conducto conservó estos binarios aunque su formato o peso no
+              estaba habilitado al recibirlos. La operación los incorpora al
+              expediente con el mismo análisis del RAG personal, vuelve a
+              ejecutar el agente evaluador con la evidencia nueva y deja el
+              documento disponible en el visor para el dictamen humano.
+            </p>
+            <ul className="mt-2 space-y-1">
+              {conserved.data.map(item => (
+                <li
+                  key={item.messageId}
+                  className="flex flex-wrap items-center gap-2 rounded-lg bg-card px-2 py-1 text-[10px]"
+                >
+                  <File className="h-3 w-3 shrink-0 text-emerald-700" />
+                  <span className="truncate font-semibold text-primary">
+                    {item.fileName}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {formatDateTime(item.createdAt)}
+                  </span>
+                  {item.reason ? (
+                    <span className="ml-auto font-mono text-[10px] text-amber-700 dark:text-amber-300">
+                      {item.reason}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {/* Acuse del expediente al candidato */}
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-muted/20 px-3 py-2">
+          <p className="text-[11px] leading-5 text-muted-foreground">
+            El agradecimiento y el aviso de contacto declarados en «Evaluación
+            de CV con IA» se envían una sola vez, por el mismo medio y con la
+            conversación tomada.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="ml-auto h-7 rounded-full text-[11px]"
+            disabled={acknowledge.isPending}
+            onClick={() => acknowledge.mutate({ applicationId })}
+          >
+            {acknowledge.isPending ? (
+              <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+            ) : null}
+            Enviar agradecimiento y aviso de contacto
+          </Button>
+        </div>
 
         {/* Resumen del documento y análisis profundo editable */}
         <div className="grid gap-3 xl:grid-cols-2">
