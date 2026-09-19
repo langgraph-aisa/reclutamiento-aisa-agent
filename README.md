@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.183</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.184</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.183-0b2d4b" alt="JARVI RH 2.0.183" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.184-0b2d4b" alt="JARVI RH 2.0.184" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse%20SDK-5.11.1-orange" alt="Langfuse SDK 5.11.1" />
@@ -24,7 +24,7 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.183 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.184 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
 Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH integra plazas, formularios y protocolos versionados, evaluación asistida por IA, revisión humana, conversaciones ApiChat, solicitud controlada de currículum y auditoría administrativa. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar, fijar remuneración o atribuir rasgos psicológicos: el personal autorizado conserva la decisión.
@@ -34,6 +34,11 @@ Talento AISA vincula capacidades técnicas con proyectos industriales, energéti
 ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
+
+### 17SEP2026 · JARVI RH 2.0.184
+
+- La descarga del adjunto dispone de dos minutos y el trabajo documental reclama quince: el peso del archivo deja de agotar los reintentos. Sin migración.
+- Un recibo agotado declara su causa —destino no permitido, fallo de red o contenido no resoluble— en lugar de la clase de error.
 
 ### 17SEP2026 · JARVI RH 2.0.183
 
@@ -239,7 +244,7 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 ### 14SEP2026 · JARVI RH 2.0.137
 
-- Plazas y anuncios administra múltiples formularios por plaza, creados o importados desde Excel/CSV, con el WhatsApp como identidad del candidato y participaciones registradas.
+- Plazas y anuncios administra múltiples formularios por plaza, importables desde Excel/CSV, con el WhatsApp como identidad del candidato.
 
 ### 14SEP2026 · JARVI RH 2.0.136
 
@@ -251,13 +256,12 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 ### 14SEP2026 · JARVI RH 2.0.134
 
-- MST-EIR se convierte en Administrador de Proyectos; PDF y Word generan resúmenes que alimentan el RAG del proyecto con la migración `0016`.
+- MST-EIR pasa a Administrador de Proyectos; PDF y Word alimentan el RAG del proyecto (`0016`).
 
 ### 14SEP2026 · JARVI RH 2.0.133
 
 - n8n queda retirado; el puente `inboxSync` rellena la bandeja cada segundo desde el historial del proveedor con deduplicación por identificador.
-- Configuración administra los siete endpoints oficiales ApiChat con interruptores auditados; la bandeja añade burbujas con hora y ticks, punteo IA y etiqueta humano/agente.
-- Borrar una versión de prueba exige un código temporal de seis dígitos por correo; la migración `0015` conserva desafío y auditoría.
+- Configuración administra los siete endpoints oficiales ApiChat con interruptores auditados; borrar una versión de prueba exige un código por correo, que la migración `0015` conserva auditado.
 
 ### 11SEP2026 · JARVI RH 2.0.132
 
@@ -278,11 +282,7 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 ### 10SEP2026 · JARVI RH 2.0.127–2.0.128
 
-- La landing fija el mensaje institucional en «Plataforma Laboral No.1» y la prueba de caja negra bloquea el sufijo retirado «de Guatemala».
-
-### 10SEP2026 · JARVI RH 2.0.127
-
-- La landing sustituye la descripción secundaria y la prueba de caja negra exige el texto aprobado y bloquea la frase anterior.
+- La landing fija el mensaje institucional en «Plataforma Laboral No.1» y sustituye la descripción secundaria; la prueba de caja negra exige el texto aprobado y bloquea el sufijo retirado «de Guatemala».
 
 ### 10SEP2026 · JARVI RH 2.0.126
 
@@ -479,7 +479,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md), [transporte base64 y visor](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md) y [caja negra 2.0.183](docs/PRUEBAS_CAJA_NEGRA_2.0.183.md).
+`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md), [transporte base64 y visor](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md) y [caja negra 2.0.184](docs/PRUEBAS_CAJA_NEGRA_2.0.184.md).
 
 ## 8. Capa cognitiva, resiliencia y alcance verificable
 

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { normalizeApiChatBatch, type ApiChatWebhookMessage } from "./apiChatContract";
+import { AttachmentTransportError } from "./base64Transport";
 
 export type ReceiptOrigin = "webhook" | "sondeo";
 export type ReceiptResult = { ok: true; registered?: boolean; skipped?: string };
@@ -78,8 +79,15 @@ export async function runApiChatReceiptSweep(pool: Pool, processMessage: Receipt
       completed += 1;
     } catch (error) {
       const exhausted = Number(receipt.attempts) >= 8;
-      // No se copia texto del candidato, URL ni secretos en el diagnóstico.
-      const reason = error instanceof Error ? error.name : "ProcessingError";
+      // No se copia texto del candidato, URL ni secretos en el diagnóstico. El
+      // transporte sí clasifica el fallo con un código y una condición de
+      // reintento: conservarlos distingue «la dirección expiró» de «el destino
+      // no está permitido» sin deducirlo del nombre de la clase de error.
+      const reason = error instanceof AttachmentTransportError
+        ? `${error.code}:${error.retryable ? "reintentable" : "permanente"}`
+        : error instanceof Error
+          ? error.name
+          : "ProcessingError";
       await pool.query(
         `UPDATE apichat_inbound_receipts
             SET status=$3,last_error=$4,lease_token=NULL,updated_at=now(),

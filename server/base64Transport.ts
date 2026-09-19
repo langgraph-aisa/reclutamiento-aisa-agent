@@ -378,6 +378,7 @@ export class AttachmentTransportError extends Error {
       | "network_error"
       | "size_limit"
       | "empty_content"
+      | "content_unresolved"
       | "redirect_limit",
     public readonly retryable: boolean,
     message: string

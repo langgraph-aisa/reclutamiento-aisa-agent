@@ -30,7 +30,7 @@ export async function runCandidateDocumentSweep(
   const outcomes: Array<{ fileId: number; status: string }> = [];
   for (let index = 0; index < (options.limit ?? 2); index++) {
     const claimed = await pool.query(`UPDATE candidate_document_jobs j
-      SET state='running',attempts=attempts+1,lease_until=now()+interval '8 minutes',updated_at=now()
+      SET state='running',attempts=attempts+1,lease_until=now()+interval '15 minutes',updated_at=now()
       WHERE file_id=(SELECT file_id FROM candidate_document_jobs
         WHERE ((state IN ('pending','retry') AND available_at<=now()) OR (state='running' AND lease_until<now()))
         ORDER BY available_at,file_id FOR UPDATE SKIP LOCKED LIMIT 1)

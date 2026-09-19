@@ -8,7 +8,7 @@ import {
   recordNormalizedInboundLocation, recordNormalizedOutboundLocation,
 } from "./inbox";
 import { writeInboxFile } from "./inboxFiles";
-import { decodeRemoteAttachment } from "./base64Transport";
+import { decodeRemoteAttachment, AttachmentTransportError } from "./base64Transport";
 import { registerCandidateInboundDocument } from "./candidateKnowledge";
 import { recordTransportTrace, trimTransportTraces } from "./transportTrace";
 import {
@@ -69,8 +69,25 @@ export async function processApiChatMessage(pool: Pool, message: ApiChatWebhookM
         sizeBytes: 0, storageKey: "", processingOutcome: "rejected", processingReason: "contenido_no_disponible", caption: message.text });
       return { ok: true, skipped: "archivo-sin-contenido" };
     }
-    const decoded = await decodeRemoteAttachment(source, { fileName: message.filename ?? "archivo", mimeType: message.mime_type ?? "", maxBytes: 30 * 1024 * 1024 });
-    if (!decoded || !decoded.sizeBytes) throw new Error("AttachmentContentUnavailable");
+    const decoded = await decodeRemoteAttachment(source, {
+      fileName: message.filename ?? "archivo",
+      mimeType: message.mime_type ?? "",
+      maxBytes: 30 * 1024 * 1024,
+      // Treinta megabytes en veinte segundos exigirían doce megabits sostenidos
+      // hasta el proveedor. Dos minutos admiten enlaces modestos sin dejar de
+      // acotar el cuelgue; cuando la carga viaja en base64 no hay descarga.
+      timeoutMs: 120_000,
+    });
+    // El origen llegó declarado pero no es decodificable: no es una URL insegura
+    // ni un fallo de red, así que se declara con su propio código. Sin él, el
+    // asiento de recepción sólo conserva el nombre genérico de la excepción y el
+    // operador no puede distinguir esta pérdida de cualquier otra.
+    if (!decoded || !decoded.sizeBytes)
+      throw new AttachmentTransportError(
+        "content_unresolved",
+        false,
+        "El adjunto declarado por el proveedor no pudo resolverse a contenido."
+      );
     // Clave determinista: un replay o reinicio nunca genera otra copia huérfana.
     const storageKey = `${outbound ? "out" : "in"}-${conversation.conversationId}/${apiChatReceiptKey(message)}`;
     await writeInboxFile(storageKey, decoded.buffer);

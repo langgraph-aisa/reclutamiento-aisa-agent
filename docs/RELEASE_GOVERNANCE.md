@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.183
+# Gobierno de release JARVI RH 2.0.184
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.183**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.184**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.184
+El release **hace que el peso del archivo deje de agotar los reintentos y que un recibo agotado diga por qué murió**. Dos precisiones sobre el conducto del adjunto, y ninguna toca el esquema.
+
+**La descarga dispone de dos minutos.** El receptor invocaba la descarga con la ventana por omisión de veinte segundos mientras admitía archivos de hasta treinta megabytes: eso exige doce megabits sostenidos hasta el proveedor, de modo que un enlace modesto consumía los ocho intentos y dejaba la notificación en `dead` sin que el archivo tuviera defecto alguno. La ventana pasa a dos minutos, que admiten enlaces de dos megabits sin dejar de acotar el cuelgue. Cuando la carga viaja en base64 —la representación que el panel declara— no hay descarga y el cambio no interviene.
+
+**El trabajo documental reclama quince minutos.** El peor caso legítimo es el reconocimiento óptico de veinte páginas, la transcripción de una nota de voz y el análisis del texto extraído. Con un reclamo de ocho minutos, un expediente lento podía ser reclamado por un segundo trabajador mientras el primero seguía trabajando; el bloqueo por asesoría impedía el análisis duplicado, de modo que no había corrupción, pero sí demora y un intento consumido de más.
+
+**Un recibo agotado declara su causa y su naturaleza.** El transporte ya clasificaba cada fallo con un código —destino no permitido, error de respuesta, fallo de red, peso excedido, contenido vacío o contenido no resoluble— y calculaba si era reintentable, pero el asiento de recepción conservaba únicamente el nombre de la clase de error. El operador leía `AttachmentTransportError` y no podía distinguir una dirección expirada de un destino prohibido. Ahora el asiento conserva el código con su condición de reintento, y el contenido que no puede resolverse recibe un código propio en lugar de una excepción genérica. La reproducción del expediente lo mide: destino no permitido declara `unsafe_destination:permanente`, un fallo de red declara `network_error:reintentable` y un contenido irresoluble declara `content_unresolved:permanente`.
+
+**Sin migración.** Las tres precisiones son de comportamiento y de diagnóstico; reutilizan las tablas `0036` y `0037` y no añaden esquema. **La política de reintentos no se altera**: el asiento declara si el fallo es permanente, pero el número de intentos sigue siendo el mismo hasta observar la cola en producción. Compilación estricta en cero errores, ciento cincuenta y tres pruebas unitarias y diecisiete de caja negra HTTP/PostgreSQL en verde.
 
 ### Alcance candidato 2.0.183
 El release **reordena la matriz de Candidatos y hace visible la revisión humana ya guardada**. Dos capacidades y una precisión, y ninguna toca el esquema.
@@ -217,7 +228,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.183 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.184 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -249,7 +260,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.183.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.184.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 
