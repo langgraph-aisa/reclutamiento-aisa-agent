@@ -343,5 +343,25 @@ describe.runIf(enabled)("Caja negra HTTP / PostgreSQL / archivos reales", () => 
     // El diagnóstico nombra el error y nunca transporta contenido del candidato.
     expect(dead?.lastError).not.toContain("Registro");
   });
+  it("un descriptor anunciado sin carga queda visible con su código, no en silencio", async () => {
+    // La forma exacta del incidente del 19 de septiembre de 2026: el proveedor
+    // anuncia el archivo con su tipo declarado y sin la carga. Antes de esta
+    // entrega, el contenido **presente pero irresoluble** no dejaba ningún asiento
+    // en la bandeja —sólo la ausencia total lo dejaba—, de modo que el reclutador
+    // veía silencio donde había una pérdida con causa.
+    const descriptor = { ...fileEvent("payloadless-1"), filename: "anunciado-sin-carga.pdf", url: "data:application/pdf;base64" };
+    expect((await post({ messages: [descriptor] })).status).toBe(200);
+    expect(await runApiChatReceiptSweep(database.pool, processApiChatMessage)).toMatchObject({ failed: 1 });
+    // El recibo declara la ausencia con su código y su naturaleza, no con el
+    // nombre de una excepción.
+    const receipt = (await database.pool.query(
+      "SELECT status,outcome,last_error FROM apichat_inbound_receipts WHERE provider_message_id='payloadless-1'"
+    )).rows[0];
+    expect(receipt).toMatchObject({ status: "dead", outcome: "payload_missing:permanente", last_error: "payload_missing:permanente" });
+    // Y la misma pérdida queda visible en la bandeja con su motivo.
+    expect((await messages()).find(row => row.media_file_name === "anunciado-sin-carga.pdf")).toMatchObject({
+      media_processing_outcome: "rejected", media_processing_reason: "payload_missing:permanente",
+    });
+  });
 });
 

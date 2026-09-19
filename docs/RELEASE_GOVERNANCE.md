@@ -1,8 +1,25 @@
-# Gobierno de release JARVI RH 2.0.186
+# Gobierno de release JARVI RH 2.0.187
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.186**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.187**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.187
+El release **lleva la pregunta del artefacto a la frontera donde está la causa**: la configuración efectiva del proveedor. Cinco capacidades —diagnóstico, conformidad del contrato, evidencia simétrica y recuperación— y ninguna toca el esquema.
+
+**La configuración efectiva se lee, se declara y se corrige.** La pérdida del PDF quedó demostrada con tres observaciones independientes —el panel del proveedor, la traza del cuerpo y la aritmética de sus bytes— como un **descriptor sin carga**: `url` vale `data:<tipo>;base64` y ningún campo del cuerpo lleva contenido. El artefacto dependía entonces de una capacidad que se configura fuera de él, y su ausencia era invisible. El contrato expone la lectura de esa configuración y la notificación de cuenta declara el modo de notificación de adjuntos y el formato de aviso, de modo que el artefacto **sabe** si el proveedor entrega la carga o sólo su descriptor, en lugar de presuponerlo. La Auditoría de ApiChat publica el veredicto con su consecuencia operativa y la administración puede corregir el modo de notificación desde el panel, con asiento de auditoría propio, sin conservar credencial alguna.
+
+**El descriptor sin carga se mide en lugar de suponerse.** El contrato ejemplifica la dirección de medios en los tres esquemas de recepción —`{url}/media/{clientId}/file.pdf`, `…/audio.ogg`, `…/image.png`—, y si esa forma se cumpliera también bajo la notificación en base64 el archivo anunciado sería recuperable sin pedirle nada al candidato. Queda una hipótesis y no una conclusión, de modo que el artefacto la **mide**: la base de medios se declara desde la administración, cada dirección candidata declara su procedencia, se intenta una sola vez por candidata y el asiento conserva el host y la procedencia, nunca el identificador de cliente. Un fracaso **refuta la hipótesis con evidencia** y la pérdida se declara con su causa propia: es la diferencia entre medir y suponer.
+
+**El adaptador se conforma al vocabulario del contrato.** El registro del historial envuelve el mismo esquema de mensaje que el callback, y el cuerpo observado usa campos que el adaptador no leía. El artefacto acoge ahora el teléfono de quien escribe como respaldo del destinatario declarado —nunca en su sustitución—, la identidad del registro histórico como respaldo del identificador y el contenido de los mensajes de publicación. Excluye deliberadamente el nombre del contacto y la miniatura: leerlos como carga confundiría el rótulo con el archivo. Y **guarda los sobres que no son mensajes** —los eventos y las actualizaciones de conversación son notificaciones distintas por contrato—, porque un acuse comparte el vocabulario de identidad de un mensaje y sin la guarda se leería como una pérdida. Las pruebas de conformidad se transcriben de los ejemplos oficiales en lugar de derivarse del propio adaptador, que era la circularidad que ocultaba la divergencia.
+
+**Una pérdida deja el mismo asiento en las dos superficies.** El receptor asentaba un adjunto rechazado cuando el contenido faltaba por completo, pero una carga presente e irresoluble lanzaba su excepción antes de escribir la fila: el reclutador, que lee la bandeja, veía silencio, mientras la cola conservaba un recibo agotado. Ahora toda pérdida del adjunto —ausencia, carga irresoluble, destino inseguro o peso excedido— escribe el mismo asiento con su motivo tipado, y un adjunto rechazado deja de confundirse con un duplicado: es el mismo mensaje del proveedor con su carga todavía sin resolver, de modo que su estado puede avanzar cuando la causa se corrige.
+
+**Lo recibido y no convertido puede recuperarse.** La recuperación devuelve a la cola las notificaciones agotadas de una ventana declarada y rebobina el cursor del historial, con presupuesto de intentos y asiento de auditoría, de modo que lo que el proveedor ya entregó y el artefacto no pudo convertir se reprocesa **sin exigir al candidato un envío nuevo**. El diagnóstico del conducto deja de declarar «sin pendientes» con un rechazo de ingreso a la vista: los adjuntos recibidos y rechazados en el ingreso se publican con su motivo y estado propio, y las notificaciones de estado y de conversación dejan de contarse como pérdida. La distinción es la del propio análisis: recepción e ingreso son hechos distintos.
+
+**Se preserva el instrumento forense.** La traza del conducto se declara en el esquema de Drizzle, de modo que una reconciliación de la base no pueda borrar la única evidencia de la forma del cuerpo que envía el proveedor.
+
+**Sin migración.** Las cinco capacidades son de lectura, de conformidad y de recuperación; reutilizan las tablas `0035` a `0037`. Treinta y cuatro pruebas nuevas —diecinueve de conformidad del contrato, seis de recuperación y nueve sobre las superficies existentes— fijan el vocabulario, la guarda de sobres, la simetría del asiento y el reproceso.
 
 ### Alcance candidato 2.0.186
 El release **hace decidible un reproceso y nombra la ausencia de contenido**, cerrando la clasificación de fallos que el conducto dejaba a medias. Una capacidad de diagnóstico y ninguna de transporte; no toca el esquema.
@@ -248,7 +265,7 @@ El release **corrige el defecto que impedía encender el ciclo automático de pr
 
 ### Alcance candidato 2.0.168
 
-El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.186 se dispara como consecuencia del último ítem y no de una invocación manual.
+El release **ejecuta el protocolo de la prueba**. Lo que 2.0.166 declaró como límite —el motor no administraba los instrumentos de la plaza— queda entregado: el ciclo emite el ítem que señala su puntero, recibe la respuesta del candidato, la determina y avanza, y al agotar el instrumento cierra el ciclo, de modo que la re-evaluación automática de 2.0.187 se dispara como consecuencia del último ítem y no de una invocación manual.
 
 **La ontología queda ordenada: un solo acto.** `assessment_cycles` es el acto único de la evaluación psicométrica y la ficha lee de ahí —el nombre de la prueba, su puntero y su punteo de ejecución—; `assessment_sessions` queda **declarada como legada**, sin productor ni consumidor, y se conserva porque las migraciones de este proyecto son expansivas y nunca destructivas. La ubicación declarada no se copia al ciclo: su fuente única es la postulación, y duplicarla solo añadiría la posibilidad de que ambas discrepen. La consulta que gobierna la toma humana lee el estado del ciclo, no el de la entidad legada.
 
@@ -280,7 +297,7 @@ El release **declara el ciclo automático de pruebas psicométricas** y lo gobie
 
 **El encadenado está declarado.** El CV se solicita de forma inmediata y `requestCvForApplication` encadena el registro del ciclo: la obligación guarda la prueba habilitada que lo inicia y el instante en que queda listo. El barrido periódico de la conversación promueve las obligaciones vencidas, abre la conversación, **encola el saludo** —con marca propia, de modo que un reintento del barrido no lo duplique— y deja el ciclo en curso con su asiento `assessment_cycle_started`. El saludo lo entrega el despachador de siempre.
 
-**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.186.
+**Límite declarado.** El protocolo conversacional —aplicar la metodología, formular las preguntas de forma recursiva y capturar el punteo de la prueba— **no está entregado**: el motor conversacional no ejecuta los protocolos de evaluación, y hacerlo requiere una pieza nueva que gobierne la secuencia, el punteo por respuesta y el cierre. El cierre evaluado se entregó en 2.0.187.
 
 La migración `0028_assessment_cycles.sql` es expansiva e idempotente: crea la tabla del ciclo con una fila por postulación y termina con una verificación autocertificada.
 

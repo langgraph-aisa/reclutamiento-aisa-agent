@@ -8,15 +8,31 @@ import {
   recordNormalizedInboundLocation, recordNormalizedOutboundLocation,
 } from "./inbox";
 import { writeInboxFile } from "./inboxFiles";
-import { decodeRemoteAttachment, AttachmentTransportError } from "./base64Transport";
+import {
+  decodeRemoteAttachment, splitBase64Payload, AttachmentTransportError,
+  type DecodedTransport,
+} from "./base64Transport";
+import {
+  isPayloadlessMediaDescriptor,
+  mediaProbeCandidates,
+  probeDeclaredMedia,
+  recordMediaProbe,
+  resolveApiChatMediaBase,
+} from "./apiChatMediaProbe";
 import { registerCandidateInboundDocument } from "./candidateKnowledge";
 import { recordTransportTrace, trimTransportTraces } from "./transportTrace";
-import { resolveApiChatWebhookSecret } from "./apiChatSettings";
+import {
+  getApiChatRuntimeSettings,
+  resolveApiChatWebhookSecret,
+} from "./apiChatSettings";
 import {
   ATTACHMENT_MESSAGE_TYPES, normalizeApiChatBatch, normalizeApiChatWebhookPayload,
   type ApiChatWebhookMessage,
 } from "./apiChatContract";
-import { apiChatReceiptKey, enqueueApiChatReceipts, type ReceiptOrigin, type ReceiptResult } from "./apiChatReceipts";
+import {
+  apiChatReceiptKey, enqueueApiChatReceipts, receiptFailureReason,
+  type ReceiptContext, type ReceiptOrigin, type ReceiptResult,
+} from "./apiChatReceipts";
 export { ATTACHMENT_MESSAGE_TYPES, normalizeApiChatWebhookPayload };
 export type { ApiChatWebhookMessage };
 
@@ -37,16 +53,130 @@ export async function conversationForPhone(pool: Pool, digits: string) {
   } : null;
 }
 
+/**
+ * Resuelve la carga de un adjunto anunciado.
+ *
+ * Una sola semántica para las dos vías: el contenido llega codificado en el
+ * cuerpo —con o sin el sobre `data:`— o como dirección que se descarga bajo
+ * guarda de destino. Cuando el proveedor anuncia el archivo **sin su carga** —el
+ * sobre `data:<tipo>;base64` sin datos, observado en la instancia el 19 de
+ * septiembre de 2026—, la ausencia se declara con su código propio; y antes de
+ * declararla se **mide** la única hipótesis de recuperación que el contrato
+ * permite: la dirección de medios que sus ejemplos declaran.
+ *
+ * La sonda no reintenta y no inventa dominios: sólo se ejecuta si la
+ * administración declaró una base de medios, y su desenlace queda asentado con
+ * su procedencia. Un fracaso no es una pérdida silenciosa: es una hipótesis
+ * refutada con evidencia, que es lo que permite dejar de suponer.
+ */
+export async function resolveAttachmentContent(
+  pool: Pool,
+  message: ApiChatWebhookMessage,
+  source: string,
+  options: { fetchImpl?: typeof fetch } = {}
+): Promise<DecodedTransport> {
+  const decodeOptions = {
+    fileName: message.filename ?? "archivo",
+    mimeType: message.mime_type ?? "",
+    maxBytes: 30 * 1024 * 1024,
+    // Treinta megabytes en veinte segundos exigirían doce megabits sostenidos
+    // hasta el proveedor. Dos minutos admiten enlaces modestos sin dejar de
+    // acotar el cuelgue; cuando la carga viaja en base64 no hay descarga.
+    timeoutMs: 120_000,
+    fetchImpl: options.fetchImpl,
+  };
+  try {
+    const decoded = await decodeRemoteAttachment(source, decodeOptions);
+    if (decoded?.sizeBytes) return decoded;
+  } catch (error) {
+    if (!(error instanceof AttachmentTransportError) || error.code !== "payload_missing")
+      throw error;
+    const probe = await probeAnnouncedMedia(pool, message, source, options);
+    if (probe) return probe;
+    // La hipótesis quedó refutada: la ausencia se declara con su código propio,
+    // que es distinto de «la carga llegó y el códec no la resuelve».
+    throw new AttachmentTransportError(
+      "payload_missing",
+      false,
+      "El proveedor anunció el archivo con su tipo declarado pero sin contenido, y la dirección de medios derivada del contrato no lo resolvió."
+    );
+  }
+  throw new AttachmentTransportError(
+    "content_unresolved",
+    false,
+    "El adjunto declarado por el proveedor no pudo resolverse a contenido."
+  );
+}
+
+/**
+ * Sonda de la dirección de medios: hipótesis medida, no adoptada.
+ *
+ * Sólo se ejecuta sobre un descriptor sin carga y con una base declarada. Si
+ * resuelve, devuelve el contenido y asienta el acierto con su procedencia; si
+ * fracasa, asienta la refutación y devuelve `null` para que la pérdida se
+ * declare con su causa. El asiento nunca conserva el identificador de cliente.
+ */
+async function probeAnnouncedMedia(
+  pool: Pool,
+  message: ApiChatWebhookMessage,
+  source: string,
+  options: { fetchImpl?: typeof fetch }
+): Promise<DecodedTransport | null> {
+  if (!isPayloadlessMediaDescriptor(source)) return null;
+  try {
+    const base = await resolveApiChatMediaBase(pool);
+    if (!base) return null;
+    const settings = await getApiChatRuntimeSettings(pool);
+    if (!settings.clientId) return null;
+    const candidates = mediaProbeCandidates({
+      base,
+      clientId: settings.clientId,
+      messageId: message.id,
+      fileName: message.filename,
+      declaredMimeType: splitBase64Payload(source).declaredMimeType,
+    });
+    if (!candidates.length) return null;
+    const outcome = await probeDeclaredMedia(candidates, {
+      fileName: message.filename ?? "archivo",
+      mimeType: message.mime_type ?? "",
+      fetchImpl: options.fetchImpl,
+    });
+    await recordMediaProbe(pool, {
+      host: new URL(base).hostname.toLowerCase(),
+      outcome,
+      providerMessageId: message.id,
+    });
+    return outcome.ok ? outcome.decoded : null;
+  } catch (error) {
+    console.warn(
+      `[ApiChatWebhook] Sonda de medios no concluyente (${error instanceof Error ? error.name : "error"}).`
+    );
+    return null;
+  }
+}
+
 /** Una sola implementación de transporte para webhook y reconciliación. */
-export async function processApiChatMessage(pool: Pool, message: ApiChatWebhookMessage, origin: ReceiptOrigin = "webhook"): Promise<ReceiptResult> {
+export async function processApiChatMessage(pool: Pool, message: ApiChatWebhookMessage, origin: ReceiptOrigin = "webhook", context?: ReceiptContext): Promise<ReceiptResult> {
   const conversation = await conversationForPhone(pool, message.number);
   if (!conversation) return { ok: true, skipped: "sin-conversacion" };
   const previous = await pool.query(
-    `SELECT id,direction FROM conversation_messages
-      WHERE conversation_id=$1 AND provider_message_id=$2 LIMIT 1`,
+    `SELECT id,direction,message_type,
+            metadata->'media'->>'processingOutcome' AS media_outcome
+       FROM conversation_messages
+      WHERE conversation_id=$1 AND provider_message_id=$2
+      ORDER BY id LIMIT 1`,
     [conversation.conversationId, message.id]
   );
-  if (previous.rows.length) return { ok: true, skipped: "duplicado" };
+  const prior = previous.rows[0];
+  // Un adjunto rechazado **no** es un duplicado: es el mismo mensaje del
+  // proveedor con su carga todavía sin resolver. Una identidad por mensaje, y su
+  // estado puede avanzar —el reproceso de las soluciones de recuperación depende
+  // de esta distinción—. Todo lo demás sí se descarta como repetición.
+  const resumable =
+    prior !== undefined &&
+    ATTACHMENT_MESSAGE_TYPES.has(String(prior.message_type)) &&
+    String(prior.media_outcome ?? "") === "rejected";
+  if (prior && !resumable) return { ok: true, skipped: "duplicado" };
   const outbound = message.from_me === true;
   const common = { ...conversation, providerMessageId: message.id, quotedMessageId: message.quotedMessageId,
     providerTimestamp: message.providerTimestamp };
@@ -65,30 +195,40 @@ export async function processApiChatMessage(pool: Pool, message: ApiChatWebhookM
   } else if (ATTACHMENT_MESSAGE_TYPES.has(message.type)) {
     const recordFile = outbound ? recordNormalizedOutboundFile : recordNormalizedInboundFile;
     const source = message.contentValue ?? message.url;
+    const announcement = {
+      ...common,
+      caption: message.text,
+      fileName: message.filename ?? "Adjunto sin contenido",
+      mimeType: message.mime_type ?? "application/octet-stream",
+    };
     if (!source) {
-      await recordFile(pool, { ...common, fileName: message.filename ?? "Adjunto sin contenido", mimeType: message.mime_type ?? "application/octet-stream",
-        sizeBytes: 0, storageKey: "", processingOutcome: "rejected", processingReason: "contenido_no_disponible", caption: message.text });
+      await recordFile(pool, { ...announcement, sizeBytes: 0, storageKey: "",
+        processingOutcome: "rejected", processingReason: "contenido_no_disponible" });
       return { ok: true, skipped: "archivo-sin-contenido" };
     }
-    const decoded = await decodeRemoteAttachment(source, {
-      fileName: message.filename ?? "archivo",
-      mimeType: message.mime_type ?? "",
-      maxBytes: 30 * 1024 * 1024,
-      // Treinta megabytes en veinte segundos exigirían doce megabits sostenidos
-      // hasta el proveedor. Dos minutos admiten enlaces modestos sin dejar de
-      // acotar el cuelgue; cuando la carga viaja en base64 no hay descarga.
-      timeoutMs: 120_000,
-    });
+    let decoded: DecodedTransport;
+    try {
+      decoded = await resolveAttachmentContent(pool, message, source);
+    } catch (error) {
+      // Simetría de la evidencia. Antes, la ausencia total de contenido dejaba
+      // asiento en la bandeja y el contenido **presente pero irresoluble** no
+      // dejaba ninguno: el reclutador veía silencio donde había una pérdida con
+      // causa, y sólo el auditor de la cola veía el `dead`. Un fallo declarado
+      // permanente se asienta de inmediato; uno transitorio espera al último
+      // intento, porque declarar perdido lo que todavía puede resolverse sería
+      // convertir una hipótesis en un hecho.
+      const permanent =
+        error instanceof AttachmentTransportError && error.retryable === false;
+      if (permanent || context?.finalAttempt === true)
+        await recordFile(pool, { ...announcement, sizeBytes: 0, storageKey: "",
+          processingOutcome: "rejected",
+          processingReason: receiptFailureReason(error) });
+      throw error;
+    }
     // El origen llegó declarado pero no es decodificable: no es una URL insegura
     // ni un fallo de red, así que se declara con su propio código. Sin él, el
     // asiento de recepción sólo conserva el nombre genérico de la excepción y el
     // operador no puede distinguir esta pérdida de cualquier otra.
-    if (!decoded || !decoded.sizeBytes)
-      throw new AttachmentTransportError(
-        "content_unresolved",
-        false,
-        "El adjunto declarado por el proveedor no pudo resolverse a contenido."
-      );
     // Clave determinista: un replay o reinicio nunca genera otra copia huérfana.
     const storageKey = `${outbound ? "out" : "in"}-${conversation.conversationId}/${apiChatReceiptKey(message)}`;
     await writeInboxFile(storageKey, decoded.buffer);

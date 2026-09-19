@@ -1,4 +1,5 @@
 import {
+  bigserial,
   boolean,
   check,
   integer,
@@ -1421,6 +1422,51 @@ export const apichatInboundReceipts = pgTable("apichat_inbound_receipts", {
   ),
 }));
 export type ApiChatInboundReceipt = typeof apichatInboundReceipts.$inferSelect;
+
+/**
+ * Traza del conducto de transporte.
+ *
+ * Declarada aquí —y no sólo en la migración `0035`— por una razón de
+ * preservación: la traza es el único instrumento que conserva la **forma** del
+ * cuerpo que envía el proveedor, y una tabla ausente del esquema es una tabla
+ * que una reconciliación de esquema puede eliminar. Su pérdida no degrada una
+ * función: destruye la evidencia con la que se diagnostica.
+ */
+export const conversationTransportTraces = pgTable(
+  "conversation_transport_traces",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    origin: varchar("origin", { length: 16 }).notNull(),
+    outcome: varchar("outcome", { length: 48 }).notNull(),
+    providerType: varchar("provider_type", { length: 48 }),
+    eventId: varchar("event_id", { length: 180 }),
+    shape: jsonb("shape").default({}).notNull(),
+    payload: jsonb("payload"),
+    payloadBytes: integer("payload_bytes").default(0).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    createdIdx: index("conversation_transport_traces_created_idx").on(
+      table.createdAt
+    ),
+    originIdx: index("conversation_transport_traces_origin_idx").on(
+      table.origin,
+      table.createdAt
+    ),
+    originCheck: check(
+      "conversation_transport_traces_origin_ck",
+      sql`${table.origin} IN ('webhook','sondeo')`
+    ),
+    bytesCheck: check(
+      "conversation_transport_traces_bytes_ck",
+      sql`${table.payloadBytes} >= 0`
+    ),
+  })
+);
+export type ConversationTransportTrace =
+  typeof conversationTransportTraces.$inferSelect;
 
 /** Avance paginado del historial del proveedor, por cuenta. */
 export const apichatHistoryCursors = pgTable("apichat_history_cursors", {

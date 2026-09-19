@@ -96,8 +96,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.186");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.186");
+    expect(APP_VERSION).toBe("2.0.187");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.187");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -543,9 +543,13 @@ describe("black-box release contract", () => {
       fs.readFileSync(path.resolve("package.json"), "utf8")
     );
 
-    expect(audit.files).toHaveLength(141);
+    // Censo declarado: el auditor formal recorre las superficies de ejecución
+    // (servidor, cliente y esquema). La cuenta crece con cada módulo nuevo y
+    // este número es su acta: si sube sin que se agregue un archivo, o baja sin
+    // que se retire, el cambio no fue intencional y la puerta lo delata.
+    expect(audit.files).toHaveLength(144);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(141);
+    expect(publicCopyAudit.files).toHaveLength(144);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -1228,7 +1232,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.186");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.187");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1242,7 +1246,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.186");
+    expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.187");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1665,7 +1669,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.186");
+    expect(governance).toContain("Alcance candidato 2.0.187");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -1904,7 +1908,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.186");
+    expect(governance).toContain("Alcance candidato 2.0.187");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });
@@ -2051,5 +2055,101 @@ describe("black-box release contract", () => {
     expect(routers).toContain("al.actor_user_id IS NOT NULL");
     expect(routers).toContain("'status_changed','comment_added'");
     expect(routers).toContain("human_review:");
+  });
+});
+
+/**
+ * Recuperación del adjunto y preservación del instrumento.
+ *
+ * Tres invariantes que la auditoría del 19 de septiembre de 2026 dejó abiertas y
+ * que esta suite fija sobre el código: el instrumento forense no puede quedar
+ * fuera del esquema, la ambigüedad de destinatario no puede morir sin nombre, y
+ * una recuperación no puede anunciar más de lo que cada vía entrega.
+ */
+describe("recuperación del adjunto conservado", () => {
+  it("declara la traza del conducto en el esquema y no sólo en la migración", () => {
+    // La traza es el único instrumento que conserva la forma del cuerpo que
+    // envía el proveedor. Una tabla ausente del esquema es una tabla que una
+    // reconciliación de esquema puede eliminar, y con ella la evidencia con la
+    // que se diagnostica.
+    const schema = fs.readFileSync(
+      path.resolve("drizzle/schema.ts"),
+      "utf8"
+    );
+    expect(schema).toContain('pgTable(\n  "conversation_transport_traces"');
+    expect(schema).toContain(
+      "export const conversationTransportTraces"
+    );
+    expect(schema).toContain(
+      'check(\n      "conversation_transport_traces_origin_ck"'
+    );
+  });
+
+  it("nombra la ambigüedad de destinatario y no la deja morir como «Error»", () => {
+    const inbox = fs.readFileSync(path.resolve("server/inbox.ts"), "utf8");
+    // La ausencia de coincidencia es una carrera y merece reintento; la
+    // pluralidad es una ambigüedad estructural del catálogo, y reintentarla
+    // veintiún minutos no la resuelve.
+    expect(inbox).toContain("destinatario-ambiguo");
+    expect(inbox).toContain("destinatario-cambiado");
+    expect(inbox).toContain("coincidentes.length <= 1");
+  });
+
+  it("el reproceso conserva el desenlace anterior y acota su alcance", () => {
+    const recovery = fs.readFileSync(
+      path.resolve("server/apiChatRecovery.ts"),
+      "utf8"
+    );
+    expect(recovery).toContain("APICHAT_RECOVERY_WINDOW_HOURS");
+    expect(recovery).toContain("APICHAT_RECOVERY_RECEIPT_LIMIT");
+    expect(recovery).toContain("status='dead'");
+    expect(recovery).toContain("'epoch'");
+    // Declara qué recupera cada vía en lugar de prometer un resultado.
+    expect(recovery).toContain("nunca se convirtieron en");
+    expect(recovery).toContain("sonda acotada");
+    expect(recovery).toContain("payloadResolvableByProbe");
+  });
+
+  it("la operación que escribe no vive en la superficie de sólo lectura", () => {
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+    const audit = fs.readFileSync(path.resolve("server/apiChatAudit.ts"), "utf8");
+    const recovery = fs.readFileSync(
+      path.resolve("server/apiChatRecovery.ts"),
+      "utf8"
+    );
+    // La auditoría declara ser de sólo lectura y lo sigue siendo: devolver
+    // trabajo a la cola no pertenece allí.
+    expect(audit).not.toContain("apichat_inbound_receipts");
+    expect(recovery).toContain("INSERT INTO audit_log");
+    expect(recovery).toContain("'apichat_recovery'");
+    expect(routers).toContain("recoverApiChatAttachments: adminProcedure");
+    expect(routers).toContain('from "./apiChatRecovery"');
+  });
+
+  it("el panel dibuja el ingreso rechazado y la recuperación con su alcance", () => {
+    const page = fs.readFileSync(
+      path.resolve("client/src/pages/ApiChatAudit.tsx"),
+      "utf8"
+    );
+    expect(page).toContain("ADJUNTOS RECIBIDOS Y NO INGRESADOS");
+    expect(page).toContain("RECUPERACIÓN DEL ADJUNTO CONSERVADO");
+    expect(page).toContain("trpc.config.recoverApiChatAttachments.useMutation");
+    // La acción exige administración: devuelve trabajo a la cola y rebobina el
+    // cursor del historial.
+    expect(page).toContain('user?.role === "admin"');
+    // El veredicto se relee: describir la intención sin la lectura posterior
+    // repetiría el defecto que la auditoría corrigió.
+    expect(page).toContain("utils.apiChatAudit.pipeline.invalidate()");
+  });
+
+  it("el conducto cuenta el rechazo de ingreso y separa la notificación sin mensaje", () => {
+    const pipeline = fs.readFileSync(
+      path.resolve("server/attachmentPipeline.ts"),
+      "utf8"
+    );
+    expect(pipeline).toContain("attachmentsRefused");
+    expect(pipeline).toContain("receiptsNotMessage");
+    expect(pipeline).toContain("notificacion-sin-mensaje");
+    expect(pipeline).toContain("processingOutcome'='rejected'");
   });
 });

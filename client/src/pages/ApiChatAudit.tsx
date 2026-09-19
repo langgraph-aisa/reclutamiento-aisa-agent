@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, CheckCircle2, HelpCircle, Inbox, Send } from "lucide-react";
 
@@ -69,6 +70,18 @@ function formatMoment(value: string | Date | null | undefined) {
 }
 
 export default function ApiChatAudit() {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
+  const recover = trpc.config.recoverApiChatAttachments.useMutation({
+    onSuccess: async () => {
+      // La recuperación mueve la cola: releer es parte de la operación, no un
+      // adorno. Un veredicto sin la lectura posterior describiría la intención.
+      await Promise.all([
+        utils.apiChatAudit.pipeline.invalidate(),
+        utils.apiChatAudit.report.invalidate(),
+      ]);
+    },
+  });
   const report = trpc.apiChatAudit.report.useQuery(undefined, {
     refetchInterval: 30_000,
     retry: false,
@@ -397,6 +410,84 @@ export default function ApiChatAudit() {
             ) : (
               <p className="mt-2 text-xs text-muted-foreground">
                 Sin documentos registrados en la ventana.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-primary">
+              ADJUNTOS RECIBIDOS Y NO INGRESADOS
+            </h2>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Un archivo que consta en la bandeja y no entró al expediente es un
+              rechazo declarado, no una ausencia. Omitirlo permitía afirmar que
+              la ventana cerraba sin pendientes con un adjunto fuera del
+              expediente.
+            </p>
+            {(pipeline.data?.refusedAttachments ?? []).length ? (
+              <ul className="mt-2 space-y-1 text-xs">
+                {(pipeline.data?.refusedAttachments ?? []).map(row => (
+                  <li key={row.reason} className="flex flex-wrap gap-2">
+                    <span className="font-mono">{row.reason}</span>
+                    <span className="text-muted-foreground">{row.total}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Ningún adjunto recibido quedó fuera del expediente en la ventana.
+              </p>
+            )}
+            {(pipeline.data?.summary.receiptsNotMessage ?? 0) > 0 ? (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                {pipeline.data?.summary.receiptsNotMessage} notificación(es) de
+                estado o de conversación quedaron excluidas de los rechazos: el
+                contrato las declara distintas de la de mensajes y contarlas con
+                ellas ocultaba las pérdidas reales entre notificaciones legítimas.
+              </p>
+            ) : null}
+          </section>
+
+          <section className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-primary">
+              RECUPERACIÓN DEL ADJUNTO CONSERVADO
+            </h2>
+            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+              La notificación que agotó sus intentos está conservada en la cola,
+              de modo que la pérdida es recuperable sin pedir un reenvío al
+              candidato. La operación declara qué puede recuperar cada vía: el
+              reproceso reproduce la carga conservada y la relectura del historial
+              rescata las notificaciones que nunca llegaron a tener recibo.
+            </p>
+            {user?.role === "admin" ? (
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  disabled={recover.isPending}
+                  onClick={() => recover.mutate()}
+                  className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary disabled:opacity-50"
+                >
+                  {recover.isPending
+                    ? "Ejecutando la recuperación…"
+                    : "Recuperar adjuntos conservados"}
+                </button>
+                {recover.data ? (
+                  <p className="text-[11px] leading-5 text-muted-foreground">
+                    {recover.data.verdict}
+                  </p>
+                ) : null}
+                {recover.error ? (
+                  <p className="text-[11px] leading-5 text-rose-700">
+                    {recover.error.message}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                La recuperación exige rol de administración. La operación
+                restituye el trabajo a la cola y rebobina el cursor del
+                historial, de modo que lo recibido y no convertido vuelve a
+                intentarse sin exigir al candidato un envío nuevo.
               </p>
             )}
           </section>

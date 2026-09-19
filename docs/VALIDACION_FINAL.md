@@ -1,4 +1,4 @@
-# Validación final · JARVI RH 2.0.186
+# Validación final · JARVI RH 2.0.187
 
 Fecha de ejecución: 2026-09-17. Rama objetivo: `main`.
 
@@ -20,8 +20,13 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 
 | Validación                                         | Resultado                     |
 | -------------------------------------------------- | ----------------------------- |
-| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.186` |
-| Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 123 archivos       |
+| Gobierno (`pnpm release:verify`)                   | Aprobado · `JARVI RH 2.0.187` |
+| Tratamiento y cobertura (`pnpm text:verify`)       | Aprobado · 144 archivos      |
+| Conformidad del contrato del proveedor (`server/apiChatContract.conformance.test.ts`) | Aprobado · 19 de 19 pruebas, transcritas de los ejemplos oficiales |
+| Configuración efectiva de la cuenta (`server/apiChatAccount.test.ts`) | Aprobado · 9 de 9 pruebas · la confirmación es la lectura, no el código de estado |
+| Sonda de la dirección de medios (`server/apiChatMediaProbe.test.ts`) | Aprobado · 13 de 13 pruebas · una tentativa por forma, sin conservar el identificador de cliente |
+| Recuperación del adjunto conservado (`server/apiChatRecovery.test.ts`) | Aprobado · 6 de 6 pruebas · declara qué puede recuperar cada vía |
+| Caja negra del adjunto (`server/attachments.blackbox.test.ts`) | Aprobado · 13 de 13 contra PostgreSQL real · el descriptor sin carga queda visible con su código |
 | Auditoría de recepción (`database/auditoria_recepcion_inbox.sql`) | Aprobado · 7 bloques de solo lectura, sin efectos sobre los datos |
 | Feed global con reconciliación (`server/inboxSync.test.ts`) | Aprobado · 10 de 10 pruebas |
 | Sincronización manual (`inbox.syncNow`, asiento `inbox_sync_manual`) | Aprobado · contrato verificado en gobernanza y caja negra BN-MANUAL-* |
@@ -66,7 +71,7 @@ La hoja conserva el alcance de 2.0.140: la **solicitud automática de CV** en ca
 | Migración `0029` en PostgreSQL 17 | Aprobado · dos columnas del cierre evaluado, autocertificación exacta y reaplicación sin error |
 | Migración del RAG del candidato (`0026_candidate_knowledge.sql`) | Aprobado · expansiva e idempotente · no altera `knowledge_files` ni `knowledge_projects` |
 | Migración `0026` en PostgreSQL 17 real | Aprobado · aplicada sobre esquema existente con y sin `candidate_knowledge_notes`; dos ejecuciones consecutivas sin error; los seis bloques de verificación en `OK` o `no aplica` || Restricciones del expediente en PostgreSQL 17 real | Aprobado · carpeta duplicada, procedencia inválida, huella no hexadecimal, referencia de almacenamiento duplicada y carpeta inexistente se rechazan; borrar la postulación elimina el expediente en cascada y el RAG de proyectos permanece intacto |
-| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.186` |
+| Próxima versión (`pnpm release:bump -- --dry-run`) | Aprobado · indica `2.0.187` |
 | Paneles plegables de la ficha (`client/src/components/review/CollapsibleSection.tsx`) | Aprobado · las cinco secciones se pliegan, la preferencia se recuerda por sección y por operador, y el plegado funciona aunque el almacenamiento del navegador no esté disponible |
 | Accesibilidad del plegado | Aprobado · el botón declara `aria-expanded` y `aria-controls` con el identificador del contenido, de modo que el estado no depende del color ni de la flecha |
 | Agente del reclutador (`server/recruiterAgent.ts`, `server/recruiterAgent.test.ts`) | Aprobado · once pruebas: catálogo de modelos acotado, instrucciones que prohíben inventar y revelar el método, cadena DORA con credencial principal y de respaldo declaradas, pregunta asentada aunque el proveedor falle, y rechazo de pregunta vacía sin llamar al proveedor |

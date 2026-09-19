@@ -129,6 +129,44 @@ export default function Config() {
     Record<string, boolean>
   >({});
 
+  // Configuración efectiva de la cuenta del proveedor. El modo en que ApiChat
+  // anuncia los adjuntos no se deduce de las pérdidas: se lee. La lectura que
+  // dibuja esta tarjeta es la guardada; la verificación contra el proveedor es
+  // un acto explícito del operador y queda sellada con su marca de observación.
+  const apiChatAccount = trpc.config.apiChatAccount.useQuery();
+  const accountNotification = endpointCatalog?.attachmentNotification;
+  const verifyApiChatAccount = trpc.config.verifyApiChatAccount.useMutation({
+    onSuccess: async result => {
+      await Promise.all([apiChatAccount.refetch(), apiChatEndpoints.refetch()]);
+      const state = result?.verdict?.state;
+      if (state === "direccion_de_medios") {
+        toast.success(
+          "Cuenta verificada: el proveedor anunciará los adjuntos con la dirección de medios del contrato."
+        );
+      } else {
+        toast.info(
+          "Cuenta verificada: el proveedor anuncia el descriptor del archivo sin su carga."
+        );
+      }
+    },
+    onError: error => toast.error(error.message),
+  });
+  const setAttachmentNotification =
+    trpc.config.setApiChatAttachmentNotification.useMutation({
+      onSuccess: async result => {
+        await Promise.all([
+          apiChatAccount.refetch(),
+          apiChatEndpoints.refetch(),
+        ]);
+        toast.success(
+          result.notification.notifyAttachmentBase64
+            ? "La cuenta notifica los adjuntos en base64."
+            : "La cuenta notifica los adjuntos con su dirección de medios."
+        );
+      },
+      onError: error => toast.error(error.message),
+    });
+
   // Registro de códecs y decodificadores del transporte. El borrador conserva
   // la decisión del operador hasta que se guarda, y el resumen del servidor
   // describe el estado **guardado**, no el que se está editando.
@@ -695,6 +733,105 @@ export default function Config() {
                     <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
                       {endpointCatalog.attachmentRequirement}
                     </p>
+                  </div>
+                ) : null}
+                {/*
+                  Modo en que el proveedor anuncia el adjunto. Es la
+                  precondición del conducto que vive fuera del artefacto y que,
+                  hasta ahora, sólo se manifestaba como pérdida ya consumada.
+                  Se declara con su requisito y con la acción que la corrige.
+                */}
+                {accountNotification ? (
+                  <div className="mt-3 rounded-2xl border border-border/70 bg-muted/30 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Modo de notificación del proveedor
+                      </p>
+                      <Badge
+                        variant="outline"
+                        className={`rounded-full text-[10px] ${
+                          accountNotification.state === "direccion_de_medios"
+                            ? "border-emerald-300 bg-emerald-100 text-emerald-900"
+                            : accountNotification.state === "descriptor_sin_carga"
+                              ? "border-rose-300 bg-rose-100 text-rose-900"
+                              : "border-amber-300 bg-amber-100 text-amber-950"
+                        }`}
+                      >
+                        {accountNotification.state === "direccion_de_medios"
+                          ? "Dirección de medios"
+                          : accountNotification.state === "descriptor_sin_carga"
+                            ? "Descriptor sin carga"
+                            : "Sin verificar"}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                      {accountNotification.requirement}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                      {accountNotification.action}
+                    </p>
+                    {accountNotification.account ? (
+                      <p className="mt-1 font-mono text-[10px] text-muted-foreground/80">
+                        base64:{" "}
+                        {String(
+                          accountNotification.account.notifyAttachmentBase64
+                        )}{" "}
+                        · formato:{" "}
+                        {String(accountNotification.account.notifyFormat)} ·
+                        chatapi:{" "}
+                        {String(accountNotification.account.isChatapi)} ·
+                        apigraph:{" "}
+                        {String(accountNotification.account.isApigraph)} ·
+                        desde-mi:{" "}
+                        {String(
+                          accountNotification.account.notifyFromMeMessage
+                        )}
+                        {accountNotification.account.webhookAddress
+                          ? ` · webhook: ${accountNotification.account.webhookAddress}`
+                          : ""}
+                        {accountNotification.account.observedAt
+                          ? ` · observado: ${new Date(
+                              accountNotification.account.observedAt
+                            ).toLocaleString("es-GT", {
+                              timeZone: "America/Guatemala",
+                            })}`
+                          : ""}
+                      </p>
+                    ) : null}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={verifyApiChatAccount.isPending}
+                        onClick={() => verifyApiChatAccount.mutate()}
+                      >
+                        {verifyApiChatAccount.isPending
+                          ? "Consultando la cuenta…"
+                          : "Leer la cuenta del proveedor"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={
+                          accountNotification.state === "descriptor_sin_carga"
+                            ? "default"
+                            : "outline"
+                        }
+                        disabled={setAttachmentNotification.isPending}
+                        onClick={() =>
+                          setAttachmentNotification.mutate({
+                            enabled:
+                              accountNotification.state !==
+                              "descriptor_sin_carga",
+                          })
+                        }
+                      >
+                        {setAttachmentNotification.isPending
+                          ? "Aplicando…"
+                          : accountNotification.state === "descriptor_sin_carga"
+                            ? "Anunciar con la dirección de medios"
+                            : "Volver a la notificación en base64"}
+                      </Button>
+                    </div>
                   </div>
                 ) : null}
                 {endpointCatalog && !endpointCatalog.enabled ? (

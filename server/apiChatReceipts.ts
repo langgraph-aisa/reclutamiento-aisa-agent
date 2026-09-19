@@ -1,11 +1,32 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
-import { normalizeApiChatBatch, type ApiChatWebhookMessage } from "./apiChatContract";
+import {
+  apiChatNonMessageEnvelope,
+  normalizeApiChatBatch,
+  type ApiChatWebhookMessage,
+} from "./apiChatContract";
 import { AttachmentTransportError } from "./base64Transport";
 
 export type ReceiptOrigin = "webhook" | "sondeo";
 export type ReceiptResult = { ok: true; registered?: boolean; skipped?: string };
-export type ReceiptProcessor = (pool: Pool, message: ApiChatWebhookMessage, origin: ReceiptOrigin) => Promise<ReceiptResult>;
+/**
+ * Contexto del intento.
+ *
+ * El receptor necesita saber si el intento en curso es el último para poder
+ * dejar el asiento de una pérdida **definitiva** sin escribir uno por cada
+ * reintento: un fallo transitorio que aún puede resolverse no debe declararse
+ * perdido, porque declararlo sería convertir una hipótesis en un hecho.
+ */
+export type ReceiptContext = { attempts: number; finalAttempt: boolean };
+export type ReceiptProcessor = (
+  pool: Pool,
+  message: ApiChatWebhookMessage,
+  origin: ReceiptOrigin,
+  context?: ReceiptContext
+) => Promise<ReceiptResult>;
+
+/** Intentos antes de declarar agotado un recibo que falla de forma transitoria. */
+export const APICHAT_RECEIPT_MAX_ATTEMPTS = 8;
 
 /**
  * Fallo de recepción con causa declarada.
@@ -50,6 +71,10 @@ export function apiChatReceiptKey(message: ApiChatWebhookMessage) {
 /** El commit confirma conservación del lote antes de devolver un acuse. */
 export async function enqueueApiChatReceipts(pool: Pool, body: unknown, origin: ReceiptOrigin) {
   const messages = normalizeApiChatBatch(body);
+  // Una notificación de estado o de conversación no es una forma no reconocida:
+  // el contrato la declara distinta de la de mensajes, y confundirlas llenaba el
+  // asiento de recepción con rechazos que no eran pérdidas.
+  const nonMessage = apiChatNonMessageEnvelope(body);
   const client = await pool.connect();
   let queued = 0;
   let rejected = 0;
@@ -67,7 +92,8 @@ export async function enqueueApiChatReceipts(pool: Pool, body: unknown, origin: 
          VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7)
          ON CONFLICT (receipt_key) DO NOTHING RETURNING receipt_key`,
         [key, message?.id ?? null, origin, message ? encoded : null, digest,
-          message ? "pending" : "rejected", message ? null : "forma-no-reconocida"]
+          message ? "pending" : "rejected",
+          message ? null : nonMessage ? "notificacion-sin-mensaje" : "forma-no-reconocida"]
       );
       if (!message) rejected += 1;
       else if (result.rows.length) queued += 1;
@@ -102,8 +128,12 @@ export async function runApiChatReceiptSweep(pool: Pool, processMessage: Receipt
     );
     const receipt = claim.rows[0];
     if (!receipt) break;
+    const attempts = Number(receipt.attempts);
     try {
-      const result = await processMessage(pool, receipt.payload, receipt.origin);
+      const result = await processMessage(pool, receipt.payload, receipt.origin, {
+        attempts,
+        finalAttempt: attempts >= APICHAT_RECEIPT_MAX_ATTEMPTS,
+      });
       // Una conversación ausente no es una pérdida de transporte: es un chat que
       // no pertenece al reclutamiento. Se le concede una ventana corta por si la
       // postulación se está creando en ese instante y después se clasifica sin
@@ -125,7 +155,7 @@ export async function runApiChatReceiptSweep(pool: Pool, processMessage: Receipt
       completed += 1;
     } catch (error) {
       const exhausted =
-        Number(receipt.attempts) >= 8 ||
+        Number(receipt.attempts) >= APICHAT_RECEIPT_MAX_ATTEMPTS ||
         // Un fallo declarado permanente no ocupa la cola: reintentarlo ocho
         // veces retrasa veintiún minutos la decisión del operador sobre una
         // causa que no va a cambiar. El destino ausente calcula su propia

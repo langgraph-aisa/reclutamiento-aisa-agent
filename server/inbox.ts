@@ -14,6 +14,7 @@ import {
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
 import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
 import { loadAttachmentManifest } from "./attachmentPipeline";
+import { ReceptionError } from "./apiChatReceipts";
 import { decodeTransport, reconstructTransportFileName } from "./base64Transport";
 import { isUndefinedTableError } from "./governanceObservability";
 import { withLangfuseObservation } from "./observability/langfuse";
@@ -1141,8 +1142,18 @@ async function recordNormalizedInboundEventInternal(
         Number(row.application_id) === input.applicationId
     );
     if (coincidentes.length !== 1)
-      throw new Error(
-        "La asociación entre teléfono y conversación cambió antes de registrar el mensaje."
+      // La guarda distingue dos hechos que antes compartían una sola palabra.
+      // Una ausencia de coincidencia es una carrera —la postulación se está
+      // creando o cerrando en ese instante— y merece reintento. Una pluralidad
+      // es una ambigüedad estructural del catálogo: reintentarla ocho veces
+      // durante veintiún minutos no la resuelve, y la declara quien debe
+      // corregirla, no quien espera.
+      throw new ReceptionError(
+        coincidentes.length > 1 ? "destinatario-ambiguo" : "destinatario-cambiado",
+        coincidentes.length <= 1,
+        coincidentes.length > 1
+          ? "El teléfono conserva más de una conversación activa para la misma postulación: el destinatario es ambiguo y ninguna escritura es admisible."
+          : "La asociación entre teléfono y conversación cambió antes de registrar el mensaje."
       );
     const conversationId = input.conversationId;
     // Referencia visual: cuando el candidato responde citando un mensaje, el
@@ -1179,6 +1190,32 @@ async function recordNormalizedInboundEventInternal(
                   sent_at=COALESCE(sent_at,now()),updated_at=now()
             WHERE id=$1`,
           [existing.rows[0].id]
+        );
+      }
+      // El adjunto anunciado y después resuelto es **el mismo mensaje que se
+      // completa**, no otro mensaje. La identidad la fija el proveedor y su
+      // estado puede avanzar: una fila sin bytes —la que dejó el anuncio
+      // rechazado— recibe aquí su contenido, de modo que la recuperación no
+      // duplique la conversación ni exija pedir el archivo de nuevo.
+      const arriving = input.mediaMetadata?.media as
+        | InboxStoredMedia
+        | undefined;
+      if (arriving?.storageKey) {
+        await client.query(
+          `UPDATE conversation_messages
+              SET storage_key=$2,original_file_name=$3,mime_type=$4,size_bytes=$5,
+                  body=$6,metadata=COALESCE(metadata,'{}'::jsonb) || $7::jsonb,
+                  updated_at=now()
+            WHERE id=$1 AND COALESCE(storage_key,'')=''`,
+          [
+            existing.rows[0].id,
+            arriving.storageKey,
+            arriving.fileName,
+            arriving.mimeType,
+            arriving.sizeBytes,
+            input.body,
+            JSON.stringify({ media: { ...arriving, providerTimestamp: providerTime } }),
+          ]
         );
       }
       await client.query("COMMIT");

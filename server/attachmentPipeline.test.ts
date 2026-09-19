@@ -120,3 +120,43 @@ describe("contadores de la ficha del candidato", () => {
     });
   });
 });
+
+describe("el ingreso rechazado no se lee como ausencia de adjunto", () => {
+  it("un adjunto recibido y no ingresado impide declarar «sin pendientes»", () => {
+    // Antes, el informe sólo leía la cola de recepción y el expediente: un
+    // archivo que la bandeja conservaba con su motivo de rechazo dejaba el
+    // veredicto en «sin pendientes», que es una conclusión falsa sobre un hecho
+    // que sí ocurrió.
+    const summary = summarizeAttachmentPipeline({
+      ...base,
+      attachmentsRefused: 2,
+    });
+    expect(summary.state).toBe("ingreso_rechazado");
+    expect(summary.verdict).toContain("recibieron y quedaron rechazados");
+    expect(summary.verdict).toContain("no llegó a ser documento");
+  });
+
+  it("una notificación que no es mensaje no cuenta como pérdida", () => {
+    // Una notificación de estado o de conversación no es una pérdida de
+    // transporte: el contrato la declara distinta de la de mensajes. Sumarla a
+    // los rechazos llenaba el diagnóstico de ruido y ocultaba las pérdidas
+    // reales entre notificaciones legítimas.
+    const summary = summarizeAttachmentPipeline({
+      ...base,
+      receiptsNotMessage: 5,
+    });
+    expect(summary.state).toBe("sin_pendientes");
+    expect(summary.verdict).toContain("no cuentan como pérdida");
+    expect(summary.receiptsNotMessage).toBe(5);
+    expect(summary.receiptsRejected).toBe(0);
+  });
+
+  it("el rechazo de ingreso precede al rechazo de forma no reconocida", () => {
+    const summary = summarizeAttachmentPipeline({
+      ...base,
+      attachmentsRefused: 1,
+      receiptsRejected: 4,
+    });
+    expect(summary.verdict).toContain("recibieron y quedaron rechazados");
+  });
+});

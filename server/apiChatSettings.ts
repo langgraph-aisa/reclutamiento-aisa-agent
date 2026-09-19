@@ -669,6 +669,74 @@ export type ApiChatAttachmentTransport = ApiChatAttachmentLosses & {
   status: ApiChatAttachmentTransportStatus;
 };
 
+/**
+ * Configuración efectiva de la cuenta del proveedor, sin secretos.
+ *
+ * El contrato declara `GET /v1/account` (`Account` = `AccountUpdate` + datos de
+ * la cuenta) y `PUT /v1/account`. Hasta ahora el artefacto dependía de una
+ * capacidad configurada **fuera** de él y no podía leerla: la única señal era la
+ * pérdida, ya consumada. Leerla convierte la dependencia en una precondición
+ * verificable y nombrable.
+ */
+export type ApiChatAccountNotification = {
+  notifyAttachmentBase64: boolean;
+  /** Presencia de la envoltura `notify_format`; su plantilla no se conserva. */
+  notifyFormat: boolean;
+  notifyFormatTemplate: boolean;
+  isChatapi: boolean;
+  isApigraph: boolean;
+  notifyFromMeMessage: boolean;
+  /** Host y ruta de la dirección notificada: la clave del webhook no se persiste. */
+  webhookAddress: string | null;
+  observedAt: string | null;
+};
+
+export const APICHAT_ACCOUNT_NOTIFICATION_KEY = "account_notification";
+export const APICHAT_ACCOUNT_VERIFIED_KEY = "account_verified_at";
+
+export type ApiChatAttachmentNotificationState =
+  | "descriptor_sin_carga"
+  | "direccion_de_medios"
+  | "sin_verificar";
+
+/**
+ * Veredicto del modo de notificación de adjuntos.
+ *
+ * Es la pieza que convierte una pérdida indistinguible en una acción concreta:
+ * con la notificación en base64 activada el proveedor anuncia el medio **sin la
+ * carga** —lo observado en la instancia el 19/09/2026—, de modo que el archivo
+ * no puede reconstruirse, mientras que sin ella el `url` es la dirección de
+ * medios que el contrato ejemplifica (`{url}/media/{clientId}/file.pdf`).
+ */
+export function attachmentNotificationVerdict(
+  account: ApiChatAccountNotification | null
+) {
+  if (!account) {
+    return {
+      state: "sin_verificar" as ApiChatAttachmentNotificationState,
+      requirement:
+        "La configuración efectiva de la cuenta no se ha leído: el artefacto no puede afirmar en qué forma anuncia el proveedor los adjuntos.",
+      action:
+        "Ejecute la verificación de la cuenta en Configuración › WhatsApp para leer la configuración vigente del proveedor.",
+    };
+  }
+  if (account.notifyAttachmentBase64) {
+    return {
+      state: "descriptor_sin_carga" as ApiChatAttachmentNotificationState,
+      requirement:
+        "La cuenta notifica los adjuntos en base64: el campo url llega como «data:<tipo>;base64» sin la carga, de modo que el archivo no puede reconstruirse en ninguna parte del cuerpo notificado.",
+      action:
+        "Desactive «Notify attachments in base64 format» en la cuenta del proveedor. El contrato declara url como dirección de medios o como archivo codificado con sus datos; con la opción activada no llega ninguna de las dos formas.",
+    };
+  }
+  return {
+    state: "direccion_de_medios" as ApiChatAttachmentNotificationState,
+    requirement:
+      "La cuenta notifica los adjuntos con la dirección de medios que el contrato ejemplifica: el receptor la descarga, la clasifica por contenido y la vincula al expediente.",
+    action: "Ninguna: el modo vigente es el que el contrato declara.",
+  };
+}
+
 export async function getApiChatEndpoints(pool: Pool | null) {
   const readiness = await getApiChatReceptionReadiness(pool);
   const baseEnabled = readiness.sendReady && readiness.mode === "native";
@@ -687,6 +755,8 @@ export async function getApiChatEndpoints(pool: Pool | null) {
   });
   const attachmentLosses = await recentAttachmentLosses(pool);
   const attachmentReceipts = await recentAttachmentReceipts(pool);
+  const accountNotification = await getApiChatAccountNotification(pool);
+  const notificationVerdict = attachmentNotificationVerdict(accountNotification);
   const attachmentTransport: ApiChatAttachmentTransport = {
     ...attachmentLosses,
     available:
@@ -713,6 +783,13 @@ export async function getApiChatEndpoints(pool: Pool | null) {
     attachmentRequirement: APICHAT_ATTACHMENT_REQUIREMENT,
     attachmentLosses,
     attachmentTransport,
+    // La forma en que el proveedor anuncia el adjunto es una precondición del
+    // conducto: mientras el descriptor viaje sin la carga, ninguna reparación
+    // del receptor puede reconstruir el archivo.
+    attachmentNotification: {
+      ...notificationVerdict,
+      account: accountNotification,
+    },
     advisories: [
       ...apiChatCapabilityAdvisories({
         baseEnabled,
@@ -721,6 +798,11 @@ export async function getApiChatEndpoints(pool: Pool | null) {
       }),
       ...apiChatAttachmentTransportAdvisory(attachmentLosses),
       ...apiChatAttachmentEvidenceAdvisory(attachmentTransport),
+      ...(notificationVerdict.state === "direccion_de_medios"
+        ? []
+        : [
+            `Modo de notificación de adjuntos: ${notificationVerdict.state === "descriptor_sin_carga" ? "el proveedor entrega el descriptor sin la carga" : "sin verificar"}. ${notificationVerdict.action}`,
+          ]),
     ],
   };
 }
@@ -897,6 +979,80 @@ async function upsertSetting(
            updated_at=now()`,
     [APICHAT_PROVIDER, key, value, isSecret]
   );
+}
+
+/**
+ * Proyección persistente de la configuración efectiva de la cuenta.
+ *
+ * La verificación es un acto explícito —como la de recepción— y su resultado
+ * queda leído en la base: así el panel puede mostrar el modo vigente sin
+ * consultar al proveedor en cada carga, y la ausencia de lectura se declara
+ * como incógnita en lugar de suponerse.
+ */
+export async function getApiChatAccountNotification(
+  pool: Pool | null
+): Promise<ApiChatAccountNotification | null> {
+  if (!pool) return null;
+  try {
+    const rows = await settingRows(pool);
+    const stored = rows.find(
+      row => row.setting_key === APICHAT_ACCOUNT_NOTIFICATION_KEY
+    )?.setting_value;
+    if (!stored) return null;
+    const parsed: unknown = JSON.parse(stored);
+    if (!parsed || typeof parsed !== "object") return null;
+    const record = parsed as Record<string, unknown>;
+    return {
+      notifyAttachmentBase64: record.notifyAttachmentBase64 === true,
+      notifyFormat: record.notifyFormat === true,
+      notifyFormatTemplate: record.notifyFormatTemplate === true,
+      isChatapi: record.isChatapi === true,
+      isApigraph: record.isApigraph === true,
+      notifyFromMeMessage: record.notifyFromMeMessage === true,
+      webhookAddress:
+        typeof record.webhookAddress === "string" ? record.webhookAddress : null,
+      observedAt:
+        rows.find(row => row.setting_key === APICHAT_ACCOUNT_VERIFIED_KEY)
+          ?.setting_value ?? null,
+    };
+  } catch {
+    // Una lectura fallida no se convierte en un modo declarado: se declara
+    // «sin verificar», que es la verdad.
+    return null;
+  }
+}
+
+export async function saveApiChatAccountNotification(
+  pool: Pool,
+  notification: Omit<ApiChatAccountNotification, "observedAt">,
+  actorUserId: number,
+  action: "account_verified" | "attachment_notification_updated"
+): Promise<ApiChatAccountNotification> {
+  const observedAt = new Date().toISOString();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await upsertSetting(
+      client,
+      APICHAT_ACCOUNT_NOTIFICATION_KEY,
+      JSON.stringify(notification),
+      false
+    );
+    await upsertSetting(client, APICHAT_ACCOUNT_VERIFIED_KEY, observedAt, false);
+    await client.query(
+      `INSERT INTO audit_log
+         (actor_user_id,entity_type,entity_id,action,after_json)
+       VALUES ($1,'apichat_account',0,$2,$3::jsonb)`,
+      [actorUserId, action, JSON.stringify(notification)]
+    );
+    await client.query("COMMIT");
+    return { ...notification, observedAt };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function saveApiChatPreferences(

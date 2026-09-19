@@ -74,6 +74,12 @@ import {
 } from "./automaticEvaluation";
 import { codecRegistry, saveCodecSettings } from "./codecRegistry";
 import { apiChatChannelReport } from "./apiChatAudit";
+import { recoverApiChatAttachments } from "./apiChatRecovery";
+import {
+  readApiChatAccountNotification,
+  setApiChatAttachmentNotification,
+  verifyApiChatAccount,
+} from "./apiChatAccount";
 import { attachmentPipelineReport } from "./attachmentPipeline";
 import {
   RECRUITER_AGENT_MAX_QUESTION_CHARS,
@@ -1070,6 +1076,10 @@ function safeIntegrationMessage(error: unknown, fallback: string) {
     "ApiChat no está configurado",
     "ApiChat rechazó la verificación",
     "ApiChat rechazó la consulta de historial",
+    "ApiChat rechazó la consulta de la cuenta",
+    "ApiChat aceptó la actualización pero",
+    "La configuración de la cuenta exige el modo de API nativa",
+    "No fue posible consultar la configuración de la cuenta",
     "La verificación integrada de ApiChat",
     "La verificación de recepción exige el modo de API nativa",
     "El endpoint /messagesHistory está desactivado",
@@ -6185,6 +6195,81 @@ export const appRouter = router({
     }),
     apiChatEndpoints: adminProcedure.query(async () => {
       return getApiChatEndpoints(await getPool());
+    }),
+    /**
+     * Configuración efectiva de la cuenta del proveedor.
+     *
+     * La lectura es de la base: la verificación contra el proveedor es un acto
+     * explícito y su resultado queda sellado con la marca de observación, de
+     * modo que el panel no consulta la red en cada carga ni declara un modo que
+     * no haya leído.
+     */
+    apiChatAccount: adminProcedure.query(async () => {
+      return readApiChatAccountNotification(await getPool());
+    }),
+    verifyApiChatAccount: adminProcedure.mutation(async ({ ctx }) => {
+      try {
+        return await verifyApiChatAccount(await requirePool(), ctx.user.id);
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: safeIntegrationMessage(
+            error,
+            "No fue posible verificar la configuración de la cuenta en ApiChat."
+          ),
+        });
+      }
+    }),
+    /**
+     * Corrige el modo de notificación de adjuntos del proveedor.
+     *
+     * La escritura reenvía la configuración leída y sólo invierte la casilla,
+     * y su éxito se decide por la lectura posterior, no por el código HTTP.
+     * Queda asentada en `audit_log` con el actor que la ejecutó.
+     */
+    setApiChatAttachmentNotification: adminProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await setApiChatAttachmentNotification(
+            await requirePool(),
+            input.enabled,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible actualizar el modo de notificación de adjuntos."
+            ),
+          });
+        }
+      }),
+    /**
+     * Recupera los adjuntos conservados sin exigir al candidato un reenvío.
+     *
+     * Devuelve a la cola las notificaciones agotadas y rebobina el cursor del
+     * historial, y declara en su veredicto **qué puede recuperar cada vía**: el
+     * reproceso reproduce la carga conservada —y sólo la resuelve si una base de
+     * medios está declarada—, mientras que la relectura del historial recupera
+     * las notificaciones que nunca llegaron a tener recibo.
+     *
+     * Escribe, y por eso no vive en la superficie de auditoría, que es de sólo
+     * lectura. Queda asentada con el actor que la ejecutó.
+     */
+    recoverApiChatAttachments: adminProcedure.mutation(async ({ ctx }) => {
+      try {
+        return await recoverApiChatAttachments(await requirePool(), ctx.user.id);
+      } catch (error) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: safeIntegrationMessage(
+            error,
+            "No fue posible ejecutar la recuperación de adjuntos."
+          ),
+        });
+      }
     }),
     conversationActivation: adminProcedure.query(async () => {
       const activation = await getConversationActivation(await getPool());

@@ -126,6 +126,22 @@ export type AttachmentPipelineCounters = {
   receiptsDead: number;
   /** No reconocidas o inválidas: se confirmaron sin generar mensaje. */
   receiptsRejected: number;
+  /**
+   * Notificaciones que no son mensajes —de estado o de conversación—. El
+   * contrato las declara distintas de la de mensajes, de modo que no son
+   * pérdidas y no deben contarse como rechazos: contarlas con ellos inflaba el
+   * diagnóstico con ruido y ocultaba las pérdidas reales entre notificaciones
+   * legítimas.
+   */
+  receiptsNotMessage: number;
+  /**
+   * Adjuntos que se recibieron y quedaron rechazados en el ingreso al
+   * expediente, con su motivo. La recepción es un hecho y el ingreso otro: un
+   * rechazo de política no es una pérdida de transporte, pero tampoco es una
+   * ausencia de adjunto, y omitirlo permitía declarar «sin pendientes» con un
+   * archivo fuera del expediente.
+   */
+  attachmentsRefused: number;
   receiptsCompleted: number;
   documentsReceived: number;
   documentsPending: number;
@@ -158,6 +174,8 @@ export function summarizeAttachmentPipeline(
     receiptsOpen: Number(input.receiptsOpen ?? 0),
     receiptsDead: Number(input.receiptsDead ?? 0),
     receiptsRejected: Number(input.receiptsRejected ?? 0),
+    receiptsNotMessage: Number(input.receiptsNotMessage ?? 0),
+    attachmentsRefused: Number(input.attachmentsRefused ?? 0),
     receiptsCompleted: Number(input.receiptsCompleted ?? 0),
     documentsReceived: Number(input.documentsReceived ?? 0),
     documentsPending: Number(input.documentsPending ?? 0),
@@ -202,6 +220,12 @@ export function summarizeAttachmentPipeline(
       state: "derivacion_requerida",
       verdict: `${counters.documentsWithoutText} documento(s) están conservados sin texto derivado: el formato requiere reconocimiento óptico o carece de extractor en esta instalación. La recepción es un hecho distinto de la interpretación.`,
     };
+  if (counters.attachmentsRefused > 0)
+    return {
+      ...counters,
+      state: "ingreso_rechazado",
+      verdict: `${counters.attachmentsRefused} adjunto(s) se recibieron y quedaron rechazados en el ingreso al expediente: el archivo consta en la bandeja con su motivo y no llegó a ser documento. La recepción y el ingreso son hechos distintos, y un rechazo declarado no es una pérdida silenciosa.`,
+    };
   if (counters.receiptsRejected > 0)
     return {
       ...counters,
@@ -218,8 +242,11 @@ export function summarizeAttachmentPipeline(
   return {
     ...counters,
     state: "sin_pendientes",
-    verdict:
-      "La ventana consultada cierra sin adjuntos pendientes: recepción, derivación y evaluación constan completadas.",
+    verdict: `La ventana consultada cierra sin adjuntos pendientes: recepción, derivación y evaluación constan completadas.${
+      counters.receiptsNotMessage > 0
+        ? ` Se excluyeron ${counters.receiptsNotMessage} notificación(es) de estado o de conversación, que el contrato declara distintas de los mensajes y no cuentan como pérdida.`
+        : ""
+    }`,
   };
 }
 
@@ -261,6 +288,12 @@ export type AttachmentPipelineReport = {
     processingErrorCode: string | null;
     total: number;
   }>;
+  /**
+   * Adjuntos recibidos y rechazados en el ingreso, agrupados por motivo. Es la
+   * mitad del conducto que la bandeja conserva y el expediente no: sin ella, un
+   * rechazo de política se leía como «sin pendientes».
+   */
+  refusedAttachments: Array<{ reason: string; total: number }>;
 };
 
 type StatusRow = { status: string; total: number };
@@ -284,7 +317,8 @@ export async function attachmentPipelineReport(
     available = false;
     return { rows };
   };
-  const [receiptStatuses, receiptOutcomes, receipts, documents, jobs] =
+  const [receiptStatuses, receiptOutcomes, receipts, documents, jobs,
+    nonMessageReceipts, refusedAttachments] =
     await Promise.all([
       pool
         .query<StatusRow>(
@@ -365,6 +399,31 @@ export async function attachmentPipelineReport(
           [window, detail]
         )
         .catch(() => unavailable([])),
+      // Notificaciones de estado y de conversación: el contrato las declara
+      // distintas de la de mensajes. Se cuentan aparte porque no son pérdidas, y
+      // sumarlas a los rechazos llenaba el diagnóstico de ruido legítimo.
+      pool
+        .query<{ total: number }>(
+          `SELECT count(*)::int AS total
+             FROM apichat_inbound_receipts
+            WHERE received_at >= now() - ($1 || ' hours')::interval
+              AND outcome='notificacion-sin-mensaje'`,
+          [window]
+        )
+        .catch(() => unavailable([] as Array<{ total: number }>)),
+      // La mitad del conducto que la bandeja conserva y el expediente no: un
+      // adjunto recibido y rechazado en el ingreso, con su motivo declarado.
+      pool
+        .query<{ reason: string | null; total: number }>(
+          `SELECT COALESCE(metadata->'media'->>'processingReason','sin-motivo') AS reason,
+                  count(*)::int AS total
+             FROM conversation_messages
+            WHERE created_at >= now() - ($1 || ' hours')::interval
+              AND metadata->'media'->>'processingOutcome'='rejected'
+            GROUP BY 1 ORDER BY total DESC LIMIT $2`,
+          [window, detail]
+        )
+        .catch(() => unavailable([] as Array<{ reason: string | null; total: number }>)),
     ]);
 
   const countStatus = (predicate: (status: string) => boolean) =>
@@ -395,6 +454,10 @@ export async function attachmentPipelineReport(
     "analysis_failed",
     "extraction_failed",
   ]);
+  const receiptsNotMessage = nonMessageReceipts.rows.reduce(
+    (total, row) => total + Number(row.total ?? 0),
+    0
+  );
   const summary = summarizeAttachmentPipeline({
     receiptsReceived: receiptStatuses.rows.reduce(
       (total, row) => total + Number(row.total ?? 0),
@@ -404,7 +467,15 @@ export async function attachmentPipelineReport(
       status => status === "pending" || status === "processing" || status === "retry"
     ),
     receiptsDead: countStatus(status => status === "dead"),
-    receiptsRejected: countStatus(status => status === "rejected"),
+    receiptsRejected: Math.max(
+      0,
+      countStatus(status => status === "rejected") - receiptsNotMessage
+    ),
+    receiptsNotMessage,
+    attachmentsRefused: refusedAttachments.rows.reduce(
+      (total, row) => total + Number(row.total ?? 0),
+      0
+    ),
     receiptsCompleted: countStatus(status => status === "completed"),
     documentsReceived: documentTotal,
     documentsPending: countDocuments("pendiente"),
@@ -461,6 +532,10 @@ export async function attachmentPipelineReport(
     documentsByError: documents.rows.map(row => ({
       analysisStatus: String(row.analysis_status),
       processingErrorCode: row.processing_error_code ?? null,
+      total: Number(row.total ?? 0),
+    })),
+    refusedAttachments: refusedAttachments.rows.map(row => ({
+      reason: String(row.reason ?? "sin-motivo"),
       total: Number(row.total ?? 0),
     })),
   };
