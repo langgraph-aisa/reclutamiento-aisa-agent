@@ -19,7 +19,15 @@ Este proyecto contiene una aplicación web responsive para postulaciones y opera
 ## PostgreSQL
 
 1. Crear una base PostgreSQL en EasyPanel y activar SSL si la red lo requiere.
-2. Definir `DATABASE_URL` en la aplicación y ejecutar `pnpm db:push`; Drizzle aplica el journal hasta `0014_cognitive_governance.sql`.
+2. Definir `DATABASE_URL` en la aplicación y aplicar el esquema con el artefacto consolidado:
+
+   ```bash
+   pnpm deploy:sql
+   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 --single-transaction \
+        -f database/005_servicio_conversacional_listo.sql
+   ```
+
+   La ejecución termina imprimiendo el `GATE GLOBAL`; debe quedar en `OK`. **No aplique el esquema con `pnpm db:push`**: esa orden ejecuta `drizzle-kit migrate` contra un diario que termina en `0014_cognitive_governance.sql` y, por tanto, no aplica las migraciones `0035` a `0037` —traza del conducto, recepción durable de adjuntos y cola de procesamiento documental—, sin las cuales la instancia no puede recibir ni conservar archivo alguno. **Tampoco use `drizzle-kit push`**: reconciliaría la base contra el esquema declarado y eliminaría la tabla de trazas, que no está declarada allí.
 3. Ejecutar `database/002_ine_catalog_seed.sql` si el catálogo geográfico aún no está cargado. Las zonas se mantienen administrables porque su fuente y granularidad operativa pueden variar.
 4. Promover el primer usuario administrador por medio de SQL controlado, por ejemplo: `UPDATE users SET role='admin' WHERE email='correo-del-administrador';`.
 
@@ -37,7 +45,7 @@ El runtime de evaluación no consulta `N8N_AGENT_EVALUATION_URL`, `N8N_MANUAL_ST
 
 ### ApiChat
 
-ApiChat no utiliza variables de entorno en JARVI RH 2.0.131. Ejecute las migraciones y configure endpoint, conexión, Client ID y token desde Administración > Configuración > WhatsApp. Los secretos se cifran en el servidor antes de almacenarse en `integration_settings`; no se devuelven al navegador.
+ApiChat no utiliza variables de entorno para su endpoint, su conexión ni sus credenciales: se configuran cifradas desde Administración > Configuración > WhatsApp. **Excepción desde 2.0.180:** la ruta de recepción sí requiere `APICHAT_WEBHOOK_SECRET`, la misma cadena que debe registrarse en la URL del webhook del panel de ApiChat (`?key=…`). Sin ella, en producción el webhook responde 503 a toda notificación y ningún mensaje, archivo o traza se conserva. Son opcionales `APICHAT_PUBLIC_BASE_URL`, `APICHAT_MEDIA_ALLOWED_HOSTS` y `APICHAT_ACCOUNT_SCOPE`. Los secretos se cifran en el servidor antes de almacenarse en `integration_settings`; no se devuelven al navegador.
 
 ### Langfuse
 

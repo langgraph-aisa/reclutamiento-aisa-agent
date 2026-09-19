@@ -1,0 +1,93 @@
+{
+  "version_examinada": "2.0.183",
+  "telefono_ficticio": "50255550001",
+  "resumen": {
+    "mensajes_del_pdf_en_bandeja": 2,
+    "documentos_en_expediente": 1,
+    "envios_realizados": 5,
+    "llegaron_a_la_bandeja": 2,
+    "no_llegaron": 3
+  },
+  "casos": [
+    {
+      "caso": "A · PDF incrustado en base64 (data: URI)",
+      "forma": "url = data:application/pdf;base64,…",
+      "recibo": {
+        "estado": "completed",
+        "desenlace": "registrado",
+        "intentos": 1,
+        "error": null
+      },
+      "bandeja": {
+        "fila_de_mensaje": true,
+        "documento": "1"
+      },
+      "veredicto": "El PDF llega a la bandeja y entra al expediente."
+    },
+    {
+      "caso": "B1 · PDF por URL remota con destino no público",
+      "forma": "url = https://127.0.0.1/media/curriculum.pdf",
+      "recibo": {
+        "estado": "dead",
+        "desenlace": null,
+        "intentos": 8,
+        "error": "unsafe_destination:permanente"
+      },
+      "bandeja": {
+        "fila_de_mensaje": false
+      },
+      "veredicto": "NO llega a la bandeja. El recibo agota ocho intentos y queda en «dead», ahora con el motivo tipado en el asiento: distingue un destino no permitido de un corte de red, y declara que el fallo es permanente."
+    },
+    {
+      "caso": "B2 · PDF por URL remota pública que no responde",
+      "forma": "url = https://media.apichat.invalid/curriculum.pdf",
+      "recibo": {
+        "estado": "dead",
+        "desenlace": null,
+        "intentos": 8,
+        "error": "network_error:reintentable"
+      },
+      "bandeja": {
+        "fila_de_mensaje": false
+      },
+      "veredicto": "NO llega a la bandeja. El asiento declara el fallo como de red y reintentable, que es la información necesaria para decidir entre reprocesar y corregir la configuración."
+    },
+    {
+      "caso": "C · PDF por URL sin TLS",
+      "forma": "url = http://…",
+      "recibo": {
+        "estado": "dead",
+        "desenlace": null,
+        "intentos": 8,
+        "error": "content_unresolved:permanente"
+      },
+      "bandeja": {
+        "fila_de_mensaje": false
+      },
+      "veredicto": "NO llega a la bandeja y tampoco queda asentado como rechazo: el receptor no puede decodificar el origen y lanza una excepción que no es de transporte, de modo que el asiento sólo conserva el nombre genérico del error. Es una pérdida total con rastro sólo en la cola de recepción."
+    },
+    {
+      "caso": "E · PDF en un campo no enumerado del proveedor",
+      "forma": "document = \"https://…\" (campo distinto de url/base64/media)",
+      "recibo": {
+        "estado": "rejected",
+        "desenlace": "archivo-sin-contenido",
+        "intentos": 1,
+        "error": null
+      },
+      "bandeja": {
+        "fila_de_mensaje": true,
+        "ingreso": "rejected",
+        "motivo": "contenido_no_disponible",
+        "documento": null
+      },
+      "veredicto": "El mensaje aparece en la bandeja como texto con su motivo, pero NO entra al expediente: no hay documento que el motor pueda leer. El detalle de qué claves llegaron no se conserva en el asiento; sí en la traza de transporte."
+    },
+    {
+      "caso": "D · Qué ve el operador en el informe del conducto",
+      "estado": "recepcion_no_confirmada",
+      "veredicto": "La cola de recepción conserva 2 notificación(es) sin convertir en mensaje, de las cuales 2 agotaron sus intentos. El archivo no alcanzó la bandeja: el motivo consta en el error de la última tentativa, no en la conducta del candidato.",
+      "limite": "El informe es de SOLO LECTURA: no reintenta ni reprocesa. Un recibo en «dead» es terminal y no existe operación administrativa que lo devuelva a la cola."
+    }
+  ]
+}

@@ -1,0 +1,186 @@
+{
+  "version": "2.0.183",
+  "casos": [
+    {
+      "id": "A1_url_http_no_reconocida",
+      "nivel": "R",
+      "funcion": "normalizeApiChatMessage",
+      "observado": {
+        "https": {
+          "campo": "url",
+          "resuelto": true
+        },
+        "http": {
+          "campo": null,
+          "resuelto": false,
+          "urlCopiado": "http://media.invalid/fixture.pdf"
+        }
+      },
+      "consecuencia": "El campo `url` se copia SIN validar el esquema, pero `contentValue` no se resuelve. Como el receptor usa `source = contentValue ?? url`, el origen no vacío llega al transporte, que devuelve null sin intentar conexión: el receptor lanza AttachmentContentUnavailable y el recibo agota 8 intentos hasta «dead». El mensaje NO se asienta y la bandeja queda vacía. Reproducido en `reproduccion_pdf_bandeja.ts`, casos B1, B2 y C."
+    },
+    {
+      "id": "A2_campo_no_enumerado",
+      "nivel": "R",
+      "funcion": "normalizeApiChatMessage",
+      "observado": {
+        "camposPresentes": [],
+        "resuelto": false
+      },
+      "consecuencia": "La lista de alias es finita y local. Aquí NO hay `url` ni contenido resoluble, de modo que `source` es vacío: es el único caso en que el receptor asienta el mensaje, con processingOutcome 'rejected' y motivo contenido_no_disponible, y sin documento. Reproducido en `reproduccion_pdf_bandeja.ts`, caso E."
+    },
+    {
+      "id": "A3_base64_bajo_umbral",
+      "nivel": "R",
+      "funcion": "normalizeApiChatMessage",
+      "observado": {
+        "longitud": 48,
+        "resuelto": false,
+        "umbral": 64
+      },
+      "consecuencia": "El umbral heurístico de 64 caracteres decide si el contenido se reconoce. Un base64 real por debajo del umbral, entregado en `url`, sigue llegando al transporte como origen no vacío: no es rechazo asentado, es pérdida con recibo agotado (misma clase que A1)."
+    },
+    {
+      "id": "A4_lote_mayor_a_cien",
+      "nivel": "R",
+      "funcion": "normalizeApiChatBatch",
+      "observado": {
+        "entradas": 101,
+        "resultado": "El lote excede cien mensajes."
+      },
+      "consecuencia": "La excepción ocurre antes de la transacción de la cola: el lote entero responde 503 y ninguno de sus elementos se conserva. Un lote del proveedor mayor de cien no se degrada parcialmente."
+    },
+    {
+      "id": "A5_lote_mixto_conserva_posiciones",
+      "nivel": "R",
+      "funcion": "normalizeApiChatBatch",
+      "observado": {
+        "largo": 3,
+        "invalidas": 1,
+        "validas": 2
+      },
+      "consecuencia": "Cada elemento recibe su propio desenlace; el comportamiento es el exigido por H01."
+    },
+    {
+      "id": "A6_tipos_admitidos",
+      "nivel": "R",
+      "funcion": "ATTACHMENT_MESSAGE_TYPES",
+      "observado": {
+        "tipos": [
+          "file",
+          "document",
+          "image",
+          "audio",
+          "ptt",
+          "voice",
+          "video",
+          "sticker"
+        ]
+      },
+      "consecuencia": "Imagen, documento y audio entran por la misma rama: la asimetría del incidente no se explica en esta puerta."
+    },
+    {
+      "id": "B1_pdf_reconocido_por_firma",
+      "nivel": "R",
+      "funcion": "decodeTransport",
+      "observado": {
+        "extension": "pdf",
+        "sha256": "b7d85a7158e8b2ea"
+      },
+      "consecuencia": "El transporte canónico no es el eslabón que pierde un PDF."
+    },
+    {
+      "id": "B2_politica_de_extensiones",
+      "nivel": "R",
+      "funcion": "decodeTransport",
+      "observado": {
+        "resultado": "Extensión no permitida: «pdf». Habilitadas en Configuración: jpg, png."
+      },
+      "consecuencia": "El rechazo por política es correcto, pero ocurre después de la recepción: el hecho «llegó y fue rechazado» es distinto de «no llegó» y debe conservarse con su motivo."
+    },
+    {
+      "id": "B3_fuente_no_transportable",
+      "nivel": "R",
+      "funcion": "decodeRemoteAttachment",
+      "observado": {
+        "resultado": null,
+        "solicitudesDeRed": 0
+      },
+      "consecuencia": "El módulo de transporte declara explícitamente que no puede mover ese origen; el adaptador, en cambio, ya lo había descartado antes de llegar aquí."
+    },
+    {
+      "id": "B4_firma_fuera_de_cero",
+      "nivel": "R",
+      "funcion": "detectContentSignature",
+      "observado": {
+        "firmaConBom": null
+      },
+      "consecuencia": "Con un prefijo previo la firma no se detecta; la extensión declarada sostiene el archivo, de modo que el efecto es una degradación silenciosa del tipo, no una pérdida."
+    },
+    {
+      "id": "C1_codigo_de_error_no_sobrevive",
+      "nivel": "C",
+      "funcion": "apiChatReceipts.ts · runApiChatReceiptSweep",
+      "observado": {
+        "asiento": "last_error = error.name",
+        "transportError": "AttachmentTransportError",
+        "codigoPerdido": "http_error",
+        "reintentablePerdido": false,
+        "contenidoNoDisponible": "Error"
+      },
+      "consecuencia": "El diagnóstico conserva «AttachmentTransportError» o «Error», nunca http_error, size_limit ni unsafe_destination. La condición `retryable` que el módulo calcula no se consume: se reintentan ocho veces por igual los fallos permanentes y los transitorios."
+    },
+    {
+      "id": "D1_recibo_agotado_visible",
+      "nivel": "R",
+      "funcion": "summarizeAttachmentPipeline",
+      "observado": {
+        "estado": "recepcion_no_confirmada",
+        "veredicto": "La cola de recepción conserva 1 notificación(es) sin convertir en mensaje, de las cuales 1 agota"
+      },
+      "consecuencia": "La pérdida por cola agotada deja de ser muda: este es el mejoramiento de 2.0.179 que sí quedó demostrado."
+    },
+    {
+      "id": "D2_incognita_no_es_cero",
+      "nivel": "R",
+      "funcion": "summarizeAttachmentPipeline",
+      "observado": {
+        "estado": "observabilidad_no_disponible"
+      },
+      "consecuencia": "La incógnita no se degrada a ausencia."
+    },
+    {
+      "id": "D3_falso_verde_por_rechazo_de_politica",
+      "nivel": "R+C",
+      "funcion": "summarizeAttachmentPipeline",
+      "observado": {
+        "contadores": {
+          "receiptsReceived": 1,
+          "receiptsCompleted": 1,
+          "receiptsRejected": 0,
+          "documentsReceived": 0
+        },
+        "estado": "sin_pendientes",
+        "veredicto": "La ventana consultada cierra sin adjuntos pendientes: recepción, derivación y evaluación constan completadas."
+      },
+      "fundamento": [
+        "apiChatWebhook.ts: el recibo se cierra como `registered` porque el MENSAJE se escribió, aunque registerCandidateInboundDocument haya devuelto outcome 'rejected'.",
+        "apiChatReceipts.ts: `terminal = registered || duplicado || saliente-ya-registrado` → status 'completed'.",
+        "attachmentPipeline.ts: los contadores leen receipts y candidate_knowledge_files; el rechazo de política no crea documento y no se cuenta como recibo rechazado."
+      ],
+      "consecuencia": "El diagnóstico puede declarar «sin pendientes» mientras el PDF del candidato fue rechazado por política y no entró al expediente. Es un falso verde: la clase de error opuesta a la que el módulo fue escrito para eliminar. Los motivos extension_not_allowed y size_limit sólo son visibles en el manifiesto de la bandeja, nunca en el informe del conducto."
+    },
+    {
+      "id": "D4_traza_permite_resolver_la_forma",
+      "nivel": "R",
+      "funcion": "describeTransportShape",
+      "observado": {
+        "rutas": [
+          "messages[0].type",
+          "messages[0].filename",
+          "messages[0].url"
+        ]
+      },
+      "consecuencia": "Si la traza del incidente existe, la forma del cuerpo y la huella del contenido están registradas: se puede resolver por consulta si ApiChat entregó la URL, en qué campo y con qué peso, sin depender del testimonio de las capturas."
+    }
+  ]
+}
