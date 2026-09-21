@@ -22,7 +22,8 @@ import { fileURLToPath } from "node:url";
  *  14. drizzle/migrations/0035_transport_traces.sql
  *  15. drizzle/migrations/0036_apichat_inbound_receipts.sql
  *  16. drizzle/migrations/0037_candidate_processing.sql
- *  17. database/verificacion_servicio_conversacional.sql
+ *  17. drizzle/migrations/0038_message_key_immutable.sql
+ *  18. database/verificacion_servicio_conversacional.sql
  *
  * Salida:
  *   database/005_servicio_conversacional_listo.sql
@@ -54,6 +55,7 @@ const sources = [
   "drizzle/migrations/0035_transport_traces.sql",
   "drizzle/migrations/0036_apichat_inbound_receipts.sql",
   "drizzle/migrations/0037_candidate_processing.sql",
+  "drizzle/migrations/0038_message_key_immutable.sql",
 ];
 
 const verificationPath = "database/verificacion_servicio_conversacional.sql";

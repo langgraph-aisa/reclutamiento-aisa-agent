@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.198
+# Gobierno de release JARVI RH 2.0.199
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.198**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.199**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.199
+El release **vuelve estructural la idempotencia del envío**. Toca el esquema con una garantía, no con una columna.
+
+**El defecto y su corrección.** La solicitud de CV salía dos veces al candidato porque confirmar el envío sobrescribía `message_key` —la clave local que sostiene el `INSERT ... ON CONFLICT (message_key) DO NOTHING`— con el identificador del proveedor. A partir de ahí el conflicto no podía encontrar nada, cada intento insertaba un asiento nuevo y el mensaje salía de nuevo. El efecto era visible para la persona —dos mensajes idénticos, en el mismo minuto— pero la causa era invisible: la protección se desactivaba en silencio. La corrección alcanzó los tres caminos de envío.
+
+**Por qué una garantía y no sólo la corrección.** Ese defecto no falló por descuido de una función, sino porque la idempotencia dependía de que ningún código futuro escribiera una columna concreta. Una invariante que se apoya en la disciplina del que escriba el próximo `UPDATE` no es una invariante. La migración `0038` declara la clave local **inmutable** con un disparador: el `UPDATE` que intentaría cambiarla falla con su causa nombrada —código `23514`— en lugar de degradar el envío sin que nadie lo note. La referencia del proveedor pertenece a `provider_message_id`, que es donde se escribe.
+
+**No intercepta ninguna escritura legítima.** Las tres políticas de conflicto vigentes —solicitud de CV, saludo del ciclo y reconciliación de la bandeja— usan `DO NOTHING`, de modo que ninguna actualiza la clave. La confirmación del envío —estado, referencia remota, marca de tiempo y metadatos— sigue escribiéndose sin obstáculo, y una prueba lo fija junto a la secuencia exacta del defecto.
+
+**Migración `0038`, idempotente y expansiva.** Se incorpora al artefacto único de despliegue.
 
 ### Alcance candidato 2.0.198
 El release **devuelve la verdad a las migraciones de prueba**. Ninguna capacidad del producto cambia.
@@ -739,4 +750,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.198.md](PRUEBAS_CAJA_NEGRA_2.0.198.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.199.md](PRUEBAS_CAJA_NEGRA_2.0.199.md).
