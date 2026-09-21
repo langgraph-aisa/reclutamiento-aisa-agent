@@ -1,4 +1,5 @@
 import type { Pool } from "pg";
+import { describeAttachmentOutcome } from "../shared/attachmentOutcome";
 import { evaluateApplicationWithAgent } from "./agentEvaluator";
 import { AttachmentTransportError, describeTransportBuffer } from "./base64Transport";
 import {
@@ -66,15 +67,26 @@ export type ConservedAttachmentView = {
 /**
  * Adjuntos conservados en la bandeja que **no** constan en el expediente.
  *
- * La consulta es deliberadamente la misma condición que usa el diagnóstico del
- * conducto para contar los rechazos de ingreso: lo que la ficha muestra como
- * recuperable y lo que el diagnóstico cuenta como rechazado deben ser el mismo
- * conjunto, o las dos superficies afirmarían cosas distintas.
+ * «Conservado» es una afirmación sobre el volumen, no sobre el mensaje. El
+ * conducto asienta `storageKey: ''` cuando la carga no llegó, de modo que la
+ * presencia de la clave —`IS NOT NULL`— no probaba que el binario existiera: el
+ * conjunto incluía anuncios sin contenido (`payload_missing`,
+ * `content_unresolved`) y la ficha los ofrecía como recuperables mientras la
+ * lectura institucional del propio artefacto declaraba, para esos mismos
+ * códigos, que no hay binario conservado. Dos superficies autorizadas afirmaban
+ * lo contrario sobre el mismo hecho, y la operación respondía `binary_missing`
+ * sobre un conjunto donde sólo una parte era recuperable.
+ *
+ * La condición exige ahora una referencia **no vacía**, con lo que el alcance de
+ * la operación coincide con `ATTACHMENT_REASONS_RECOVERABLE`: lo que la política
+ * administrativa dejó fuera y el volumen todavía conserva. La ausencia que exige
+ * una entrega nueva se declara donde corresponde —el asiento del mensaje y el
+ * diagnóstico del conducto— y no se disfraza de recuperación pendiente.
  */
 const CONSERVED_ATTACHMENTS_SQL = `SELECT m.id,
           COALESCE(m.metadata->'media'->>'fileName',m.original_file_name,m.body) AS file_name,
           COALESCE(m.metadata->'media'->>'mimeType',m.mime_type) AS mime_type,
-          COALESCE(m.storage_key,m.metadata->'media'->>'storageKey') AS storage_key,
+          COALESCE(NULLIF(m.storage_key,''),NULLIF(m.metadata->'media'->>'storageKey','')) AS storage_key,
           m.metadata->'media'->>'processingReason' AS reason,
           m.created_at
      FROM conversation_messages m
@@ -82,7 +94,7 @@ const CONSERVED_ATTACHMENTS_SQL = `SELECT m.id,
     WHERE c.application_id=$1
       AND m.direction='inbound'
       AND m.metadata->'media' IS NOT NULL
-      AND COALESCE(m.storage_key,m.metadata->'media'->>'storageKey') IS NOT NULL
+      AND COALESCE(NULLIF(m.storage_key,''),NULLIF(m.metadata->'media'->>'storageKey','')) IS NOT NULL
       AND m.metadata->'media'->>'candidateFileId' IS NULL
     ORDER BY m.created_at,m.id`;
 
@@ -99,6 +111,66 @@ export async function listConservedAttachments(
     reason: row.reason ? String(row.reason) : null,
     createdAt: new Date(row.created_at as string | number | Date).toISOString(),
   }));
+}
+
+/**
+ * Adjuntos anunciados cuyo contenido nunca llegó.
+ *
+ * Es el conjunto complementario del anterior y se declara por separado porque es
+ * un hecho distinto: aquí **no hay binario**. Antes de esta entrega esas filas
+ * entraban en la lista de conservados —la consulta admitía la clave vacía—, de
+ * modo que la ficha ofrecía incorporar lo que no existía y el operador recibía
+ * `binary_missing` sin causa declarada. Nombrarlas con su código y su remedio es
+ * lo que permite distinguir «la política lo dejó fuera» de «el proveedor no lo
+ * entregó», que exigen acciones distintas.
+ */
+const UNRESOLVED_ATTACHMENTS_SQL = `SELECT m.id,
+          COALESCE(m.metadata->'media'->>'fileName',m.original_file_name,m.body) AS file_name,
+          m.metadata->'media'->>'processingReason' AS reason,
+          m.created_at
+     FROM conversation_messages m
+     JOIN conversations c ON c.id=m.conversation_id
+    WHERE c.application_id=$1
+      AND m.direction='inbound'
+      AND m.metadata->'media'->>'processingOutcome'='rejected'
+      AND COALESCE(NULLIF(m.storage_key,''),NULLIF(m.metadata->'media'->>'storageKey','')) IS NULL
+      AND m.metadata->'media'->>'candidateFileId' IS NULL
+    ORDER BY m.created_at,m.id`;
+
+export type UnresolvedAttachmentView = {
+  messageId: number;
+  fileName: string;
+  /** Código tipado que el conducto dejó asentado. */
+  reason: string | null;
+  /** Sentencia institucional: declara la causa y el remedio. */
+  detail: string;
+  createdAt: string;
+};
+
+/**
+ * Adjuntos anunciados que quedaron fuera del expediente sin binario conservado.
+ *
+ * La sentencia no se redacta aquí: procede del catálogo compartido con la
+ * bandeja, de modo que las dos superficies afirmen lo mismo sobre el mismo
+ * mensaje. Un motivo desconocido se declara como desconocido.
+ */
+export async function listUnresolvedAttachments(
+  pool: Pool,
+  applicationId: number
+): Promise<UnresolvedAttachmentView[]> {
+  const result = await pool.query(UNRESOLVED_ATTACHMENTS_SQL, [applicationId]);
+  return result.rows.map(row => {
+    const reason = row.reason ? String(row.reason) : null;
+    return {
+      messageId: Number(row.id),
+      fileName: String(row.file_name ?? "Adjunto"),
+      reason,
+      detail: describeAttachmentOutcome(reason),
+      createdAt: new Date(
+        row.created_at as string | number | Date
+      ).toISOString(),
+    };
+  });
 }
 
 export type ConservedRecoveryState =

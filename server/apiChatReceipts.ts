@@ -68,7 +68,25 @@ export function apiChatReceiptKey(message: ApiChatWebhookMessage) {
   return hash(`${process.env.APICHAT_ACCOUNT_SCOPE ?? "default"}:${message.number}:${message.id}`);
 }
 
-/** El commit confirma conservación del lote antes de devolver un acuse. */
+/**
+ * El commit confirma conservación del lote antes de devolver un acuse.
+ *
+ * Rearme del recibo difunto
+ * -------------------------
+ * La identidad de un recibo la fija el proveedor (`scope:teléfono:id`), de modo
+ * que la reentrega del **mismo** mensaje se descartaba como repetición. Eso
+ * hacía imposible la única recuperación que el contrato permite cuando la carga
+ * no llegó en el primer intento: si el proveedor volvía a anunciar el mensaje
+ * —ahora con su contenido—, el recibo ya existía en `dead` y la carga nueva se
+ * perdía en silencio. El expediente podía esperar indefinidamente un binario que
+ * el sistema ya había recibido y estaba descartando.
+ *
+ * El rearme se acota a su causa con dos condiciones conjuntas: el recibo está
+ * `dead` —ningún desenlace vivo se reabre— y la **huella de la carga cambió**
+ * —el proveedor entregó contenido distinto para esa identidad—. Una reentrega
+ * idéntica sigue contando como repetición, así que un proveedor que repita el
+ * mismo anuncio no genera trabajo: sólo el contenido nuevo lo genera.
+ */
 export async function enqueueApiChatReceipts(pool: Pool, body: unknown, origin: ReceiptOrigin) {
   const messages = normalizeApiChatBatch(body);
   // Una notificación de estado o de conversación no es una forma no reconocida:
@@ -90,7 +108,20 @@ export async function enqueueApiChatReceipts(pool: Pool, body: unknown, origin: 
         `INSERT INTO apichat_inbound_receipts
            (receipt_key,provider_message_id,origin,payload,payload_sha256,status,outcome)
          VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7)
-         ON CONFLICT (receipt_key) DO NOTHING RETURNING receipt_key`,
+         ON CONFLICT (receipt_key) DO UPDATE
+            SET payload=EXCLUDED.payload,
+                payload_sha256=EXCLUDED.payload_sha256,
+                status='pending',
+                outcome=NULL,
+                attempts=0,
+                last_error=NULL,
+                lease_token=NULL,
+                locked_at=NULL,
+                next_attempt_at=now(),
+                updated_at=now()
+          WHERE apichat_inbound_receipts.status='dead'
+            AND apichat_inbound_receipts.payload_sha256<>EXCLUDED.payload_sha256
+         RETURNING receipt_key`,
         [key, message?.id ?? null, origin, message ? encoded : null, digest,
           message ? "pending" : "rejected",
           message ? null : nonMessage ? "notificacion-sin-mensaje" : "forma-no-reconocida"]

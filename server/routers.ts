@@ -159,6 +159,7 @@ import {
 import {
   dispatchExpedienteAppreciation,
   listConservedAttachments,
+  listUnresolvedAttachments,
   recoverConservedAttachments,
 } from "./candidateConservedRecovery";
 import { applicationStatuses } from "./policy";
@@ -2799,6 +2800,19 @@ export const appRouter = router({
       .input(z.object({ applicationId: z.number().int().positive() }))
       .query(async ({ input }) =>
         listConservedAttachments(await requirePool(), input.applicationId)
+      ),
+    /**
+     * Adjuntos anunciados cuyo contenido nunca llegó.
+     *
+     * Se declaran por separado de los conservados porque son un hecho distinto:
+     * aquí no hay binario que incorporar. La sentencia que los describe —causa y
+     * remedio— procede del mismo catálogo que lee la bandeja, de modo que las dos
+     * superficies no vuelvan a afirmar cosas contrarias sobre el mismo mensaje.
+     */
+    announcedAttachments: roleProcedure
+      .input(z.object({ applicationId: z.number().int().positive() }))
+      .query(async ({ input }) =>
+        listUnresolvedAttachments(await requirePool(), input.applicationId)
       ),
     /**
      * Incorpora al expediente los adjuntos conservados y ejecuta su análisis.

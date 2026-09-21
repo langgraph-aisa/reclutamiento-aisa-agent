@@ -248,11 +248,24 @@ export function CandidateRagPanel({
     { applicationId },
     { refetchInterval: 30_000, refetchIntervalInBackground: false }
   );
+  /**
+   * Adjuntos anunciados cuyo contenido nunca llegó.
+   *
+   * Se declaran aparte de los conservados porque no hay binario que incorporar.
+   * Confundir ambos conjuntos hacía que la ficha ofreciera una recuperación
+   * imposible; declararlos con su causa permite saber que el remedio es una
+   * entrega nueva, que el conducto reincorpora sola cuando llega.
+   */
+  const announced = trpc.candidateKnowledge.announcedAttachments.useQuery(
+    { applicationId },
+    { refetchInterval: 30_000, refetchIntervalInBackground: false }
+  );
   const recover = trpc.candidateKnowledge.recoverConservedAttachments.useMutation({
     onSuccess: report => {
       toast.success(report.verdict, { duration: 12_000 });
       refresh();
       void conserved.refetch();
+      void announced.refetch();
     },
     onError: error => toast.error(error.message),
   });
@@ -270,6 +283,7 @@ export function CandidateRagPanel({
         );
       else toast.error(outcome.error);
       void conserved.refetch();
+      void announced.refetch();
     },
     onError: error => toast.error(error.message),
   });
@@ -492,6 +506,48 @@ export function CandidateRagPanel({
                       {item.reason}
                     </span>
                   ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {/* Adjuntos anunciados sin contenido, declarados con su causa */}
+        {announced.data?.length ? (
+          <div className="rounded-xl border border-amber-300 bg-amber-50/70 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-900 dark:text-amber-200">
+              Adjuntos anunciados sin contenido ({announced.data.length})
+            </p>
+            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+              El proveedor anunció estos archivos sin su carga y no hay binario
+              conservado, de modo que no pueden incorporarse al expediente: el
+              remedio es una entrega nueva. Si el proveedor los reentrega con su
+              contenido, el conducto los reincorpora sin intervención, los
+              analiza y vuelve a ejecutar el agente evaluador.
+            </p>
+            <ul className="mt-2 space-y-1">
+              {announced.data.map(item => (
+                <li
+                  key={item.messageId}
+                  className="rounded-lg bg-card px-2 py-1 text-[10px]"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <File className="h-3 w-3 shrink-0 text-amber-700" />
+                    <span className="truncate font-semibold text-primary">
+                      {item.fileName}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {formatDateTime(item.createdAt)}
+                    </span>
+                    {item.reason ? (
+                      <span className="ml-auto font-mono text-[10px] text-amber-700 dark:text-amber-300">
+                        {item.reason}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 leading-4 text-muted-foreground">
+                    {item.detail}
+                  </p>
                 </li>
               ))}
             </ul>

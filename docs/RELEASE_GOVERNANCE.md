@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.190
+# Gobierno de release JARVI RH 2.0.191
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.190**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.191**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.191
+El release **corrige el alcance del adjunto conservado y devuelve al conducto la entrega diferida**, cerrando los dos únicos eslabones que 2.0.188 dejó prometiendo más de lo que el hecho sostenía. Ninguna capacidad toca el esquema ni altera el comportamiento verificado de la recuperación.
+
+**«Conservado» es una afirmación sobre el volumen, no sobre el mensaje.** La lista que la ficha ofrecía bajo «Adjuntos conservados fuera del expediente» se componía con una condición que admitía la clave de almacenamiento **vacía**, y el conducto escribe exactamente eso cuando la carga no llegó (`storageKey: ''` en la rama de rechazo de `apiChatWebhook.ts`). El conjunto incluía, por tanto, anuncios cuyo contenido nunca arribó —`payload_missing` y `content_unresolved`, los cuatro casos observados en la instancia el 19 de septiembre de 2026—, de modo que la ficha los presentaba como recuperables mientras la lectura institucional del propio artefacto declaraba, para esos mismos códigos, que **no hay binario conservado**. Dos superficies autorizadas afirmaban lo contrario sobre el mismo hecho y la operación respondía `binary_missing` sin causa declarada. La condición exige ahora una referencia no vacía, con lo que el alcance de la operación coincide con lo que la política administrativa dejó fuera y el volumen todavía conserva.
+
+**La ausencia se declara donde corresponde.** Lo que se retira de la lista de conservados no desaparece de la ficha: se declara aparte, con el código que el conducto asentó y con la sentencia que **nombra la causa y el remedio**. El catálogo que redacta esa sentencia existía desde 2.0.188 y no lo consumía ninguna superficie; ahora lo comparten la bandeja y la ficha, de modo que el reclutador distinga «la política lo dejó fuera y es recuperable» de «el proveedor no lo entregó y exige un envío nuevo», que exigen acciones distintas.
+
+**La entrega diferida vuelve a ser posible.** La identidad de un recibo la fija el proveedor —alcance, teléfono y mensaje—, así que la reentrega del **mismo** mensaje se descartaba como repetición. Un anuncio sin carga que después llegaba con su contenido quedaba `dead` para siempre: el expediente esperaba un binario que el sistema ya estaba recibiendo y descartando. El recibo difunto se rearma cuando el proveedor reentrega esa identidad **con una carga distinta**, y sólo entonces: el rearme se acota a su causa con dos condiciones conjuntas —ningún desenlace vivo se reabre y la huella de la carga cambió—, de modo que un proveedor que repita el mismo anuncio no genera trabajo. Recibida la carga, el camino ya verificado en 2.0.188 hace el resto: el binario entra al expediente, se analiza y el agente evaluador vuelve a dictaminar.
+
+**Sin migración.** Reutiliza las tablas `0035` a `0037` y el volumen de la bandeja. Tres casos nuevos sobre PostgreSQL real fijan el alcance del conjunto conservado, la declaración del anunciado sin contenido y el rearme acotado del recibo difunto.
 
 ### Alcance candidato 2.0.190
 El release **vuelve la señalización del expediente un vocabulario compartido** y la lleva a las hojas donde el reclutador decide. Ninguna capacidad toca el esquema.
@@ -647,4 +658,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.190.md](PRUEBAS_CAJA_NEGRA_2.0.190.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.191.md](PRUEBAS_CAJA_NEGRA_2.0.191.md).

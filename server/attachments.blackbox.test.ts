@@ -363,5 +363,42 @@ describe.runIf(enabled)("Caja negra HTTP / PostgreSQL / archivos reales", () => 
       media_processing_outcome: "rejected", media_processing_reason: "payload_missing:permanente",
     });
   });
+  it("rearma el recibo difunto sólo cuando la carga nueva lo justifica", async () => {
+    // La identidad del recibo la fija el proveedor, así que la reentrega del
+    // MISMO mensaje se descartaba como repetición: un anuncio sin carga que
+    // después llegaba con su contenido quedaba en `dead` para siempre y el
+    // expediente esperaba un binario que el sistema ya estaba recibiendo.
+    // Un binario con huella propia: la incorporación deduplica por contenido, y
+    // reutilizar el PDF de otra prueba mediría la deduplicación, no el rearme.
+    const rearme = syntheticPdf("Handout de Galasso. Anuncio sin carga reentregado con su contenido.");
+    const announced = { ...fileEvent("rearm-1"), filename: "rearme-diferido.pdf", url: "data:application/pdf;base64" };
+    expect((await post({ messages: [announced] })).status).toBe(200);
+    expect(await runApiChatReceiptSweep(database.pool, processApiChatMessage)).toMatchObject({ failed: 1 });
+    const receipt = () => database.pool.query(
+      "SELECT status,attempts,last_error FROM apichat_inbound_receipts WHERE provider_message_id='rearm-1'"
+    ).then(result => result.rows[0]);
+    expect(await receipt()).toMatchObject({ status: "dead", last_error: "payload_missing:permanente" });
+    // 1. La misma forma ya difunta: sin contenido nuevo no hay rearme, de modo
+    // que un proveedor que repita el anuncio no genera trabajo indefinido.
+    expect(await (await post({ messages: [announced] })).json()).toMatchObject({ queued: 0, duplicates: 1 });
+    expect(await receipt()).toMatchObject({ status: "dead", last_error: "payload_missing:permanente" });
+    // 2. La misma identidad, ahora con su carga: la huella cambia y el recibo
+    // vuelve a la cola como si se recibiera por primera vez.
+    const delivered = { ...announced, url: "data:application/pdf;base64," + rearme.toString("base64") };
+    expect(await (await post({ messages: [delivered] })).json()).toMatchObject({ queued: 1 });
+    expect(await receipt()).toMatchObject({ status: "pending", attempts: 0, last_error: null });
+    expect(await runApiChatReceiptSweep(database.pool, processApiChatMessage)).toMatchObject({ completed: 1, failed: 0 });
+    // 3. El binario queda en el expediente del candidato y el mensaje deja de
+    // declarar una ausencia que ya no existe: la bandeja y el evaluador leen el
+    // mismo hecho, que es lo que permite analizarlo y reevaluar al candidato.
+    const documents = await database.pool.query(
+      "SELECT original_name,storage_key FROM candidate_knowledge_files WHERE application_id=$1 AND original_name='rearme-diferido.pdf'",
+      [applicationId]
+    );
+    expect(documents.rows).toHaveLength(1);
+    expect(String(documents.rows[0].storage_key)).not.toBe("");
+    const row = (await messages()).find(item => item.media_file_name === "rearme-diferido.pdf");
+    expect(row?.media_processing_outcome).not.toBe("rejected");
+  });
 });
 
