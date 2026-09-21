@@ -157,6 +157,7 @@ import {
   saveCandidateFolder,
 } from "./candidateKnowledge";
 import {
+  autoRecoverAnnounced,
   dispatchExpedienteAppreciation,
   listConservedAttachments,
   listUnresolvedAttachments,
@@ -2887,6 +2888,22 @@ export const appRouter = router({
       .input(z.object({ applicationId: z.number().int().positive() }))
       .mutation(async ({ input, ctx }) =>
         dispatchExpedienteAppreciation(await requirePool(), {
+          applicationId: input.applicationId,
+          actorUserId: ctx.user.id,
+        })
+      ),
+    /**
+     * Pase automático sobre los anuncios con dirección declarada.
+     *
+     * Lo dispara la apertura de la ficha cuando el reclutador no pulsó el
+     * cohete. El reclamo, la ventana de silencio y el tope viven en la base: el
+     * descarte ocurre antes de abrir ninguna conexión hacia afuera, de modo que
+     * abrir la ficha muchas veces no multiplica las descargas.
+     */
+    autoRecoverAnnounced: roleProcedure
+      .input(z.object({ applicationId: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) =>
+        autoRecoverAnnounced(await requirePool(), {
           applicationId: input.applicationId,
           actorUserId: ctx.user.id,
         })

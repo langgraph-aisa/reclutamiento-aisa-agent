@@ -665,6 +665,15 @@ export async function recoverAnnouncedAttachment(
     fetchImpl?: typeof fetch;
     /** Inyección de la resolución de nombres; en producción no se usa. */
     lookupImpl?: AttachmentLookup;
+    /**
+     * Admite `http://`.
+     *
+     * Por omisión es verdadero **en esta operación y no en la recepción**: la
+     * descarga automática de un mensaje no puede aceptar destinos sin cifrado,
+     * pero una persona que pide traer un archivo concreto sí puede decidirlo, y
+     * su decisión queda asentada con la integridad que tuvo el transporte.
+     */
+    allowPlainHttp?: boolean;
   }
 ): Promise<AnnouncedRecoveryOutcome> {
   const result = await pool.query(ANNOUNCED_ATTACHMENT_SQL, [
@@ -718,6 +727,7 @@ export async function recoverAnnouncedAttachment(
       timeoutMs: 120_000,
       fetchImpl: input.fetchImpl,
       lookupImpl: input.lookupImpl,
+      allowPlainHttp: input.allowPlainHttp ?? true,
     });
   } catch (error) {
     const code =
@@ -820,8 +830,10 @@ export async function recoverAnnouncedAttachment(
         sha256: decoded.sha256,
         // La procedencia se asienta: el expediente acredita de dónde vino el
         // documento, que es lo que distingue esta vía de la recuperación de un
-        // binario ya conservado.
+        // binario ya conservado. Y se declara la integridad que tuvo el
+        // transporte, porque un destino sin cifrado no la tuvo.
         declaredUrl: address,
+        transportIntegrity: transportIntegrityOf(address),
         previousReason: row.reason ? String(row.reason) : null,
         created: saved.created,
         analysisStatus,
@@ -855,16 +867,224 @@ export async function recoverAnnouncedAttachment(
   };
 }
 
-/** Sentencia para una dirección que no entregó contenido utilizable. */
-function nextAddressSentence(address: string) {
-  const host = (() => {
+/** Umbral de anuncios que un pase automático procesa como máximo. */
+export const AUTO_RECOVER_LIMIT_MAX = 5;
+
+/** Ventana de silencio por omisión: quince minutos entre intentos automáticos. */
+export const AUTO_RECOVER_QUIET_SECONDS = 900;
+
+/**
+ * Candidatos de un pase automático: anuncios de la postulación con dirección
+ * declarada, sin binario, sin documento y sin un intento reciente.
+ *
+ * Las tres condiciones del reclamo están aquí y no en el llamador, porque la
+ * eficiencia bajo carga alta depende de que el descarte ocurra **en la base** y
+ * no después de haber abierto una conexión hacia afuera.
+ */
+const AUTO_RECOVER_CANDIDATES_SQL = `SELECT m.id
+     FROM conversation_messages m
+     JOIN conversations c ON c.id=m.conversation_id
+     ${DECLARED_ADDRESS_LATERAL}
+    WHERE c.application_id=$1
+      AND m.direction='inbound'
+      AND m.metadata->'media'->>'processingOutcome'='rejected'
+      AND COALESCE(NULLIF(m.storage_key,''),NULLIF(m.metadata->'media'->>'storageKey','')) IS NULL
+      AND m.metadata->'media'->>'candidateFileId' IS NULL
+      AND d.declared_url IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM audit_log a
+         WHERE a.entity_type='conversation_message'
+           AND a.entity_id=m.id
+           AND a.action='candidate_attachment_auto'
+           AND a.created_at > now() - make_interval(secs=>$2)
+      )
+    ORDER BY m.created_at
+    LIMIT $3`;
+
+export type AnnouncedAutoReport = {
+  applicationId: number;
+  /** Anuncios que el reclamo entregó a este pase. */
+  claimed: number;
+  incorporated: number;
+  duplicates: number;
+  rejected: number;
+  unreachable: number;
+  /** Anuncios con dirección que quedaron fuera por el tope del pase. */
+  pending: number;
+  outcomes: AnnouncedRecoveryOutcome[];
+  verdict: string;
+};
+
+/**
+ * Pase automático sobre los anuncios de una postulación.
+ *
+ * Fundamento
+ * ----------
+ * El cohete exige que alguien lo pulse, y hay expedientes que nadie revisa hasta
+ * que el candidato pregunta por su proceso. Este pase ejecuta la misma operación
+ * cuando la ficha se abre, acotado por tres condiciones que lo sostienen bajo
+ * carga alta:
+ *
+ * 1. **Alcance por postulación.** Sólo mira los anuncios de la postulación que se
+ *    está leyendo: la carga no crece con el tamaño del catálogo.
+ * 2. **Reclamo con ventana de silencio.** Un anuncio ya intentado dentro de la
+ *    ventana no vuelve a intentarse, de modo que abrir la ficha muchas veces —o
+ *    el refresco periódico del panel— no multiplica las descargas. El descarte lo
+ *    decide la base, antes de abrir ninguna conexión hacia afuera.
+ * 3. **Tope por pase.** Un pase procesa como máximo `AUTO_RECOVER_LIMIT_MAX`
+ *    anuncios, así que la latencia de una ficha no depende de cuántos anuncios
+ *    acumule la postulación.
+ *
+ * El asiento del intento se escribe **siempre**, también cuando no incorpora
+ * nada, porque es lo que hace cumplir la ventana de silencio. Y no se pide la
+ * re-evaluación del agente por cada anuncio: la evaluación se dispara una sola
+ * vez al final, sobre el expediente ya completo, en lugar de una vez por archivo.
+ */
+export async function autoRecoverAnnounced(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    actorUserId: number | null;
+    limit?: number;
+    quietSeconds?: number;
+    fetchImpl?: typeof fetch;
+    lookupImpl?: AttachmentLookup;
+  }
+): Promise<AnnouncedAutoReport> {
+  const limit = Math.min(
+    Math.max(Math.trunc(input.limit ?? AUTO_RECOVER_LIMIT_MAX), 1),
+    AUTO_RECOVER_LIMIT_MAX
+  );
+  const quietSeconds = Math.max(
+    Math.trunc(input.quietSeconds ?? AUTO_RECOVER_QUIET_SECONDS),
+    0
+  );
+  const claimed = await pool.query(AUTO_RECOVER_CANDIDATES_SQL, [
+    input.applicationId,
+    quietSeconds,
+    limit,
+  ]);
+  const outcomes: AnnouncedRecoveryOutcome[] = [];
+  for (const row of claimed.rows) {
+    const messageId = Number(row.id);
+    let outcome: AnnouncedRecoveryOutcome;
     try {
-      return new URL(address).hostname;
-    } catch {
-      return address;
+      outcome = await recoverAnnouncedAttachment(pool, {
+        applicationId: input.applicationId,
+        messageId,
+        actorUserId: input.actorUserId,
+        analyze: true,
+        reevaluate: false,
+        fetchImpl: input.fetchImpl,
+        lookupImpl: input.lookupImpl,
+      });
+    } catch (error) {
+      // Un fallo inesperado no puede dejar el pase a medias sin rastro: se
+      // declara y el asiento del intento hace cumplir la ventana igualmente.
+      outcome = {
+        messageId,
+        fileName: "Adjunto",
+        state: "unreachable",
+        fileId: null,
+        analysisStatus: null,
+        declaredUrl: null,
+        reasonCode: "error_interno",
+        detail: `La carga automática no pudo completarse (${
+          error instanceof Error ? error.name : "error"
+        }). El anuncio conserva su motivo y admite un intento posterior.`,
+        evaluation: {
+          status: "skipped",
+          reason: "La incorporación no cambió el expediente.",
+        },
+      };
     }
-  })();
-  return `La dirección declarada (${host}) no entregó contenido utilizable. El anuncio conserva su motivo y admite un intento posterior.`;
+    await pool.query(
+      `INSERT INTO audit_log(actor_user_id,entity_type,entity_id,action,after_json)
+       VALUES($1,'conversation_message',$2,'candidate_attachment_auto',$3::jsonb)`,
+      [
+        input.actorUserId,
+        messageId,
+        JSON.stringify({
+          applicationId: input.applicationId,
+          state: outcome.state,
+          reasonCode: outcome.reasonCode,
+          declaredUrl: outcome.declaredUrl,
+          fileId: outcome.fileId,
+        }),
+      ]
+    );
+    outcomes.push(outcome);
+  }
+
+  const incorporated = outcomes.filter(o => o.state === "incorporated").length;
+  const duplicates = outcomes.filter(o => o.state === "duplicate").length;
+  const rejected = outcomes.filter(o => o.state === "rejected").length;
+  const unreachable = outcomes.filter(o => o.state === "unreachable").length;
+  const pending = await pool.query(
+    `SELECT count(*)::int AS n
+       FROM conversation_messages m
+       JOIN conversations c ON c.id=m.conversation_id
+       ${DECLARED_ADDRESS_LATERAL}
+      WHERE c.application_id=$1
+        AND m.direction='inbound'
+        AND m.metadata->'media'->>'processingOutcome'='rejected'
+        AND COALESCE(NULLIF(m.storage_key,''),NULLIF(m.metadata->'media'->>'storageKey','')) IS NULL
+        AND m.metadata->'media'->>'candidateFileId' IS NULL
+        AND d.declared_url IS NOT NULL`,
+    [input.applicationId]
+  );
+  const outstanding = Number(pending.rows[0]?.n ?? 0);
+
+  return {
+    applicationId: input.applicationId,
+    claimed: outcomes.length,
+    incorporated,
+    duplicates,
+    rejected,
+    unreachable,
+    pending: Math.max(outstanding - incorporated - duplicates, 0),
+    outcomes,
+    verdict:
+      outcomes.length === 0
+        ? "No había anuncios con dirección declarada pendientes de un intento automático."
+        : `Pase automático: ${incorporated} incorporado(s), ${duplicates} ya presente(s), ${rejected} rechazado(s) por política y ${unreachable} sin respuesta.`,
+  };
+}
+
+/** Origen legible de una dirección: esquema y host, sin ruta ni credenciales. */
+function addressOrigin(address: string) {
+  try {
+    const parsed = new URL(address);
+    return `${parsed.protocol}//${parsed.hostname}${
+      parsed.port ? `:${parsed.port}` : ""
+    }`;
+  } catch {
+    return address;
+  }
+}
+
+/**
+ * Integridad que tuvo el transporte del binario.
+ *
+ * Se asienta porque distingue dos procedencias que no valen lo mismo: un
+ * destino cifrado y uno que no lo está. El evaluador humano decide sobre la
+ * evidencia y merece saber si el documento pudo alterarse en el camino.
+ */
+export function transportIntegrityOf(address: string): "tls" | "plain" {
+  return /^https:\/\//i.test(address) ? "tls" : "plain";
+}
+
+/**
+ * Sentencia para una dirección que no entregó contenido utilizable.
+ *
+ * Nombra el esquema además del host: sin él, el operador veía una dirección
+ * desnuda y no podía saber si el fallo era de red, de esquema o de contenido,
+ * que exigen remedios distintos.
+ */
+function nextAddressSentence(address: string) {
+  return `La dirección declarada (${addressOrigin(
+    address
+  )}) no entregó contenido utilizable. El anuncio conserva su motivo y admite un intento posterior.`;
 }
 
 /**

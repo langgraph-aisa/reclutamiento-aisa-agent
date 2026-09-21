@@ -1,8 +1,21 @@
-# Gobierno de release JARVI RH 2.0.194
+# Gobierno de release JARVI RH 2.0.195
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.194**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.195**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.195
+El release **corrige dos defectos de ingeniería del conducto de anuncios y devuelve el pase automático**. Ninguna capacidad toca el esquema.
+
+**Una dirección se confundía con una carga.** `decodeRemoteAttachment` decidía el camino con `^https://`: toda cadena que no fuera HTTPS caía en la rama de base64 sin sobre, y esa rama acepta cualquier cosa que pase de sesenta y cuatro caracteres y supere la prueba de alfabeto. Una dirección `http://` con ruta larga satisface ambas —el alfabeto de base64 incluye letras, dígitos, `+`, `/` y `=`, y una ruta los contiene—, de modo que el receptor **decodificaba la dirección como si fuera el archivo** y escribía en el expediente un binario ilegible. El síntoma observado era el peor posible: no una pérdida declarada, sino un documento inservible con apariencia de documento. El esquema decide ahora el camino, y una dirección nunca se interpreta como contenido.
+
+**La guarda de destino no nombraba su causa.** El rechazo por esquema, por puerto, por credenciales o por host no encaminable viajaba como un único enunciado genérico, y una dirección `http://` quedaba declarada como «contenido no resoluble»: el operador no podía distinguir una decisión de destino —que él puede revertir— de una carga ausente en el proveedor —que no depende de él—. El mensaje nombra ahora el esquema y la razón.
+
+**La descarga sin cifrado se admite sólo por acto humano.** La recepción automática sigue exigiendo TLS: el expediente no puede acreditar la integridad de lo que viaja sin cifrar, y descargar por iniciativa propia cualquier dirección que llegue en un mensaje convertiría al receptor en un cliente de la red a merced del emisor. La carga manual —y sólo ella— admite `http://` público, porque una persona lo pidió sobre una dirección concreta y la procedencia queda asentada en la auditoría.
+
+**El pase automático.** El cohete exige que alguien lo pulse, y hay expedientes que nadie revisa hasta que el candidato pregunta por su proceso. La apertura de la ficha dispara la misma operación a los veinte segundos si nadie la pidió antes. Tres condiciones lo sostienen bajo carga alta: el **alcance** es la postulación que se está leyendo —la carga no crece con el catálogo—, el **reclamo con ventana de silencio** descarta en la base los anuncios ya intentados —antes de abrir ninguna conexión hacia afuera, y apoyado en `audit_log_entity_idx`—, y el **tope del pase** acota cuántos anuncios procesa un pase, de modo que la latencia de una ficha no dependa de cuántos anuncios acumule. La re-evaluación del agente se dispara **una sola vez** al cierre del pase, no una por archivo.
+
+**Sin migración.** Reutiliza las tablas `0035` a `0037`, el volumen y los índices vigentes.
 
 ### Alcance candidato 2.0.194
 El release **devuelve la decisión al evaluador sobre los anuncios que el conducto no pudo resolver**. Ninguna capacidad toca el esquema.
@@ -691,4 +704,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.194.md](PRUEBAS_CAJA_NEGRA_2.0.194.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.195.md](PRUEBAS_CAJA_NEGRA_2.0.195.md).

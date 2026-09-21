@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { createMediaTestDatabase } from "./testSupport/mediaDatabase";
 import {
+  autoRecoverAnnounced,
   declaredAttachmentUrl,
   listConservedAttachments,
   listUnresolvedAttachments,
@@ -462,16 +463,18 @@ describe.runIf(enabled)(
         });
       }, 120_000);
 
-      it("no trae nada por una dirección sin TLS", async () => {
-        // El transporte exige `https://` para descargar: el expediente no puede
-        // acreditar la integridad de lo que viaja sin cifrar. La dirección se
-        // publica como enlace —una persona sí puede mirarla— pero el cohete no
-        // la descarga, y lo declara con su causa.
+      it("trae el archivo por una dirección sin cifrado y declara su integridad", async () => {
+        // La forma observada en la instancia el 21 de septiembre de 2026: el
+        // proveedor declara una dirección por IP y sin TLS. La recepción no
+        // puede descargarla —el expediente no acredita integridad de lo que
+        // viaja sin cifrar— pero una persona sí puede decidirlo, y su decisión
+        // queda asentada con la integridad que tuvo el transporte.
         await allowPdf();
+        const bytes = syntheticPdf("Manual de contratacion por IP sin cifrado");
         const messageId = await announced(
           "manual-http",
           "20240312_SEEWORLD_Introduction-Mandy.pdf",
-          "http://media.apichat.io/adjunto/mandy.pdf"
+          "http://159.69.12.81/adjunto/mandy.pdf"
         );
         const outcome = await recoverAnnouncedAttachment(database.pool, {
           applicationId,
@@ -479,15 +482,100 @@ describe.runIf(enabled)(
           actorUserId: null,
           analyze: false,
           reevaluate: false,
-          fetchImpl: fileAt(syntheticPdf("no deberia descargarse")),
+          fetchImpl: fileAt(bytes),
           lookupImpl: publicLookup,
         });
-        expect(outcome.state).toBe("unreachable");
+        expect(outcome.state).toBe("incorporated");
         expect(outcome.declaredUrl).toBe(
-          "http://media.apichat.io/adjunto/mandy.pdf"
+          "http://159.69.12.81/adjunto/mandy.pdf"
         );
-        expect(outcome.reasonCode).toBe("content_unresolved");
-        expect(outcome.fileId).toBeNull();
+        const audit = await database.pool.query(
+          `SELECT after_json FROM audit_log
+            WHERE action='candidate_file_recovered' AND entity_id=$1`,
+          [outcome.fileId]
+        );
+        expect(audit.rows[0].after_json.transportIntegrity).toBe("plain");
+      }, 120_000);
+
+      it("el pase automático reclama una vez y respeta la ventana de silencio", async () => {
+        await allowPdf();
+        const bytes = syntheticPdf("carga automatica del anuncio");
+        await announced(
+          "auto-1",
+          "auto-uno.pdf",
+          "https://media.apichat.io/adjunto/auto-uno.pdf"
+        );
+        await announced(
+          "auto-2",
+          "auto-dos.pdf",
+          "https://media.apichat.io/adjunto/auto-dos.pdf"
+        );
+
+        const pase = await autoRecoverAnnounced(database.pool, {
+          applicationId,
+          actorUserId: null,
+          fetchImpl: fileAt(bytes),
+          lookupImpl: publicLookup,
+        });
+        // El pase toma todos los anuncios con dirección declarada de la
+        // postulación, incluidos los que dejaron las pruebas anteriores: lo que
+        // se verifica es que ninguno quede sin intentar, y que cada intento
+        // termine en el expediente —incorporado o ya presente por su huella—.
+        expect(pase.claimed).toBeGreaterThanOrEqual(2);
+        expect(pase.incorporated + pase.duplicates).toBe(pase.claimed);
+        expect(pase.unreachable).toBe(0);
+
+        // Lo incorporado deja de ser candidato: ya no hay nada que traer, así
+        // que la segunda llamada no encuentra trabajo ni antes ni después de la
+        // ventana.
+        const sinTrabajo = await autoRecoverAnnounced(database.pool, {
+          applicationId,
+          actorUserId: null,
+          fetchImpl: fileAt(bytes),
+          lookupImpl: publicLookup,
+        });
+        expect(sinTrabajo.claimed).toBe(0);
+
+        // La ventana se prueba con un anuncio que **no** se incorpora: la
+        // dirección responde con un error, de modo que el anuncio sigue siendo
+        // candidato y lo único que puede impedir el reintento es el silencio.
+        await announced(
+          "auto-fallido",
+          "auto-fallido.pdf",
+          "https://media.apichat.io/adjunto/auto-fallido.pdf"
+        );
+        const falla = (async () =>
+          new Response("no encontrado", { status: 404 })) as unknown as typeof fetch;
+
+        const primero = await autoRecoverAnnounced(database.pool, {
+          applicationId,
+          actorUserId: null,
+          fetchImpl: falla,
+          lookupImpl: publicLookup,
+        });
+        expect(primero.claimed).toBe(1);
+        expect(primero.unreachable).toBe(1);
+
+        // Abrir la ficha otra vez no vuelve a descargar: la ventana de silencio
+        // es lo que sostiene la carga alta bajo aperturas repetidas.
+        const silencio = await autoRecoverAnnounced(database.pool, {
+          applicationId,
+          actorUserId: null,
+          fetchImpl: falla,
+          lookupImpl: publicLookup,
+        });
+        expect(silencio.claimed).toBe(0);
+
+        // Y con la ventana en cero vuelve a estar disponible: el silencio es una
+        // política, no un bloqueo.
+        const sinVentana = await autoRecoverAnnounced(database.pool, {
+          applicationId,
+          actorUserId: null,
+          quietSeconds: 0,
+          fetchImpl: falla,
+          lookupImpl: publicLookup,
+        });
+        expect(sinVentana.claimed).toBe(1);
       }, 120_000);
 
       it("no trae nada desde la red interna ni sin dirección declarada", async () => {

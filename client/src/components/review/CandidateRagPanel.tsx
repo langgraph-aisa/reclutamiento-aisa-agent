@@ -28,7 +28,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 /**
@@ -47,6 +47,24 @@ import { toast } from "sonner";
 
 const SUMMARY_WORD_LIMIT = 66;
 const ANALYSIS_WORD_LIMIT = 325;
+
+/**
+ * Espera del pase automático, en milisegundos.
+ *
+ * Veinte segundos bastan para que el reclutador vea la lista y decida; pasado
+ * ese lapso, el sistema trae lo que él no trajo. La espera no es una demora
+ * arbitraria: es el margen que hace que la decisión humana llegue primero.
+ */
+const AUTO_RECOVER_DELAY_MS = 20_000;
+
+/**
+ * Postulaciones cuyo pase automático ya se disparó en esta sesión.
+ *
+ * Vive fuera del componente a propósito: montar y desmontar el panel —cambiar
+ * de pestaña, cerrar y reabrir la ficha— no debe repetir la carga. El servidor
+ * tiene su propia ventana de silencio; ésta evita incluso el viaje.
+ */
+const autoRecoverFired = new Set<number>();
 
 type CandidateFile = {
   id: number;
@@ -269,8 +287,10 @@ export function CandidateRagPanel({
    * que llegue en un mensaje. Traer el archivo no lo incorpora —la política
    * vigente sigue decidiendo— y la procedencia queda asentada.
    */
+  const manualRecovered = useRef(false);
   const bring = trpc.candidateKnowledge.recoverAnnouncedAttachment.useMutation({
     onSuccess: outcome => {
+      manualRecovered.current = true;
       if (outcome.state === "incorporated" || outcome.state === "duplicate")
         toast.success(outcome.detail, { duration: 12_000 });
       else toast.error(outcome.detail, { duration: 12_000 });
@@ -306,6 +326,47 @@ export function CandidateRagPanel({
       void announced.refetch();
     },
     onError: error => toast.error(error.message),
+  });
+
+  /**
+   * Pase automático a los veinte segundos.
+   *
+   * El reclutador abre la ficha para dictaminar, no para pulsar botones: si hay
+   * anuncios con dirección declarada y no los trae él, el sistema los trae. La
+   * espera existe para que su decisión manual llegue primero, y el reclamo del
+   * servidor —ventana de silencio y tope por pase— es lo que impide que abrir la
+   * ficha muchas veces multiplique las descargas.
+   *
+   * Se dispara una sola vez por postulación y sesión: el refresco periódico del
+   * panel no lo repite.
+   */
+  useEffect(() => {
+    const pendientes = announced.data ?? [];
+    if (!pendientes.some(item => item.declaredUrl)) return;
+    if (manualRecovered.current) return;
+    if (autoRecoverFired.has(applicationId)) return;
+    const timer = window.setTimeout(() => {
+      autoRecoverFired.add(applicationId);
+      autoRecover.mutate({ applicationId });
+    }, AUTO_RECOVER_DELAY_MS);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applicationId, announced.data]);
+
+  /**
+   * Pase automático de los anuncios con dirección declarada.
+   *
+   * Su fallo no interrumpe la ficha: es una comodidad, no una dependencia.
+   */
+  const autoRecover = trpc.candidateKnowledge.autoRecoverAnnounced.useMutation({
+    onSuccess: report => {
+      if (report.claimed === 0) return;
+      toast.info(report.verdict, { duration: 12_000 });
+      refresh();
+      void announced.refetch();
+      void conserved.refetch();
+    },
+    onError: () => undefined,
   });
 
   /** El visor resuelve el documento fuera del ciclo de tRPC; el vale lo autoriza. */

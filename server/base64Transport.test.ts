@@ -340,6 +340,44 @@ describe("transporte base64: recepción remota", () => {
     const decoded = await decodeRemoteAttachment("ftp://ejemplo.invalid/a.pdf");
     expect(decoded).toBeNull();
   });
+
+  it("declara el esquema sin cifrado en lugar de perderlo como contenido irresoluble", async () => {
+    // Defecto de auditoría: una `http://` no entraba en la rama de descarga —la
+    // prueba era `^https://`— y caía en la de base64, donde devolvía `null`. El
+    // motivo se declaraba entonces como «contenido no resoluble», que es falso y
+    // no tiene remedio, y una dirección de más de sesenta y cuatro caracteres
+    // podía además satisfacer la prueba de base64 y decodificarse como archivo.
+    await expect(
+      decodeRemoteAttachment("http://159.69.12.81/adjunto/manual.pdf")
+    ).rejects.toMatchObject({
+      code: "unsafe_destination",
+      retryable: false,
+    });
+  });
+
+  it("descarga el esquema sin cifrado sólo con autorización explícita", async () => {
+    const fetchImpl = (async () =>
+      new Response(pdfBytes, {
+        status: 200,
+        headers: { "content-type": "application/pdf" },
+      })) as unknown as typeof fetch;
+    // Sin autorización la guarda detiene la descarga: el expediente no puede
+    // acreditar la integridad de lo que viaja sin cifrar.
+    await expect(
+      decodeRemoteAttachment("http://159.69.12.81/adjunto/manual.pdf", {
+        fileName: "manual.pdf",
+        fetchImpl,
+      })
+    ).rejects.toMatchObject({ code: "unsafe_destination" });
+    // Con autorización explícita —la decisión de una persona sobre una
+    // dirección concreta— se descarga por el mismo conducto guardado.
+    const autorizado = await decodeRemoteAttachment(
+      "http://159.69.12.81/adjunto/manual.pdf",
+      { fileName: "manual.pdf", fetchImpl, allowPlainHttp: true }
+    );
+    expect(autorizado?.buffer.equals(pdfBytes)).toBe(true);
+    expect(autorizado?.extension).toBe("pdf");
+  });
 });
 
 describe("descarga de medios con frontera de red y cuota", () => {

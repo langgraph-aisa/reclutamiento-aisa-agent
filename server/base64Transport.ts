@@ -460,6 +460,16 @@ export async function resolveAttachmentDestination(
     lookupImpl?: AttachmentLookup;
     allowedHosts?: readonly string[];
     signal?: AbortSignal;
+    /**
+     * Admite `http://` además de `https://`.
+     *
+     * Por omisión es falso: la descarga automática de la recepción sólo acepta
+     * TLS, porque el expediente no puede acreditar la integridad de lo que viaja
+     * sin cifrar. Las operaciones que una persona pide de forma explícita sobre
+     * una dirección concreta —la carga manual de un anuncio— sí lo activan, y
+     * asientan que la procedencia no tuvo integridad de transporte.
+     */
+    allowPlainHttp?: boolean;
   } = {}
 ) {
   let url: URL;
@@ -473,18 +483,25 @@ export async function resolveAttachmentDestination(
     );
   }
   const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const plain = url.protocol === "http:";
   if (
-    url.protocol !== "https:" ||
+    (!plain && url.protocol !== "https:") ||
+    (plain && !options.allowPlainHttp) ||
     url.username ||
     url.password ||
-    (url.port && url.port !== "443") ||
+    (url.port && url.port !== (plain ? "80" : "443")) ||
     host === "localhost" ||
     /\.(localhost|local|internal|lan|home)$/.test(host)
   ) {
+    // El esquema se nombra: sin él, una dirección `http://` se confundía con
+    // «contenido no resoluble» y el operador no podía distinguir una guarda de
+    // destino de una carga ausente.
     throw new AttachmentTransportError(
       "unsafe_destination",
       false,
-      "El destino del adjunto no es un servidor HTTPS público permitido."
+      plain && !options.allowPlainHttp
+        ? "El destino del adjunto viaja sin cifrado y esta operación no lo admite."
+        : "El destino del adjunto no es un servidor público permitido."
     );
   }
   // El contrato usa {url}/media y no fija un dominio. La lista institucional,
@@ -608,6 +625,7 @@ async function downloadAttachment(
     fetchImpl?: typeof fetch;
     lookupImpl?: AttachmentLookup;
     allowedHosts?: readonly string[];
+    allowPlainHttp?: boolean;
   }
 ) {
   const signal = AbortSignal.timeout(options.timeoutMs);
@@ -708,6 +726,8 @@ export async function decodeRemoteAttachment(
     lookupImpl?: AttachmentLookup;
     allowedHosts?: readonly string[];
     timeoutMs?: number;
+    /** Admite `http://`; por omisión sólo se descarga con TLS. */
+    allowPlainHttp?: boolean;
   } = {}
 ): Promise<DecodedTransport | null> {
   const {
@@ -742,7 +762,7 @@ export async function decodeRemoteAttachment(
       );
     }
   }
-  if (!/^https:\/\//i.test(source)) {
+  if (!/^https?:\/\//i.test(source)) {
     // El proveedor puede notificar el adjunto como base64 **sin** el sobre
     // `data:` —es literalmente lo que declara la opción «Notify attachments in
     // base64 format» del panel—. Rechazarlo por no ser una URL era una de las
@@ -750,6 +770,11 @@ export async function decodeRemoteAttachment(
     const payload = source.replace(/\s+/g, "");
     // El umbral evita confundir un pie de foto con un archivo: una carga real
     // codificada supera con holgura los 64 caracteres.
+    //
+    // Una dirección se reconoce **por su esquema**, y esto no es una guarda
+    // cosmética: una `http://` de más de sesenta y cuatro caracteres podía
+    // satisfacer la prueba de base64 y decodificarse como contenido, de modo que
+    // el expediente recibía un archivo ilegible en lugar de la causa declarada.
     if (payload.length >= 64 && isValidBase64Payload(payload)) {
       return decodeTransport(
         { dataBase64: payload, fileName, mimeType },
@@ -765,6 +790,7 @@ export async function decodeRemoteAttachment(
     fetchImpl,
     lookupImpl: options.lookupImpl,
     allowedHosts: options.allowedHosts,
+    allowPlainHttp: options.allowPlainHttp,
   });
   return decodeTransportBuffer(
     downloaded.buffer,
