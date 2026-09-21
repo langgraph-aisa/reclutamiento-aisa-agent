@@ -19,6 +19,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import {
+  attachmentIsRecoverable,
+  describeAttachmentOutcome,
+} from "@shared/attachmentOutcome";
+import {
   Bot,
   CheckCircle2,
   Clock3,
@@ -537,7 +541,16 @@ export function CandidateConversationPanel({
                         </p>
                       ) : null}
                       {item.media_processing_outcome === "rejected" ? (
-                        <p className="mt-1 text-xs text-amber-200">Archivo conservado en la bandeja; aún no incorporado al expediente por su formato o peso. La incorporación se ejecuta desde el RAG Personal del candidato y no exige un envío nuevo.</p>
+                        <p className="mt-1 text-xs text-amber-200">
+                          {describeAttachmentOutcome(
+                            item.media_processing_reason
+                          )}
+                          {attachmentIsRecoverable(
+                            item.media_processing_reason
+                          )
+                            ? " La incorporación se ejecuta desde el RAG Personal del candidato y no exige un envío nuevo."
+                            : ""}
+                        </p>
                       ) : item.media_processing_status === "pendiente" ? (
                         <p className="mt-1 text-xs text-white/70">Archivo recibido. Análisis pendiente.</p>
                       ) : item.media_processing_status === "error" ? (

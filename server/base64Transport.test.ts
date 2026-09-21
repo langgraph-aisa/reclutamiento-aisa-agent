@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  AttachmentTransportError,
   BASE64_TRANSPORT_VERSION,
   classifyTransportKind,
   createTransportEnvelope,
@@ -118,6 +119,39 @@ describe("transporte base64: decodificación y reconstrucción", () => {
     expect(() =>
       decodeTransport(overLimit.toString("base64"), { maxBytes: 1_024 })
     ).toThrow(/supera el peso máximo admitido/);
+  });
+
+  it("declara la causa del exceso de peso en lugar de perderla en el nombre de la excepción", () => {
+    // La ruta inline es la forma real del proveedor: la carga viaja en el
+    // cuerpo, sin sobre `data:`. Sus guardas lanzaban `Error` sin tipar, de
+    // modo que el asiento de recepción quedaba en «Error» —la misma palabra
+    // para cualquier fallo— y la superficie de la conversación afirmaba que el
+    // archivo seguía conservado cuando no se había escrito ningún binario.
+    const desproporcionada = Buffer.alloc(64 * 1_024, 0x41);
+    const capturar = (accion: () => unknown) => {
+      try {
+        accion();
+      } catch (error) {
+        return error;
+      }
+      throw new Error("La guarda no se ejecutó.");
+    };
+    expect(
+      capturar(() =>
+        decodeTransport(desproporcionada.toString("base64"), {
+          maxBytes: 1_024,
+        })
+      )
+    ).toMatchObject({ code: "content_too_large", retryable: false });
+    const excedida = Buffer.alloc(1_025, 0x41);
+    expect(
+      capturar(() =>
+        decodeTransport(excedida.toString("base64"), { maxBytes: 1_024 })
+      )
+    ).toMatchObject({ code: "content_too_large", retryable: false });
+    expect(
+      capturar(() => decodeTransport("no-es-base64!!", { maxBytes: 1_024 }))
+    ).toBeInstanceOf(AttachmentTransportError);
   });
 
   it("aplica la política de extensiones permitidas", () => {

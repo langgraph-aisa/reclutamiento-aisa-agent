@@ -28,6 +28,18 @@ describe("motivo tipado de un fallo de recepción", () => {
         new AttachmentTransportError("content_unresolved", false, "Sin contenido.")
       )
     ).toBe("content_unresolved:permanente");
+    // La carga que excede el límite de recepción se declaraba como «Error»: la
+    // causa se perdía en el nombre de la excepción y una pérdida permanente
+    // quedaba sin remedio nombrado.
+    expect(
+      receiptFailureReason(
+        new AttachmentTransportError(
+          "content_too_large",
+          false,
+          "Excede el límite."
+        )
+      )
+    ).toBe("content_too_large:permanente");
   });
 
   it("declara el destino ausente y su ventana de reintento", () => {

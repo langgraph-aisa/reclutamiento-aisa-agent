@@ -383,6 +383,17 @@ export class AttachmentTransportError extends Error {
       | "payload_missing"
       /** La carga llegó pero no es una codificación válida. */
       | "payload_invalid"
+      /**
+       * La carga llegó pero excede el límite de recepción del conducto.
+       *
+       * Se distingue de `size_limit` —que es una decisión de la política de
+       * conocimiento y deja el binario conservado— porque aquí **no hay
+       * binario**: el contenido se descartó antes de escribirlo. Sin este
+       * código propio el motivo se perdía en `error.name` y una pérdida
+       * permanente quedaba declarada como «Error», indistinguible y sin
+       * remedio.
+       */
+      | "content_too_large"
       | "redirect_limit",
     public readonly retryable: boolean,
     message: string
@@ -813,12 +824,18 @@ export function decodeTransport(
 
   const split = splitBase64Payload(raw.dataBase64 ?? "");
   if (!split.base64 || !isValidBase64Payload(split.base64)) {
-    throw new Error(
+    throw new AttachmentTransportError(
+      "payload_invalid",
+      false,
       "El contenido recibido no es una codificación base64 válida."
     );
   }
   if (split.base64.replace(/\s+/g, "").length > transportByteLimit(maxBytes)) {
-    throw new Error("El contenido codificado supera el límite admitido.");
+    throw new AttachmentTransportError(
+      "content_too_large",
+      false,
+      "El contenido codificado supera el límite admitido."
+    );
   }
 
   const buffer = Buffer.from(split.base64.replace(/\s+/g, ""), "base64");
@@ -862,10 +879,18 @@ function decodeTransportBuffer(
     allowMismatch = true,
   } = options;
   if (buffer.length === 0) {
-    throw new Error("El contenido decodificado está vacío.");
+    throw new AttachmentTransportError(
+      "empty_content",
+      false,
+      "El contenido decodificado está vacío."
+    );
   }
   if (buffer.length > maxBytes) {
-    throw new Error("El archivo supera el peso máximo admitido.");
+    throw new AttachmentTransportError(
+      "content_too_large",
+      false,
+      "El archivo supera el peso máximo admitido."
+    );
   }
 
   const fileName = sanitizeTransportFileName(

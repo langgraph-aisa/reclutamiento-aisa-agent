@@ -22,6 +22,10 @@ import {
 import { ExpedienteSignalBadges } from "@/components/review/ExpedienteSignalBadges";
 import { trpc } from "@/lib/trpc";
 import { expedienteSignals } from "@shared/expedienteSignal";
+import {
+  attachmentIsRecoverable,
+  describeAttachmentOutcome,
+} from "@shared/attachmentOutcome";
 import { Bot, CheckCircle2, Clock3, ExternalLink, FileText, Link2, MapPin, Phone, Search, Send, ShieldAlert, Trash2, UserRound, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -484,7 +488,16 @@ export default function Inbox() {
                             </p>
                           ) : null}
                           {item.media_processing_outcome === "rejected" ? (
-                            <p className="mt-1 text-xs text-amber-200">Archivo conservado en la bandeja; aún no incorporado al expediente por su formato o peso. La incorporación se ejecuta desde el RAG Personal del candidato y no exige un envío nuevo.</p>
+                            <p className="mt-1 text-xs text-amber-200">
+                              {describeAttachmentOutcome(
+                                item.media_processing_reason
+                              )}
+                              {attachmentIsRecoverable(
+                                item.media_processing_reason
+                              )
+                                ? " La incorporación se ejecuta desde el RAG Personal del candidato y no exige un envío nuevo."
+                                : ""}
+                            </p>
                           ) : item.media_processing_status === "pendiente" ? (
                             <p className="mt-1 text-xs text-white/70">Archivo recibido. Análisis pendiente.</p>
                           ) : item.media_processing_status === "error" ? (

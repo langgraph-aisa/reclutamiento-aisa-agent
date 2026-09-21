@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.191
+# Gobierno de release JARVI RH 2.0.192
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.191**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.192**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.192
+El release **devuelve el nombre a la causa perdida y retira de la conversación dos afirmaciones que no eran ciertas**. Ninguna capacidad toca el esquema.
+
+**La causa del exceso de peso se perdía en el nombre de la excepción.** La ruta inline —la carga viaja en el cuerpo, sin sobre `data:`, que es la forma real que envía el proveedor— lanzaba `Error` sin tipar en sus guardas de tamaño y de codificación. El asiento de recepción se clasifica con `receiptFailureReason`, que para una excepción sin código cae en `error.name`: la cadena «Error», la misma palabra para cualquier fallo. El efecto observado en la instancia es una pérdida **permanente** declarada como «Error», indistinguible y sin remedio nombrado, y el candidato aparece sin el documento que sí envió. Las guardas declaran ahora su código propio —`content_too_large` para el exceso de recepción, `payload_invalid` para la codificación ilegible, `empty_content` para la carga vacía—, de modo que el fallo se declara con su causa y su naturaleza, y una causa permanente se asienta de inmediato en lugar de agotar ocho intentos durante veintiún minutos.
+
+**`content_too_large` no es `size_limit`.** El segundo es un veredicto de la política de conocimiento y deja el binario conservado, así que la recuperación lo incorpora cuando el límite se eleva. El primero es el límite de recepción del conducto: el contenido se descartó antes de escribirse y **no hay binario**. Confundirlos sería prometer una incorporación imposible, que es exactamente el defecto que este release corrige.
+
+**La conversación afirmaba una conservación que no ocurrió.** Las dos superficies donde se lee un adjunto —la bandeja general y la conversación del candidato— mostraban una sentencia fija para todo desenlace `rejected`: «Archivo conservado en la bandeja; aún no incorporado al expediente por su formato o peso. La incorporación se ejecuta desde el RAG Personal del candidato y no exige un envío nuevo». Para las causas sin binario esa frase era falsa en sus dos mitades —no hay nada conservado y no hay incorporación que ejecutar—, y para las causas de política no nombraba el motivo ni el remedio: el reclutador podía pulsar la incorporación indefinidamente sin saber que el obstáculo estaba en la configuración. Ahora la sentencia procede del catálogo compartido —el mismo que lee el expediente— y sólo añade la promesa de incorporación cuando la causa efectivamente conserva el binario. El campo `media_processing_reason` ya viajaba en la respuesta de la bandeja y no lo consumía ninguna superficie.
+
+**Sin migración.** Cuatro pruebas nuevas fijan el contrato tipado del transporte y su clasificación.
 
 ### Alcance candidato 2.0.191
 El release **corrige el alcance del adjunto conservado y devuelve al conducto la entrega diferida**, cerrando los dos únicos eslabones que 2.0.188 dejó prometiendo más de lo que el hecho sostenía. Ninguna capacidad toca el esquema ni altera el comportamiento verificado de la recuperación.
@@ -658,4 +669,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.191.md](PRUEBAS_CAJA_NEGRA_2.0.191.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.192.md](PRUEBAS_CAJA_NEGRA_2.0.192.md).

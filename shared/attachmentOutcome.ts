@@ -30,6 +30,7 @@ export const ATTACHMENT_REASONS_WITHOUT_CONSERVED_BINARY = [
   "payload_invalid",
   "empty_content",
   "content_unresolved",
+  "content_too_large",
 ] as const;
 
 /** Códigos cuya recuperación depende de la política vigente, no del proveedor. */
@@ -53,6 +54,8 @@ const REASON_SENTENCES: Record<string, string> = {
     "El origen entregó un adjunto vacío. El mensaje consta con su causa y no hay contenido que incorporar.",
   content_unresolved:
     "El adjunto declarado no pudo resolverse a contenido. El mensaje consta con su causa.",
+  content_too_large:
+    "El archivo excede el límite de recepción del conducto, de modo que no se conservó ningún binario. La recuperación exige un envío con un peso menor; habilitar la extensión no lo resuelve.",
   http_error:
     "La descarga del adjunto respondió con un error del servidor de origen. El mensaje consta con su causa y admite reintento.",
   network_error:
@@ -142,6 +145,7 @@ export function attachmentReasonLabel(reason: string | null | undefined) {
     payload_invalid: "Codificación no interpretable",
     empty_content: "Contenido vacío",
     content_unresolved: "Contenido no resuelto",
+    content_too_large: "Peso sobre el límite de recepción",
     http_error: "Error del origen",
     network_error: "Red",
     unsafe_destination: "Destino no seguro",
