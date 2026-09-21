@@ -110,8 +110,15 @@ describe("buzón de salida del agente", () => {
       {}
     );
     const confirm = calls.find(call => call.text.includes(confirmSentMarker))!;
-    expect(confirm.text).toContain("message_key=COALESCE($3,message_key)");
-    expect(confirm.params[2]).toMatch(/^apichat:[0-9a-f]{64}$/);
+    // La clave local de idempotencia **no** se sobrescribe al confirmar.
+    //
+    // Defecto corregido: la confirmación reemplazaba `message_key` con la clave
+    // del proveedor. La solicitud de CV ancla su idempotencia en esa clave
+    // —`cv_request:<postulación>`—, así que al dejar de coincidir un segundo
+    // intento no encontraba el asiento, insertaba uno nuevo y **el candidato
+    // recibía el mensaje dos veces**.
+    expect(confirm.text).not.toContain("message_key");
+    expect(confirm.params).toEqual(["ABC123", 70]);
   });
 
   it("devuelve el mensaje a la cola mientras queden intentos", async () => {

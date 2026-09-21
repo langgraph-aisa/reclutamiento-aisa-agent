@@ -1,7 +1,6 @@
 import type { Pool } from "pg";
 import { ApiChatDeliveryUnknownError, sendApiChatText } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
-import { apichatMessageKey } from "./inbox";
 import { assertCapability } from "./conversationRuntime";
 import { getConversationActivation } from "./conversationActivation";
 import { isUndefinedTableError } from "./governanceObservability";
@@ -220,15 +219,9 @@ export async function dispatchQueuedReplies(
           await pool.query(
             `UPDATE conversation_messages
                 SET delivery_status='sent',provider_message_id=$1,last_error=NULL,
-                    sent_at=now(),message_key=COALESCE($3,message_key),updated_at=now()
+                    sent_at=now(),updated_at=now()
               WHERE id=$2`,
-            [
-              sent.providerMessageId,
-              messageId,
-              sent.providerMessageId
-                ? apichatMessageKey(sent.providerMessageId)
-                : null,
-            ]
+            [sent.providerMessageId, messageId]
           );
           if (outboxId) {
             await pool.query(

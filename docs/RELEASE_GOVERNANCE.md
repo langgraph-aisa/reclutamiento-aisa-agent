@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.196
+# Gobierno de release JARVI RH 2.0.197
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.196**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.197**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.197
+El release **devuelve la identidad local al asiento y detiene el envío duplicado**. Ninguna capacidad toca el esquema.
+
+**La protección de idempotencia se destruía al enviar.** El asiento de un mensaje saliente se crea con `INSERT … ON CONFLICT (message_key) DO NOTHING`, y su clave local es determinista —`cv_request:<postulación>` para la solicitud de CV—. Confirmar el envío reemplazaba esa clave por la del proveedor (`apichat:<huella>`), de modo que a partir del primer envío el asiento **ya no se reconocía**: un segundo intento —la confirmación del formulario y la automatización del ciclo, o dos invocaciones solapadas— no encontraba conflicto, insertaba un asiento nuevo y **el candidato recibía el mismo mensaje dos veces**.
+
+**La clave de idempotencia es un hecho del artefacto.** La referencia del proveedor sirve para reconciliar el historial y para deduplicar entregas, y vive en su propia columna (`provider_message_id`); la clave local existe para que el asiento se reconozca a sí mismo entre intentos. Sobrescribir la segunda con la primera confunde dos identidades distintas —la del mensaje para el artefacto y la del mensaje para el proveedor— y deja la protección sin efecto en silencio, sin error y sin rastro.
+
+**El defecto se había repetido en los tres caminos.** La corrección alcanza el buzón del agente, la entrega de la solicitud de CV y el envío de la bandeja: los tres confirmaban el envío reescribiendo la clave.
+
+**Sin migración.** Reutiliza el esquema vigente.
 
 ### Alcance candidato 2.0.196
 El release **devuelve la causa al fallo de red y prefiere el cifrado al descargar**. Ninguna capacidad toca el esquema.
@@ -715,4 +726,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.196.md](PRUEBAS_CAJA_NEGRA_2.0.196.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.197.md](PRUEBAS_CAJA_NEGRA_2.0.197.md).

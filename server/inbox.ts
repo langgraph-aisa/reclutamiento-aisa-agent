@@ -685,7 +685,7 @@ async function sendInboxMessageInternal(
     const confirmedMessage = await confirmation.query(
       `UPDATE conversation_messages
           SET delivery_status='sent',provider_message_id=$1,last_error=NULL,
-              sent_at=now(),message_key=COALESCE($4,message_key),
+              sent_at=now(),
               metadata=metadata || $2::jsonb,updated_at=now()
         WHERE id=$3
         RETURNING id`,
@@ -693,9 +693,6 @@ async function sendInboxMessageInternal(
         result.providerMessageId,
         JSON.stringify({ statusCode: result.statusCode }),
         messageId,
-        result.providerMessageId
-          ? apichatMessageKey(result.providerMessageId)
-          : null,
       ]
     );
     if (!confirmedMessage.rows[0]) {

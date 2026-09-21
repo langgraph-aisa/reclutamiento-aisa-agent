@@ -6,7 +6,6 @@ import {
 } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
 import { scheduleAssessmentCycle } from "./assessmentAutomation";
-import { apichatMessageKey } from "./inbox";
 import {
   composeCvClosingFromSettings,
 } from "./cvAnalysis";
@@ -286,17 +285,9 @@ async function deliverCvRequestMessageInternal(
       await client.query(
         `UPDATE conversation_messages
             SET delivery_status='sent',provider_message_id=$1,last_error=NULL,sent_at=now(),updated_at=now(),
-                message_key=COALESCE($4,message_key),
                 metadata=jsonb_build_object('provider','apichat','statusCode',$2)
           WHERE id=$3`,
-        [
-          result.providerMessageId,
-          result.statusCode,
-          message.id,
-          result.providerMessageId
-            ? apichatMessageKey(result.providerMessageId)
-            : null,
-        ]
+        [result.providerMessageId, result.statusCode, message.id]
       );
       await client.query(
         `UPDATE conversations SET status='activo',last_message_at=now(),updated_at=now()
