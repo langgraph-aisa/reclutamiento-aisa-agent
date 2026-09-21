@@ -378,6 +378,125 @@ describe("transporte base64: recepción remota", () => {
     expect(autorizado?.buffer.equals(pdfBytes)).toBe(true);
     expect(autorizado?.extension).toBe("pdf");
   });
+
+  it("prefiere TLS sobre la dirección sin cifrar que el proveedor declaró", async () => {
+    // El servidor de medios declara `http://` y muchos atienden también en 443:
+    // intentar primero el mismo host por TLS consigue el archivo con integridad
+    // de transporte en lugar de renunciar a ella sin necesidad.
+    const requested: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      requested.push(String(input));
+      return new Response(pdfBytes, {
+        status: 200,
+        headers: { "content-type": "application/pdf" },
+      });
+    }) as unknown as typeof fetch;
+    const decoded = await decodeRemoteAttachment(
+      "http://159.69.12.81/adjunto/manual.pdf",
+      {
+        fileName: "manual.pdf",
+        fetchImpl,
+        lookupImpl: publicLookup,
+        allowPlainHttp: true,
+      }
+    );
+    expect(requested).toEqual(["https://159.69.12.81/adjunto/manual.pdf"]);
+    expect(decoded?.extension).toBe("pdf");
+  });
+
+  it("recurre a la dirección declarada cuando el intento cifrado no conecta", async () => {
+    const requested: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requested.push(url);
+      if (url.startsWith("https://"))
+        throw Object.assign(new Error("connect ECONNREFUSED"), {
+          code: "ECONNREFUSED",
+        });
+      return new Response(pdfBytes, {
+        status: 200,
+        headers: { "content-type": "application/pdf" },
+      });
+    }) as unknown as typeof fetch;
+    const decoded = await decodeRemoteAttachment(
+      "http://159.69.12.81/adjunto/manual.pdf",
+      {
+        fileName: "manual.pdf",
+        fetchImpl,
+        lookupImpl: publicLookup,
+        allowPlainHttp: true,
+      }
+    );
+    expect(requested).toEqual([
+      "https://159.69.12.81/adjunto/manual.pdf",
+      "http://159.69.12.81/adjunto/manual.pdf",
+    ]);
+    expect(decoded?.extension).toBe("pdf");
+  });
+
+  it("no repite el intento sin cifrar cuando el servidor ya respondió", async () => {
+    // Un 404 por TLS es una respuesta definitiva: repetirla sin cifrado
+    // duplicaría la petición sin poder cambiar el desenlace.
+    const requested: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      requested.push(String(input));
+      return new Response("no encontrado", { status: 404 });
+    }) as unknown as typeof fetch;
+    await expect(
+      decodeRemoteAttachment("http://159.69.12.81/adjunto/manual.pdf", {
+        fileName: "manual.pdf",
+        fetchImpl,
+        lookupImpl: publicLookup,
+        allowPlainHttp: true,
+      })
+    ).rejects.toMatchObject({ code: "http_error" });
+    expect(requested).toEqual(["https://159.69.12.81/adjunto/manual.pdf"]);
+  });
+
+  it("conserva el motivo técnico del fallo de red en lugar de la palabra genérica", async () => {
+    // `network_error` era la misma palabra para un puerto cerrado, un tiempo
+    // agotado y un certificado rechazado: el operador no podía saber qué
+    // corregir y la única acción posible era suponer.
+    const fallaCon = (code: string, name?: string) =>
+      (async () => {
+        throw Object.assign(new Error(`connect ${code}`), { code, name });
+      }) as unknown as typeof fetch;
+    await expect(
+      decodeRemoteAttachment("https://ejemplo.invalid/adjunto", {
+        fileName: "manual",
+        fetchImpl: fallaCon("ECONNREFUSED"),
+        lookupImpl: publicLookup,
+      })
+    ).rejects.toMatchObject({
+      code: "network_error",
+      message: expect.stringContaining("ECONNREFUSED"),
+    });
+    await expect(
+      decodeRemoteAttachment("https://ejemplo.invalid/adjunto", {
+        fileName: "manual",
+        fetchImpl: fallaCon("DEPTH_ZERO_SELF_SIGNED_CERT"),
+        lookupImpl: publicLookup,
+      })
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("DEPTH_ZERO_SELF_SIGNED_CERT"),
+    });
+    // El vencimiento del propio límite de tiempo no trae código: se nombra.
+    const timeoutImpl = (async () => {
+      throw Object.assign(new Error("The operation was aborted"), {
+        code: undefined,
+        name: "TimeoutError",
+      });
+    }) as unknown as typeof fetch;
+    await expect(
+      decodeRemoteAttachment("https://ejemplo.invalid/adjunto", {
+        fileName: "manual",
+        fetchImpl: timeoutImpl,
+        lookupImpl: publicLookup,
+      })
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("TimeoutError"),
+    });
+  });
 });
 
 describe("descarga de medios con frontera de red y cuota", () => {

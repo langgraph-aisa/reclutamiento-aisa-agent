@@ -468,7 +468,7 @@ describe.runIf(enabled)(
         // proveedor declara una dirección por IP y sin TLS. La recepción no
         // puede descargarla —el expediente no acredita integridad de lo que
         // viaja sin cifrar— pero una persona sí puede decidirlo, y su decisión
-        // queda asentada con la integridad que tuvo el transporte.
+        // queda asentada con la integridad que **tuvo** el transporte.
         await allowPdf();
         const bytes = syntheticPdf("Manual de contratacion por IP sin cifrado");
         const messageId = await announced(
@@ -489,12 +489,87 @@ describe.runIf(enabled)(
         expect(outcome.declaredUrl).toBe(
           "http://159.69.12.81/adjunto/mandy.pdf"
         );
+        // El host admitió TLS, así que la integridad asentada lo declara: el
+        // asiento no puede afirmar «sin cifrado» sobre una descarga cifrada.
+        const audit = await database.pool.query(
+          `SELECT after_json FROM audit_log
+            WHERE action='candidate_file_recovered' AND entity_id=$1`,
+          [outcome.fileId]
+        );
+        expect(audit.rows[0].after_json.transportIntegrity).toBe("tls");
+      }, 120_000);
+
+      it("asienta la ausencia de cifrado cuando el host no admite TLS", async () => {
+        await allowPdf();
+        const bytes = syntheticPdf(
+          "Manual de contratacion servido solo sin cifrado"
+        );
+        const messageId = await announced(
+          "manual-http-solo",
+          "PE_HANDOUT_GALASSO20111121224951.PDF",
+          "http://159.69.12.81/adjunto/handout.pdf"
+        );
+        const requested: string[] = [];
+        const fetchImpl = (async (input: RequestInfo | URL) => {
+          const url = String(input);
+          requested.push(url);
+          if (url.startsWith("https://"))
+            throw Object.assign(new Error("connect ECONNREFUSED"), {
+              code: "ECONNREFUSED",
+            });
+          return new Response(bytes, {
+            status: 200,
+            headers: { "content-type": "application/pdf" },
+          });
+        }) as unknown as typeof fetch;
+        const outcome = await recoverAnnouncedAttachment(database.pool, {
+          applicationId,
+          messageId,
+          actorUserId: null,
+          analyze: false,
+          reevaluate: false,
+          fetchImpl,
+          lookupImpl: publicLookup,
+        });
+        expect(requested).toEqual([
+          "https://159.69.12.81/adjunto/handout.pdf",
+          "http://159.69.12.81/adjunto/handout.pdf",
+        ]);
+        expect(outcome.state).toBe("incorporated");
         const audit = await database.pool.query(
           `SELECT after_json FROM audit_log
             WHERE action='candidate_file_recovered' AND entity_id=$1`,
           [outcome.fileId]
         );
         expect(audit.rows[0].after_json.transportIntegrity).toBe("plain");
+      }, 120_000);
+
+      it("declara el motivo técnico del fallo de red, no sólo su clasificación", async () => {
+        // «network_error» es la clasificación, no la causa: un puerto cerrado y
+        // un certificado rechazado comparten código y exigen remedios distintos.
+        await allowPdf();
+        const messageId = await announced(
+          "manual-red",
+          "SIERA-GT-SOLAR-GT.pdf",
+          "https://159.69.12.81/adjunto/siera.pdf"
+        );
+        const fetchImpl = (async () => {
+          throw Object.assign(new Error("connect ECONNREFUSED"), {
+            code: "ECONNREFUSED",
+          });
+        }) as unknown as typeof fetch;
+        const outcome = await recoverAnnouncedAttachment(database.pool, {
+          applicationId,
+          messageId,
+          actorUserId: null,
+          analyze: false,
+          reevaluate: false,
+          fetchImpl,
+          lookupImpl: publicLookup,
+        });
+        expect(outcome.state).toBe("unreachable");
+        expect(outcome.reasonCode).toBe("network_error");
+        expect(outcome.detail).toContain("ECONNREFUSED");
       }, 120_000);
 
       it("el pase automático reclama una vez y respeta la ventana de silencio", async () => {

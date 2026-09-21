@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.195
+# Gobierno de release JARVI RH 2.0.196
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.195**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.196**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.196
+El release **devuelve la causa al fallo de red y prefiere el cifrado al descargar**. Ninguna capacidad toca el esquema.
+
+**`network_error` era una palabra sin causa.** La guarda de descarga clasificaba cualquier excepción no tipada con un único enunciado —«La descarga del adjunto no pudo completarse»— y descartaba el motivo. Un puerto cerrado, un tiempo agotado, un nombre que no resuelve y un certificado rechazado compartían código, de modo que ante el fallo observado en la instancia el operador no podía saber si el problema era de red, de esquema o de certificado: la única acción posible era suponer. El motivo técnico —`ECONNREFUSED`, `ETIMEDOUT`, `ENOTFOUND`, `DEPTH_ZERO_SELF_SIGNED_CERT` o el vencimiento del propio límite— se conserva y se publica. No transporta contenido del candidato: es la clasificación del fallo.
+
+**Se prefiere TLS a la dirección sin cifrar.** El servidor de medios declara direcciones `http://` por IP, y muchos atienden también en 443. Intentar primero el mismo host por TLS consigue el archivo **con integridad de transporte** en lugar de renunciar a ella sin necesidad, que es exactamente lo que el expediente debe procurar. El orden importa y la caída de recurso está acotada: sólo se recurre a la dirección declarada cuando el intento cifrado **no pudo establecer la conexión**. Un rechazo del servidor —un 404, un peso excesivo— es una respuesta definitiva y no se repite, porque repetirla sin cifrado duplicaría la petición sin poder cambiar el desenlace.
+
+**La integridad asentada es la observada, no la declarada.** El asiento de custodia deducía el esquema del texto de la dirección, de modo que una descarga que prosperó por TLS sobre una dirección `http://` quedaba registrada como «sin cifrado»: una afirmación falsa en el asiento que el evaluador humano usa para juzgar la evidencia. El esquema observado manda.
+
+**Sin migración.** Reutiliza las tablas `0035` a `0037`.
 
 ### Alcance candidato 2.0.195
 El release **corrige dos defectos de ingeniería del conducto de anuncios y devuelve el pase automático**. Ninguna capacidad toca el esquema.
@@ -704,4 +715,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.195.md](PRUEBAS_CAJA_NEGRA_2.0.195.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.196.md](PRUEBAS_CAJA_NEGRA_2.0.196.md).

@@ -734,12 +734,26 @@ export async function recoverAnnouncedAttachment(
       error instanceof AttachmentTransportError
         ? error.code
         : "extraction_failed";
+    /**
+     * El motivo técnico se publica cuando es lo único que permite actuar.
+     *
+     * `network_error` es la clasificación del fallo de conexión, no su causa:
+     * un puerto cerrado y un certificado rechazado comparten código y exigen
+     * remedios distintos. El texto que lo acompaña procede de la guarda del
+     * transporte —nunca del servidor remoto ni del candidato—, así que puede
+     * mostrarse.
+     */
+    const diagnostic =
+      error instanceof AttachmentTransportError &&
+      error.code === "network_error"
+        ? ` ${error.message}`
+        : "";
     return {
       ...base,
       declaredUrl: address,
       state: "unreachable",
       reasonCode: code,
-      detail: `La dirección declarada no entregó el archivo (${code}). El anuncio conserva su motivo y admite un intento posterior.`,
+      detail: `La dirección declarada no entregó el archivo (${code}).${diagnostic} El anuncio conserva su motivo y admite un intento posterior.`,
     };
   }
   if (!decoded?.sizeBytes)
@@ -833,7 +847,10 @@ export async function recoverAnnouncedAttachment(
         // binario ya conservado. Y se declara la integridad que tuvo el
         // transporte, porque un destino sin cifrado no la tuvo.
         declaredUrl: address,
-        transportIntegrity: transportIntegrityOf(address),
+        transportIntegrity: transportIntegrityOf(
+          address,
+          decoded.transportScheme
+        ),
         previousReason: row.reason ? String(row.reason) : null,
         created: saved.created,
         analysisStatus,
@@ -1069,9 +1086,18 @@ function addressOrigin(address: string) {
  * Se asienta porque distingue dos procedencias que no valen lo mismo: un
  * destino cifrado y uno que no lo está. El evaluador humano decide sobre la
  * evidencia y merece saber si el documento pudo alterarse en el camino.
+ *
+ * Manda el esquema **observado** sobre el declarado: una dirección `http://` se
+ * intenta primero por TLS, así que deducir la integridad del texto declarado
+ * afirmaría lo contrario de lo que ocurrió.
  */
-export function transportIntegrityOf(address: string): "tls" | "plain" {
-  return /^https:\/\//i.test(address) ? "tls" : "plain";
+export function transportIntegrityOf(
+  address: string,
+  observed?: "https" | "http"
+): "tls" | "plain" {
+  const scheme =
+    observed ?? (/^https:\/\//i.test(address) ? "https" : "http");
+  return scheme === "https" ? "tls" : "plain";
 }
 
 /**

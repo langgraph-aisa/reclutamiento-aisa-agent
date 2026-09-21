@@ -1,5 +1,5 @@
 -- ============================================================================
--- JARVI RH 2.0.195 · Despliegue completo del servicio conversacional
+-- JARVI RH 2.0.196 · Despliegue completo del servicio conversacional
 -- ============================================================================
 -- Archivo GENERADO. No editar a mano: se compone con
 --   pnpm deploy:sql

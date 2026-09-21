@@ -63,6 +63,16 @@ export type DecodedTransport = {
   sizeBytes: number;
   sha256: string;
   version: string;
+  /**
+   * Esquema con el que se obtuvo el binario, cuando se descargó de una dirección.
+   *
+   * Se declara porque no siempre coincide con el declarado: una dirección
+   * `http://` se intenta primero por TLS, de modo que deducir la integridad del
+   * texto declarado afirmaría lo contrario de lo que ocurrió
+   * —«sin cifrado» sobre una descarga cifrada— en el asiento que el evaluador
+   * humano usa para juzgar la evidencia.
+   */
+  transportScheme?: "https" | "http";
 };
 
 export type TransportDecodeOptions = {
@@ -697,10 +707,19 @@ async function downloadAttachment(
     }
   } catch (error) {
     if (error instanceof AttachmentTransportError) throw error;
+    // El motivo técnico se conserva.
+    //
+    // Antes se descartaba: `network_error` era la misma palabra para un puerto
+    // cerrado, un tiempo agotado, un nombre que no resuelve y un certificado
+    // rechazado, de modo que el operador no podía saber qué corregir y la única
+    // acción posible era suponer. El código no transporta contenido del
+    // candidato —es la clasificación del fallo—, así que puede publicarse.
     throw new AttachmentTransportError(
       "network_error",
       true,
-      "La descarga del adjunto no pudo completarse; puede reintentarse."
+      `La descarga del adjunto no pudo completarse (${describeNetworkFailure(
+        error
+      )}); puede reintentarse.`
     );
   }
   throw new AttachmentTransportError(
@@ -708,6 +727,28 @@ async function downloadAttachment(
     false,
     "La descarga excedió las redirecciones permitidas."
   );
+}
+
+/**
+ * Clasificación técnica de un fallo de red, sin contenido del candidato.
+ *
+ * Se prefiere el código del sistema —`ECONNREFUSED`, `ETIMEDOUT`,
+ * `ENOTFOUND`, `DEPTH_ZERO_SELF_SIGNED_CERT`— porque es lo que permite actuar:
+ * un puerto cerrado y un certificado rechazado exigen remedios distintos. El
+ * nombre de la excepción queda como último recurso, y `TimeoutError` es el que
+ * produce el vencimiento del propio límite de tiempo.
+ */
+function describeNetworkFailure(error: unknown) {
+  if (!(error instanceof Error)) return "error";
+  const code = (error as { code?: unknown }).code;
+  if (typeof code === "string" && code) return code;
+  const cause = (error as { cause?: unknown }).cause;
+  const causeCode =
+    cause && typeof cause === "object" && "code" in cause
+      ? (cause as { code?: unknown }).code
+      : undefined;
+  if (typeof causeCode === "string" && causeCode) return causeCode;
+  return error.name || "error";
 }
 
 /**
@@ -784,19 +825,56 @@ export async function decodeRemoteAttachment(
     return null;
   }
   const maxBytes = options.maxBytes ?? 20 * 1024 * 1024;
-  const downloaded = await downloadAttachment(source, {
+  const downloadOptions = {
     maxBytes,
     timeoutMs,
     fetchImpl,
     lookupImpl: options.lookupImpl,
     allowedHosts: options.allowedHosts,
     allowPlainHttp: options.allowPlainHttp,
-  });
-  return decodeTransportBuffer(
-    downloaded.buffer,
-    { fileName, mimeType: mimeType || downloaded.mimeType },
-    options
-  );
+  };
+  /**
+   * Se prefiere TLS sobre la dirección sin cifrar que el proveedor declaró.
+   *
+   * Muchos servidores de medios declaran `http://` y atienden también en 443,
+   * de modo que intentar primero el mismo host por TLS consigue el archivo
+   * **con integridad de transporte** en lugar de renunciar a ella sin
+   * necesidad. Sólo se recurre a la dirección declarada cuando el intento
+   * cifrado no pudo establecer la conexión: un rechazo del servidor —un 404,
+   * un peso excesivo— es una respuesta definitiva y no se repite.
+   */
+  const secure = /^http:\/\//i.test(source)
+    ? `https://${source.replace(/^http:\/\//i, "")}`
+    : null;
+  if (secure && options.allowPlainHttp) {
+    try {
+      const downloaded = await downloadAttachment(secure, downloadOptions);
+      return {
+        ...decodeTransportBuffer(
+          downloaded.buffer,
+          { fileName, mimeType: mimeType || downloaded.mimeType },
+          options
+        ),
+        transportScheme: "https" as const,
+      };
+    } catch (error) {
+      const retryableNetwork =
+        error instanceof AttachmentTransportError &&
+        error.code === "network_error";
+      if (!retryableNetwork) throw error;
+    }
+  }
+  const downloaded = await downloadAttachment(source, downloadOptions);
+  return {
+    ...decodeTransportBuffer(
+      downloaded.buffer,
+      { fileName, mimeType: mimeType || downloaded.mimeType },
+      options
+    ),
+    transportScheme: (/^https:\/\//i.test(source) ? "https" : "http") as
+      | "https"
+      | "http",
+  };
 }
 
 /** Construye el sobre transportable para envío remoto (por ejemplo ApiChat). */
