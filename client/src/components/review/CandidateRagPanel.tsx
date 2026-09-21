@@ -14,6 +14,7 @@ import {
   FileImage,
   FileSpreadsheet,
   FileText,
+  Rocket,
   FileVideo,
   Folder,
   FolderPlus,
@@ -261,6 +262,24 @@ export function CandidateRagPanel({
     { applicationId },
     { refetchInterval: 30_000, refetchIntervalInBackground: false }
   );
+  /**
+   * Carga manual de un anuncio desde la dirección que declaró el proveedor.
+   *
+   * Es un acto humano explícito: el conducto no descarga solo ninguna dirección
+   * que llegue en un mensaje. Traer el archivo no lo incorpora —la política
+   * vigente sigue decidiendo— y la procedencia queda asentada.
+   */
+  const bring = trpc.candidateKnowledge.recoverAnnouncedAttachment.useMutation({
+    onSuccess: outcome => {
+      if (outcome.state === "incorporated" || outcome.state === "duplicate")
+        toast.success(outcome.detail, { duration: 12_000 });
+      else toast.error(outcome.detail, { duration: 12_000 });
+      refresh();
+      void announced.refetch();
+      void conserved.refetch();
+    },
+    onError: error => toast.error(error.message),
+  });
   const recover = trpc.candidateKnowledge.recoverConservedAttachments.useMutation({
     onSuccess: report => {
       toast.success(report.verdict, { duration: 12_000 });
@@ -561,6 +580,34 @@ export function CandidateRagPanel({
                         {item.fileName}
                       </span>
                     )}
+                    {item.declaredUrl ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-6 gap-1 rounded-full px-2 text-[10px]"
+                        disabled={
+                          bring.isPending &&
+                          bring.variables?.messageId === item.messageId
+                        }
+                        onClick={() =>
+                          bring.mutate({
+                            applicationId,
+                            messageId: item.messageId,
+                            analyze: true,
+                          })
+                        }
+                        title="Traer el archivo al RAG desde la dirección declarada, analizarlo y reevaluar al candidato"
+                      >
+                        {bring.isPending &&
+                        bring.variables?.messageId === item.messageId ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Rocket className="h-3 w-3" />
+                        )}
+                        Cargar al RAG
+                      </Button>
+                    ) : null}
                     <span className="text-muted-foreground">
                       {formatDateTime(item.createdAt)}
                     </span>

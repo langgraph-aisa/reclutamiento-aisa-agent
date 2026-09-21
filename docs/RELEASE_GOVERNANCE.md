@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.193
+# Gobierno de release JARVI RH 2.0.194
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.193**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.194**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.194
+El release **devuelve la decisión al evaluador sobre los anuncios que el conducto no pudo resolver**. Ninguna capacidad toca el esquema.
+
+**Una pérdida que el receptor no puede resolver y una persona sí.** Hay anuncios cuyo binario no existe y cuya procedencia sí: el proveedor notificó el adjunto como una dirección, y la guarda de descarga la rechaza cuando no es `https://` —no por descuido, sino porque el expediente no puede acreditar la integridad de lo que viaja sin cifrar—. Hasta aquí esa pérdida quedaba declarada y sin salida: el evaluador leía el motivo, veía el nombre del archivo y no tenía forma de traerlo.
+
+**Carga manual, no descarga automática.** La operación es un acto humano explícito sobre una dirección concreta. Descargar por iniciativa propia cualquier dirección que llegue en un mensaje es exactamente lo que la guarda impide, y automatizarlo convertiría el receptor en un cliente de la red a merced del emisor. El cohete de la ficha ejecuta el **mismo conducto guardado** que la recepción: destino público verificado contra la misma lista de rangos no encaminables, sin credenciales, sin redirecciones fuera de guarda, tope de peso y verificación por contenido —la extensión, el tipo y la huella se reconstruyen del binario, nunca de lo declarado—.
+
+**Traer el archivo no lo incorpora.** La política vigente sigue decidiendo, y un rechazo se declara con su remedio igual que en la recuperación de un binario conservado. La diferencia entre las dos vías es de dónde salió el documento, y esa diferencia se asienta: el expediente guarda la **procedencia** —la dirección declarada— junto al motivo anterior, de modo que el dictamen humano pueda acreditar de dónde vino la evidencia.
+
+**Sin migración.** Reutiliza las tablas `0035` a `0037` y el volumen. Cuatro pruebas nuevas fijan el camino completo, la dirección sin TLS, el destino interno y el rechazo de política.
 
 ### Alcance candidato 2.0.193
 El release **devuelve al evaluador la vista del archivo que originó el rechazo**. Ninguna capacidad toca el esquema y ninguna decisión de la recuperación cambia.
@@ -680,4 +691,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.193.md](PRUEBAS_CAJA_NEGRA_2.0.193.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.194.md](PRUEBAS_CAJA_NEGRA_2.0.194.md).

@@ -160,6 +160,7 @@ import {
   dispatchExpedienteAppreciation,
   listConservedAttachments,
   listUnresolvedAttachments,
+  recoverAnnouncedAttachment,
   recoverConservedAttachments,
 } from "./candidateConservedRecovery";
 import { applicationStatuses } from "./policy";
@@ -2814,6 +2815,40 @@ export const appRouter = router({
       .query(async ({ input }) =>
         listUnresolvedAttachments(await requirePool(), input.applicationId)
       ),
+    /**
+     * Carga manual de un anuncio desde la dirección que declaró el proveedor.
+     *
+     * Es un acto humano explícito sobre una dirección concreta —no una descarga
+     * automática— y usa el conducto guardado de la recepción: destino público,
+     * sin credenciales, tope de peso y verificación por contenido. Traer el
+     * archivo no lo incorpora: la política vigente sigue decidiendo.
+     */
+    recoverAnnouncedAttachment: roleProcedure
+      .input(
+        z.object({
+          applicationId: z.number().int().positive(),
+          messageId: z.number().int().positive(),
+          analyze: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await recoverAnnouncedAttachment(await requirePool(), {
+            applicationId: input.applicationId,
+            messageId: input.messageId,
+            actorUserId: ctx.user.id,
+            analyze: input.analyze ?? true,
+          });
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              error instanceof Error
+                ? error.message
+                : "No fue posible traer el adjunto anunciado.",
+          });
+        }
+      }),
     /**
      * Incorpora al expediente los adjuntos conservados y ejecuta su análisis.
      *

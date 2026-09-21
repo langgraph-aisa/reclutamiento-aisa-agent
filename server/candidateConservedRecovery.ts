@@ -4,8 +4,10 @@ import { describeAttachmentOutcome } from "../shared/attachmentOutcome";
 import { evaluateApplicationWithAgent } from "./agentEvaluator";
 import {
   AttachmentTransportError,
+  decodeRemoteAttachment,
   describeTransportBuffer,
   isPublicAttachmentAddress,
+  type AttachmentLookup,
 } from "./base64Transport";
 import {
   analyzeCandidateDocument,
@@ -129,6 +131,30 @@ export async function listConservedAttachments(
  * lo que permite distinguir «la política lo dejó fuera» de «el proveedor no lo
  * entregó», que exigen acciones distintas.
  */
+/**
+ * Dirección que el proveedor declaró para el adjunto, leída del asiento de
+ * recepción.
+ *
+ * El asiento conserva el mensaje normalizado tal como llegó, de modo que es la
+ * única superficie donde sobrevive el campo `url` cuando el receptor no pudo
+ * resolverlo. Se prefiere el campo propio del adjunto y se acepta el sobre
+ * `data:` sólo si el transporte no lo habría resuelto —un `contentValue` con
+ * carga real no es una dirección, es el archivo—, y la guarda de publicación
+ * descarta después lo que no sea abrible.
+ */
+const DECLARED_ADDRESS_LATERAL = `LEFT JOIN LATERAL (
+       SELECT CASE
+                WHEN COALESCE(r.payload->>'url',r.payload->>'metadataMediaUrl',r.payload->>'contentValue')
+                     ~* '^https?://[^[:space:]]+$'
+                THEN COALESCE(r.payload->>'url',r.payload->>'metadataMediaUrl',r.payload->>'contentValue')
+              END AS declared_url,
+              r.provider_message_id AS receipt_message_id
+         FROM apichat_inbound_receipts r
+        WHERE r.provider_message_id=m.provider_message_id
+        ORDER BY r.received_at DESC
+        LIMIT 1
+     ) d ON true`;
+
 const UNRESOLVED_ATTACHMENTS_SQL = `SELECT m.id,
           COALESCE(m.metadata->'media'->>'fileName',m.original_file_name,m.body) AS file_name,
           m.metadata->'media'->>'processingReason' AS reason,
@@ -136,23 +162,26 @@ const UNRESOLVED_ATTACHMENTS_SQL = `SELECT m.id,
           m.created_at
      FROM conversation_messages m
      JOIN conversations c ON c.id=m.conversation_id
-     LEFT JOIN LATERAL (
-       SELECT CASE
-                WHEN COALESCE(r.payload->>'url',r.payload->>'metadataMediaUrl',r.payload->>'contentValue')
-                     ~* '^https?://[^[:space:]]+$'
-                THEN COALESCE(r.payload->>'url',r.payload->>'metadataMediaUrl',r.payload->>'contentValue')
-              END AS declared_url
-         FROM apichat_inbound_receipts r
-        WHERE r.provider_message_id=m.provider_message_id
-        ORDER BY r.received_at DESC
-        LIMIT 1
-     ) d ON true
+     ${DECLARED_ADDRESS_LATERAL}
     WHERE c.application_id=$1
       AND m.direction='inbound'
       AND m.metadata->'media'->>'processingOutcome'='rejected'
       AND COALESCE(NULLIF(m.storage_key,''),NULLIF(m.metadata->'media'->>'storageKey','')) IS NULL
       AND m.metadata->'media'->>'candidateFileId' IS NULL
     ORDER BY m.created_at,m.id`;
+
+/** Un anuncio concreto, para traerlo por su dirección declarada. */
+const ANNOUNCED_ATTACHMENT_SQL = `SELECT m.id,
+          COALESCE(m.metadata->'media'->>'fileName',m.original_file_name,m.body) AS file_name,
+          COALESCE(m.metadata->'media'->>'mimeType',m.mime_type) AS mime_type,
+          m.metadata->'media'->>'processingReason' AS reason,
+          m.metadata->'media'->>'candidateFileId' AS candidate_file_id,
+          d.declared_url
+     FROM conversation_messages m
+     JOIN conversations c ON c.id=m.conversation_id
+     ${DECLARED_ADDRESS_LATERAL}
+    WHERE c.application_id=$1 AND m.id=$2 AND m.direction='inbound'
+    LIMIT 1`;
 
 /** Nombres de host que apuntan a la red interna y nunca se publican. */
 const PRIVATE_HOST_PATTERN =
@@ -570,6 +599,272 @@ export async function recoverConservedAttachments(
       evaluation,
     }),
   };
+}
+
+export type AnnouncedRecoveryState =
+  | "incorporated"
+  | "duplicate"
+  | "rejected"
+  | "unreachable"
+  | "no_address"
+  | "already_linked";
+
+export type AnnouncedRecoveryOutcome = {
+  messageId: number;
+  fileName: string;
+  state: AnnouncedRecoveryState;
+  fileId: number | null;
+  analysisStatus: string | null;
+  /** Dirección que se intentó, si la había. */
+  declaredUrl: string | null;
+  reasonCode: string | null;
+  detail: string;
+  evaluation: ConservedRecoveryEvaluation;
+};
+
+/**
+ * Trae al expediente un adjunto anunciado, desde la dirección que el proveedor
+ * declaró.
+ *
+ * Fundamento
+ * ----------
+ * Hay pérdidas que el receptor no puede resolver y una persona sí. El contrato
+ * admite que el proveedor notifique el adjunto como una dirección; la guarda de
+ * descarga la rechaza cuando no es `https://` —no por descuido, sino porque el
+expediente no puede acreditar la integridad de lo que viaja sin cifrar— y la
+ * pérdida quedaba declarada y sin salida: el evaluador leía el motivo, veía el
+ * nombre del archivo y no tenía forma de traerlo.
+ *
+ * La operación restituye la decisión sin inventar contenido. No es una descarga
+ * automática —descargar cualquier dirección que llegue en un mensaje es
+ * exactamente lo que la guarda impide— sino un acto humano explícito sobre una
+ * dirección concreta, y usa el mismo conducto guardado que la recepción:
+ * destino público verificado, sin credenciales, tope de peso, límite de
+ * redirecciones y verificación por contenido.
+ *
+ * Tres invariantes:
+ *
+ * 1. **La dirección se declara.** Sólo se intenta si es abrible y pública, y su
+ *    procedencia se asienta: el expediente acredita de dónde vino el documento,
+ *    no sólo que existe.
+ * 2. **El binario manda.** La extensión, el tipo y la huella se reconstruyen por
+ *    contenido; nunca se acepta lo declarado por el emisor.
+ * 3. **La política sigue decidiendo.** Traer el archivo no lo incorpora: si la
+ *    política vigente lo rechaza, el rechazo se declara con su remedio.
+ */
+export async function recoverAnnouncedAttachment(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    messageId: number;
+    actorUserId: number | null;
+    analyze?: boolean;
+    reevaluate?: boolean;
+    dependencies?: CandidateProcessingDependencies;
+    /** Inyección de la descarga para las pruebas; en producción no se usa. */
+    fetchImpl?: typeof fetch;
+    /** Inyección de la resolución de nombres; en producción no se usa. */
+    lookupImpl?: AttachmentLookup;
+  }
+): Promise<AnnouncedRecoveryOutcome> {
+  const result = await pool.query(ANNOUNCED_ATTACHMENT_SQL, [
+    input.applicationId,
+    input.messageId,
+  ]);
+  const row = result.rows[0];
+  const base = {
+    messageId: input.messageId,
+    fileName: String(row?.file_name ?? "Adjunto"),
+    fileId: null,
+    analysisStatus: null,
+    declaredUrl: null,
+    evaluation: {
+      status: "skipped",
+      reason: "La incorporación no cambió el expediente.",
+    } satisfies ConservedRecoveryEvaluation,
+  };
+  if (!row)
+    return {
+      ...base,
+      state: "unreachable",
+      reasonCode: "mensaje_no_encontrado",
+      detail:
+        "El anuncio no consta en la conversación de esta postulación: no hay dirección que traer.",
+    };
+  if (row.candidate_file_id)
+    return {
+      ...base,
+      state: "already_linked",
+      reasonCode: null,
+      detail: `El anuncio ya consta en el expediente como documento ${row.candidate_file_id}; no hay nada que traer.`,
+    };
+  const address = declaredAttachmentUrl(row.declared_url);
+  if (!address)
+    return {
+      ...base,
+      state: "no_address",
+      reasonCode: "sin_direccion_declarada",
+      detail: describeAttachmentOutcome(
+        row.reason ? String(row.reason) : null
+      ),
+    };
+
+  let decoded: Awaited<ReturnType<typeof decodeRemoteAttachment>>;
+  try {
+    decoded = await decodeRemoteAttachment(address, {
+      fileName: String(row.file_name ?? "Adjunto"),
+      mimeType: row.mime_type ? String(row.mime_type) : "",
+      maxBytes: 30 * 1024 * 1024,
+      timeoutMs: 120_000,
+      fetchImpl: input.fetchImpl,
+      lookupImpl: input.lookupImpl,
+    });
+  } catch (error) {
+    const code =
+      error instanceof AttachmentTransportError
+        ? error.code
+        : "extraction_failed";
+    return {
+      ...base,
+      declaredUrl: address,
+      state: "unreachable",
+      reasonCode: code,
+      detail: `La dirección declarada no entregó el archivo (${code}). El anuncio conserva su motivo y admite un intento posterior.`,
+    };
+  }
+  if (!decoded?.sizeBytes)
+    return {
+      ...base,
+      declaredUrl: address,
+      state: "unreachable",
+      reasonCode: "content_unresolved",
+      detail: nextAddressSentence(address),
+    };
+
+  const settings = await getKnowledgeSettings(pool);
+  const refusal = candidatePolicyRefusal(
+    settings,
+    decoded.extension,
+    decoded.sizeBytes
+  );
+  if (refusal)
+    return {
+      ...base,
+      fileName: decoded.fileName,
+      declaredUrl: address,
+      state: "rejected",
+      reasonCode: refusal.reason,
+      detail: policyDetail(refusal),
+    };
+
+  const saved = await persistCandidateDocument(pool, {
+    applicationId: input.applicationId,
+    fileName: decoded.fileName,
+    decoded,
+    source: "webhook",
+    actorUserId: input.actorUserId,
+  });
+  if (saved.outcome === "rejected")
+    return {
+      ...base,
+      fileName: decoded.fileName,
+      declaredUrl: address,
+      state: "rejected",
+      reasonCode: saved.refusal?.reason ?? saved.reason ?? "extension_not_allowed",
+      detail: saved.refusal
+        ? policyDetail(saved.refusal)
+        : "El documento no se incorporó por la política vigente.",
+    };
+
+  await linkConservedMessageToDocument(
+    pool,
+    input.messageId,
+    saved.id,
+    row.reason ? String(row.reason) : null
+  );
+
+  let analysisStatus: string | null = null;
+  if (input.analyze !== false) {
+    const dependencies = saved.created
+      ? (input.dependencies ?? {})
+      : { ...(input.dependencies ?? {}), skipCompleted: true };
+    const analysis = await analyzeCandidateDocument(
+      pool,
+      saved.id,
+      input.actorUserId,
+      dependencies
+    );
+    analysisStatus = analysis.analysisStatus;
+    if (
+      analysis.analysisStatus === "analizado" ||
+      analysis.analysisStatus === "no_aplica"
+    )
+      await pool.query(
+        `UPDATE candidate_document_jobs SET state='completed',updated_at=now() WHERE file_id=$1`,
+        [saved.id]
+      );
+  }
+
+  await pool.query(
+    `INSERT INTO audit_log(actor_user_id,entity_type,entity_id,action,after_json)
+     VALUES($1,'candidate_knowledge_file',$2,'candidate_file_recovered',$3::jsonb)`,
+    [
+      input.actorUserId,
+      saved.id,
+      JSON.stringify({
+        applicationId: input.applicationId,
+        messageId: input.messageId,
+        originalName: decoded.fileName,
+        extension: decoded.extension,
+        sizeBytes: decoded.sizeBytes,
+        sha256: decoded.sha256,
+        // La procedencia se asienta: el expediente acredita de dónde vino el
+        // documento, que es lo que distingue esta vía de la recuperación de un
+        // binario ya conservado.
+        declaredUrl: address,
+        previousReason: row.reason ? String(row.reason) : null,
+        created: saved.created,
+        analysisStatus,
+      }),
+    ]
+  );
+
+  const evaluation = await reevaluateWithNewEvidence(pool, {
+    applicationId: input.applicationId,
+    changed: saved.created ? 1 : saved.analysisStatus !== "analizado" ? 1 : 0,
+    enabled: input.reevaluate !== false,
+    evaluate: evaluateApplicationWithAgent,
+  });
+
+  return {
+    ...base,
+    fileName: decoded.fileName,
+    fileId: saved.id,
+    analysisStatus,
+    declaredUrl: address,
+    state: saved.created ? "incorporated" : "duplicate",
+    reasonCode: null,
+    detail: saved.created
+      ? `Incorporado al expediente desde la dirección declarada como ${decoded.fileName} (${decoded.extension}).${
+          analysisStatus === "analizado"
+            ? " El análisis quedó registrado."
+            : " El trabajo de análisis permanece en cola."
+        }`
+      : `El expediente ya contenía el mismo contenido por su huella; el anuncio se vinculó al documento existente.`,
+    evaluation,
+  };
+}
+
+/** Sentencia para una dirección que no entregó contenido utilizable. */
+function nextAddressSentence(address: string) {
+  const host = (() => {
+    try {
+      return new URL(address).hostname;
+    } catch {
+      return address;
+    }
+  })();
+  return `La dirección declarada (${host}) no entregó contenido utilizable. El anuncio conserva su motivo y admite un intento posterior.`;
 }
 
 /**

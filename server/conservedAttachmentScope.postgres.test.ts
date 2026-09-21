@@ -7,10 +7,12 @@ import {
   declaredAttachmentUrl,
   listConservedAttachments,
   listUnresolvedAttachments,
+  recoverAnnouncedAttachment,
   recoverConservedAttachments,
 } from "./candidateConservedRecovery";
 import { recordNormalizedInboundFile } from "./inbox";
 import { buildInboxFileKey, writeInboxFile } from "./inboxFiles";
+import { syntheticPdf } from "./testSupport/mediaFixtures";
 
 /**
  * Alcance del adjunto conservado.
@@ -228,7 +230,7 @@ describe.runIf(enabled)(
     it("incorpora el conservado y declara la ausencia del que no lo está", async () => {
       const settings = await database.pool.query(
         `INSERT INTO integration_settings(provider,setting_key,setting_value)
-         VALUES('recruitment','allowed_extensions','jpg,pdf'),('recruitment','max_size_mb','25')
+         VALUES('knowledge','allowed_extensions','jpg,pdf'),('knowledge','max_size_mb','25')
          ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value
          RETURNING setting_key`
       );
@@ -346,6 +348,212 @@ describe.runIf(enabled)(
       expect(declaredAttachmentUrl("data:application/pdf;base64,AAAA")).toBeNull();
       expect(declaredAttachmentUrl("no es una direccion")).toBeNull();
       expect(declaredAttachmentUrl(null)).toBeNull();
+    });
+
+    /**
+     * Carga manual desde la dirección declarada.
+     *
+     * La descarga la ejecuta el conducto guardado: destino público verificado,
+     * sin credenciales, tope de peso y verificación por contenido. La resolución
+     * y la descarga se inyectan porque la prueba no debe salir a la red, pero la
+     * guarda de destino se ejecuta de verdad.
+     */
+    describe("carga manual del anuncio", () => {
+      const publicLookup = async () => [
+        { address: "93.184.216.34", family: 4 },
+      ];
+      const fileAt = (bytes: Buffer) =>
+        (async () =>
+          new Response(bytes, {
+            status: 200,
+            headers: { "content-type": "application/pdf" },
+          })) as unknown as typeof fetch;
+
+      /** Asienta el anuncio y la dirección que el proveedor declaró. */
+      async function announced(
+        providerMessageId: string,
+        fileName: string,
+        url: string,
+        receiptPayload: Record<string, unknown> = { url }
+      ) {
+        await announce({
+          providerMessageId,
+          fileName,
+          storageKey: "",
+          sizeBytes: 0,
+          processingOutcome: "rejected",
+          processingReason: "content_unresolved:permanente",
+        });
+        await database.pool.query(
+          `INSERT INTO apichat_inbound_receipts
+             (receipt_key,provider_message_id,origin,payload,payload_sha256,status,outcome)
+           VALUES($1,$2,'webhook',$3::jsonb,$4,'dead','dead')`,
+          [
+            `receipt-${providerMessageId}`,
+            providerMessageId,
+            JSON.stringify({ id: providerMessageId, ...receiptPayload }),
+            `digest-${providerMessageId}`,
+          ]
+        );
+        const row = await database.pool.query(
+          `SELECT id FROM conversation_messages WHERE provider_message_id=$1`,
+          [providerMessageId]
+        );
+        return Number(row.rows[0].id);
+      }
+
+      async function allowPdf() {
+        await database.pool.query(
+          `INSERT INTO integration_settings(provider,setting_key,setting_value)
+           VALUES('knowledge','allowed_extensions','pdf'),('knowledge','max_size_mb','25')
+           ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value`
+        );
+      }
+
+      it("trae el archivo, lo incorpora al expediente y asienta su procedencia", async () => {
+        await allowPdf();
+        const bytes = syntheticPdf(
+          "Manual de contratacion. Carga manual desde la direccion declarada."
+        );
+        const messageId = await announced(
+          "manual-ok",
+          "Manual_Sistema_Contratacion_n8n_ERPNext.pdf",
+          "https://media.apichat.io/adjunto/manual.pdf"
+        );
+        const outcome = await recoverAnnouncedAttachment(database.pool, {
+          applicationId,
+          messageId,
+          actorUserId: null,
+          analyze: false,
+          reevaluate: false,
+          fetchImpl: fileAt(bytes),
+          lookupImpl: publicLookup,
+        });
+        expect(outcome).toMatchObject({
+          state: "incorporated",
+          declaredUrl: "https://media.apichat.io/adjunto/manual.pdf",
+        });
+        const document = await database.pool.query(
+          `SELECT id,original_name,storage_key FROM candidate_knowledge_files WHERE id=$1`,
+          [outcome.fileId]
+        );
+        expect(document.rows[0].original_name).toBe(
+          "Manual_Sistema_Contratacion_n8n_ERPNext.pdf"
+        );
+        expect(String(document.rows[0].storage_key)).not.toBe("");
+        // El mensaje deja de declarar la ausencia y queda vinculado.
+        const message = await database.pool.query(
+          `SELECT metadata->'media'->>'candidateFileId' AS linked,
+                  metadata->'media'->>'processingOutcome' AS outcome
+             FROM conversation_messages WHERE id=$1`,
+          [messageId]
+        );
+        expect(message.rows[0].outcome).toBe("accepted");
+        expect(Number(message.rows[0].linked)).toBe(outcome.fileId);
+        // La procedencia se asienta: el expediente acredita de dónde vino.
+        const audit = await database.pool.query(
+          `SELECT after_json FROM audit_log
+            WHERE action='candidate_file_recovered' AND entity_id=$1`,
+          [outcome.fileId]
+        );
+        expect(audit.rows[0].after_json).toMatchObject({
+          declaredUrl: "https://media.apichat.io/adjunto/manual.pdf",
+          previousReason: "content_unresolved:permanente",
+        });
+      }, 120_000);
+
+      it("no trae nada por una dirección sin TLS", async () => {
+        // El transporte exige `https://` para descargar: el expediente no puede
+        // acreditar la integridad de lo que viaja sin cifrar. La dirección se
+        // publica como enlace —una persona sí puede mirarla— pero el cohete no
+        // la descarga, y lo declara con su causa.
+        await allowPdf();
+        const messageId = await announced(
+          "manual-http",
+          "20240312_SEEWORLD_Introduction-Mandy.pdf",
+          "http://media.apichat.io/adjunto/mandy.pdf"
+        );
+        const outcome = await recoverAnnouncedAttachment(database.pool, {
+          applicationId,
+          messageId,
+          actorUserId: null,
+          analyze: false,
+          reevaluate: false,
+          fetchImpl: fileAt(syntheticPdf("no deberia descargarse")),
+          lookupImpl: publicLookup,
+        });
+        expect(outcome.state).toBe("unreachable");
+        expect(outcome.declaredUrl).toBe(
+          "http://media.apichat.io/adjunto/mandy.pdf"
+        );
+        expect(outcome.reasonCode).toBe("content_unresolved");
+        expect(outcome.fileId).toBeNull();
+      }, 120_000);
+
+      it("no trae nada desde la red interna ni sin dirección declarada", async () => {
+        const interno = await announced(
+          "manual-interno",
+          "interno.pdf",
+          "http://127.0.0.1:8080/panel"
+        );
+        expect(
+          (
+            await recoverAnnouncedAttachment(database.pool, {
+              applicationId,
+              messageId: interno,
+              actorUserId: null,
+              analyze: false,
+              reevaluate: false,
+            })
+          ).state
+        ).toBe("no_address");
+        // El anuncio sin carga no declara dirección: no hay nada que traer.
+        const sinDireccion = await announced(
+          "manual-sin-url",
+          "sin-direccion.pdf",
+          "data:application/pdf;base64",
+          { url: "data:application/pdf;base64" }
+        );
+        expect(
+          (
+            await recoverAnnouncedAttachment(database.pool, {
+              applicationId,
+              messageId: sinDireccion,
+              actorUserId: null,
+              analyze: false,
+              reevaluate: false,
+            })
+          ).state
+        ).toBe("no_address");
+      }, 120_000);
+
+      it("trae el archivo y declara el rechazo cuando la política no lo admite", async () => {
+        await database.pool.query(
+          `INSERT INTO integration_settings(provider,setting_key,setting_value)
+           VALUES('knowledge','allowed_extensions','jpg'),('knowledge','max_size_mb','25')
+           ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value`
+        );
+        const messageId = await announced(
+          "manual-politica",
+          "Manual_Sistema_Contratacion_n8n_ERPNext.pdf",
+          "https://media.apichat.io/adjunto/manual-2.pdf"
+        );
+        const outcome = await recoverAnnouncedAttachment(database.pool, {
+          applicationId,
+          messageId,
+          actorUserId: null,
+          analyze: false,
+          reevaluate: false,
+          fetchImpl: fileAt(
+            syntheticPdf("manual con extension fuera de la politica vigente")
+          ),
+          lookupImpl: publicLookup,
+        });
+        // Traer el archivo no lo incorpora: la política sigue decidiendo.
+        expect(outcome.state).toBe("rejected");
+        expect(outcome.reasonCode).toBe("extension_not_allowed");
+        expect(outcome.detail).toContain("jpg");
+      }, 120_000);
     });
   }
 );
