@@ -1,6 +1,6 @@
 {
   "name": "reclutamiento-automatizado",
-  "version": "2.0.197",
+  "version": "2.0.198",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -18,7 +18,8 @@
     "auditar:conducto": "bash scripts/auditar-conducto-apichat.sh",
     "release:verify": "node scripts/verify-release.mjs",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
-    "test:attachments:black-box": "vitest run server/attachments.blackbox.test.ts"
+    "test:attachments:black-box": "vitest run server/attachments.blackbox.test.ts",
+    "verify:migrations": "tsx scripts/verificar-carrera-migraciones.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

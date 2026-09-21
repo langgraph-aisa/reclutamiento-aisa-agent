@@ -1,8 +1,21 @@
-# Gobierno de release JARVI RH 2.0.197
+# Gobierno de release JARVI RH 2.0.198
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.197**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.198**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.198
+El release **devuelve la verdad a las migraciones de prueba**. Ninguna capacidad del producto cambia.
+
+**Fallo intermitente, y por tanto atribuido al azar.** La puerta de integración continua falló con `0023_conversation_service_split.sql: duplicate key value violates unique constraint "pg_authid_rolname_index"` acompañando a un cambio que no tenía relación con ella. Un fallo que aparece y desaparece no se diagnostica: se reintenta, y el reintento enseña a ignorar la puerta.
+
+**La causa es una carrera de consulta-antes-de-actuar.** La migración comprueba `pg_roles` y después crea el rol, de modo que dos migradores simultáneos ven «no existe» los dos y el segundo viola el índice. El detalle que la vuelve inevitable es que **el rol es del clúster y no de la base**: las bases de prueba son distintas —una por archivo— y aun así compiten por el mismo nombre. `CREATE SCHEMA IF NOT EXISTS` tiene exactamente la misma forma.
+
+**La defensa se elige por clase, no por caso.** Corregir la guarda de `0023` habría cerrado esa instancia y ninguna otra: la migración siguiente podría reintroducirla, y el fallo volvería a aparecer como una pérdida intermitente y ajena a su causa. El arnés serializa la aplicación de migraciones con un cerrojo consultivo del clúster, de modo que las bases se construyen de una en una mientras las pruebas siguen en paralelo. El cerrojo se toma en una conexión propia porque la liberación sólo alcanza a la sesión que lo tomó.
+
+**El hecho se mide, no se supone.** `pnpm verify:migrations` ejecuta la guarda real con dos sesiones simultáneas y declara las dos mitades: sin cerrojo la carrera se reprodujo en **seis de diez rondas** con el error exacto de la puerta, y con cerrojo no se reprodujo ninguna. Una primera sonda que concurrentaba la creación de bases **no reprodujo la carrera**, porque el `CREATE DATABASE` previo escalona a los migradores: medir con ella habría dado un verde falso. La verificación declara además su propia falta de conclusión cuando no consigue reproducir el fallo, en lugar de darse por aprobada.
+
+**Sin migración.** Cambia el arnés de pruebas y añade la verificación deliberada.
 
 ### Alcance candidato 2.0.197
 El release **devuelve la identidad local al asiento y detiene el envío duplicado**. Ninguna capacidad toca el esquema.
@@ -726,4 +739,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.197.md](PRUEBAS_CAJA_NEGRA_2.0.197.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.198.md](PRUEBAS_CAJA_NEGRA_2.0.198.md).
