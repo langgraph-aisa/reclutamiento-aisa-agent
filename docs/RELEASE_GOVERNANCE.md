@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.192
+# Gobierno de release JARVI RH 2.0.193
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.192**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.193**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.193
+El release **devuelve al evaluador la vista del archivo que originó el rechazo**. Ninguna capacidad toca el esquema y ninguna decisión de la recuperación cambia.
+
+**La lista deja de ser un callejón sin salida.** La ficha declaraba el nombre del adjunto, su hora y su causa, pero no ofrecía forma de mirarlo: el reclutador leía «la extensión no está habilitada» sobre un archivo que no podía abrir, y tenía que decidir si habilitar la política sin haber visto lo que iba a incorporar. Ahora el nombre del adjunto **conservado** abre en una pestaña nueva el binario real, servido por la ruta autenticada del propio artefacto —la misma que ya usa la conversación del candidato—, de modo que la revisión del documento y la decisión sobre la política ocurren sobre la misma evidencia.
+
+**El anuncio sin contenido publica su procedencia, no su contenido.** Cuando el conducto no pudo resolver la carga, el binario no existe, pero el proveedor **sí declaró** de dónde venía. El contrato admite direcciones `http://` que la guarda de descarga no acepta por esquema, y ésa es una pérdida del receptor que una persona puede mirar: la dirección declarada se lee del asiento de recepción y se publica como enlace a la procedencia. Nunca se publica un sobre `data:` —sería ofrecer un archivo vacío con apariencia de documento— ni una cadena de contenido cualquiera.
+
+**El enlace se acota al destino público.** Se admiten únicamente `http` y `https`, se descartan los nombres de host internos y las direcciones literales que no son unicast públicas, con la misma guarda que aplica el transporte a la descarga. Un enlace del panel administrativo lo pulsa una persona y no puede convertir su navegador en un sondeo de la red privada. Cuando la pérdida no tiene ni binario ni dirección declarada, la sentencia lo dice: no hay archivo que abrir.
+
+**Sin migración.** Reutiliza las tablas `0035` a `0037` y una prueba nueva fija el contrato de la dirección publicable.
 
 ### Alcance candidato 2.0.192
 El release **devuelve el nombre a la causa perdida y retira de la conversación dos afirmaciones que no eran ciertas**. Ninguna capacidad toca el esquema.
@@ -669,4 +680,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.192.md](PRUEBAS_CAJA_NEGRA_2.0.192.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.193.md](PRUEBAS_CAJA_NEGRA_2.0.193.md).

@@ -1,7 +1,12 @@
+import { isIP } from "node:net";
 import type { Pool } from "pg";
 import { describeAttachmentOutcome } from "../shared/attachmentOutcome";
 import { evaluateApplicationWithAgent } from "./agentEvaluator";
-import { AttachmentTransportError, describeTransportBuffer } from "./base64Transport";
+import {
+  AttachmentTransportError,
+  describeTransportBuffer,
+  isPublicAttachmentAddress,
+} from "./base64Transport";
 import {
   analyzeCandidateDocument,
   candidatePolicyRefusal,
@@ -127,15 +132,56 @@ export async function listConservedAttachments(
 const UNRESOLVED_ATTACHMENTS_SQL = `SELECT m.id,
           COALESCE(m.metadata->'media'->>'fileName',m.original_file_name,m.body) AS file_name,
           m.metadata->'media'->>'processingReason' AS reason,
+          d.declared_url,
           m.created_at
      FROM conversation_messages m
      JOIN conversations c ON c.id=m.conversation_id
+     LEFT JOIN LATERAL (
+       SELECT CASE
+                WHEN COALESCE(r.payload->>'url',r.payload->>'metadataMediaUrl',r.payload->>'contentValue')
+                     ~* '^https?://[^[:space:]]+$'
+                THEN COALESCE(r.payload->>'url',r.payload->>'metadataMediaUrl',r.payload->>'contentValue')
+              END AS declared_url
+         FROM apichat_inbound_receipts r
+        WHERE r.provider_message_id=m.provider_message_id
+        ORDER BY r.received_at DESC
+        LIMIT 1
+     ) d ON true
     WHERE c.application_id=$1
       AND m.direction='inbound'
       AND m.metadata->'media'->>'processingOutcome'='rejected'
       AND COALESCE(NULLIF(m.storage_key,''),NULLIF(m.metadata->'media'->>'storageKey','')) IS NULL
       AND m.metadata->'media'->>'candidateFileId' IS NULL
     ORDER BY m.created_at,m.id`;
+
+/** Nombres de host que apuntan a la red interna y nunca se publican. */
+const PRIVATE_HOST_PATTERN =
+  /^(localhost|.*\.localhost|.*\.local|.*\.internal|.*\.home\.arpa)$/i;
+
+/**
+ * Dirección que el proveedor declaró para el archivo, si es abrible.
+ *
+ * Se publica como enlace y nunca como contenido: el reclutador navega a la
+ * procedencia que el emisor declaró, y el panel no la descarga. Se acota a
+ * `http(s)` —un sobre `data:` sería ofrecer un archivo vacío con apariencia de
+ * documento— y se descartan los destinos internos, porque un enlace del panel
+ * administrativo no debe convertir el navegador del reclutador en un sondeo de
+ * la red privada.
+ */
+export function declaredAttachmentUrl(value: unknown): string | null {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!/^https?:\/\/[^\s]+$/i.test(raw)) return null;
+  let host: string;
+  try {
+    host = new URL(raw).hostname.replace(/^\[|\]$/g, "");
+  } catch {
+    return null;
+  }
+  if (!host) return null;
+  if (PRIVATE_HOST_PATTERN.test(host)) return null;
+  if (isIP(host) && !isPublicAttachmentAddress(host)) return null;
+  return raw;
+}
 
 export type UnresolvedAttachmentView = {
   messageId: number;
@@ -144,6 +190,17 @@ export type UnresolvedAttachmentView = {
   reason: string | null;
   /** Sentencia institucional: declara la causa y el remedio. */
   detail: string;
+  /**
+   * Dirección que el proveedor declaró para el archivo, si la declaró.
+   *
+   * No es el binario: es la procedencia. Se expone porque hay pérdidas que el
+   * receptor no puede resolver y una persona sí puede mirar —el contrato admite
+   * direcciones `http://` que la guarda de descarga no acepta por esquema—, y
+   * porque sin ella el evaluador no tiene forma de saber de qué archivo se
+   * habla. Sólo se publica cuando es una dirección abrible: nunca una cadena
+   * base64 ni un sobre `data:`.
+   */
+  declaredUrl: string | null;
   createdAt: string;
 };
 
@@ -166,6 +223,7 @@ export async function listUnresolvedAttachments(
       fileName: String(row.file_name ?? "Adjunto"),
       reason,
       detail: describeAttachmentOutcome(reason),
+      declaredUrl: declaredAttachmentUrl(row.declared_url),
       createdAt: new Date(
         row.created_at as string | number | Date
       ).toISOString(),

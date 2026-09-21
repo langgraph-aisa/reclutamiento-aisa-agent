@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { createMediaTestDatabase } from "./testSupport/mediaDatabase";
 import {
+  declaredAttachmentUrl,
   listConservedAttachments,
   listUnresolvedAttachments,
   recoverConservedAttachments,
@@ -269,5 +270,82 @@ describe.runIf(enabled)(
         policyMessageId
       );
     }, 120_000);
+
+    it("expone la dirección declarada y nunca una cadena de contenido", async () => {
+      // El contrato admite direcciones `http://` que la guarda de descarga no
+      // acepta por esquema: la pérdida es del receptor, pero una persona sí puede
+      // mirar el archivo. El anuncio sin carga, en cambio, no tiene nada que
+      // abrir, y publicar su sobre `data:` como enlace sería ofrecer un archivo
+      // vacío con apariencia de documento.
+      await announce({
+        providerMessageId: "conserved-addressable",
+        fileName: "CV-Jose-Miguel-Ardon-Lopez.pdf",
+        storageKey: "",
+        sizeBytes: 0,
+        processingOutcome: "rejected",
+        processingReason: "content_unresolved:permanente",
+      });
+      await announce({
+        providerMessageId: "conserved-payloadless",
+        fileName: "20240312_SEEWORLD_Introduction-Mandy.pdf",
+        storageKey: "",
+        sizeBytes: 0,
+        processingOutcome: "rejected",
+        processingReason: "payload_missing:permanente",
+      });
+      const receipt = (
+        key: string,
+        providerMessageId: string,
+        payload: Record<string, unknown>
+      ) =>
+        database.pool.query(
+          `INSERT INTO apichat_inbound_receipts
+             (receipt_key,provider_message_id,origin,payload,payload_sha256,status,outcome)
+           VALUES($1,$2,'webhook',$3::jsonb,$4,'dead','dead')`,
+          [key, providerMessageId, JSON.stringify(payload), `digest-${key}`]
+        );
+      await receipt("receipt-addressable", "conserved-addressable", {
+        id: "conserved-addressable",
+        url: "http://media.apichat.io/adjunto/cv-jose-miguel.pdf",
+      });
+      await receipt("receipt-payloadless", "conserved-payloadless", {
+        id: "conserved-payloadless",
+        url: "data:application/pdf;base64",
+      });
+
+      const announced = await listUnresolvedAttachments(
+        database.pool,
+        applicationId
+      );
+      const byName = new Map(announced.map(item => [item.fileName, item]));
+      expect(byName.get("CV-Jose-Miguel-Ardon-Lopez.pdf")?.declaredUrl).toBe(
+        "http://media.apichat.io/adjunto/cv-jose-miguel.pdf"
+      );
+      expect(
+        byName.get("20240312_SEEWORLD_Introduction-Mandy.pdf")?.declaredUrl
+      ).toBeNull();
+    }, 60_000);
+
+    it("no publica destinos internos ni contenido como enlace", () => {
+      // El enlace vive en un panel autenticado y lo pulsa una persona: su
+      // destino no puede ser la red privada, y una cadena de contenido no es una
+      // dirección. La guarda es la misma que aplica el transporte a la descarga.
+      expect(declaredAttachmentUrl("http://media.apichat.io/cv.pdf")).toBe(
+        "http://media.apichat.io/cv.pdf"
+      );
+      expect(
+        declaredAttachmentUrl("https://media.apichat.io/cv.pdf")
+      ).toBe("https://media.apichat.io/cv.pdf");
+      expect(declaredAttachmentUrl("http://127.0.0.1:8080/panel")).toBeNull();
+      expect(declaredAttachmentUrl("http://192.168.1.10/cv.pdf")).toBeNull();
+      expect(declaredAttachmentUrl("http://10.0.0.5/cv.pdf")).toBeNull();
+      expect(declaredAttachmentUrl("http://localhost:3000/cv.pdf")).toBeNull();
+      expect(declaredAttachmentUrl("http://interno.local/cv.pdf")).toBeNull();
+      expect(declaredAttachmentUrl("http://[::1]/cv.pdf")).toBeNull();
+      expect(declaredAttachmentUrl("javascript:alert(1)")).toBeNull();
+      expect(declaredAttachmentUrl("data:application/pdf;base64,AAAA")).toBeNull();
+      expect(declaredAttachmentUrl("no es una direccion")).toBeNull();
+      expect(declaredAttachmentUrl(null)).toBeNull();
+    });
   }
 );

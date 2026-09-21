@@ -8,6 +8,7 @@ import {
   AudioLines,
   BookOpen,
   ChevronRight,
+  ExternalLink,
   File,
   FileAudio,
   FileImage,
@@ -486,7 +487,9 @@ export function CandidateRagPanel({
               estaba habilitado al recibirlos. La operación los incorpora al
               expediente con el mismo análisis del RAG personal, vuelve a
               ejecutar el agente evaluador con la evidencia nueva y deja el
-              documento disponible en el visor para el dictamen humano.
+              documento disponible en el visor para el dictamen humano. El
+              nombre abre en una pestaña nueva el binario conservado, para
+              revisar el archivo que originó el rechazo.
             </p>
             <ul className="mt-2 space-y-1">
               {conserved.data.map(item => (
@@ -495,9 +498,16 @@ export function CandidateRagPanel({
                   className="flex flex-wrap items-center gap-2 rounded-lg bg-card px-2 py-1 text-[10px]"
                 >
                   <File className="h-3 w-3 shrink-0 text-emerald-700" />
-                  <span className="truncate font-semibold text-primary">
+                  <a
+                    href={`/api/inbox/files/${encodeURIComponent(item.storageKey)}`}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    title="Abrir en una pestaña nueva el binario conservado"
+                    className="inline-flex items-center gap-1 truncate font-semibold text-primary underline decoration-dotted underline-offset-2 hover:opacity-80"
+                  >
                     {item.fileName}
-                  </span>
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
                   <span className="text-muted-foreground">
                     {formatDateTime(item.createdAt)}
                   </span>
@@ -523,7 +533,9 @@ export function CandidateRagPanel({
               conservado, de modo que no pueden incorporarse al expediente: el
               remedio es una entrega nueva. Si el proveedor los reentrega con su
               contenido, el conducto los reincorpora sin intervención, los
-              analiza y vuelve a ejecutar el agente evaluador.
+              analiza y vuelve a ejecutar el agente evaluador. El nombre abre en
+              una pestaña nueva la dirección declarada por el proveedor, cuando
+              la declaró.
             </p>
             <ul className="mt-2 space-y-1">
               {announced.data.map(item => (
@@ -533,9 +545,22 @@ export function CandidateRagPanel({
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <File className="h-3 w-3 shrink-0 text-amber-700" />
-                    <span className="truncate font-semibold text-primary">
-                      {item.fileName}
-                    </span>
+                    {item.declaredUrl ? (
+                      <a
+                        href={item.declaredUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        title="Abrir en una pestaña nueva la dirección declarada por el proveedor"
+                        className="inline-flex items-center gap-1 truncate font-semibold text-primary underline decoration-dotted underline-offset-2 hover:opacity-80"
+                      >
+                        {item.fileName}
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                      </a>
+                    ) : (
+                      <span className="truncate font-semibold text-primary">
+                        {item.fileName}
+                      </span>
+                    )}
                     <span className="text-muted-foreground">
                       {formatDateTime(item.createdAt)}
                     </span>
@@ -547,6 +572,9 @@ export function CandidateRagPanel({
                   </div>
                   <p className="mt-0.5 leading-4 text-muted-foreground">
                     {item.detail}
+                    {item.declaredUrl
+                      ? ""
+                      : " El proveedor no declaró ninguna dirección para este anuncio, de modo que no hay archivo que abrir."}
                   </p>
                 </li>
               ))}
