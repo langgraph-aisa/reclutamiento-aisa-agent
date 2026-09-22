@@ -42,10 +42,14 @@ export function inboxFilePath(key: string) {
   return target;
 }
 
+/** Clave del backend: la bandeja vive bajo su propio namespace dentro del volumen. */
+function inboxBackendKey(key: string) {
+  return `inbox-files/${key}`;
+}
+
 export async function writeInboxFile(key: string, data: Buffer) {
-  const target = inboxFilePath(key);
-  await currentStorageBackend().write(target, data);
-  return target;
+  await currentStorageBackend().write(inboxBackendKey(key), data);
+  return inboxFilePath(key);
 }
 
 /**
@@ -58,15 +62,15 @@ export async function writeInboxFile(key: string, data: Buffer) {
  * sistema de archivos, que el llamador declara con su propio código.
  */
 export async function readInboxFile(key: string) {
-  return currentStorageBackend().read(inboxFilePath(key));
+  return currentStorageBackend().read(inboxBackendKey(key));
 }
 
 export async function removeInboxFile(key: string) {
-  await currentStorageBackend().remove(inboxFilePath(key));
+  await currentStorageBackend().remove(inboxBackendKey(key));
 }
 
 export function inboxFileStats(key: string): Promise<StorageStat> {
-  return currentStorageBackend().stat(inboxFilePath(key));
+  return currentStorageBackend().stat(inboxBackendKey(key));
 }
 
 function sendRange(

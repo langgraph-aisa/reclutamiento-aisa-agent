@@ -206,7 +206,7 @@ export async function saveDriveOAuthSecret(
 }
 
 /** Conexión por usuario, descifrada para el servidor (nunca sale al navegador). */
-async function storedDriveConnection(
+export async function getDriveConnectionSecret(
   pool: Pool,
   userId: number
 ): Promise<{ refreshToken: string; email: string } | null> {
@@ -230,7 +230,7 @@ async function storedDriveConnection(
 /** Estado visible de la conexión de Drive de un usuario. */
 export async function getDriveConnection(pool: Pool | null, userId: number) {
   if (!pool) return { configured: false, email: null as string | null };
-  const stored = await storedDriveConnection(pool, userId);
+  const stored = await getDriveConnectionSecret(pool, userId);
   if (!stored) return { configured: false, email: null as string | null };
   return { configured: true, email: stored.email || null };
 }
@@ -285,7 +285,7 @@ export async function unlinkDriveConnection(
   actorUserId: number,
   revokeImpl: typeof fetch = fetch
 ) {
-  const stored = await storedDriveConnection(pool, userId);
+  const stored = await getDriveConnectionSecret(pool, userId);
   if (stored) {
     try {
       await revokeImpl(GOOGLE_DRIVE_REVOKE_URL, {
@@ -414,6 +414,40 @@ export async function exchangeDriveCode(
     refreshToken: data.refresh_token,
     expiresIn: data.expires_in ?? 3600,
   };
+}
+
+/** Renueva el token de acceso a partir del `refresh_token` de una conexión. */
+export async function refreshDriveAccessToken(
+  input: {
+    clientId: string;
+    clientSecret: string;
+    refreshToken: string;
+  },
+  fetchImpl: typeof fetch = fetch
+) {
+  const response = await fetchImpl(GOOGLE_DRIVE_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: input.clientId,
+      client_secret: input.clientSecret,
+      refresh_token: input.refreshToken,
+      grant_type: "refresh_token",
+    }).toString(),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Google rechazó la renovación del token con estado HTTP ${response.status}.`
+    );
+  }
+  const data = (await response.json()) as {
+    access_token?: string;
+    expires_in?: number;
+  };
+  if (!data.access_token) {
+    throw new Error("Google no devolvió el token de acceso renovado.");
+  }
+  return { accessToken: data.access_token, expiresIn: data.expires_in ?? 3600 };
 }
 
 /** Cuenta asociada al token, leída de Google para asentar la procedencia. */

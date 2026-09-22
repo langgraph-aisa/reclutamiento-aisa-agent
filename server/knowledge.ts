@@ -275,23 +275,22 @@ function resolveStoredPath(storageKey: string) {
 }
 
 export async function writeKnowledgeFile(storageKey: string, data: Buffer) {
-  const target = resolveStoredPath(storageKey);
-  await currentStorageBackend().write(target, data);
-  return target;
+  await currentStorageBackend().write(storageKey, data);
+  return resolveStoredPath(storageKey);
 }
 
 export function readKnowledgeFile(storageKey: string) {
-  return currentStorageBackend().read(resolveStoredPath(storageKey));
+  return currentStorageBackend().read(storageKey);
 }
 
 export async function removeKnowledgeFile(storageKey: string) {
-  await currentStorageBackend().remove(resolveStoredPath(storageKey));
+  await currentStorageBackend().remove(storageKey);
 }
 
 export function knowledgeFileStats(
   storageKey: string
 ): Promise<StorageStat> {
-  return currentStorageBackend().stat(resolveStoredPath(storageKey));
+  return currentStorageBackend().stat(storageKey);
 }
 
 export type KnowledgeStorageHealth = {

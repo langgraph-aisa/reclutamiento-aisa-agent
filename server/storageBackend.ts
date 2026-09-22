@@ -6,16 +6,18 @@ import { randomUUID } from "node:crypto";
  * Costura de almacenamiento del RAG.
  *
  * El catálogo vive en PostgreSQL y los binarios en un backend de
- * almacenamiento. Hoy el backend es el sistema de archivos local
- * (`KNOWLEDGE_STORAGE_DIR`); esta costura separa la semántica —escribir, leer,
- * borrar y medir— de la implementación, de modo que un backend alterno
- * (Google Drive) pueda sustituir al local sin tocar los métodos que consumen
- * el almacenamiento.
+ * almacenamiento identificados por una **clave relativa** —la misma referencia
+ * que conserva la base—, no por una ruta absoluta. El backend resuelve la
+ * clave contra su propio medio: el sistema de archivos local o Google Drive.
  *
- * La escritura es atómica: se escribe un archivo temporal y se renombra, de
- * modo que la ruta final solo publica archivos completos incluso durante un
- * reintento. La lectura, el borrado y la medida conservan la semántica del
- * sistema de archivos vigente: la ausencia se propaga como error para que el
+ * Formas de clave admitidas:
+ *   · `<proyecto>/<uuid>.<extensión>`            — RAG de proyectos
+ *   · `applications/<postulación>/<uuid>.<ext>`   — RAG del candidato
+ *   · `inbox-files/<in|out>-<id>/<uuid>`          — bandeja conversacional
+ *
+ * La escritura es atómica en el backend local: se escribe un archivo temporal y
+ * se renombra, de modo que la ruta final solo publica archivos completos
+ * incluso durante un reintento. La ausencia se propaga como error para que el
  * llamador la declare con su propio código.
  */
 
@@ -25,39 +27,69 @@ export type StorageStat = {
 };
 
 export interface StorageBackend {
-  /** Escribe bytes en la ruta absoluta, creando los directorios intermedios. */
-  write(filePath: string, data: Buffer): Promise<void>;
-  /** Lee los bytes completos de una ruta. */
-  read(filePath: string): Promise<Buffer>;
-  /** Borra una ruta sin fallar cuando no existe. */
-  remove(filePath: string): Promise<void>;
-  /** Metadatos del archivo; la ausencia se propaga como error. */
-  stat(filePath: string): Promise<StorageStat>;
+  /** Escribe bytes bajo una clave, creando los niveles intermedios. */
+  write(key: string, data: Buffer): Promise<void>;
+  /** Lee los bytes completos de una clave. */
+  read(key: string): Promise<Buffer>;
+  /** Borra una clave sin fallar cuando no existe. */
+  remove(key: string): Promise<void>;
+  /** Metadatos de una clave; la ausencia se propaga como error. */
+  stat(key: string): Promise<StorageStat>;
+}
+
+/** Directorio local resuelto en este proceso (compartido con el RAG y la bandeja). */
+export function defaultStorageDirectory() {
+  return path.resolve(
+    process.env.KNOWLEDGE_STORAGE_DIR ??
+      path.join(process.cwd(), "data", "knowledge-files")
+  );
+}
+
+const KEY_SEGMENT = /^[A-Za-z0-9._-]+$/;
+
+function keySegments(key: string): string[] {
+  if (!key || key.includes("..")) {
+    throw new Error("La referencia de almacenamiento no es válida.");
+  }
+  const segments = key.split("/");
+  if (segments.some(segment => !segment || !KEY_SEGMENT.test(segment))) {
+    throw new Error("La referencia de almacenamiento no es válida.");
+  }
+  return segments;
 }
 
 export class LocalStorageBackend implements StorageBackend {
-  async write(filePath: string, data: Buffer): Promise<void> {
-    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-    const temporary = `${filePath}.${randomUUID()}.tmp`;
+  constructor(
+    private readonly directory: () => string = defaultStorageDirectory
+  ) {}
+
+  private resolve(key: string): string {
+    return path.join(this.directory(), ...keySegments(key));
+  }
+
+  async write(key: string, data: Buffer): Promise<void> {
+    const target = this.resolve(key);
+    await fs.promises.mkdir(path.dirname(target), { recursive: true });
+    const temporary = `${target}.${randomUUID()}.tmp`;
     try {
       await fs.promises.writeFile(temporary, data, { flag: "wx", mode: 0o600 });
-      await fs.promises.rename(temporary, filePath);
+      await fs.promises.rename(temporary, target);
     } catch (error) {
       await fs.promises.rm(temporary, { force: true }).catch(() => undefined);
       throw error;
     }
   }
 
-  async read(filePath: string): Promise<Buffer> {
-    return fs.promises.readFile(filePath);
+  async read(key: string): Promise<Buffer> {
+    return fs.promises.readFile(this.resolve(key));
   }
 
-  async remove(filePath: string): Promise<void> {
-    await fs.promises.rm(filePath, { force: true });
+  async remove(key: string): Promise<void> {
+    await fs.promises.rm(this.resolve(key), { force: true });
   }
 
-  async stat(filePath: string): Promise<StorageStat> {
-    const info = await fs.promises.stat(filePath);
+  async stat(key: string): Promise<StorageStat> {
+    const info = await fs.promises.stat(this.resolve(key));
     return { size: info.size, mtime: info.mtime };
   }
 }
