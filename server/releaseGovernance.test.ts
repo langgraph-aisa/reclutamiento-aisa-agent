@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.205");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.205");
+    expect(APP_VERSION).toBe("2.0.206");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.206");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -560,9 +560,9 @@ describe("black-box release contract", () => {
     // 2.0.199: +3 por la señalización del expediente (compartido, servidor y
     // distintivo del cliente).
     // 2.0.200: +1 por la capa de resiliencia de proveedores (server/agentProviders.ts).
-    // 2.0.205: +1 por la costura de almacenamiento del RAG (server/storageBackend.ts).
-    // 2.0.205: +1 por la conexión de Google Drive (server/driveConnection.ts).
-    // 2.0.205: +1 por el backend de almacenamiento en Drive (server/driveStorage.ts).
+    // 2.0.202: +1 por la costura de almacenamiento del RAG (server/storageBackend.ts).
+    // 2.0.202: +1 por la conexión de Google Drive (server/driveConnection.ts).
+    // 2.0.203: +1 por el backend de almacenamiento en Drive (server/driveStorage.ts).
     // 2.0.205: +1 por la resolución del proyecto y su backend (server/driveProject.ts).
     expect(audit.files).toHaveLength(154);
     expect(audit.findings).toEqual([]);
@@ -1249,7 +1249,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.205");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.206");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1268,7 +1268,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 22SEP2026 · JARVI RH 2.0.205");
+    expect(readme).toContain("### 22SEP2026 · JARVI RH 2.0.206");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1691,14 +1691,14 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.205");
+    expect(governance).toContain("Alcance candidato 2.0.206");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
   it("conserva la integridad del relato de release en cada entrega", () => {
     // El encabezado de un alcance histórico se congelaba, pero no su cuerpo: el
     // incremento de versión reescribía el literal dentro de la narración y una
-    // entrega de 2.0.166 llegó a citar 2.0.205. La hoja de especificación del
+    // entrega de 2.0.166 llegó a citar 2.0.189. La hoja de especificación del
     // release se renombra en cada entrega y sus referencias quedaron apuntando
     // a documentos inexistentes. Ambas cosas se auditan aquí.
     const findings = auditDocumentaryIntegrity();
@@ -1973,7 +1973,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.205");
+    expect(governance).toContain("Alcance candidato 2.0.206");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

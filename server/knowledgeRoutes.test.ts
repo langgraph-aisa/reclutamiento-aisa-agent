@@ -23,6 +23,7 @@ const queryMock = vi.fn(async () => queryResult);
 
 vi.mock("./db", () => ({
   getPool: async () => ({ query: queryMock }),
+  currentPool: () => ({ query: queryMock }),
   getUserById: async () => ({ id: 1, role: "admin", active: true }),
 }));
 

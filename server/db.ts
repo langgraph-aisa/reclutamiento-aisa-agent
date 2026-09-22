@@ -19,6 +19,11 @@ export async function getPool() {
   return _pool;
 }
 
+/** Pool ya inicializado, sin crear conexión; `null` cuando no hay base. */
+export function currentPool(): Pool | null {
+  return _pool;
+}
+
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {

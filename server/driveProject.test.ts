@@ -6,8 +6,10 @@ import {
 import {
   driveBackendForProject,
   projectIdForApplication,
+  projectIdForKey,
   projectIdForPosition,
   projectOwnerUserId,
+  storageBackendForKey,
 } from "./driveProject";
 import { DriveStorageBackend } from "./driveStorage";
 
@@ -137,6 +139,49 @@ describe("resolución del proyecto y del backend de Drive", () => {
     });
     await expect(
       driveBackendForProject(sinPropietario.pool, 7)
+    ).resolves.toBeNull();
+  });
+
+  it("deriva el proyecto de la clave según el espacio de nombres", async () => {
+    const { pool } = fakePool({ projectId: 7 });
+    // Clave institucional: el primer segmento es el identificador del proyecto.
+    await expect(
+      projectIdForKey(pool, "7/11111111-2222-3333-4444-555555555555.pdf")
+    ).resolves.toBe(7);
+    // Clave del candidato: se resuelve la postulación y su plaza.
+    await expect(
+      projectIdForKey(pool, "applications/41/11111111-2222-3333-4444-555555555555.pdf")
+    ).resolves.toBe(7);
+    // Un espacio de nombres ajeno (bandeja de entrada) no pertenece a proyecto.
+    await expect(
+      projectIdForKey(pool, "inbox-files/11111111-2222-3333-4444-555555555555.pdf")
+    ).resolves.toBeNull();
+  });
+
+  it("resuelve el backend por clave y declina sin plataforma", async () => {
+    const completo = fakePool({
+      projectId: 7,
+      ownerUserId: 9,
+      platform: true,
+      connectionUserId: 9,
+    });
+    const backend = await storageBackendForKey(
+      completo.pool,
+      "7/11111111-2222-3333-4444-555555555555.pdf"
+    );
+    expect(backend).toBeInstanceOf(DriveStorageBackend);
+
+    const sinPlataforma = fakePool({
+      projectId: 7,
+      ownerUserId: 9,
+      platform: false,
+      connectionUserId: 9,
+    });
+    await expect(
+      storageBackendForKey(
+        sinPlataforma.pool,
+        "7/11111111-2222-3333-4444-555555555555.pdf"
+      )
     ).resolves.toBeNull();
   });
 });

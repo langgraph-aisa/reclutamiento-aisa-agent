@@ -64,6 +64,33 @@ export async function projectOwnerUserId(
   return owner == null ? null : Number(owner);
 }
 
+/** Proyecto al que pertenece una clave de almacenamiento, o `null`. */
+export async function projectIdForKey(
+  pool: Pool,
+  key: string
+): Promise<number | null> {
+  if (key.startsWith("applications/")) {
+    const applicationId = Number(key.split("/")[1]);
+    if (!Number.isInteger(applicationId) || applicationId <= 0) return null;
+    return projectIdForApplication(pool, applicationId);
+  }
+  const projectId = Number(key.split("/")[0]);
+  return Number.isInteger(projectId) && projectId > 0 ? projectId : null;
+}
+
+/**
+ * Backend de Drive para una clave, o `null` si la clave no pertenece a un
+ * proyecto con conexión. El llamador conserva el backend local ante `null`.
+ */
+export async function storageBackendForKey(
+  pool: Pool,
+  key: string
+): Promise<StorageBackend | null> {
+  const projectId = await projectIdForKey(pool, key);
+  if (projectId == null) return null;
+  return driveBackendForProject(pool, projectId);
+}
+
 /**
  * Backend de Drive para un proyecto, o `null` si no hay conexión del propietario
  * o la credencial de plataforma no está configurada.

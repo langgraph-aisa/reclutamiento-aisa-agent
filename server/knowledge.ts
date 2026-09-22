@@ -14,6 +14,8 @@ import {
 import { observeOpenAIClient } from "./observability/langfuse";
 import { extractDocumentText } from "./documentExtraction";
 import { currentStorageBackend, type StorageStat } from "./storageBackend";
+import { currentPool } from "./db";
+import { storageBackendForKey } from "./driveProject";
 
 export const KNOWLEDGE_PROVIDER = "knowledge";
 export const KNOWLEDGE_SUMMARY_WORD_LIMIT = 66;
@@ -274,23 +276,37 @@ function resolveStoredPath(storageKey: string) {
   return knowledgeFilePath(storageKey);
 }
 
+/** Backend para una clave: Drive si el proyecto tiene conexión; local en caso contrario. */
+async function resolvedStorageBackend(
+  storageKey: string
+): Promise<ReturnType<typeof currentStorageBackend>> {
+  const pool = currentPool();
+  if (!pool) return currentStorageBackend();
+  const drive = await storageBackendForKey(pool, storageKey);
+  return drive ?? currentStorageBackend();
+}
+
 export async function writeKnowledgeFile(storageKey: string, data: Buffer) {
-  await currentStorageBackend().write(storageKey, data);
+  const backend = await resolvedStorageBackend(storageKey);
+  await backend.write(storageKey, data);
   return resolveStoredPath(storageKey);
 }
 
-export function readKnowledgeFile(storageKey: string) {
-  return currentStorageBackend().read(storageKey);
+export async function readKnowledgeFile(storageKey: string) {
+  const backend = await resolvedStorageBackend(storageKey);
+  return backend.read(storageKey);
 }
 
 export async function removeKnowledgeFile(storageKey: string) {
-  await currentStorageBackend().remove(storageKey);
+  const backend = await resolvedStorageBackend(storageKey);
+  await backend.remove(storageKey);
 }
 
-export function knowledgeFileStats(
+export async function knowledgeFileStats(
   storageKey: string
 ): Promise<StorageStat> {
-  return currentStorageBackend().stat(storageKey);
+  const backend = await resolvedStorageBackend(storageKey);
+  return backend.stat(storageKey);
 }
 
 export type KnowledgeStorageHealth = {

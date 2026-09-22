@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.205
+# Gobierno de release JARVI RH 2.0.206
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.205**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.206**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.206
+El release **activa la custodia por proyecto en la entrega del visor y en los métodos de almacenamiento**. Sin migración.
+
+**Resolución por clave.** `server/driveProject.ts` incorpora `projectIdForKey` —deriva el proyecto del primer segmento de una clave institucional o de la postulación en una clave `applications/<postulación>/…`— y `storageBackendForKey`, que fabrica el backend de Drive de esa clave o devuelve `null` para conservar el local. `server/db.ts` expone `currentPool()` para que las capas de almacenamiento resuelvan la base sin firmarla.
+
+**Métodos conectados.** `server/knowledge.ts` resuelve el backend por clave antes de escribir, leer, borrar o medir: sin Drive, cada método conserva el volumen local; con Drive, la operación sale hacia la cuenta del propietario. `server/knowledgeRoutes.ts` entrega el binario por el mismo criterio —el local mantiene el flujo con rangos y el de Drive se sirve completo con `Accept-Ranges: none` y las mismas cabeceras de seguridad—.
+
+**Sin migración.** La cadena de custodia queda activa por proyecto; el rol «Administrador de proyectos» y la rotación de cuenta por proyecto se cierran en la entrega siguiente.
 
 ### Alcance candidato 2.0.205
 El release **resuelve el proyecto de cada postulación y fabrica su backend de Drive**. Sin migración.
@@ -804,4 +813,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.205.md](PRUEBAS_CAJA_NEGRA_2.0.205.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.206.md](PRUEBAS_CAJA_NEGRA_2.0.206.md).

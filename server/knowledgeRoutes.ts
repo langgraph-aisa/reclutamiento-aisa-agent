@@ -9,6 +9,7 @@ import {
   renderPlainTextPreview,
   renderSpreadsheetHtml,
 } from "./knowledge";
+import { storageBackendForKey } from "./driveProject";
 import { readLocalSession } from "./localAuth";
 import { VIEWER_SECURITY_HEADERS, verifyViewerToken } from "./viewerAccess";
 
@@ -113,6 +114,39 @@ function sendRange(
     "Accept-Ranges": "bytes",
   });
   fs.createReadStream(filePath, { start, end }).pipe(res);
+}
+
+/**
+ * Entrega el binario según el backend que custodia la clave: el backend local
+ * conserva el flujo con rangos; el backend de Drive se sirve completo, sin
+ * rangos, con la misma cabecera de seguridad y el mismo `Content-Type`.
+ */
+async function deliverBinary(
+  req: Request,
+  res: Response,
+  row: { storage_key: string; original_name: string; mime_type: string }
+) {
+  const pool = await getPool();
+  const drive = pool
+    ? await storageBackendForKey(pool, row.storage_key)
+    : null;
+  const disposition = `inline; filename="${row.original_name.replace(/[^\w.\- ]/g, "_")}"`;
+  res.set("Content-Disposition", disposition);
+  if (drive) {
+    const data = await drive.read(row.storage_key);
+    res.writeHead(200, {
+      ...VIEWER_SECURITY_HEADERS,
+      "Content-Type": row.mime_type,
+      "Content-Length": data.length,
+      "Accept-Ranges": "none",
+      "Cache-Control": "private, max-age=3600",
+    });
+    res.end(data);
+    return;
+  }
+  const filePath = knowledgeFilePath(row.storage_key);
+  const stats = await knowledgeFileStats(row.storage_key);
+  sendRange(res, filePath, stats.size, row.mime_type, req.headers.range);
 }
 
 /**
@@ -365,13 +399,7 @@ export function registerKnowledgeRoutes(app: Express) {
     try {
       row = await resolveKnowledgeFile(req, res);
       if (!row) return;
-      const filePath = knowledgeFilePath(row.storage_key);
-      const stats = await knowledgeFileStats(row.storage_key);
-      res.set(
-        "Content-Disposition",
-        `inline; filename="${row.original_name.replace(/[^\w.\- ]/g, "_")}"`
-      );
-      sendRange(res, filePath, stats.size, row.mime_type, req.headers.range);
+      await deliverBinary(req, res, row);
     } catch (error) {
       respondDeliveryFailure(req, res, classifyDeliveryFailure(error), {
         fileId: row?.id,
@@ -425,13 +453,7 @@ export function registerKnowledgeRoutes(app: Express) {
     try {
       row = await resolveCandidateKnowledgeFile(req, res);
       if (!row) return;
-      const filePath = knowledgeFilePath(row.storage_key);
-      const stats = await knowledgeFileStats(row.storage_key);
-      res.set(
-        "Content-Disposition",
-        `inline; filename="${row.original_name.replace(/[^\w.\- ]/g, "_")}"`
-      );
-      sendRange(res, filePath, stats.size, row.mime_type, req.headers.range);
+      await deliverBinary(req, res, row);
     } catch (error) {
       respondDeliveryFailure(req, res, classifyDeliveryFailure(error), {
         fileId: row?.id,
