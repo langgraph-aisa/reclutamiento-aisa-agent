@@ -92,7 +92,6 @@ export default function Jobs() {
   });
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<Draft>(blank);
-  const [copied, setCopied] = useState("");
   const [search, setSearch] = useState("");
   const [linkDialogPosition, setLinkDialogPosition] = useState<number | null>(
     null
@@ -199,13 +198,6 @@ export default function Jobs() {
     await upsert.mutateAsync(draft);
     setDraft(blank);
     setShowForm(false);
-  };
-  const copyLink = async (slug: string) => {
-    await navigator.clipboard?.writeText(
-      `${window.location.origin}/apply/${slug}`
-    );
-    setCopied(slug);
-    window.setTimeout(() => setCopied(""), 1400);
   };
 
   return (
@@ -424,28 +416,6 @@ export default function Jobs() {
                     {job.published ? "Publicada" : "Borrador"}
                   </Badge>
                 </div>
-                <div className="mt-5 flex items-center justify-between rounded-2xl bg-muted/70 p-3">
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground">
-                      Enlace seguro
-                    </p>
-                    <p className="truncate text-sm font-semibold text-primary">
-                      /apply/{job.public_slug}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => copyLink(job.public_slug)}
-                    aria-label="Copiar enlace"
-                  >
-                    {copied === job.public_slug ? (
-                      <Check className="h-4 w-4 text-emerald-700" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-700">
                     {job.applications_count ?? 0} postulaciones
@@ -516,20 +486,9 @@ export default function Jobs() {
                     isAdmin={isAdmin}
                   />
                 </div>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <Link href={`/apply/${job.public_slug}`}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full"
-                    >
-                      <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                      Formulario público
-                    </Button>
-                  </Link>
-                  {isAdmin && (
-                    <>
-                      <Link href={`/admin/candidates?position=${job.id}`}>
+                {isAdmin && (
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    <Link href={`/admin/candidates?position=${job.id}`}>
                         <Button
                           variant="outline"
                           size="sm"
@@ -612,9 +571,8 @@ export default function Jobs() {
                         <Trash2 className="mr-2 h-3.5 w-3.5" />
                         Eliminar
                       </Button>
-                    </>
-                  )}
-                </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
