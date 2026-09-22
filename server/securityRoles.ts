@@ -102,6 +102,11 @@ export const SECURITY_RESOURCES: ReadonlyArray<{
     note: "Perfil del puesto y criterios del agente.",
   },
   {
+    key: "proyectos",
+    label: "Proyectos",
+    note: "Base de conocimiento por proyecto y su cuenta de Drive.",
+  },
+  {
     key: "formularios",
     label: "Formularios y preguntas",
     note: "Estructura del instrumento y sus respuestas.",

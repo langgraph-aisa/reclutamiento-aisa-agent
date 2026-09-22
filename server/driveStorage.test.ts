@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  candidateUnderProjectKeyMapper,
   DriveStorageBackend,
   DRIVE_API_BASE,
   DRIVE_UPLOAD_BASE,
@@ -190,5 +191,47 @@ describe("backend de almacenamiento en Google Drive", () => {
     await expect(backend.read("3/inexistente.pdf")).rejects.toMatchObject({
       code: "ENOENT",
     });
+  });
+
+  it("anida la carpeta del candidato bajo la del proyecto mediante el mapper", async () => {
+    const { files, fetchImpl } = fakeDrive();
+    const backend = new DriveStorageBackend(async () => "access-token", {
+      fetchImpl,
+      keyMapper: candidateUnderProjectKeyMapper(3),
+    });
+    await backend.write(
+      "applications/41/uuid-cv.pdf",
+      Buffer.from("curriculum")
+    );
+    expect(
+      [...files.values()].some(
+        file =>
+          file.name === "candidatos" &&
+          file.mimeType === "application/vnd.google-apps.folder" &&
+          file.parents.some(
+            parent =>
+              files.get(parent)?.name === "3"
+          )
+      )
+    ).toBe(true);
+    expect(
+      [...files.values()].some(
+        file =>
+          file.name === "41" &&
+          file.parents.some(
+            parent => files.get(parent)?.name === "candidatos"
+          )
+      )
+    ).toBe(true);
+    expect(
+      (await backend.read("applications/41/uuid-cv.pdf")).toString()
+    ).toBe("curriculum");
+  });
+
+  it("reescribe el candidato a la carpeta del proyecto", () => {
+    expect(candidateUnderProjectKeyMapper(3)("applications/41/uuid.pdf")).toBe(
+      "3/candidatos/41/uuid.pdf"
+    );
+    expect(candidateUnderProjectKeyMapper(3)("7/uuid.pdf")).toBe("7/uuid.pdf");
   });
 });

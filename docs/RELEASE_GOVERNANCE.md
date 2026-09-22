@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.203
+# Gobierno de release JARVI RH 2.0.204
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.203**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.204**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.204
+El release **anida la carpeta del candidato bajo la de su proyecto en Drive** y abre el dominio «proyectos» en el catálogo de seguridad. Sin migración.
+
+**El mapper de clave.** `server/driveStorage.ts` incorpora `DriveKeyMapper` y `candidateUnderProjectKeyMapper`: una clave `applications/<postulación>/<uuid>` se reescribe como `<proyecto>/candidatos/<postulación>/<uuid>` antes de resolverse contra Drive, de modo que el RAG personal del candidato quede bajo la carpeta del proyecto al que pertenece y herede su cuenta.
+
+**El dominio de seguridad.** `server/securityRoles.ts` suma «proyectos» a `SECURITY_RESOURCES` —la base de conocimiento por proyecto y su cuenta de Drive—, dejando el dominio gobernable por el módulo de Roles de Seguridad.
+
+**Sin migración.** El mapper queda probado; la resolución del proyecto de cada postulación y el rol «Administrador de proyectos» se cierran en la entrega siguiente.
 
 ### Alcance candidato 2.0.203
 El release **implementa el backend de almacenamiento en Google Drive**. Sin migración.
@@ -786,4 +795,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.203.md](PRUEBAS_CAJA_NEGRA_2.0.203.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.204.md](PRUEBAS_CAJA_NEGRA_2.0.204.md).

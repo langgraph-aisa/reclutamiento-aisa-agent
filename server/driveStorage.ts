@@ -23,6 +23,21 @@ type FetchImpl = typeof fetch;
 
 export type DriveTokenSource = () => Promise<string>;
 
+/** Reescribe una clave antes de resolverla contra Drive (p. ej., anidar el candidato bajo su proyecto). */
+export type DriveKeyMapper = (key: string) => string;
+
+/**
+ * Mapper que anida la carpeta del candidato bajo la carpeta de su proyecto:
+ * `applications/<postulación>/<uuid>` pasa a `<proyecto>/candidatos/<postulación>/<uuid>`.
+ */
+export function candidateUnderProjectKeyMapper(
+  projectId: number | string
+): DriveKeyMapper {
+  const prefix = `${projectId}/candidatos/`;
+  return key =>
+    key.replace(/^applications\/([^/]+)\//, `${prefix}$1/`);
+}
+
 type DriveFileRef = {
   id: string;
   name?: string;
@@ -44,6 +59,7 @@ export class DriveStorageBackend implements StorageBackend {
     private readonly options: {
       fetchImpl?: FetchImpl;
       rootFolderName?: string;
+      keyMapper?: DriveKeyMapper;
     } = {}
   ) {}
 
@@ -53,6 +69,10 @@ export class DriveStorageBackend implements StorageBackend {
 
   private rootName(): string {
     return this.options.rootFolderName ?? DRIVE_ROOT_FOLDER;
+  }
+
+  private mapKey(key: string): string {
+    return this.options.keyMapper ? this.options.keyMapper(key) : key;
   }
 
   private async authHeaders(): Promise<Record<string, string>> {
@@ -121,7 +141,7 @@ export class DriveStorageBackend implements StorageBackend {
   private async resolveParentAndName(
     key: string
   ): Promise<{ parentId: string; name: string }> {
-    const segments = key.split("/");
+    const segments = this.mapKey(key).split("/");
     const name = segments.pop();
     if (!name || segments.some(segment => !segment || segment.includes(".."))) {
       throw new Error("La referencia de almacenamiento no es válida.");
