@@ -1,8 +1,15 @@
-# Gobierno de release JARVI RH 2.0.200
+# Gobierno de release JARVI RH 2.0.201
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.200**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.201**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.201
+El release **publica el análisis de viabilidad de Google Drive como capa de custodia del RAG**. Es un release de gobierno y documentación: no toca el esquema ni cambia código.
+
+**El defecto que motiva el análisis.** El catálogo del RAG vive en PostgreSQL y los binarios en el volumen local `KNOWLEDGE_STORAGE_DIR`. Una base restaurada sin su volumen deja filas válidas apuntando a binarios ausentes —el aviso «N de M documentos no están en el volumen»—, y el fallo de infraestructura se confunde con una ausencia del candidato. El documento [ANALISIS_RAG_GOOGLE_DRIVE_CUSTODIA.md](ANALISIS_RAG_GOOGLE_DRIVE_CUSTODIA.md) separa la ruptura en cuatro eslabones —durabilidad, transporte, visor y atribución—, valida el scope `drive.file`, propone una abstracción `StorageBackend` que conserva los métodos vigentes y declara el único punto que exige verificación empírica: la descarga con rango sobre `alt=media`.
+
+**Sin migración ni cambio de código.** El alcance es de decisión y de documentación; la implementación, si se aprueba, se planifica por fases.
 
 ### Alcance candidato 2.0.200
 El release **añade un segundo proveedor de IA con conmutación resiliente**. Ninguna capacidad toca el esquema.
@@ -761,4 +768,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.200.md](PRUEBAS_CAJA_NEGRA_2.0.200.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.201.md](PRUEBAS_CAJA_NEGRA_2.0.201.md).
