@@ -7,8 +7,10 @@ import {
 import type { Pool, PoolClient } from "pg";
 import {
   AGENT_MODELS,
+  AI_PROVIDERS,
   DEFAULT_AGENT_INSTRUCTIONS,
   DEFAULT_AGENT_SETTINGS,
+  DEEPSEEK_MODELS,
   EVALUATION_BLOCKS,
   LANGFUSE_CAPTURE_MODES,
   LANGFUSE_CLOUD_BASE_URLS,
@@ -25,6 +27,8 @@ export const AGENT_PROVIDER = "ai_agent";
 export const AGENT_SECRET_KEYS = [
   "openai_api_key",
   "openai_api_key_backup",
+  "deepseek_api_key",
+  "deepseek_api_key_backup",
   "langfuse_public_key",
   "langfuse_secret_key",
 ] as const;
@@ -50,6 +54,8 @@ const preferenceKeys = {
   langfuseEnvironment: "langfuse_environment",
   langfuseCaptureMode: "langfuse_capture_mode",
   langfuseSampleRate: "langfuse_sample_rate",
+  primaryProvider: "primary_provider",
+  deepseekModel: "deepseek_model",
 } as const;
 
 type SettingRow = {
@@ -308,6 +314,20 @@ function preferencesFromRows(rows: SettingRow[]): AgentPreferences {
       values.get(preferenceKeys.langfuseSampleRate),
       DEFAULT_AGENT_SETTINGS.langfuseSampleRate
     ),
+    primaryProvider: AI_PROVIDERS.includes(
+      values.get(preferenceKeys.primaryProvider) as AgentPreferences["primaryProvider"]
+    )
+      ? (values.get(
+          preferenceKeys.primaryProvider
+        ) as AgentPreferences["primaryProvider"])
+      : DEFAULT_AGENT_SETTINGS.primaryProvider,
+    deepseekModel: DEEPSEEK_MODELS.some(
+      item => item.value === values.get(preferenceKeys.deepseekModel)
+    )
+      ? (values.get(
+          preferenceKeys.deepseekModel
+        ) as AgentPreferences["deepseekModel"])
+      : DEFAULT_AGENT_SETTINGS.deepseekModel,
   };
 }
 
@@ -450,6 +470,8 @@ export async function saveAgentPreferences(
       [preferenceKeys.langfuseEnvironment, preferences.langfuseEnvironment],
       [preferenceKeys.langfuseCaptureMode, preferences.langfuseCaptureMode],
       [preferenceKeys.langfuseSampleRate, String(preferences.langfuseSampleRate)],
+      [preferenceKeys.primaryProvider, preferences.primaryProvider],
+      [preferenceKeys.deepseekModel, preferences.deepseekModel],
     ];
     for (const [key, value] of entries) {
       await upsertSetting(client, key, value, false);
@@ -477,6 +499,8 @@ export async function saveAgentPreferences(
           langfuseEnvironment: preferences.langfuseEnvironment,
           langfuseCaptureMode: preferences.langfuseCaptureMode,
           langfuseSampleRate: preferences.langfuseSampleRate,
+          primaryProvider: preferences.primaryProvider,
+          deepseekModel: preferences.deepseekModel,
         }),
       ]
     );

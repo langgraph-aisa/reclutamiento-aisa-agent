@@ -35,7 +35,7 @@ vi.mock("./profileEditorial", () => ({
 vi.mock("./agentEvaluator", () => ({
   evaluateApplicationWithAgent,
   verifyLangfuseConnection: vi.fn(),
-  verifyOpenAIConnection: vi.fn(),
+  verifyProviderConnection: vi.fn(),
 }));
 
 vi.mock("./importForms", () => ({

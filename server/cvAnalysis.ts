@@ -1,9 +1,12 @@
 import { z } from "zod";
-import OpenAI from "openai";
-import { zodTextFormat } from "openai/helpers/zod";
 import type { Pool } from "pg";
 import { APP_VERSION } from "../shared/release";
 import { getAgentRuntimeSettings } from "./agentSettings";
+import {
+  buildResilientChain,
+  openAiCompatibleClient,
+  structuredOutput,
+} from "./agentProviders";
 import {
   extractKnowledgeText,
   KNOWLEDGE_ANALYSIS_MODEL,
@@ -291,34 +294,29 @@ export async function analyzeCandidateCvEssence(
   const settings = await getAgentRuntimeSettings(pool);
   if (!settings.useResponsesApi) {
     throw new Error(
-      "La OpenAI Responses API debe estar habilitada para analizar el CV."
+      "El motor del agente debe estar habilitado antes de analizar el CV."
     );
   }
-  const keyOptions = [
-    ["primary", settings.secrets.openai_api_key],
-    ["backup", settings.secrets.openai_api_key_backup],
-  ] as const;
-  const configuredKeys = keyOptions.filter(option => Boolean(option[1]));
-  if (!configuredKeys.length) {
+  const chain = buildResilientChain(settings);
+  if (!chain.length) {
     throw new Error(
-      "Configure y verifique una API Key de OpenAI antes de analizar el CV."
+      "Configure y verifique una API Key de proveedor antes de analizar el CV."
     );
   }
   const model = KNOWLEDGE_ANALYSIS_MODEL;
   let essence = "";
-  for (const option of configuredKeys) {
-    const slot = option[0];
-    const apiKey = option[1];
+  for (const attempt of chain) {
     try {
       const client = observeOpenAIClient(
-        new OpenAI({ apiKey: apiKey!, timeout: 60_000, maxRetries: 0 }),
+        openAiCompatibleClient(attempt, { timeout: 60_000, maxRetries: 0 }),
         {
           traceName: "candidate-cv-essence",
-          tags: ["candidate", "cv", "responses-api"],
-          generationName: `cv-essence-${slot}`,
+          tags: ["candidate", "cv", "structured-output"],
+          generationName: `cv-essence-${attempt.provider}-${attempt.slot}`,
           generationMetadata: {
             feature: "candidate-cv-essence",
-            keySlot: slot,
+            provider: attempt.provider,
+            keySlot: attempt.slot,
             version: APP_VERSION,
             fileId: input.fileId,
             chunks: chunks.length,
@@ -327,22 +325,24 @@ export async function analyzeCandidateCvEssence(
           },
         }
       );
-      const response = await client.responses.parse({
+      const parsed = await structuredOutput({
+        client,
+        provider: attempt.provider,
         model,
         instructions: CV_ESSENCE_INSTRUCTIONS,
         input: `Currículum (documento ${input.fileId}), en ${chunks.length} fragmento(s):\n\n${chunks.join("\n\n")}`,
-        text: { format: zodTextFormat(CvEssenceSchema, "esencia_cv") },
-        max_output_tokens: 8_000,
-        store: false,
+        schema: CvEssenceSchema,
+        schemaName: "esencia_cv",
+        maxOutputTokens: 8_000,
       });
-      if (!response.output_parsed?.essence?.trim()) {
+      if (!parsed.essence?.trim()) {
         throw new Error("La esencia del CV está vacía.");
       }
-      essence = response.output_parsed.essence.trim();
+      essence = parsed.essence.trim();
       break;
     } catch (error) {
       console.warn(
-        `[CvAnalysis] OpenAI ${slot} no generó la esencia (${error instanceof Error ? error.name : "unknown"}).`
+        `[CvAnalysis] ${attempt.provider} ${attempt.slot} no generó la esencia (${error instanceof Error ? error.name : "unknown"}).`
       );
     }
   }

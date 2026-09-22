@@ -15,6 +15,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import {
   AGENT_MODELS,
+  AI_PROVIDERS,
+  DEEPSEEK_MODELS,
   JARVI_HR_IDENTITY_EMAIL,
   LANGFUSE_CLOUD_BASE_URLS,
   OPENAI_API_ENDPOINTS,
@@ -46,6 +48,8 @@ import { toast } from "sonner";
 type SecretKey =
   | "openai_api_key"
   | "openai_api_key_backup"
+  | "deepseek_api_key"
+  | "deepseek_api_key_backup"
   | "langfuse_public_key"
   | "langfuse_secret_key";
 
@@ -74,6 +78,8 @@ const PENDING_PREFERENCES: AgentPreferences = {
   langfuseEnvironment: "production",
   langfuseCaptureMode: "metadata_only",
   langfuseSampleRate: 1,
+  primaryProvider: "openai",
+  deepseekModel: "deepseek-chat",
 };
 
 export default function AgentEvaluator() {
@@ -96,7 +102,7 @@ export default function AgentEvaluator() {
     },
     onError: error => toast.error(error.message),
   });
-  const verifyOpenAI = trpc.agent.verifyOpenAI.useMutation({
+  const verifyProvider = trpc.agent.verifyProvider.useMutation({
     onSuccess: result =>
       toast.success(`Conexión verificada con ${result.model}`),
     onError: error => toast.error(error.message),
@@ -137,6 +143,8 @@ export default function AgentEvaluator() {
       langfuseEnvironment: configuration.data.langfuseEnvironment,
       langfuseCaptureMode: configuration.data.langfuseCaptureMode,
       langfuseSampleRate: configuration.data.langfuseSampleRate,
+      primaryProvider: configuration.data.primaryProvider,
+      deepseekModel: configuration.data.deepseekModel,
     });
   }, [configuration.data]);
 
@@ -151,10 +159,19 @@ export default function AgentEvaluator() {
       return false;
     }
   };
+  const activeProviderKeys =
+    preferences.primaryProvider === "deepseek"
+      ? [
+          configuration.data?.secrets.deepseek_api_key,
+          configuration.data?.secrets.deepseek_api_key_backup,
+        ]
+      : [
+          configuration.data?.secrets.openai_api_key,
+          configuration.data?.secrets.openai_api_key_backup,
+        ];
   const ready = Boolean(
     preferences.useResponsesApi &&
-      (configuration.data?.secrets.openai_api_key.configured ||
-        configuration.data?.secrets.openai_api_key_backup.configured)
+      activeProviderKeys.some(key => key?.configured)
   );
   const langfuseReady = Boolean(
     configuration.data?.secrets.langfuse_public_key.configured &&
@@ -223,12 +240,50 @@ export default function AgentEvaluator() {
             />
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="space-y-3">
+              <Label className="font-semibold text-primary">
+                Proveedor activo del agente
+              </Label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {AI_PROVIDERS.map(provider => {
+                  const active = preferences.primaryProvider === provider;
+                  return (
+                    <button
+                      key={provider}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() =>
+                        setPreferences(current => ({
+                          ...current,
+                          primaryProvider: provider,
+                        }))
+                      }
+                      className={
+                        active
+                          ? "rounded-2xl border-2 border-emerald-600 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900"
+                          : "rounded-2xl border border-border/70 bg-muted/40 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-primary"
+                      }
+                    >
+                      {provider === "openai" ? "OpenAI" : "DeepSeek"}
+                      {active ? " · activo" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Un solo proveedor permanece activo a la vez. Si no responde, el
+                servidor pasa al proveedor secundario; el proveedor inactivo
+                queda sin edición de credenciales.
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label className="font-semibold text-primary">
                 Modelo de evaluación
               </Label>
               <Select
                 value={preferences.model}
+                disabled={preferences.primaryProvider !== "openai"}
                 onValueChange={model =>
                   setPreferences(current => ({
                     ...current,
@@ -259,20 +314,26 @@ export default function AgentEvaluator() {
                 description="Credencial principal"
                 placeholder="sk-proj-…"
                 state={configuration.data?.secrets.openai_api_key}
-                pending={saveSecret.isPending || verifyOpenAI.isPending}
+                disabled={preferences.primaryProvider !== "openai"}
+                pending={saveSecret.isPending || verifyProvider.isPending}
                 onSave={value => persistSecret("openai_api_key", value)}
                 onRemove={() => persistSecret("openai_api_key", null)}
-                onVerify={() => verifyOpenAI.mutate({ slot: "primary" })}
+                onVerify={() =>
+                  verifyProvider.mutate({ provider: "openai", slot: "primary" })
+                }
               />
               <SecretField
                 label="API Key Back Up"
                 description="Credencial de continuidad"
                 placeholder="sk-proj-…"
                 state={configuration.data?.secrets.openai_api_key_backup}
-                pending={saveSecret.isPending || verifyOpenAI.isPending}
+                disabled={preferences.primaryProvider !== "openai"}
+                pending={saveSecret.isPending || verifyProvider.isPending}
                 onSave={value => persistSecret("openai_api_key_backup", value)}
                 onRemove={() => persistSecret("openai_api_key_backup", null)}
-                onVerify={() => verifyOpenAI.mutate({ slot: "backup" })}
+                onVerify={() =>
+                  verifyProvider.mutate({ provider: "openai", slot: "backup" })
+                }
               />
             </div>
 
@@ -307,8 +368,8 @@ export default function AgentEvaluator() {
             />
             <ControlSwitch
               icon={Workflow}
-              title="Habilitar OpenAI Responses API"
-              description="Ejecuta salida estructurada mediante LangChain y un flujo controlado de LangGraph."
+              title="Habilitar el motor del agente"
+              description="Ejecuta salida estructurada mediante LangChain y un flujo controlado de LangGraph, con el proveedor activo."
               checked={preferences.useResponsesApi}
               onCheckedChange={checked =>
                 setPreferences(current => ({
@@ -331,6 +392,85 @@ export default function AgentEvaluator() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="rounded-3xl border-0 shadow-soft">
+        <CardHeader>
+          <SectionTitle
+            icon={KeyRound}
+            title="DeepSeek y rotación de credenciales"
+            description="Segundo proveedor para la capa de resiliencia. Dos API keys con sustitución automática y salida estructurada sobre deepseek-chat."
+          />
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label className="font-semibold text-primary">
+              Modelo de evaluación
+            </Label>
+            <Select
+              value={preferences.deepseekModel}
+              disabled={preferences.primaryProvider !== "deepseek"}
+              onValueChange={deepseekModel =>
+                setPreferences(current => ({
+                  ...current,
+                  deepseekModel:
+                    deepseekModel as AgentPreferences["deepseekModel"],
+                }))
+              }
+            >
+              <SelectTrigger className="rounded-2xl">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DEEPSEEK_MODELS.map(model => (
+                  <SelectItem key={model.value} value={model.value}>
+                    {model.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs leading-5 text-muted-foreground">
+              DeepSeek-R1 no admite salida estructurada: la evaluación y las
+              superficies con esquema se anclan a deepseek-chat; el razonador
+              queda reservado al texto libre del agente del reclutador.
+            </p>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <SecretField
+              label="API Key"
+              description="Credencial principal de DeepSeek"
+              placeholder="sk-…"
+              state={configuration.data?.secrets.deepseek_api_key}
+              disabled={preferences.primaryProvider !== "deepseek"}
+              pending={saveSecret.isPending || verifyProvider.isPending}
+              onSave={value => persistSecret("deepseek_api_key", value)}
+              onRemove={() => persistSecret("deepseek_api_key", null)}
+              onVerify={() =>
+                verifyProvider.mutate({ provider: "deepseek", slot: "primary" })
+              }
+            />
+            <SecretField
+              label="API Key Back Up"
+              description="Credencial de continuidad de DeepSeek"
+              placeholder="sk-…"
+              state={configuration.data?.secrets.deepseek_api_key_backup}
+              disabled={preferences.primaryProvider !== "deepseek"}
+              pending={saveSecret.isPending || verifyProvider.isPending}
+              onSave={value => persistSecret("deepseek_api_key_backup", value)}
+              onRemove={() => persistSecret("deepseek_api_key_backup", null)}
+              onVerify={() =>
+                verifyProvider.mutate({ provider: "deepseek", slot: "backup" })
+              }
+            />
+          </div>
+
+          <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4 text-sm leading-6 text-sky-950">
+            DeepSeek sustituye el razonamiento de texto cuando OpenAI no
+            responde. La transcripción y la voz no tienen equivalente en
+            DeepSeek y conservan las credenciales de OpenAI.
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-5 xl:grid-cols-2">
         <Card className="rounded-3xl border-0 shadow-soft">
@@ -884,6 +1024,7 @@ function SecretField({
   placeholder,
   state,
   pending,
+  disabled,
   onSave,
   onRemove,
   onVerify,
@@ -893,6 +1034,7 @@ function SecretField({
   placeholder: string;
   state?: { configured: boolean; masked: string | null };
   pending: boolean;
+  disabled?: boolean;
   onSave: (value: string) => Promise<boolean>;
   onRemove: () => Promise<boolean>;
   onVerify?: () => void;
@@ -900,7 +1042,14 @@ function SecretField({
   const [value, setValue] = useState("");
   const [visible, setVisible] = useState(false);
   return (
-    <div className="space-y-3 rounded-2xl border border-border/70 p-4">
+    <div
+      className={
+        disabled
+          ? "space-y-3 rounded-2xl border border-border/70 p-4 opacity-55"
+          : "space-y-3 rounded-2xl border border-border/70 p-4"
+      }
+      aria-disabled={disabled}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <Label className="font-semibold text-primary">{label}</Label>
@@ -929,6 +1078,7 @@ function SecretField({
           onChange={event => setValue(event.target.value)}
           className="rounded-xl pr-10 font-mono text-xs"
           autoComplete="new-password"
+          disabled={disabled}
           placeholder={
             state?.configured ? "Ingresar una nueva para rotar" : placeholder
           }
@@ -937,6 +1087,7 @@ function SecretField({
           type="button"
           className="absolute right-3 top-2.5 text-muted-foreground hover:text-primary"
           onClick={() => setVisible(current => !current)}
+          disabled={disabled}
           aria-label={visible ? "Ocultar credencial" : "Mostrar credencial"}
         >
           {visible ? (
@@ -950,7 +1101,7 @@ function SecretField({
         <Button
           size="sm"
           className="rounded-full"
-          disabled={pending || value.trim().length < 8}
+          disabled={disabled || pending || value.trim().length < 8}
           onClick={async () => {
             if (await onSave(value.trim())) {
               setValue("");
@@ -965,7 +1116,7 @@ function SecretField({
             size="sm"
             variant="outline"
             className="rounded-full"
-            disabled={pending}
+            disabled={disabled || pending}
             onClick={onVerify}
           >
             <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> Verificar
@@ -976,7 +1127,7 @@ function SecretField({
             size="icon"
             variant="ghost"
             className="h-8 w-8 rounded-full text-destructive hover:text-destructive"
-            disabled={pending}
+            disabled={disabled || pending}
             onClick={() => void onRemove()}
             aria-label={`Eliminar ${label}`}
           >

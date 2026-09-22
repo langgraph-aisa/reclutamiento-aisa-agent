@@ -117,8 +117,9 @@ describe("profile requirement editorial validation", () => {
     expect(observeOpenAIClient).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        generationName: "public-copy-editorial-primary",
+        generationName: "public-copy-editorial-openai-primary",
         generationMetadata: expect.objectContaining({
+          provider: "openai",
           keySlot: "primary",
           attempt: 1,
           version: PUBLIC_COPY_EDITORIAL_POLICY_VERSION,
@@ -194,7 +195,7 @@ describe("profile requirement editorial validation", () => {
     await expect(
       normalizeProfileRequirements({} as never, ["Experiencia comercial"])
     ).rejects.toThrow(
-      "Configure y verifique una API Key de OpenAI antes de guardar o publicar textos públicos."
+      "Configure y verifique una API Key de proveedor antes de guardar o publicar textos públicos."
     );
     expect(parse).not.toHaveBeenCalled();
   });
@@ -295,7 +296,7 @@ describe("profile requirement editorial validation", () => {
         lists: [],
       })
     ).rejects.toThrow(
-      "No fue posible validar editorialmente los textos públicos con OpenAI."
+      "No fue posible validar editorialmente los textos públicos con los proveedores configurados."
     );
     expect(warning).toHaveBeenCalled();
     warning.mockRestore();
@@ -396,7 +397,7 @@ describe("profile requirement editorial validation", () => {
         "industrial)",
       ])
     ).rejects.toThrow(
-      "No fue posible validar editorialmente los textos públicos con OpenAI."
+      "No fue posible validar editorialmente los textos públicos con los proveedores configurados."
     );
     expect(warning).toHaveBeenCalledOnce();
     warning.mockRestore();

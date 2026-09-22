@@ -1,9 +1,12 @@
-import OpenAI from "openai";
-import { zodTextFormat } from "openai/helpers/zod";
 import type { Pool } from "pg";
 import { z } from "zod";
 import { APP_VERSION } from "../shared/release";
 import { getAgentRuntimeSettings } from "./agentSettings";
+import {
+  buildResilientChain,
+  openAiCompatibleClient,
+  structuredOutput,
+} from "./agentProviders";
 import {
   observeOpenAIClient,
   withLangfuseObservation,
@@ -263,41 +266,33 @@ export async function normalizePublicCopy(
       const settings = await getAgentRuntimeSettings(pool);
       if (!settings.useResponsesApi) {
         throw new Error(
-          "La OpenAI Responses API debe estar habilitada para validar los textos públicos."
+          "El motor del agente debe estar habilitado para validar los textos públicos."
         );
       }
 
-      const keyOptions = [
-        ["primary", settings.secrets.openai_api_key],
-        ["backup", settings.secrets.openai_api_key_backup],
-      ] as const;
-      const configuredKeys = keyOptions.filter(option => Boolean(option[1]));
-      if (!configuredKeys.length) {
+      const chain = buildResilientChain(settings);
+      if (!chain.length) {
         throw new Error(
-          "Configure y verifique una API Key de OpenAI antes de guardar o publicar textos públicos."
+          "Configure y verifique una API Key de proveedor antes de guardar o publicar textos públicos."
         );
       }
 
-      for (
-        let attemptIndex = 0;
-        attemptIndex < configuredKeys.length;
-        attemptIndex += 1
-      ) {
-        const [keySlot, apiKey] = configuredKeys[attemptIndex]!;
+      for (let attemptIndex = 0; attemptIndex < chain.length; attemptIndex += 1) {
+        const attempt = chain[attemptIndex]!;
         try {
           const client = observeOpenAIClient(
-            new OpenAI({
-              apiKey: apiKey!,
+            openAiCompatibleClient(attempt, {
               timeout: 45_000,
               maxRetries: 0,
             }),
             {
               traceName: "public-copy-editorial",
-              tags: ["public-copy", "editorial-control", "responses-api"],
-              generationName: `public-copy-editorial-${keySlot}`,
+              tags: ["public-copy", "editorial-control", "structured-output"],
+              generationName: `public-copy-editorial-${attempt.provider}-${attempt.slot}`,
               generationMetadata: {
                 feature: "public-copy-editorial",
-                keySlot,
+                provider: attempt.provider,
+                keySlot: attempt.slot,
                 attempt: attemptIndex + 1,
                 version: PUBLIC_COPY_EDITORIAL_POLICY_VERSION,
                 fieldCount: input.fields.length,
@@ -306,31 +301,26 @@ export async function normalizePublicCopy(
               },
             }
           );
-          const response = await client.responses.parse({
+          const parsed = await structuredOutput({
+            client,
+            provider: attempt.provider,
             model: PUBLIC_COPY_EDITORIAL_MODEL,
             instructions: EDITORIAL_INSTRUCTIONS,
             input: JSON.stringify(input),
-            text: {
-              format: zodTextFormat(
-                EditorialDocumentSchema,
-                "textos_publicos_corregidos"
-              ),
-            },
-            max_output_tokens: 24_000,
-            store: false,
+            schema: EditorialDocumentSchema,
+            schemaName: "textos_publicos_corregidos",
+            maxOutputTokens: 24_000,
           });
-          if (!response.output_parsed) {
-            throw new Error("La respuesta editorial está vacía.");
-          }
           const result: PublicCopyEditorialResult = {
-            ...validateEditorialOutput(input, response.output_parsed),
+            ...validateEditorialOutput(input, parsed),
             model: PUBLIC_COPY_EDITORIAL_MODEL,
-            keySlot,
+            keySlot: attempt.slot,
           };
           editorialObservation.update({
             output: {
               completed: true,
-              keySlot,
+              provider: attempt.provider,
+              keySlot: attempt.slot,
               attempt: attemptIndex + 1,
               fieldCount: Object.keys(result.fields).length,
               listCount: Object.keys(result.lists).length,
@@ -343,13 +333,13 @@ export async function normalizePublicCopy(
           return result;
         } catch (error) {
           console.warn(
-            `[PublicCopyEditorial] OpenAI ${keySlot} request failed (${error instanceof Error ? error.name : "unknown"}).`
+            `[PublicCopyEditorial] ${attempt.provider} ${attempt.slot} request failed (${error instanceof Error ? error.name : "unknown"}).`
           );
         }
       }
 
       throw new Error(
-        "No fue posible validar editorialmente los textos públicos con OpenAI. Verifique las credenciales e inténtelo de nuevo."
+        "No fue posible validar editorialmente los textos públicos con los proveedores configurados. Verifique las credenciales e inténtelo de nuevo."
       );
     }
   );

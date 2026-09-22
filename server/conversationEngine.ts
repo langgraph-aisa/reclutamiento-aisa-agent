@@ -1,11 +1,11 @@
-import OpenAI from "openai";
-import { zodTextFormat } from "openai/helpers/zod";
 import type { Pool } from "pg";
 import { databaseQueryScope } from "./databaseQueryScope";
 import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
 import {
   JARVI_HR_IDENTITY_EMAIL,
   SALARY_GOVERNANCE_POLICY,
+  type AiProvider,
 } from "../shared/agentConfig";
 import {
   CONVERSATION_CONDUCT,
@@ -19,6 +19,11 @@ import {
 import { candidateDocumentsProcessing } from "./candidateDocumentWorker";
 import { APP_VERSION } from "../shared/release";
 import { getAgentRuntimeSettings } from "./agentSettings";
+import {
+  buildResilientChain,
+  openAiCompatibleClient,
+  structuredOutput,
+} from "./agentProviders";
 import {
   buildConversationContext,
   effectiveConversationGaps,
@@ -80,6 +85,7 @@ export type ConversationTurnOutput = z.infer<
 export type ConversationGeneratorInput = {
   instructions: string;
   userInput: string;
+  provider: AiProvider;
   apiKey: string;
   model: string;
   keySlot: "primary" | "backup";
@@ -200,14 +206,20 @@ export function buildConversationUserInput(
 
 export const defaultConversationGenerator: ConversationGenerator =
   async input => {
+    const attempt = {
+      provider: input.provider,
+      slot: input.keySlot,
+      apiKey: input.apiKey,
+    };
     const client = observeOpenAIClient(
-      new OpenAI({ apiKey: input.apiKey, timeout: 45_000, maxRetries: 0 }),
+      openAiCompatibleClient(attempt, { timeout: 45_000, maxRetries: 0 }),
       {
         traceName: "conversation-turn",
-        tags: ["conversation", "responses-api", "whatsapp"],
-        generationName: `conversation-turn-${input.keySlot}`,
+        tags: ["conversation", "structured-output", "whatsapp"],
+        generationName: `conversation-turn-${input.provider}-${input.keySlot}`,
         generationMetadata: {
           feature: "conversational-agent",
+          provider: input.provider,
           keySlot: input.keySlot,
           attempt: input.attempt,
           version: APP_VERSION,
@@ -215,6 +227,23 @@ export const defaultConversationGenerator: ConversationGenerator =
         },
       }
     );
+    if (input.provider === "deepseek") {
+      const output = await structuredOutput({
+        client,
+        provider: input.provider,
+        model: input.model,
+        instructions: input.instructions,
+        input: input.userInput,
+        schema: ConversationTurnOutputSchema,
+        schemaName: "turno_conversacional",
+        maxOutputTokens: 1_600,
+      });
+      return {
+        output: ConversationTurnOutputSchema.parse(output),
+        responseId: null,
+        model: input.model,
+      };
+    }
     const response = await client.responses.parse({
       model: input.model,
       instructions: input.instructions,
@@ -429,17 +458,13 @@ async function runConversationTurnInternal(
       )(pool);
       if (!settings.useResponsesApi) {
         throw new Error(
-          "La OpenAI Responses API debe estar habilitada para el agente conversacional."
+          "El motor del agente debe estar habilitado para el agente conversacional."
         );
       }
-      const keyOptions = [
-        ["primary", settings.secrets.openai_api_key],
-        ["backup", settings.secrets.openai_api_key_backup],
-      ] as const;
-      const configuredKeys = keyOptions.filter(option => Boolean(option[1]));
-      if (!configuredKeys.length) {
+      const chain = buildResilientChain(settings);
+      if (!chain.length) {
         throw new Error(
-          "Configure y verifique una API Key de OpenAI antes de habilitar el agente conversacional."
+          "Configure y verifique una API Key de proveedor antes de habilitar el agente conversacional."
         );
       }
 
@@ -489,9 +514,7 @@ async function runConversationTurnInternal(
         attempt += 1
       ) {
         const startedAt = Date.now();
-        const slot = configuredKeys[attempt % configuredKeys.length]!;
-        const keySlot =
-          slot[0] === "backup" ? ("backup" as const) : ("primary" as const);
+        const current = chain[attempt % chain.length]!;
         const generated = await (
           input.dependencies?.generator ?? defaultConversationGenerator
         )({
@@ -500,9 +523,10 @@ async function runConversationTurnInternal(
               ? instructions
               : `${instructions}\n\nCORRECCIÓN OBLIGATORIA DEL INTENTO ANTERIOR\n${lastReasons.join("\n")}`,
           userInput,
-          apiKey: slot[1]!,
+          provider: current.provider,
+          apiKey: current.apiKey,
           model: settings.model,
-          keySlot,
+          keySlot: current.slot,
           attempt: attempt + 1,
         });
         lastModel = generated.model;

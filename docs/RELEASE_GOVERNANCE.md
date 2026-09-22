@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.199
+# Gobierno de release JARVI RH 2.0.200
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.199**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.200**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.200
+El release **añade un segundo proveedor de IA con conmutación resiliente**. Ninguna capacidad toca el esquema.
+
+**El defecto y su corrección.** El agente consumía OpenAI con dos credenciales del mismo proveedor. Esa rotación mitiga la caída de una credencial, pero no la del proveedor: si OpenAI no responde, el razonamiento de texto —evaluador, conversación, esencia del CV, RAG, editorial y reclutador— se detiene aunque DeepSeek, compatible con OpenAI en Chat Completions, esté disponible. La capa nueva en `server/agentProviders.ts` compone una cadena resiliente: el proveedor activo aporta sus dos credenciales —principal y respaldo— y, si ninguna responde, el secundario aporta las suyas. La observabilidad asienta proveedor y ranura en cada intento para distinguir la caída del proveedor de la de una credencial.
+
+**Salida estructurada neutra.** OpenAI conserva la Responses API; DeepSeek usa Chat Completions con `response_format: json_object` y valida con el mismo esquema Zod, sin duplicar reglas. `deepseek-reasoner` no admite salida estructurada, de modo que la evaluación y las superficies con esquema se anclan a `deepseek-chat`.
+
+**Límite declarado.** DeepSeek no expone Responses API, transcripción ni voz: las superficies de audio conservan la rotación de credenciales de OpenAI. La hoja administrativa incorpora el switch de proveedor activo —uno a la vez— y deja en gris las credenciales del proveedor inactivo, con verificación por proveedor y ranura.
+
+**Sin migración.** Reutiliza `integration_settings` y el cifrado vigente.
 
 ### Alcance candidato 2.0.199
 El release **vuelve estructural la idempotencia del envío**. Toca el esquema con una garantía, no con una columna.
@@ -750,4 +761,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.199.md](PRUEBAS_CAJA_NEGRA_2.0.199.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.200.md](PRUEBAS_CAJA_NEGRA_2.0.200.md).

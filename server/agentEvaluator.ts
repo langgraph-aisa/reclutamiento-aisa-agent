@@ -4,10 +4,17 @@ import { ChatOpenAI } from "@langchain/openai";
 import OpenAI from "openai";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { EVALUATION_BLOCKS, SCORE_BANDS } from "../shared/agentConfig";
+import {
+  DEEPSEEK_BASE_URL,
+  DEEPSEEK_STRUCTURED_MODEL,
+  EVALUATION_BLOCKS,
+  SCORE_BANDS,
+  type AiProvider,
+} from "../shared/agentConfig";
 import { APP_VERSION } from "../shared/release";
 import { evaluateDeterministic, type ConfiguredQuestion } from "./evaluation";
 import { getAgentRuntimeSettings, type AgentSecretKey } from "./agentSettings";
+import { buildResilientChain, type ProviderAttempt } from "./agentProviders";
 import { loadPositionKnowledgeContext } from "./knowledgeContext";
 import {
   createLangfuseCallbackHandler,
@@ -66,6 +73,7 @@ export type AgentModelOutput = z.infer<typeof AgentModelOutputSchema>;
 export type AgentEvaluationResult = AgentModelOutput & {
   score: number;
   classification: (typeof SCORE_BANDS)[number]["label"];
+  provider: AiProvider;
   keySlot: "primary" | "backup";
 };
 
@@ -237,7 +245,44 @@ function publicEvaluationInput(source: EvaluationSource) {
   };
 }
 
+/**
+ * Construcción del modelo del nodo según el proveedor. OpenAI conserva la
+ * Responses API con salida estricta; DeepSeek usa Chat Completions con salida
+ * estructurada por llamada a función sobre `deepseek-chat`, único modelo de
+ * DeepSeek que la admite.
+ */
+function buildEvaluationModel(
+  provider: AiProvider,
+  apiKey: string,
+  model: string
+) {
+  if (provider === "deepseek") {
+    return new ChatOpenAI({
+      apiKey,
+      model: DEEPSEEK_STRUCTURED_MODEL,
+      configuration: { baseURL: DEEPSEEK_BASE_URL },
+      useResponsesApi: false,
+      maxRetries: 1,
+      timeout: 60_000,
+    }).withStructuredOutput(AgentModelOutputSchema, {
+      name: "evaluacion_candidato",
+      method: "functionCalling",
+    });
+  }
+  return new ChatOpenAI({
+    apiKey,
+    model,
+    useResponsesApi: true,
+    maxRetries: 1,
+    timeout: 60_000,
+  }).withStructuredOutput(AgentModelOutputSchema, {
+    name: "evaluacion_candidato",
+    strict: true,
+  });
+}
+
 async function invokeGraph(input: {
+  provider: AiProvider;
   apiKey: string;
   model: string;
   instructions: string;
@@ -248,16 +293,7 @@ async function invokeGraph(input: {
   const EvaluationState = Annotation.Root({
     result: Annotation<AgentModelOutput | null>,
   });
-  const model = new ChatOpenAI({
-    apiKey: input.apiKey,
-    model: input.model,
-    useResponsesApi: true,
-    maxRetries: 1,
-    timeout: 60_000,
-  }).withStructuredOutput(AgentModelOutputSchema, {
-    name: "evaluacion_candidato",
-    strict: true,
-  });
+  const model = buildEvaluationModel(input.provider, input.apiKey, input.model);
 
   const graph = new StateGraph(EvaluationState)
     .addNode("evaluate", async () => ({
@@ -271,14 +307,15 @@ async function invokeGraph(input: {
     .addEdge(START, "evaluate")
     .addEdge("evaluate", END)
     .compile();
+  const method = input.provider === "openai" ? "responses-api" : "chat-completions";
   const callback = createLangfuseCallbackHandler({
     sessionId: `application:${input.source.applicationId}`,
-    tags: ["candidate-evaluation", "langgraph", "responses-api"],
+    tags: ["candidate-evaluation", "langgraph", method],
     version: APP_VERSION,
     traceMetadata: {
       feature: "candidate-evaluation",
-      provider: "openai",
-      method: "responses-api",
+      provider: input.provider,
+      method,
       keySlot: input.keySlot,
       attempt: input.attempt,
       classification: "restricted-redacted",
@@ -289,9 +326,10 @@ async function invokeGraph(input: {
     {
       callbacks: callback ? [callback] : [],
       runName: "candidate-evaluation-graph",
-      tags: ["candidate-evaluation", "langgraph", "responses-api"],
+      tags: ["candidate-evaluation", "langgraph", method],
       metadata: {
         feature: "candidate-evaluation",
+        provider: input.provider,
         keySlot: input.keySlot,
         attempt: input.attempt,
         classification: "restricted-redacted",
@@ -551,8 +589,8 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
       version: APP_VERSION,
       metadata: {
         feature: "candidate-evaluation",
-        provider: "openai",
-        method: "responses-api",
+        provider: "hybrid",
+        method: "structured-output",
         classification: "restricted-redacted",
       },
       input: { operation: "evaluate_application" },
@@ -634,15 +672,13 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
 
       const settings = await getAgentRuntimeSettings(pool);
       if (!settings.useResponsesApi) {
-        throw new Error("La OpenAI Responses API no está habilitada.");
+        throw new Error(
+          "El motor del agente debe estar habilitado antes de evaluar."
+        );
       }
-      const keyOptions = [
-        ["primary", settings.secrets.openai_api_key],
-        ["backup", settings.secrets.openai_api_key_backup],
-      ] as const;
-      const configuredKeys = keyOptions.filter(option => Boolean(option[1]));
-      if (!configuredKeys.length) {
-        throw new Error("No hay una API key de OpenAI configurada.");
+      const chain = buildResilientChain(settings);
+      if (!chain.length) {
+        throw new Error("No hay una API key de proveedor configurada.");
       }
 
       const methodologies = settings.useMethodologies
@@ -667,33 +703,35 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
         source.candidateEvidence
       );
       let output: AgentModelOutput | null = null;
+      let provider: AiProvider = "openai";
       let keySlot: "primary" | "backup" = "primary";
       let lastError: unknown;
-      for (
-        let attemptIndex = 0;
-        attemptIndex < configuredKeys.length;
-        attemptIndex += 1
-      ) {
-        const [slot, apiKey] = configuredKeys[attemptIndex]!;
+      for (let attemptIndex = 0; attemptIndex < chain.length; attemptIndex += 1) {
+        const current: ProviderAttempt = chain[attemptIndex]!;
         try {
           output = await withLangfuseObservation(
             {
-              name: `openai-evaluation-attempt-${slot}`,
+              name: `ai-evaluation-attempt-${current.provider}-${current.slot}`,
               metadata: {
-                keySlot: slot,
+                provider: current.provider,
+                keySlot: current.slot,
                 attempt: attemptIndex + 1,
                 model: settings.model,
-                method: "responses-api",
+                method:
+                  current.provider === "openai"
+                    ? "responses-api"
+                    : "chat-completions",
               },
               input: { operation: "invoke_evaluation_graph" },
             },
             async attemptObservation => {
               const graphOutput = await invokeGraph({
-                apiKey: apiKey!,
+                provider: current.provider,
+                apiKey: current.apiKey,
                 model: settings.model,
                 instructions,
                 source,
-                keySlot: slot,
+                keySlot: current.slot,
                 attempt: attemptIndex + 1,
               });
               attemptObservation.update({
@@ -702,17 +740,22 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
                   structuredOutputValid: true,
                   blockCount: graphOutput.blocks.length,
                 },
-                metadata: { keySlot: slot, attempt: attemptIndex + 1 },
+                metadata: {
+                  provider: current.provider,
+                  keySlot: current.slot,
+                  attempt: attemptIndex + 1,
+                },
               });
               return graphOutput;
             }
           );
-          keySlot = slot;
+          provider = current.provider;
+          keySlot = current.slot;
           break;
         } catch (error) {
           lastError = error;
           console.warn(
-            `[Agent] OpenAI ${slot} request failed (${error instanceof Error ? error.name : "unknown"}).`
+            `[Agent] ${current.provider} ${current.slot} request failed (${error instanceof Error ? error.name : "unknown"}).`
           );
         }
       }
@@ -742,6 +785,7 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
         summary: limitWords(output.summary, settings.summaryWordLimit),
         score,
         classification: classificationForScore(score),
+        provider,
         keySlot,
       };
       const status = applicationStatusForEvaluation(
@@ -798,7 +842,7 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
                 safeJson({
                   ...result,
                   framework: "LangGraph",
-                  api: "Responses",
+                  api: provider === "openai" ? "Responses" : "Chat Completions",
                   knowledgeFingerprint: knowledgeContext.fingerprint,
                   knowledgeFileCount: knowledgeContext.fileCount,
                   knowledgeCharacters: knowledgeContext.characters,
@@ -825,7 +869,7 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
                   classification: result.classification,
                   status,
                 }),
-                `Evaluación automática con ${settings.model}`,
+                `Evaluación automática con ${settings.model} (${provider})`,
               ]
             );
             await client.query("COMMIT");
@@ -847,6 +891,7 @@ async function evaluateApplicationUnlocked(pool: Pool, applicationId: number) {
           status,
           score,
           classification: result.classification,
+          provider,
           keySlot,
           criticalDisqualification: result.criticalDisqualification,
         },
@@ -882,21 +927,53 @@ export async function evaluateApplicationWithAgent(
   }
 }
 
-export async function verifyOpenAIConnection(
+export async function verifyProviderConnection(
   pool: Pool,
+  provider: AiProvider,
   slot: "primary" | "backup"
 ) {
   const settings = await getAgentRuntimeSettings(pool);
   const keyName: AgentSecretKey =
-    slot === "primary" ? "openai_api_key" : "openai_api_key_backup";
+    provider === "deepseek"
+      ? slot === "primary"
+        ? "deepseek_api_key"
+        : "deepseek_api_key_backup"
+      : slot === "primary"
+        ? "openai_api_key"
+        : "openai_api_key_backup";
   const apiKey = settings.secrets[keyName];
   if (!apiKey)
     throw new Error(
-      `La API Key ${slot === "backup" ? "Back Up" : "principal"} no está configurada.`
+      `La API Key ${slot === "backup" ? "Back Up" : "principal"} de ${provider} no está configurada.`
     );
-  const client = new OpenAI({ apiKey, timeout: 15_000, maxRetries: 0 });
+  const client =
+    provider === "deepseek"
+      ? new OpenAI({
+          apiKey,
+          baseURL: DEEPSEEK_BASE_URL,
+          timeout: 15_000,
+          maxRetries: 0,
+        })
+      : new OpenAI({ apiKey, timeout: 15_000, maxRetries: 0 });
+  if (provider === "deepseek") {
+    const models = await client.models.list();
+    const available = models.data.some(
+      item => item.id === DEEPSEEK_STRUCTURED_MODEL
+    );
+    if (!available) {
+      throw new Error(
+        "DeepSeek no expone el modelo de evaluación estructurada."
+      );
+    }
+    return {
+      success: true as const,
+      provider,
+      slot,
+      model: DEEPSEEK_STRUCTURED_MODEL,
+    };
+  }
   const model = await client.models.retrieve(settings.model);
-  return { success: true as const, slot, model: model.id };
+  return { success: true as const, provider, slot, model: model.id };
 }
 
 export async function verifyLangfuseConnection(pool: Pool) {

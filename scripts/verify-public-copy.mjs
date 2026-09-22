@@ -28,6 +28,7 @@ export function auditPublicCopyControls() {
   );
 
   const editorial = source("server/profileEditorial.ts");
+  const providers = source("server/agentProviders.ts");
   const routers = source("server/routers.ts");
   const bootstrap = source("server/_core/index.ts");
   const profiles = source("client/src/pages/Profiles.tsx");
@@ -49,20 +50,26 @@ export function auditPublicCopyControls() {
   requireSource(
     findings,
     editorial,
+    "structuredOutput",
+    "La corrección editorial debe canalizarse por la salida estructurada neutra al proveedor."
+  );
+  requireSource(
+    findings,
+    providers,
     "client.responses.parse",
-    "La corrección editorial debe usar OpenAI Responses API con salida estructurada."
+    "La salida estructurada debe usar OpenAI Responses API cuando el proveedor es OpenAI."
   );
   requireSource(
     findings,
-    editorial,
+    providers,
     "zodTextFormat",
-    "La respuesta editorial debe validarse con un esquema estructurado."
+    "La salida estructurada debe validarse con un esquema estructurado."
   );
   requireSource(
     findings,
-    editorial,
+    providers,
     "store: false",
-    "La revisión editorial no debe habilitar el almacenamiento de respuestas en OpenAI."
+    "La revisión no debe habilitar el almacenamiento de respuestas en OpenAI."
   );
   requireSource(
     findings,

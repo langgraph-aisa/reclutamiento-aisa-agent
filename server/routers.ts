@@ -44,6 +44,8 @@ import {
 } from "./cvRequest";
 import {
   AGENT_MODELS,
+  AI_PROVIDERS,
+  DEEPSEEK_MODELS,
   LANGFUSE_CAPTURE_MODES,
   LANGFUSE_CLOUD_BASE_URLS,
   OPENAI_TRANSCRIPTION_MODELS,
@@ -53,7 +55,7 @@ import {
 import {
   evaluateApplicationWithAgent,
   verifyLangfuseConnection,
-  verifyOpenAIConnection,
+  verifyProviderConnection,
   withBlockLabels,
 } from "./agentEvaluator";
 import {
@@ -237,6 +239,14 @@ const transcriptionModelValues = OPENAI_TRANSCRIPTION_MODELS.map(
 const ttsModelValues = OPENAI_TTS_MODELS.map(model => model.value) as [
   (typeof OPENAI_TTS_MODELS)[number]["value"],
   ...(typeof OPENAI_TTS_MODELS)[number]["value"][],
+];
+const deepseekModelValues = DEEPSEEK_MODELS.map(model => model.value) as [
+  (typeof DEEPSEEK_MODELS)[number]["value"],
+  ...(typeof DEEPSEEK_MODELS)[number]["value"][],
+];
+const providerValues = AI_PROVIDERS as unknown as [
+  (typeof AI_PROVIDERS)[number],
+  ...(typeof AI_PROVIDERS)[number][],
 ];
 const assessmentLevelValues = ASSESSMENT_LEVELS.map(level => level.value) as [
   (typeof ASSESSMENT_LEVELS)[number]["value"],
@@ -6152,6 +6162,8 @@ export const appRouter = router({
             }),
           langfuseCaptureMode: z.enum(LANGFUSE_CAPTURE_MODES),
           langfuseSampleRate: z.number().min(0.01).max(1),
+          primaryProvider: z.enum(providerValues),
+          deepseekModel: z.enum(deepseekModelValues),
         })
       )
       .mutation(async ({ input, ctx }) => {
@@ -6181,6 +6193,16 @@ export const appRouter = router({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "La API key de OpenAI debe comenzar con sk-.",
+          });
+        }
+        if (
+          input.value &&
+          input.key.startsWith("deepseek_") &&
+          !input.value.startsWith("sk-")
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "La API key de DeepSeek debe comenzar con sk-.",
           });
         }
         if (
@@ -6235,17 +6257,26 @@ export const appRouter = router({
           });
         }
       }),
-    verifyOpenAI: adminProcedure
-      .input(z.object({ slot: z.enum(["primary", "backup"]) }))
+    verifyProvider: adminProcedure
+      .input(
+        z.object({
+          provider: z.enum(providerValues),
+          slot: z.enum(["primary", "backup"]),
+        })
+      )
       .mutation(async ({ input }) => {
         try {
-          return await verifyOpenAIConnection(await requirePool(), input.slot);
+          return await verifyProviderConnection(
+            await requirePool(),
+            input.provider,
+            input.slot
+          );
         } catch (error) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: safeIntegrationMessage(
               error,
-              "No fue posible verificar la conexión con OpenAI."
+              `No fue posible verificar la conexión con ${input.provider}.`
             ),
           });
         }

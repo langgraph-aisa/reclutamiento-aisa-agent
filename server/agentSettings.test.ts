@@ -238,6 +238,8 @@ describe("agent settings security", () => {
     expect(configuration.secrets).toEqual({
       openai_api_key: { configured: true, masked: "••••••••1234" },
       openai_api_key_backup: { configured: true, masked: "••••••••5678" },
+      deepseek_api_key: { configured: false, masked: null },
+      deepseek_api_key_backup: { configured: false, masked: null },
       langfuse_public_key: { configured: true, masked: "••••••••9012" },
       langfuse_secret_key: { configured: true, masked: "••••••••3456" },
     });
@@ -247,6 +249,8 @@ describe("agent settings security", () => {
     expect(runtime.secrets).toEqual({
       openai_api_key: "sk-proj-primary-1234",
       openai_api_key_backup: "sk-proj-backup-5678",
+      deepseek_api_key: null,
+      deepseek_api_key_backup: null,
       langfuse_public_key: "pk-lf-public-9012",
       langfuse_secret_key: "sk-lf-secret-3456",
     });

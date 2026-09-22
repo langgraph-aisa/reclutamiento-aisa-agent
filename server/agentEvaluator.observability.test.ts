@@ -216,7 +216,7 @@ describe("agent evaluator Langfuse observability", () => {
       "candidate-evaluation",
       "load-evaluation-context",
       "deterministic-eligibility-gate",
-      "openai-evaluation-attempt-primary",
+      "ai-evaluation-attempt-openai-primary",
       "salary-offer-policy",
       "persist-candidate-evaluation",
     ]);
@@ -242,10 +242,10 @@ describe("agent evaluator Langfuse observability", () => {
     expect(
       observationOptions
         .map(option => option.name)
-        .filter(name => String(name).startsWith("openai-evaluation-attempt-"))
+        .filter(name => String(name).startsWith("ai-evaluation-attempt-"))
     ).toEqual([
-      "openai-evaluation-attempt-primary",
-      "openai-evaluation-attempt-backup",
+      "ai-evaluation-attempt-openai-primary",
+      "ai-evaluation-attempt-openai-backup",
     ]);
     expect(createLangfuseCallbackHandler).toHaveBeenCalledTimes(2);
     expect(warning.mock.calls.flat().join(" ")).not.toMatch(

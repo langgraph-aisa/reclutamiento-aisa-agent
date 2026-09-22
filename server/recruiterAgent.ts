@@ -1,6 +1,8 @@
 import type { Pool } from "pg";
 import OpenAI from "openai";
+import type { AiProvider } from "../shared/agentConfig";
 import { getAgentRuntimeSettings } from "./agentSettings";
+import { buildResilientChain, openAiCompatibleClient } from "./agentProviders";
 import { loadPositionKnowledgeContext } from "./knowledgeContext";
 
 /**
@@ -301,6 +303,7 @@ export type RecruiterAgentAnswer = {
 
 /** Generador inyectable: las pruebas verifican la cadena sin salir a la red. */
 export type RecruiterAgentGenerator = (input: {
+  provider: AiProvider;
   apiKey: string;
   model: string;
   instructions: string;
@@ -309,13 +312,29 @@ export type RecruiterAgentGenerator = (input: {
 }) => Promise<string>;
 
 const defaultGenerator: RecruiterAgentGenerator = async input => {
-  const client = new OpenAI({ apiKey: input.apiKey });
   const history = input.history.slice(-RECRUITER_AGENT_HISTORY_LIMIT).map(
     message => ({
       role: message.author === "jarvi" ? ("assistant" as const) : ("user" as const),
       content: message.body,
     })
   );
+  if (input.provider === "deepseek") {
+    const client = openAiCompatibleClient(
+      { provider: "deepseek", slot: "primary", apiKey: input.apiKey },
+      { timeout: 45_000, maxRetries: 0 }
+    );
+    const completion = await client.chat.completions.create({
+      model: input.model,
+      messages: [
+        { role: "system", content: input.instructions },
+        ...history,
+        { role: "user", content: input.question },
+      ],
+      max_tokens: 12_000,
+    });
+    return String(completion.choices[0]?.message?.content ?? "").trim();
+  }
+  const client = new OpenAI({ apiKey: input.apiKey });
   const response = await client.responses.create({
     model: input.model,
     instructions: input.instructions,
@@ -354,7 +373,7 @@ export async function askRecruiterAgent(
   if (!candidate) return { ok: false, reason: "La postulación no existe." };
   const settings = await getAgentRuntimeSettings(pool);
   const thread = await recruiterThreadFor(pool, input.applicationId);
-  const model = effectiveRecruiterModel({
+  const openaiModel = effectiveRecruiterModel({
     conversationModel: thread.model,
     institutionalModel: settings.model,
   });
@@ -381,17 +400,16 @@ export async function askRecruiterAgent(
     actorUserId: input.actorUserId,
     body: question,
   });
-  const keys = [
-    ["primary", settings.secrets.openai_api_key],
-    ["backup", settings.secrets.openai_api_key_backup],
-  ] as const;
+  const chain = buildResilientChain(settings);
   const generate = input.dependencies?.generator ?? defaultGenerator;
   let lastError = "sin credencial configurada";
-  for (const [keySource, apiKey] of keys) {
-    if (!apiKey) continue;
+  for (const attempt of chain) {
+    const model =
+      attempt.provider === "deepseek" ? settings.deepseekModel : openaiModel;
     try {
       const answer = await generate({
-        apiKey,
+        provider: attempt.provider,
+        apiKey: attempt.apiKey,
         model,
         instructions,
         question,
@@ -405,7 +423,7 @@ export async function askRecruiterAgent(
         author: RECRUITER_AGENT_AUTHOR_JARVI,
         actorUserId: null,
         model,
-        keySource,
+        keySource: attempt.slot,
         body,
       });
       await pool.query(
@@ -414,7 +432,7 @@ export async function askRecruiterAgent(
       );
       return {
         ok: true,
-        answer: { answer: body, model, keySource },
+        answer: { answer: body, model, keySource: attempt.slot },
         history: await loadRecruiterHistory(pool, input.applicationId),
       };
     } catch (error) {

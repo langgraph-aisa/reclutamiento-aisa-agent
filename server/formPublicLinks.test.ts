@@ -29,7 +29,7 @@ vi.mock("./profileEditorial", () => ({
 vi.mock("./agentEvaluator", () => ({
   evaluateApplicationWithAgent: vi.fn().mockResolvedValue(undefined),
   verifyLangfuseConnection: vi.fn(),
-  verifyOpenAIConnection: vi.fn(),
+  verifyProviderConnection: vi.fn(),
 }));
 
 import { appRouter } from "./routers";

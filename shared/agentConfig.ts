@@ -8,6 +8,29 @@ export const AGENT_MODELS = [
   { value: "gpt-4o-mini", label: "GPT-4o mini · opción económica" },
 ] as const;
 
+export const DEEPSEEK_MODELS = [
+  {
+    value: "deepseek-chat",
+    label: "DeepSeek-V3 · texto y salida estructurada",
+  },
+  {
+    value: "deepseek-reasoner",
+    label: "DeepSeek-R1 · razonamiento, solo texto libre",
+  },
+] as const;
+
+/**
+ * Modelo de DeepSeek apto para salida estructurada. `deepseek-reasoner` no
+ * admite JSON ni llamadas a función, de modo que las superficies que exigen un
+ * esquema (evaluador, conversación, CV, RAG y editorial) se anclan a
+ * `deepseek-chat` aunque la preferencia administrativa señale al razonador.
+ */
+export const DEEPSEEK_STRUCTURED_MODEL = "deepseek-chat" as const;
+
+export const DEEPSEEK_BASE_URL = "https://api.deepseek.com" as const;
+
+export const AI_PROVIDERS = ["openai", "deepseek"] as const;
+
 export const OPENAI_TRANSCRIPTION_MODELS = [
   {
     value: "gpt-4o-mini-transcribe",
@@ -180,6 +203,8 @@ Para auditoría humana, la IA entrega una puntuación de 0 a 100 y una explicaci
 El esquema toma MST-EIR/ITEI como referencia para valorar conocimiento, práctica, resolución de problemas, seguridad, competencias digitales y contexto profesional. La recomendación automatizada es apoyo a la preselección y conserva revisión humana.`;
 
 export type AgentModel = (typeof AGENT_MODELS)[number]["value"];
+export type DeepSeekModel = (typeof DEEPSEEK_MODELS)[number]["value"];
+export type AiProvider = (typeof AI_PROVIDERS)[number];
 export type OpenAiTranscriptionModel =
   (typeof OPENAI_TRANSCRIPTION_MODELS)[number]["value"];
 export type OpenAiTtsModel = (typeof OPENAI_TTS_MODELS)[number]["value"];
@@ -205,6 +230,8 @@ export type AgentPreferences = {
   langfuseEnvironment: string;
   langfuseCaptureMode: LangfuseCaptureMode;
   langfuseSampleRate: number;
+  primaryProvider: AiProvider;
+  deepseekModel: DeepSeekModel;
 };
 
 export const DEFAULT_AGENT_SETTINGS: AgentPreferences = {
@@ -226,4 +253,6 @@ export const DEFAULT_AGENT_SETTINGS: AgentPreferences = {
   langfuseEnvironment: "production",
   langfuseCaptureMode: "metadata_only",
   langfuseSampleRate: 1,
+  primaryProvider: "openai",
+  deepseekModel: "deepseek-chat",
 };
