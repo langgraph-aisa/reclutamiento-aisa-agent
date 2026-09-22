@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.204
+# Gobierno de release JARVI RH 2.0.205
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.204**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.205**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.205
+El release **resuelve el proyecto de cada postulación y fabrica su backend de Drive**. Sin migración.
+
+**Resolución por plaza.** `server/driveProject.ts` expone `projectIdForPosition` —el primer proyecto de conocimiento vinculado a la plaza en `knowledge_project_positions`— y `projectIdForApplication`, que lo deriva de la plaza de la postulación.
+
+**Backend por proyecto.** `driveBackendForProject` compone el `DriveStorageBackend` desde la credencial de plataforma y la conexión del propietario —el creador del proyecto, `created_by_user_id`—, con el mapper que anida al candidato bajo el proyecto y una fuente de token que renueva el acceso desde el `refresh_token`. Sin conexión, sin propietario o sin plataforma, devuelve `null` y el llamador conserva el backend local.
+
+**Sin migración.** La asignación o rotación de una cuenta distinta por proyecto y el rol «Administrador de proyectos» se cierran en la entrega siguiente; por ahora manda el creador.
 
 ### Alcance candidato 2.0.204
 El release **anida la carpeta del candidato bajo la de su proyecto en Drive** y abre el dominio «proyectos» en el catálogo de seguridad. Sin migración.
@@ -795,4 +804,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.204.md](PRUEBAS_CAJA_NEGRA_2.0.204.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.205.md](PRUEBAS_CAJA_NEGRA_2.0.205.md).
