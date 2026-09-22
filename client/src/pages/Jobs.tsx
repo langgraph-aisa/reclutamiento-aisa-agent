@@ -416,6 +416,83 @@ export default function Jobs() {
                     {job.published ? "Publicada" : "Borrador"}
                   </Badge>
                 </div>
+                {isAdmin && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Link href={`/admin/candidates?position=${job.id}`}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                      >
+                        <Users className="mr-2 h-3.5 w-3.5" />
+                        Candidatos
+                      </Button>
+                    </Link>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full"
+                      onClick={() =>
+                        setScreeningTarget({
+                          positionId: Number(job.id),
+                          phase: "precalificacion",
+                        })
+                      }
+                    >
+                      <Sparkles className="mr-2 h-3.5 w-3.5" />
+                      Precalificación IA
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full"
+                      onClick={() =>
+                        setScreeningTarget({
+                          positionId: Number(job.id),
+                          phase: "entrevista",
+                        })
+                      }
+                    >
+                      <MessageSquareText className="mr-2 h-3.5 w-3.5" />
+                      Entrevista IA
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEdit(job)}
+                      className="rounded-full"
+                    >
+                      <Edit3 className="mr-2 h-3.5 w-3.5" />
+                      Editar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setPublished.mutate({
+                          id: job.id,
+                          published: !job.published,
+                        })
+                      }
+                      className="rounded-full"
+                    >
+                      {job.published ? "Despublicar" : "Publicar"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        window.confirm(
+                          "¿Eliminar esta plaza y su formulario?"
+                        ) && remove.mutate({ id: job.id })
+                      }
+                      className="rounded-full text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="mr-2 h-3.5 w-3.5" />
+                      Eliminar
+                    </Button>
+                  </div>
+                )}
                 <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-700">
                     {job.applications_count ?? 0} postulaciones
@@ -486,93 +563,6 @@ export default function Jobs() {
                     isAdmin={isAdmin}
                   />
                 </div>
-                {isAdmin && (
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <Link href={`/admin/candidates?position=${job.id}`}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-full"
-                        >
-                          <Users className="mr-2 h-3.5 w-3.5" />
-                          Candidatos
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-full"
-                        onClick={() =>
-                          setScreeningTarget({
-                            positionId: Number(job.id),
-                            phase: "precalificacion",
-                          })
-                        }
-                      >
-                        <Sparkles className="mr-2 h-3.5 w-3.5" />
-                        Precalificación IA
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-full"
-                        onClick={() =>
-                          setScreeningTarget({
-                            positionId: Number(job.id),
-                            phase: "entrevista",
-                          })
-                        }
-                      >
-                        <MessageSquareText className="mr-2 h-3.5 w-3.5" />
-                        Entrevista IA
-                      </Button>
-                      <Link href={`/admin/forms/${job.id}`}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-full"
-                        >
-                          <Settings2 className="mr-2 h-3.5 w-3.5" />
-                          Preguntas
-                        </Button>
-                      </Link>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEdit(job)}
-                        className="rounded-full"
-                      >
-                        <Edit3 className="mr-2 h-3.5 w-3.5" />
-                        Editar
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setPublished.mutate({
-                            id: job.id,
-                            published: !job.published,
-                          })
-                        }
-                        className="rounded-full"
-                      >
-                        {job.published ? "Despublicar" : "Publicar"}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          window.confirm(
-                            "¿Eliminar esta plaza y su formulario?"
-                          ) && remove.mutate({ id: job.id })
-                        }
-                        className="rounded-full text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="mr-2 h-3.5 w-3.5" />
-                        Eliminar
-                      </Button>
-                  </div>
-                )}
               </CardContent>
             </Card>
           ))}
