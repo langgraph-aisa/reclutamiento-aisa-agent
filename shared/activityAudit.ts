@@ -13,6 +13,7 @@ export const ADMIN_PAGE_LABELS: Record<string, string> = {
   "/admin/assessments": "Pruebas psicométricas",
   "/admin/reports": "Informes",
   "/admin/mst-eir": "Administrador de Proyectos",
+  "/admin/project-storage": "Custodia de proyectos",
   "/admin/agent-evaluator": "Agente de IA LangGraph",
   "/admin/apichat-audit": "Auditoría de ApiChat",
   "/admin/activity": "Actividad y control ISO",

@@ -6346,6 +6346,42 @@ export const appRouter = router({
         });
       }
     }),
+    projects: projectAdminProcedure.query(async () => {
+      const pool = await requirePool();
+      const result = await pool.query(
+        `SELECT p.id,p.name,p.storage_mode,
+                p.drive_connection_user_id,p.created_by_user_id,
+                owner.name AS owner_name,
+                drive.name AS drive_name,
+                (SELECT count(*)::int FROM knowledge_files f WHERE f.project_id=p.id) AS file_count,
+                (SELECT count(*)::int
+                   FROM candidate_knowledge_files c
+                   JOIN applications a ON a.id=c.application_id
+                   JOIN knowledge_project_positions link ON link.position_id=a.job_position_id
+                  WHERE link.project_id=p.id) AS candidate_file_count
+           FROM knowledge_projects p
+           LEFT JOIN users owner ON owner.id=p.created_by_user_id
+           LEFT JOIN users drive ON drive.id=p.drive_connection_user_id
+          ORDER BY lower(p.name)`
+      );
+      return result.rows;
+    }),
+    connectedUsers: projectAdminProcedure.query(async () => {
+      const pool = await requirePool();
+      const result = await pool.query(
+        `SELECT u.id,u.name,u.email,u.role
+           FROM users u
+          WHERE EXISTS (
+                  SELECT 1 FROM integration_settings s
+                   WHERE s.provider='google_drive'
+                     AND s.setting_key='refresh:' || u.id
+                     AND s.is_secret
+                     AND COALESCE(s.setting_value,'') <> ''
+                )
+          ORDER BY lower(u.name)`
+      );
+      return result.rows;
+    }),
     projectProfile: projectAdminProcedure
       .input(z.object({ projectId: z.number().int().positive() }))
       .query(async ({ input }) => {

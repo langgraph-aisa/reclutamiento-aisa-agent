@@ -1,8 +1,15 @@
-# Gobierno de release JARVI RH 2.0.207
+# Gobierno de release JARVI RH 2.0.208
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.207**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.208**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.208
+El release **expone la administración de la custodia por proyecto en una hoja propia**. Sin migración de base.
+
+**La hoja.** `client/src/pages/ProjectStorage.tsx` (`/admin/project-storage`) lista los proyectos con su modo de almacenamiento, la cuenta que los respalda y el conteo de documentos de proyecto y de candidato; permite conmutar local↔Drive, asignar la cuenta de Drive y migrar los binarios. La entrada de menú se muestra solo a administración y a administración de proyectos.
+
+**Las consultas.** `server/routers.ts` incorpora `drive.projects` —proyectos con modo, propietario, cuenta y conteos— y `drive.connectedUsers` —usuarios con conexión de Drive—, ambas bajo `projectAdminProcedure`. La auditoría de actividad atribuye el namespace `drive` a la nueva hoja.
 
 ### Alcance candidato 2.0.207
 El release **hace explícita y reversible la custodia en Drive y abre el rol «Administrador de proyectos»**. Migración `0039`.
@@ -822,4 +829,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.207.md](PRUEBAS_CAJA_NEGRA_2.0.207.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.208.md](PRUEBAS_CAJA_NEGRA_2.0.208.md).

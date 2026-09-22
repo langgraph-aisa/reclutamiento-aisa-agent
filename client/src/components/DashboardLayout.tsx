@@ -36,6 +36,7 @@ import {
   BrainCircuit,
   BriefcaseBusiness,
   ClipboardList,
+  Database,
   Eye,
   FolderKanban,
   Globe2,
@@ -82,6 +83,11 @@ const menuItems = [
   },
   { icon: BarChart3, label: "Informes", path: "/admin/reports" },
   { icon: FolderKanban, label: "Administrador de Proyectos", path: "/admin/mst-eir", adminOnly: true },
+  {
+    icon: Database,
+    label: "Custodia de proyectos",
+    path: "/admin/project-storage",
+  },
   {
     icon: ClipboardList,
     label: "Actividad y control ISO",
@@ -230,6 +236,14 @@ function DashboardLayoutContent({
   });
   const visibleMenuItems = menuItems.filter(item => {
     if (item.adminOnly && user?.role !== "admin") return false;
+    // La custodia por proyecto es de administración y de administración de
+    // proyectos: el reclutador no la ve, aunque no lleve la marca `adminOnly`.
+    if (
+      item.path === "/admin/project-storage" &&
+      !["admin", "project_admin"].includes(user?.role ?? "")
+    ) {
+      return false;
+    }
     if (visibility.data?.admin) return true;
     if (!visibility.data) return true;
     return visibility.data.visible.includes(item.path);

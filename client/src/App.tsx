@@ -21,6 +21,7 @@ import Jobs from "./pages/Jobs";
 import Login from "./pages/Login";
 import MstEir from "./pages/MstEir";
 import Profiles from "./pages/Profiles";
+import ProjectStorage from "./pages/ProjectStorage";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
 import SecurityRoles from "./pages/SecurityRoles";
@@ -122,6 +123,11 @@ function Router() {
       <Route path="/admin/mst-eir">
         <AdminShell>
           <MstEir />
+        </AdminShell>
+      </Route>
+      <Route path="/admin/project-storage">
+        <AdminShell>
+          <ProjectStorage />
         </AdminShell>
       </Route>
       <Route path="/admin/agent-evaluator">
