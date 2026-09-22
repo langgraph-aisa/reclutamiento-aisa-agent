@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.208
+# Gobierno de release JARVI RH 2.0.209
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.208**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.209**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.209
+El release **suma el banco de precalificación y entrevista por plaza y el acceso a candidatos con el filtro de plaza ya aplicado**. Migración `0040`.
+
+**El modelo.** `screening_questions` guarda el banco único de preguntas por plaza en dos fases (`precalificacion`, `entrevista`): campo, pregunta, ayuda, tipo, orden, descarte directo (`hard_fail`), respuestas aprobadas, rango permitido, criterio de razonamiento editable y dependencia opcional. `screening_runs` conserva la máquina de estados de cada postulación.
+
+**El motor.** `server/screeningEngine.ts` crea el recorrido cuando el CV llega y la plaza declara preguntas activas; administra las preguntas en orden, evalúa el descarte de forma determinista y cierra la conversación con el agradecimiento y el aviso de contacto. La postulación descartada queda `no_calificado`; sin preguntas configuradas, el flujo conversacional ordinario se conserva.
+
+**La superficie.** `server/routers.ts` incorpora `screening.*` (listado, alta, edición, borrado, orden y activación). `Jobs.tsx` suma los tres accesos en la ficha y el editor de preguntas; «Candidatos» abre el explorador con el filtro de la plaza aplicado.
 
 ### Alcance candidato 2.0.208
 El release **expone la administración de la custodia por proyecto en una hoja propia**. Sin migración de base.
@@ -829,4 +838,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.208.md](PRUEBAS_CAJA_NEGRA_2.0.208.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.209.md](PRUEBAS_CAJA_NEGRA_2.0.209.md).

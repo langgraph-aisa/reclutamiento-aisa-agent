@@ -974,6 +974,106 @@ export const assessmentItemAttempts = pgTable(
   })
 );
 
+/**
+ * Banco único de preguntas guiadas del agente por plaza, en dos fases:
+ * precalificación (tras recibir el CV) y entrevista (segunda ronda). Cada
+ * pregunta declara su descarte directo —respuestas aprobadas o rango
+ * permitido— y un criterio de razonamiento editable que la IA usa para
+ * reforzar la decisión. La máquina de estados de cada postulación vive en
+ * `screeningRuns`.
+ */
+export const screeningQuestions = pgTable(
+  "screening_questions",
+  {
+    id: serial("id").primaryKey(),
+    jobPositionId: integer("job_position_id")
+      .references(() => jobPositions.id, { onDelete: "cascade" })
+      .notNull(),
+    phase: varchar("phase", { length: 24 }).notNull(),
+    fieldKey: varchar("field_key", { length: 100 }).notNull(),
+    prompt: text("prompt").notNull(),
+    helpText: text("help_text"),
+    type: varchar("type", { length: 40 }).default("texto").notNull(),
+    orderIndex: integer("order_index").default(0).notNull(),
+    hardFail: boolean("hard_fail").default(false).notNull(),
+    acceptedAnswers: jsonb("accepted_answers").default([]).notNull(),
+    answerConfig: jsonb("answer_config").default({}).notNull(),
+    evaluationCriteria: text("evaluation_criteria"),
+    dependsOnFieldKey: varchar("depends_on_field_key", { length: 100 }),
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    positionPhaseFieldUq: uniqueIndex(
+      "screening_questions_position_phase_field_uq"
+    ).on(table.jobPositionId, table.phase, table.fieldKey),
+    positionPhaseIdx: index("screening_questions_position_phase_idx").on(
+      table.jobPositionId,
+      table.phase,
+      table.orderIndex
+    ),
+    phaseCheck: check(
+      "screening_questions_phase_ck",
+      sql`${table.phase} IN ('precalificacion','entrevista')`
+    ),
+    orderCheck: check(
+      "screening_questions_order_ck",
+      sql`${table.orderIndex} >= 0`
+    ),
+  })
+);
+
+/**
+ * Máquina de estados de precalificación y entrevista por postulación: el
+ * avance determinista del agente desde la espera del CV hasta el cierre.
+ */
+export const screeningRuns = pgTable(
+  "screening_runs",
+  {
+    id: serial("id").primaryKey(),
+    applicationId: integer("application_id")
+      .references(() => applications.id, { onDelete: "cascade" })
+      .notNull()
+      .unique(),
+    phase: varchar("phase", { length: 24 }).default("esperando_cv").notNull(),
+    currentQuestionIndex: integer("current_question_index")
+      .default(0)
+      .notNull(),
+    status: varchar("status", { length: 24 }).default("en_curso").notNull(),
+    disqualifiedAt: timestamp("disqualified_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    phaseStatusIdx: index("screening_runs_phase_idx").on(
+      table.phase,
+      table.status
+    ),
+    phaseCheck: check(
+      "screening_runs_phase_ck",
+      sql`${table.phase} IN ('esperando_cv','precalificacion','entrevista','descalificado','concluido')`
+    ),
+    statusCheck: check(
+      "screening_runs_status_ck",
+      sql`${table.status} IN ('en_curso','descalificado','concluido')`
+    ),
+    questionCheck: check(
+      "screening_runs_question_ck",
+      sql`${table.currentQuestionIndex} >= 0`
+    ),
+  })
+);
+
 export const protocolDeleteChallenges = pgTable(
   "protocol_delete_challenges",
   {

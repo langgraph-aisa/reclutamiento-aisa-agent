@@ -24,16 +24,18 @@ import {
   FileSpreadsheet,
   FolderKanban,
   Globe2,
-  MessageCircle,
+  MessageSquareText,
   Plus,
   Radio,
   Search,
   Settings2,
+  Sparkles,
   Trash2,
   Upload,
+  Users,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
@@ -99,6 +101,10 @@ export default function Jobs() {
     new Set()
   );
   const [importPositionId, setImportPositionId] = useState<number | null>(null);
+  const [screeningTarget, setScreeningTarget] = useState<{
+    positionId: number;
+    phase: "precalificacion" | "entrevista";
+  } | null>(null);
   const [importFileName, setImportFileName] = useState("");
   const [importBase64, setImportBase64] = useState("");
   const [importReading, setImportReading] = useState(false);
@@ -523,6 +529,44 @@ export default function Jobs() {
                   </Link>
                   {isAdmin && (
                     <>
+                      <Link href={`/admin/candidates?position=${job.id}`}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-full"
+                        >
+                          <Users className="mr-2 h-3.5 w-3.5" />
+                          Candidatos
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() =>
+                          setScreeningTarget({
+                            positionId: Number(job.id),
+                            phase: "precalificacion",
+                          })
+                        }
+                      >
+                        <Sparkles className="mr-2 h-3.5 w-3.5" />
+                        Precalificación IA
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() =>
+                          setScreeningTarget({
+                            positionId: Number(job.id),
+                            phase: "entrevista",
+                          })
+                        }
+                      >
+                        <MessageSquareText className="mr-2 h-3.5 w-3.5" />
+                        Entrevista IA
+                      </Button>
                       <Link href={`/admin/forms/${job.id}`}>
                         <Button
                           variant="outline"
@@ -588,22 +632,18 @@ export default function Jobs() {
               </p>
               <p className="mt-1 text-sm text-white/60">
                 {isAdmin
-                  ? "Defina preguntas y reglas; al calificar, ApiChat solicita el CV directamente desde el backend."
+                  ? "Defina las preguntas de precalificación y entrevista; el agente las administra en orden después de recibir el CV."
                   : "La configuración de formularios y perfiles está reservada al rol Administrador."}
               </p>
             </div>
           </div>
-          {isAdmin && (
-            <Button
-              variant="secondary"
-              className="rounded-full bg-emerald-200 text-emerald-950 hover:bg-emerald-100"
-            >
-              <MessageCircle className="mr-2 h-4 w-4" />
-              ApiChat directo
-            </Button>
-          )}
         </CardContent>
       </Card>
+
+      <ScreeningDialog
+        target={screeningTarget}
+        onClose={() => setScreeningTarget(null)}
+      />
 
       <Dialog
         open={linkDialogPosition !== null}
@@ -964,3 +1004,389 @@ function Field({
     </div>
   );
 }
+
+type ScreeningTarget = {
+  positionId: number;
+  phase: "precalificacion" | "entrevista";
+} | null;
+
+const SCREENING_PHASE_LABEL: Record<
+  "precalificacion" | "entrevista",
+  { title: string; subtitle: string }
+> = {
+  precalificacion: {
+    title: "Precalificación por IA",
+    subtitle:
+      "El agente administra estas preguntas al inicio de la conversación, después de recibir el CV. Active, ordene y defina cuándo una respuesta descarta.",
+  },
+  entrevista: {
+    title: "Entrevista Guiada por IA",
+    subtitle:
+      "Segunda ronda: el agente administra estas preguntas si la persona supera la precalificación. Active, ordene y defina cuándo una respuesta descarta.",
+  },
+};
+
+type ScreeningDraft = {
+  id?: number;
+  fieldKey: string;
+  type: string;
+  prompt: string;
+  helpText: string;
+  hardFail: boolean;
+  acceptedAnswers: string;
+  dependsOnFieldKey: string;
+  evaluationCriteria: string;
+};
+
+const blankScreeningDraft: ScreeningDraft = {
+  fieldKey: "",
+  type: "texto",
+  prompt: "",
+  helpText: "",
+  hardFail: false,
+  acceptedAnswers: "",
+  dependsOnFieldKey: "",
+  evaluationCriteria: "",
+};
+
+function ScreeningDialog({
+  target,
+  onClose,
+}: {
+  target: ScreeningTarget;
+  onClose: () => void;
+}) {
+  const utils = trpc.useUtils();
+  const open = target !== null;
+  const positionId = target?.positionId ?? 0;
+  const phase = target?.phase ?? "precalificacion";
+  const questions = trpc.screening.listQuestions.useQuery(
+    { positionId },
+    { enabled: open }
+  );
+  const save = trpc.screening.saveQuestion.useMutation({
+    onSuccess: () => {
+      toast.success("Pregunta guardada");
+      utils.screening.listQuestions.invalidate({ positionId });
+      setDraft(null);
+    },
+    onError: error => toast.error(error.message),
+  });
+  const remove = trpc.screening.deleteQuestion.useMutation({
+    onSuccess: () => {
+      utils.screening.listQuestions.invalidate({ positionId });
+    },
+    onError: error => toast.error(error.message),
+  });
+  const setActive = trpc.screening.setQuestionActive.useMutation({
+    onSuccess: () => {
+      utils.screening.listQuestions.invalidate({ positionId });
+    },
+    onError: error => toast.error(error.message),
+  });
+  const move = trpc.screening.moveQuestion.useMutation({
+    onSuccess: () => {
+      utils.screening.listQuestions.invalidate({ positionId });
+    },
+    onError: error => toast.error(error.message),
+  });
+  const [draft, setDraft] = useState<ScreeningDraft | null>(null);
+
+  useEffect(() => {
+    setDraft(null);
+  }, [target]);
+
+  const phaseQuestions = (questions.data ?? []).filter(
+    (question: any) => question.phase === phase
+  );
+
+  const startEdit = (question: any) => {
+    setDraft({
+      id: Number(question.id),
+      fieldKey: question.field_key,
+      type: question.type,
+      prompt: question.prompt,
+      helpText: question.help_text ?? "",
+      hardFail: Boolean(question.hard_fail),
+      acceptedAnswers: Array.isArray(question.accepted_answers)
+        ? question.accepted_answers.join(", ")
+        : "",
+      dependsOnFieldKey: question.depends_on_field_key ?? "",
+      evaluationCriteria: question.evaluation_criteria ?? "",
+    });
+  };
+
+  const submit = () => {
+    if (!draft || !target) return;
+    const acceptedAnswers = draft.acceptedAnswers
+      .split(",")
+      .map(item => item.trim())
+      .filter(Boolean);
+    save.mutate({
+      id: draft.id,
+      positionId: target.positionId,
+      phase: target.phase,
+      fieldKey: draft.fieldKey,
+      type: draft.type || "texto",
+      prompt: draft.prompt,
+      helpText: draft.helpText || undefined,
+      hardFail: draft.hardFail,
+      acceptedAnswers,
+      answerConfig: {},
+      evaluationCriteria: draft.evaluationCriteria || undefined,
+      dependsOnFieldKey: draft.dependsOnFieldKey || undefined,
+      orderIndex: draft.id
+        ? (phaseQuestions.find((q: any) => Number(q.id) === draft.id)
+            ?.order_index ?? 0)
+        : phaseQuestions.length,
+    });
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={next => {
+        if (!next) onClose();
+      }}
+    >
+      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-3xl sm:max-w-xl">
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-primary">
+              {SCREENING_PHASE_LABEL[phase].title}
+            </DialogTitle>
+            {!draft && (
+              <Button
+                size="sm"
+                className="rounded-full"
+                onClick={() => setDraft(blankScreeningDraft)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Agregar pregunta
+              </Button>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {SCREENING_PHASE_LABEL[phase].subtitle}
+          </p>
+        </DialogHeader>
+
+        {draft ? (
+          <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/20 p-4">
+            <p className="text-sm font-semibold text-primary">
+              {draft.id ? "Editar pregunta y su criterio" : "Nueva pregunta y su criterio"}
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Clave del campo">
+                <Input
+                  value={draft.fieldKey}
+                  onChange={event =>
+                    setDraft({ ...draft, fieldKey: event.target.value })
+                  }
+                  placeholder="experiencia_ventas"
+                  className="rounded-2xl"
+                />
+              </Field>
+              <Field label="Tipo">
+                <Input
+                  value={draft.type}
+                  onChange={event =>
+                    setDraft({ ...draft, type: event.target.value })
+                  }
+                  placeholder="texto"
+                  className="rounded-2xl"
+                />
+              </Field>
+            </div>
+            <Field label="Pregunta">
+              <Textarea
+                value={draft.prompt}
+                onChange={event =>
+                  setDraft({ ...draft, prompt: event.target.value })
+                }
+                placeholder="¿Cuántos años de experiencia tiene?"
+                className="rounded-2xl"
+              />
+            </Field>
+            <Field label="Ayuda al candidato">
+              <Textarea
+                value={draft.helpText}
+                onChange={event =>
+                  setDraft({ ...draft, helpText: event.target.value })
+                }
+                placeholder="Explique cómo debe responder."
+                className="rounded-2xl"
+              />
+            </Field>
+            <div className="flex items-center justify-between rounded-2xl border border-border/60 p-3">
+              <div>
+                <p className="text-sm font-semibold text-primary">
+                  ¿Descalifica si no coincide?
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Úselo para residencia, licencia u otra condición esencial.
+                </p>
+              </div>
+              <Switch
+                checked={draft.hardFail}
+                onCheckedChange={checked =>
+                  setDraft({ ...draft, hardFail: checked })
+                }
+                aria-label="Activar el descarte directo de esta pregunta"
+              />
+            </div>
+            {draft.hardFail && (
+              <Field label="Respuestas que aprueban la condición">
+                <Textarea
+                  value={draft.acceptedAnswers}
+                  onChange={event =>
+                    setDraft({ ...draft, acceptedAnswers: event.target.value })
+                  }
+                  placeholder="Sí, Guatemala, 12 meses"
+                  className="rounded-2xl"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Separe con comas. Si activa el descarte directo, cualquier
+                  respuesta distinta puede descalificar automáticamente.
+                </p>
+              </Field>
+            )}
+            <Field label="Depende de la pregunta (clave opcional)">
+              <Input
+                value={draft.dependsOnFieldKey}
+                onChange={event =>
+                  setDraft({ ...draft, dependsOnFieldKey: event.target.value })
+                }
+                placeholder="tipo_de_vehiculo"
+                className="rounded-2xl"
+              />
+            </Field>
+            <Field label="Criterio de razonamiento para IA">
+              <Textarea
+                value={draft.evaluationCriteria}
+                onChange={event =>
+                  setDraft({ ...draft, evaluationCriteria: event.target.value })
+                }
+                placeholder="Considere que la persona está calificada solo si la experiencia es de 12 meses o más. Si indica meses, conviértalos a meses totales."
+                className="rounded-2xl"
+              />
+            </Field>
+            <div className="flex gap-2">
+              <Button
+                className="rounded-full"
+                disabled={save.isPending}
+                onClick={submit}
+              >
+                {save.isPending ? "Guardando…" : "Guardar pregunta"}
+              </Button>
+              <Button
+                variant="outline"
+                className="rounded-full"
+                onClick={() => setDraft(null)}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {phaseQuestions.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-border/70 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+                Sin preguntas en esta fase. Agregue la primera para que el
+                agente la administre al candidato.
+              </p>
+            ) : (
+              phaseQuestions.map((question: any, index: number) => (
+                <div
+                  key={question.id}
+                  className="rounded-xl border border-border/60 bg-background px-3 py-2 text-sm"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-primary">
+                      {index + 1}. {question.prompt}
+                    </span>
+                    {Boolean(question.hard_fail) && (
+                      <Badge className="rounded-full bg-red-100 text-red-800">
+                        Descarte directo
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="rounded-full bg-muted px-2 py-0.5">
+                      {question.field_key}
+                    </span>
+                    <span className="rounded-full bg-muted px-2 py-0.5">
+                      {question.type}
+                    </span>
+                    <span className="ml-auto flex items-center gap-1">
+                      <Switch
+                        checked={Boolean(question.active)}
+                        disabled={setActive.isPending}
+                        onCheckedChange={active =>
+                          setActive.mutate({
+                            id: Number(question.id),
+                            active,
+                          })
+                        }
+                        aria-label={`Activar o desactivar la pregunta ${question.prompt}`}
+                      />
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="rounded-full"
+                      disabled={index === 0 || move.isPending}
+                      onClick={() =>
+                        move.mutate({ id: Number(question.id), direction: "up" })
+                      }
+                    >
+                      Subir
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="rounded-full"
+                      disabled={index === phaseQuestions.length - 1 || move.isPending}
+                      onClick={() =>
+                        move.mutate({
+                          id: Number(question.id),
+                          direction: "down",
+                        })
+                      }
+                    >
+                      Bajar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() => startEdit(question)}
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="rounded-full text-red-700 hover:bg-red-50"
+                      onClick={() =>
+                        window.confirm("¿Eliminar esta pregunta?") &&
+                        remove.mutate({ id: Number(question.id) })
+                      }
+                    >
+                      Eliminar
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+

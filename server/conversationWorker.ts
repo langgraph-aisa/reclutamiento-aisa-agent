@@ -5,6 +5,7 @@ import {
   runAssessmentCycleSweep,
   runAssessmentStepSweep,
 } from "./assessmentAutomation";
+import { runScreeningStepSweep } from "./screeningEngine";
 import { assertCapability } from "./conversationRuntime";
 import { getConversationActivation } from "./conversationActivation";
 import { isUndefinedTableError } from "./governanceObservability";
@@ -73,6 +74,30 @@ async function conversationsInProtocol(pool: Pool, ids: number[]) {
   return excluded;
 }
 
+/**
+ * Conversaciones dentro de una serie de precalificación o entrevista en curso.
+ *
+ * Precedencia declarada: mientras el banco de preguntas se administra, el
+ * screening conduce la conversación y el motor general no consume el turno.
+ */
+async function conversationsInScreening(pool: Pool, ids: number[]) {
+  const excluded = new Set<number>();
+  if (!ids.length) return excluded;
+  try {
+    const result = await pool.query<{ id: number }>(
+      `SELECT conv.id FROM conversations conv
+         JOIN screening_runs run ON run.application_id=conv.application_id
+        WHERE conv.id = ANY($1::int[]) AND run.status='en_curso'
+          AND run.phase IN ('precalificacion','entrevista')`,
+      [ids]
+    );
+    for (const row of result.rows) excluded.add(Number(row.id));
+  } catch (error) {
+    if (!isUndefinedTableError(error)) throw error;
+  }
+  return excluded;
+}
+
 export async function runConversationReasoning(
   pool: Pool,
   options: { limit?: number; now?: Date } = {}
@@ -85,9 +110,18 @@ export async function runConversationReasoning(
   // reanuda al encender el interruptor— en ambos modos.
   const assessment = await runAssessmentCycleSweep(pool, { now: options.now });
   const protocol = await runAssessmentStepSweep(pool, { now: options.now });
+  let screening: Array<{ runId: number; action: string }> = [];
+  try {
+    screening = await runScreeningStepSweep(pool, { now: options.now });
+  } catch (error) {
+    if (!isUndefinedTableError(error)) throw error;
+  }
   const candidates = await pendingConversationIds(pool, options.limit);
   const inProtocol = await conversationsInProtocol(pool, candidates);
-  const conversationIds = candidates.filter(id => !inProtocol.has(id));
+  const inScreening = await conversationsInScreening(pool, candidates);
+  const conversationIds = candidates.filter(
+    id => !inProtocol.has(id) && !inScreening.has(id)
+  );
   const turns: Array<{ conversationId: number; status: string }> = [];
   for (const conversationId of conversationIds) {
     try {
@@ -103,7 +137,7 @@ export async function runConversationReasoning(
       turns.push({ conversationId, status: "error" });
     }
   }
-  return { assessment, protocol, turns };
+  return { assessment, protocol, screening, turns };
 }
 
 export async function runConversationSweep(

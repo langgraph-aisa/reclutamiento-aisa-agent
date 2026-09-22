@@ -6143,6 +6143,215 @@ export const appRouter = router({
       }),
   }),
 
+  screening: router({
+    listQuestions: roleProcedure
+      .input(z.object({ positionId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await getPool();
+        if (!pool) return [];
+        const result = await pool.query(
+          `SELECT * FROM screening_questions
+            WHERE job_position_id=$1
+            ORDER BY phase, order_index, id`,
+          [input.positionId]
+        );
+        return result.rows;
+      }),
+    saveQuestion: adminProcedure
+      .input(
+        z.object({
+          id: z.number().optional(),
+          positionId: z.number().int().positive(),
+          phase: z.enum(["precalificacion", "entrevista"]),
+          fieldKey: z.string().min(2).max(100),
+          prompt: z.string().min(2),
+          helpText: z.string().max(600).optional(),
+          type: z.string().min(2).max(40).default("texto"),
+          orderIndex: z.number().int().default(0),
+          hardFail: z.boolean().default(false),
+          acceptedAnswers: z.array(z.unknown()).default([]),
+          answerConfig: z.record(z.string(), z.unknown()).default({}),
+          evaluationCriteria: z.string().max(2000).optional(),
+          dependsOnFieldKey: z.string().max(100).optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const hasRange = [
+          input.answerConfig.min,
+          input.answerConfig.max,
+          input.answerConfig.minMonths,
+          input.answerConfig.maxMonths,
+        ].some(value => value !== undefined && value !== null && value !== "");
+        if (input.hardFail && input.acceptedAnswers.length === 0 && !hasRange)
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Una pregunta de descarte debe definir respuestas aprobadas o un rango permitido.",
+          });
+        const pool = await requirePool();
+        if (input.id) {
+          const result = await pool.query(
+            `UPDATE screening_questions
+                SET phase=$1,field_key=$2,prompt=$3,help_text=$4,type=$5,
+                    order_index=$6,hard_fail=$7,accepted_answers=$8::jsonb,
+                    answer_config=$9::jsonb,evaluation_criteria=$10,
+                    depends_on_field_key=$11,updated_at=now()
+              WHERE id=$12 AND job_position_id=$13
+              RETURNING *`,
+            [
+              input.phase,
+              input.fieldKey,
+              input.prompt,
+              input.helpText ?? null,
+              input.type,
+              input.orderIndex,
+              input.hardFail,
+              JSON.stringify(input.acceptedAnswers),
+              JSON.stringify(input.answerConfig),
+              input.evaluationCriteria ?? null,
+              input.dependsOnFieldKey ?? null,
+              input.id,
+              input.positionId,
+            ]
+          );
+          if (!result.rows[0])
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Pregunta no encontrada en esta plaza.",
+            });
+          return result.rows[0];
+        }
+        const result = await pool.query(
+          `INSERT INTO screening_questions
+             (job_position_id,phase,field_key,prompt,help_text,type,order_index,
+              hard_fail,accepted_answers,answer_config,evaluation_criteria,
+              depends_on_field_key)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11,$12)
+           RETURNING *`,
+          [
+            input.positionId,
+            input.phase,
+            input.fieldKey,
+            input.prompt,
+            input.helpText ?? null,
+            input.type,
+            input.orderIndex,
+            input.hardFail,
+            JSON.stringify(input.acceptedAnswers),
+            JSON.stringify(input.answerConfig),
+            input.evaluationCriteria ?? null,
+            input.dependsOnFieldKey ?? null,
+          ]
+        );
+        return result.rows[0];
+      }),
+    deleteQuestion: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const pool = await requirePool();
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          const current = await client.query(
+            `SELECT job_position_id,phase FROM screening_questions WHERE id=$1 FOR UPDATE`,
+            [input.id]
+          );
+          if (!current.rows[0])
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Pregunta no encontrada.",
+            });
+          await client.query(`DELETE FROM screening_questions WHERE id=$1`, [
+            input.id,
+          ]);
+          await client.query(
+            `WITH ordered AS (
+               SELECT id, row_number() OVER (ORDER BY order_index,id)-1 AS new_order
+                 FROM screening_questions
+                WHERE job_position_id=$1 AND phase=$2
+             )
+             UPDATE screening_questions q SET order_index=ordered.new_order
+               FROM ordered WHERE q.id=ordered.id`,
+            [current.rows[0].job_position_id, current.rows[0].phase]
+          );
+          await client.query("COMMIT");
+          return { success: true };
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+      }),
+    setQuestionActive: adminProcedure
+      .input(z.object({ id: z.number(), active: z.boolean() }))
+      .mutation(async ({ input }) => {
+        const pool = await requirePool();
+        const result = await pool.query(
+          `UPDATE screening_questions SET active=$1,updated_at=now()
+            WHERE id=$2 RETURNING *`,
+          [input.active, input.id]
+        );
+        if (!result.rows[0])
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Pregunta no encontrada.",
+          });
+        return result.rows[0];
+      }),
+    moveQuestion: adminProcedure
+      .input(z.object({ id: z.number(), direction: z.enum(["up", "down"]) }))
+      .mutation(async ({ input }) => {
+        const pool = await requirePool();
+        const client = await pool.connect();
+        try {
+          await client.query("BEGIN");
+          const current = await client.query(
+            `SELECT id,job_position_id,phase,order_index FROM screening_questions
+              WHERE id=$1 FOR UPDATE`,
+            [input.id]
+          );
+          if (!current.rows[0])
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Pregunta no encontrada.",
+            });
+          const delta = input.direction === "up" ? -1 : 1;
+          const target = await client.query(
+            `SELECT id,order_index FROM screening_questions
+              WHERE job_position_id=$1 AND phase=$2 AND order_index=$3
+              ORDER BY id LIMIT 1 FOR UPDATE`,
+            [
+              current.rows[0].job_position_id,
+              current.rows[0].phase,
+              current.rows[0].order_index + delta,
+            ]
+          );
+          if (target.rows[0]) {
+            await client.query(
+              `UPDATE screening_questions SET order_index=$1 WHERE id=$2`,
+              [current.rows[0].order_index, target.rows[0].id]
+            );
+            await client.query(
+              `UPDATE screening_questions SET order_index=$1 WHERE id=$2`,
+              [target.rows[0].order_index, current.rows[0].id]
+            );
+          }
+          const result = await client.query(
+            `SELECT * FROM screening_questions WHERE id=$1`,
+            [input.id]
+          );
+          await client.query("COMMIT");
+          return result.rows[0];
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
+        } finally {
+          client.release();
+        }
+      }),
+  }),
+
   agent: router({
     configuration: adminProcedure.query(async () => {
       return getAgentConfiguration(await getPool());

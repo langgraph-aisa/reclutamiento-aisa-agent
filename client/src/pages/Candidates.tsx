@@ -54,7 +54,10 @@ export default function Candidates() {
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState("all");
-  const [positionId, setPositionId] = useState("all");
+  const [positionId, setPositionId] = useState<string>(() => {
+    const raw = new URLSearchParams(window.location.search).get("position");
+    return raw && /^\d+$/.test(raw) ? raw : "all";
+  });
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [minimumScore, setMinimumScore] = useState("all");
