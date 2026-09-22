@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 
 type SortBy = "submitted_at" | "name" | "score" | "status" | "position";
 type SortDirection = "asc" | "desc";
@@ -54,10 +54,18 @@ export default function Candidates() {
   const [searchText, setSearchText] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const locationSearch = useSearch();
   const [positionId, setPositionId] = useState<string>(() => {
-    const raw = new URLSearchParams(window.location.search).get("position");
+    const raw = new URLSearchParams(locationSearch).get("position");
     return raw && /^\d+$/.test(raw) ? raw : "all";
   });
+
+  // El filtro de plaza sigue al parámetro de la URL: navegar entre plazas desde
+  // la ficha sin remontar la hoja actualiza el filtro en lugar de conservarlo.
+  useEffect(() => {
+    const raw = new URLSearchParams(locationSearch).get("position");
+    setPositionId(raw && /^\d+$/.test(raw) ? raw : "all");
+  }, [locationSearch]);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [minimumScore, setMinimumScore] = useState("all");

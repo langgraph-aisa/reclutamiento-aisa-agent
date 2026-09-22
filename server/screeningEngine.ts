@@ -337,7 +337,7 @@ async function candidateRuns(
             a.job_position_id AS position_id,r.phase,r.current_question_index,r.status
        FROM screening_runs r
        JOIN applications a ON a.id=r.application_id
-       LEFT JOIN conversations conv ON conv.application_id=r.application_id
+       JOIN conversations conv ON conv.application_id=r.application_id
       WHERE r.status='en_curso'
         AND r.phase IN ('precalificacion','entrevista')
       ORDER BY r.id
@@ -374,6 +374,10 @@ export async function ensureScreeningRunsForReceivedCv(
         WHERE EXISTS (
                 SELECT 1 FROM candidate_knowledge_files f
                  WHERE f.application_id = a.id AND f.document_class = 'cv'
+              )
+          AND EXISTS (
+                SELECT 1 FROM conversations c
+                 WHERE c.application_id = a.id
               )
           AND EXISTS (
                 SELECT 1 FROM screening_questions q
@@ -439,7 +443,12 @@ async function closeScreening(
     );
     await pool.query(
       `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
-       VALUES (NULL,'application',$1,'screening_disqualified',$2::jsonb)`,
+       SELECT NULL,'application',$1,'screening_disqualified',$2::jsonb
+        WHERE NOT EXISTS (
+          SELECT 1 FROM audit_log
+           WHERE entity_type='application' AND entity_id=$1
+             AND action='screening_disqualified'
+        )`,
       [
         run.application_id,
         JSON.stringify({ run_id: run.run_id, phase: run.phase }),
