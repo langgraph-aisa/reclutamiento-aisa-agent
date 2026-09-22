@@ -84,6 +84,11 @@ export function screeningCloseMessageKey(runId: number) {
   return `screening_close:${runId}`;
 }
 
+/** Identidad del recordatorio; un reintento no lo duplica. */
+export function screeningRepeatMessageKey(runId: number, index: number) {
+  return `screening_repeat:${runId}:${index}`;
+}
+
 export function normalizeAnswer(value: string) {
   return value
     .normalize("NFD")
@@ -91,6 +96,17 @@ export function normalizeAnswer(value: string) {
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Respuesta sin contenido suficiente para juzgar o avanzar. */
+export function isTrivialScreeningAnswer(value: string) {
+  const answer = normalizeAnswer(value);
+  if (!answer) return true;
+  const words = answer.split(/\s+/).filter(Boolean).length;
+  if (words < 2) return true;
+  return ["no entiendo", "no se", "no se que responder", "nose"].includes(
+    answer
+  );
 }
 
 function escapeRegExp(value: string) {
@@ -368,24 +384,29 @@ export async function ensureScreeningRunsForReceivedCv(
   try {
     const result = await pool.query(
       `INSERT INTO screening_runs (application_id, phase, status)
-       SELECT a.id, 'precalificacion', 'en_curso'
-         FROM applications a
-         JOIN job_positions p ON p.id = a.job_position_id
-        WHERE EXISTS (
-                SELECT 1 FROM candidate_knowledge_files f
-                 WHERE f.application_id = a.id AND f.document_class = 'cv'
-              )
-          AND EXISTS (
-                SELECT 1 FROM conversations c
-                 WHERE c.application_id = a.id
-              )
-          AND EXISTS (
-                SELECT 1 FROM screening_questions q
-                 WHERE q.job_position_id = a.job_position_id AND q.active = true
-              )
-          AND NOT EXISTS (
-                SELECT 1 FROM screening_runs r WHERE r.application_id = a.id
-              )
+       SELECT ids.id, 'precalificacion', 'en_curso'
+         FROM (
+           SELECT app.id
+             FROM applications app
+             JOIN job_positions p ON p.id = app.job_position_id
+            WHERE EXISTS (
+                    SELECT 1 FROM candidate_knowledge_files f
+                     WHERE f.application_id = app.id AND f.document_class = 'cv'
+                  )
+              AND EXISTS (
+                    SELECT 1 FROM conversations c
+                     WHERE c.application_id = app.id
+                  )
+              AND EXISTS (
+                    SELECT 1 FROM screening_questions q
+                     WHERE q.job_position_id = app.job_position_id AND q.active = true
+                  )
+              AND NOT EXISTS (
+                    SELECT 1 FROM screening_runs r WHERE r.application_id = app.id
+                  )
+            ORDER BY app.id
+            LIMIT 50
+         ) ids
         ON CONFLICT (application_id) DO NOTHING`,
       []
     );
@@ -399,7 +420,7 @@ export async function ensureScreeningRunsForReceivedCv(
 async function closeScreening(
   pool: Pool,
   run: RunCandidate,
-  input: { disqualify: boolean }
+  input: { disqualify: boolean; reason?: string }
 ) {
   const closing = await pool.query<{
     name: string | null;
@@ -437,9 +458,12 @@ async function closeScreening(
   });
   if (input.disqualify) {
     await pool.query(
-      `UPDATE applications SET status='no_calificado', updated_at=now()
+      `UPDATE applications
+          SET status='no_calificado',
+              evaluation_reason=$2,
+              updated_at=now()
         WHERE id=$1 AND status NOT IN ('no_calificado')`,
-      [run.application_id]
+      [run.application_id, input.reason ?? null]
     );
     await pool.query(
       `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
@@ -503,11 +527,12 @@ export async function runScreeningStepSweep(
             AND m.created_at > (
               SELECT COALESCE(MAX(pm.created_at), 'epoch')
                 FROM conversation_messages pm
-               WHERE pm.message_key=$2
+               WHERE pm.conversation_id=$1 AND pm.direction='outbound'
+                 AND pm.message_key LIKE 'screening_%'
             )
           ORDER BY m.created_at,m.id
           LIMIT 1`,
-        [run.conversation_id, screeningQuestionMessageKey(run.run_id, run.current_question_index)]
+        [run.conversation_id]
       );
       const plan = planScreeningStep({
         run,
@@ -548,14 +573,43 @@ export async function runScreeningStepSweep(
         continue;
       }
       if (plan.action === "evaluar" && question) {
-        const judgement = judgeScreeningAnswer(
-          question,
-          String(pending.rows[0]?.body ?? "")
-        );
-        if (judgement.disqualifying) {
-          await closeScreening(pool, run, { disqualify: true });
-          outcomes.push({ runId: run.run_id, action: "descalificado" });
-          continue;
+        const answer = String(pending.rows[0]?.body ?? "");
+        if (question.hard_fail) {
+          const judgement = judgeScreeningAnswer(question, answer);
+          if (judgement.disqualifying) {
+            await closeScreening(pool, run, {
+              disqualify: true,
+              reason: judgement.rationale,
+            });
+            outcomes.push({ runId: run.run_id, action: "descalificado" });
+            continue;
+          }
+        } else if (isTrivialScreeningAnswer(answer)) {
+          // Una respuesta sin contenido en una pregunta que no descarta no
+          // avanza: se recuerda una sola vez; si la persona persiste, el
+          // protocolo avanza para no atascarse.
+          const repeated = await pool.query<{ exists: string }>(
+            `SELECT count(*)::text AS exists FROM conversation_messages
+              WHERE message_key=$1`,
+            [
+              screeningRepeatMessageKey(
+                run.run_id,
+                run.current_question_index
+              ),
+            ]
+          );
+          if (Number(repeated.rows[0]?.exists ?? 0) === 0) {
+            await enqueueScreeningMessage(pool, {
+              conversationId: run.conversation_id,
+              text: "Para continuar, por favor responda la pregunta anterior. Si no la entendió, escríbalo y una persona se hará cargo.",
+              messageKey: screeningRepeatMessageKey(
+                run.run_id,
+                run.current_question_index
+              ),
+            });
+            outcomes.push({ runId: run.run_id, action: "repetir" });
+            continue;
+          }
         }
         const nextIndex = run.current_question_index + 1;
         if (nextIndex >= questions.length) {

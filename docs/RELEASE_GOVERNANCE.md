@@ -9,7 +9,7 @@ El release **suma el banco de precalificación y entrevista por plaza y el acces
 
 **El modelo.** `screening_questions` guarda el banco único de preguntas por plaza en dos fases (`precalificacion`, `entrevista`): campo, pregunta, ayuda, tipo, orden, descarte directo (`hard_fail`), respuestas aprobadas, rango permitido, criterio de razonamiento editable y dependencia opcional. `screening_runs` conserva la máquina de estados de cada postulación.
 
-**El motor.** `server/screeningEngine.ts` crea el recorrido cuando el CV llega y la plaza declara preguntas activas; administra las preguntas en orden, evalúa el descarte de forma determinista y cierra la conversación con el agradecimiento y el aviso de contacto. La postulación descartada queda `no_calificado`; sin preguntas configuradas, el flujo conversacional ordinario se conserva.
+**El motor.** `server/screeningEngine.ts` crea el recorrido cuando el CV llega y la plaza declara preguntas activas; administra las preguntas en orden, evalúa el descarte de forma determinista y cierra la conversación con el agradecimiento y el aviso de contacto. La postulación descartada queda `no_calificado` y su motivo se asienta en `evaluation_reason`, visible en la matriz y la ficha; una respuesta sin contenido en una pregunta que no descarta se recuerda una sola vez. Sin preguntas configuradas, el flujo conversacional ordinario se conserva.
 
 **La superficie.** `server/routers.ts` incorpora `screening.*` (listado, alta, edición, borrado, orden y activación). `Jobs.tsx` suma los tres accesos en la ficha y el editor de preguntas; «Candidatos» abre el explorador con el filtro de la plaza aplicado.
 

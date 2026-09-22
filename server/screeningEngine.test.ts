@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   firstNumber,
+  isTrivialScreeningAnswer,
   judgeScreeningAnswer,
   nextScreeningPhase,
   normalizeAnswer,
@@ -77,6 +78,15 @@ describe("screeningEngine: juicio determinista de descarte", () => {
       "cualquier cosa"
     );
     expect(judgement.disqualifying).toBe(false);
+  });
+
+  it("reconoce una respuesta trivial que no debe avanzar", () => {
+    expect(isTrivialScreeningAnswer("")).toBe(true);
+    expect(isTrivialScreeningAnswer("ok")).toBe(true);
+    expect(isTrivialScreeningAnswer("no entiendo")).toBe(true);
+    expect(isTrivialScreeningAnswer("Tengo 12 meses de experiencia")).toBe(
+      false
+    );
   });
 });
 
