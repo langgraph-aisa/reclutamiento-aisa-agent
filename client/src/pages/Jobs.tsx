@@ -90,6 +90,19 @@ export default function Jobs() {
   const remove = trpc.positions.remove.useMutation({
     onSuccess: () => query.refetch(),
   });
+  const createForm = trpc.forms.upsert.useMutation({
+    onSuccess: (created: any, variables) => {
+      toast.success("Formulario creado");
+      utils.forms.listByPosition.invalidate({
+        positionId: variables.positionId,
+      });
+      query.refetch();
+      window.location.assign(
+        `/admin/forms/${variables.positionId}?formId=${created.id}`
+      );
+    },
+    onError: error => toast.error(error.message),
+  });
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<Draft>(blank);
   const [search, setSearch] = useState("");
@@ -546,16 +559,35 @@ export default function Jobs() {
                       Formularios y anuncios
                     </p>
                     {isAdmin && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="rounded-full"
-                        onClick={() => setImportPositionId(Number(job.id))}
-                      >
-                        <Upload className="mr-2 h-3.5 w-3.5" />
-                        Importar Excel/CSV
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full"
+                          onClick={() => setImportPositionId(Number(job.id))}
+                        >
+                          <Upload className="mr-2 h-3.5 w-3.5" />
+                          Importar Excel/CSV
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="rounded-full"
+                          onClick={() =>
+                            createForm.mutate({
+                              positionId: Number(job.id),
+                              title: `Formulario · ${job.title}`,
+                              intro:
+                                "Complete sus datos para postularse a esta plaza.",
+                            })
+                          }
+                          disabled={createForm.isPending}
+                        >
+                          <Plus className="mr-2 h-3.5 w-3.5" />
+                          Nuevo formulario
+                        </Button>
+                      </div>
                     )}
                   </div>
                   <PositionForms
