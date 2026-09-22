@@ -10,6 +10,7 @@ import {
   renderSpreadsheetHtml,
 } from "./knowledge";
 import { storageBackendForKey } from "./driveProject";
+import type { StorageBackend } from "./storageBackend";
 import { readLocalSession } from "./localAuth";
 import { VIEWER_SECURITY_HEADERS, verifyViewerToken } from "./viewerAccess";
 
@@ -118,8 +119,8 @@ function sendRange(
 
 /**
  * Entrega el binario según el backend que custodia la clave: el backend local
- * conserva el flujo con rangos; el backend de Drive se sirve completo, sin
- * rangos, con la misma cabecera de seguridad y el mismo `Content-Type`.
+ * conserva el flujo con rangos; el backend de Drive sirve también rangos cuando
+ * el visor los pide, de modo que PDF, audio y video conserven el paginado.
  */
 async function deliverBinary(
   req: Request,
@@ -133,20 +134,55 @@ async function deliverBinary(
   const disposition = `inline; filename="${row.original_name.replace(/[^\w.\- ]/g, "_")}"`;
   res.set("Content-Disposition", disposition);
   if (drive) {
-    const data = await drive.read(row.storage_key);
-    res.writeHead(200, {
-      ...VIEWER_SECURITY_HEADERS,
-      "Content-Type": row.mime_type,
-      "Content-Length": data.length,
-      "Accept-Ranges": "none",
-      "Cache-Control": "private, max-age=3600",
-    });
-    res.end(data);
+    await sendDriveBinary(req, res, drive, row);
     return;
   }
   const filePath = knowledgeFilePath(row.storage_key);
   const stats = await knowledgeFileStats(row.storage_key);
   sendRange(res, filePath, stats.size, row.mime_type, req.headers.range);
+}
+
+/** Entrega desde Drive: con rango si el visor lo pide y el backend lo soporta. */
+async function sendDriveBinary(
+  req: Request,
+  res: Response,
+  drive: StorageBackend,
+  row: { storage_key: string; mime_type: string }
+) {
+  const common = {
+    ...VIEWER_SECURITY_HEADERS,
+    "Content-Type": row.mime_type,
+    "Cache-Control": "private, max-age=3600",
+  };
+  const range = /^bytes=(\d*)-(\d*)$/.exec(
+    (req.headers.range ?? "").trim()
+  );
+  if (range && drive.readRange) {
+    const stats = await drive.stat(row.storage_key);
+    const size = stats.size;
+    const start = range[1] ? Number(range[1]) : 0;
+    const end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+    if (start > end || start >= size || end < 0) {
+      res.status(416).set("Content-Range", `bytes */${size}`).end();
+      return;
+    }
+    const data = await drive.readRange(row.storage_key, start, end);
+    res.writeHead(206, {
+      ...common,
+      "Content-Length": data.length,
+      "Content-Range": `bytes ${start}-${start + data.length - 1}/${size}`,
+      "Accept-Ranges": "bytes",
+    });
+    res.end(data);
+    return;
+  }
+  const data = await drive.read(row.storage_key);
+  res.writeHead(200, {
+    ...common,
+    "Content-Length": data.length,
+    "Accept-Ranges": "bytes",
+  });
+  res.end(data);
 }
 
 /**
@@ -267,6 +303,38 @@ function classifyDeliveryFailure(error: unknown): DeliveryFailure {
       reason: "ruta-es-directorio",
       message:
         "La ruta configurada apunta a un directorio y no al documento almacenado.",
+    };
+  }
+  if (code === "drive_unauthenticated") {
+    return {
+      status: 502,
+      reason: "drive-sin-acceso",
+      message:
+        "La cuenta de Google Drive perdió el acceso; vuelva a conectarla en «Mi cuenta».",
+    };
+  }
+  if (code === "drive_forbidden") {
+    return {
+      status: 403,
+      reason: "drive-sin-permiso",
+      message:
+        "La cuenta de Google Drive no tiene permiso sobre el documento.",
+    };
+  }
+  if (code === "drive_rate_limited") {
+    return {
+      status: 503,
+      reason: "drive-limite",
+      message:
+        "Google Drive rechazó la entrega por límite de peticiones; inténtelo de nuevo en unos minutos.",
+    };
+  }
+  if (code === "drive_unavailable") {
+    return {
+      status: 502,
+      reason: "drive-no-disponible",
+      message:
+        "Google Drive no respondió; el documento sigue custodiado en la cuenta del proyecto.",
     };
   }
   if (error instanceof Error && /no es válida/i.test(error.message)) {

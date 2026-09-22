@@ -31,6 +31,8 @@ export interface StorageBackend {
   write(key: string, data: Buffer): Promise<void>;
   /** Lee los bytes completos de una clave. */
   read(key: string): Promise<Buffer>;
+  /** Lee un rango cerrado `[start, end]`; los backend que no lo soportan lo omiten. */
+  readRange?(key: string, start: number, end: number): Promise<Buffer>;
   /** Borra una clave sin fallar cuando no existe. */
   remove(key: string): Promise<void>;
   /** Metadatos de una clave; la ausencia se propaga como error. */

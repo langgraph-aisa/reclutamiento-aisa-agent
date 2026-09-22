@@ -1,9 +1,13 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import { createServer, type Server } from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {
+  encryptAgentSecret,
+  integrationSecretContext,
+} from "./agentSettings";
 
 /**
  * Prueba de extremo a extremo de la entrega del visor.
@@ -19,7 +23,28 @@ const PDF_BYTES = Buffer.concat([
 ]);
 
 let queryResult: { rows: unknown[] } = { rows: [] };
-const queryMock = vi.fn(async () => queryResult);
+let driveMode = false;
+let driveSettingsRows: unknown[] = [];
+
+const queryMock = vi.fn(async (sql: string) => {
+  if (!driveMode) return queryResult;
+  const text = String(sql);
+  if (text.includes("FROM integration_settings")) {
+    return { rows: driveSettingsRows };
+  }
+  if (text.includes("FROM knowledge_projects")) {
+    return {
+      rows: [
+        {
+          created_by_user_id: 9,
+          drive_connection_user_id: 9,
+          storage_mode: "drive",
+        },
+      ],
+    };
+  }
+  return queryResult;
+});
 
 vi.mock("./db", () => ({
   getPool: async () => ({ query: queryMock }),
@@ -33,6 +58,9 @@ vi.mock("./localAuth", () => ({
 
 const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "rag-viewer-e2e-"));
 process.env.KNOWLEDGE_STORAGE_DIR = storageRoot;
+// El cliente de la prueba pide por HTTP real; el `fetch` global se reserva para
+// el backend de Drive, que se sustituye en la rama de custodia por proyecto.
+const realFetch = globalThis.fetch;
 
 const { registerKnowledgeRoutes } = await import("./knowledgeRoutes");
 const { createViewerToken } = await import("./viewerAccess");
@@ -76,6 +104,117 @@ function writeStoredPdf(storageKey: string) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, PDF_BYTES);
   return target;
+}
+
+/**
+ * Drive en memoria para la rama de entrega por backend. Se siembra la jerarquía
+ * `JARVI RH/3` con el documento, de modo que la lectura con o sin rango no
+ * toque la red real.
+ */
+function fakeDriveFetch(fileName: string, content: Buffer) {
+  const apiBase = "https://www.googleapis.com/drive/v3";
+  const files = new Map<
+    string,
+    { id: string; name: string; mimeType: string; parents: string[]; content?: Buffer }
+  >();
+  let counter = 0;
+  const id = () => `drive-${++counter}`;
+  const rootId = id();
+  files.set(rootId, {
+    id: rootId,
+    name: "JARVI RH",
+    mimeType: "application/vnd.google-apps.folder",
+    parents: ["root"],
+  });
+  const projectId = id();
+  files.set(projectId, {
+    id: projectId,
+    name: "3",
+    mimeType: "application/vnd.google-apps.folder",
+    parents: [rootId],
+  });
+  const fileId = "drive-file";
+  files.set(fileId, {
+    id: fileId,
+    name: fileName,
+    mimeType: "application/pdf",
+    parents: [projectId],
+    content,
+  });
+
+  const find = (name: string, parent: string, mimeType?: string) =>
+    [...files.values()].filter(
+      file =>
+        file.name === name &&
+        file.parents.includes(parent) &&
+        (!mimeType || file.mimeType === mimeType)
+    );
+
+  const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "https://oauth2.googleapis.com/token") {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: "access-token", expires_in: 3600 }),
+      } as unknown as Response;
+    }
+    if (url.startsWith(`${apiBase}/files?`)) {
+      const q = decodeURIComponent(url.split("q=")[1].split("&")[0]);
+      const name = /name='([^']+)'/.exec(q)?.[1] ?? "";
+      const parent = /'([^']+)' in parents/.exec(q)?.[1] ?? "";
+      const mimeType = /mimeType='([^']+)'/.exec(q)?.[1];
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          files: find(name, parent, mimeType).map(file => ({
+            id: file.id,
+            name: file.name,
+            mimeType: file.mimeType,
+            size: String(file.content?.length ?? 0),
+            modifiedTime: "2026-09-22T00:00:00.000Z",
+          })),
+        }),
+      } as unknown as Response;
+    }
+    if (url.includes("alt=media")) {
+      const targetId = url.split("/files/")[1].split("?")[0];
+      const file = files.get(targetId);
+      if (!file) {
+        return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+      }
+      const body = file.content ?? Buffer.from("");
+      const range = String(
+        ((init?.headers as Record<string, string> | undefined) ?? {})[
+          "Range"
+        ] ?? ""
+      );
+      const match = /^bytes=(\d+)-(\d+)$/.exec(range);
+      if (match) {
+        const start = Number(match[1]);
+        const end = Number(match[2]);
+        if (start > end || start >= body.length) {
+          return { ok: false, status: 416, json: async () => ({}) } as unknown as Response;
+        }
+        const sliced = body.subarray(start, Math.min(end + 1, body.length));
+        return {
+          ok: true,
+          status: 206,
+          arrayBuffer: async () =>
+            sliced.buffer.slice(sliced.byteOffset, sliced.byteOffset + sliced.byteLength),
+        } as unknown as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        arrayBuffer: async () =>
+          body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+      } as unknown as Response;
+    }
+    return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+  };
+  return fetchImpl as unknown as typeof fetch;
 }
 
 describe("entrega del visor de conocimiento", () => {
@@ -251,5 +390,85 @@ describe("diagnóstico del volumen de conocimiento", () => {
     );
     expect(health.directory).toBe(path.resolve(storageRoot));
     expect(health.registered).toBe(0);
+  });
+});
+
+describe("entrega del visor desde Google Drive", () => {
+  beforeEach(() => {
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "test-key-material-with-more-than-thirty-two-characters"
+    );
+    const secretContext = integrationSecretContext(
+      "google_drive",
+      "oauth_client_secret"
+    );
+    const refreshContext = integrationSecretContext("google_drive", "refresh:9");
+    driveSettingsRows = [
+      {
+        setting_key: "oauth_client_id",
+        setting_value: "client-id.apps.googleusercontent.com",
+        is_secret: false,
+      },
+      {
+        setting_key: "oauth_client_secret",
+        setting_value: encryptAgentSecret("secret-value", secretContext),
+        is_secret: true,
+      },
+      {
+        setting_key: "refresh:9",
+        setting_value: encryptAgentSecret(
+          JSON.stringify({ refreshToken: "refresh", email: "propietario@aisa.com.gt" }),
+          refreshContext
+        ),
+        is_secret: true,
+      },
+    ];
+    driveMode = true;
+  });
+
+  afterEach(() => {
+    driveMode = false;
+    driveSettingsRows = [];
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("sirve el binario completo desde Drive con cabeceras de seguridad", async () => {
+    const storageKey = "3/drive-uuid.pdf";
+    registerPdfRow(31, storageKey);
+    vi.stubGlobal("fetch", fakeDriveFetch("drive-uuid.pdf", PDF_BYTES));
+
+    const token = createViewerToken("knowledge", 31);
+    const response = await realFetch(
+      `${baseUrl}/api/knowledge/files/31?t=${encodeURIComponent(token)}`,
+      { headers: { Accept: "application/pdf,*/*" } }
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/pdf");
+    expect(response.headers.get("accept-ranges")).toBe("bytes");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(Buffer.from(await response.arrayBuffer()).equals(PDF_BYTES)).toBe(
+      true
+    );
+  });
+
+  it("sirve un rango de bytes desde Drive para el paginado", async () => {
+    const storageKey = "3/drive-uuid.pdf";
+    registerPdfRow(32, storageKey);
+    vi.stubGlobal("fetch", fakeDriveFetch("drive-uuid.pdf", PDF_BYTES));
+
+    const token = createViewerToken("knowledge", 32);
+    const response = await realFetch(
+      `${baseUrl}/api/knowledge/files/32?t=${encodeURIComponent(token)}`,
+      { headers: { Range: "bytes=0-9" } }
+    );
+
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe(
+      `bytes 0-9/${PDF_BYTES.length}`
+    );
+    expect((await response.arrayBuffer()).byteLength).toBe(10);
   });
 });

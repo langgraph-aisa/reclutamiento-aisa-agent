@@ -15,7 +15,7 @@ type StoredFile = {
   modifiedTime: string;
 };
 
-function fakeDrive() {
+function fakeDrive(options: { downloadStatus?: number } = {}) {
   const files = new Map<string, StoredFile>();
   let counter = 0;
   const id = () => `drive-${++counter}`;
@@ -102,7 +102,29 @@ function fakeDrive() {
         return jsonResponse({});
       }
       if (url.includes("alt=media")) {
-        return binaryResponse(file.content ?? Buffer.from(""));
+        if (options.downloadStatus) {
+          return jsonResponse({}, false, options.downloadStatus);
+        }
+        const content = file.content ?? Buffer.from("");
+        const range = String(
+          ((init?.headers as Record<string, string> | undefined) ?? {})[
+            "Range"
+          ] ?? ""
+        );
+        const match = /^bytes=(\d+)-(\d+)$/.exec(range);
+        if (match) {
+          const start = Number(match[1]);
+          const end = Number(match[2]);
+          if (start > end || start >= content.length) {
+            return jsonResponse({}, false, 416);
+          }
+          const sliced = content.subarray(start, Math.min(end + 1, content.length));
+          return {
+            ...binaryResponse(sliced),
+            status: 206,
+          } as unknown as Response;
+        }
+        return binaryResponse(content);
       }
       return jsonResponse({ id: file.id });
     }
@@ -233,5 +255,38 @@ describe("backend de almacenamiento en Google Drive", () => {
       "3/candidatos/41/uuid.pdf"
     );
     expect(candidateUnderProjectKeyMapper(3)("7/uuid.pdf")).toBe("7/uuid.pdf");
+  });
+
+  it("sirve un rango de bytes sin descargar el binario completo", async () => {
+    const { fetchImpl } = fakeDrive();
+    const backend = new DriveStorageBackend(async () => "access-token", {
+      fetchImpl,
+    });
+    const content = Buffer.from("0123456789");
+    await backend.write("3/uuid.txt", content);
+    const slice = await backend.readRange("3/uuid.txt", 2, 5);
+    expect(slice.toString()).toBe("2345");
+    expect(slice.length).toBe(4);
+  });
+
+  it("declara un rango fuera de alcance como vacío", async () => {
+    const { fetchImpl } = fakeDrive();
+    const backend = new DriveStorageBackend(async () => "access-token", {
+      fetchImpl,
+    });
+    await backend.write("3/uuid.txt", Buffer.from("corto"));
+    const slice = await backend.readRange("3/uuid.txt", 90, 120);
+    expect(slice.length).toBe(0);
+  });
+
+  it("nombra la causa de un rechazo de Drive", async () => {
+    const { fetchImpl } = fakeDrive({ downloadStatus: 403 });
+    const backend = new DriveStorageBackend(async () => "access-token", {
+      fetchImpl,
+    });
+    await backend.write("3/uuid.pdf", Buffer.from("x"));
+    await expect(backend.read("3/uuid.pdf")).rejects.toMatchObject({
+      code: "drive_forbidden",
+    });
   });
 });

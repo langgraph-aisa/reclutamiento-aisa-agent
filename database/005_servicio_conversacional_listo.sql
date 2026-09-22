@@ -1,5 +1,5 @@
 -- ============================================================================
--- JARVI RH 2.0.206 · Despliegue completo del servicio conversacional
+-- JARVI RH 2.0.207 · Despliegue completo del servicio conversacional
 -- ============================================================================
 -- Archivo GENERADO. No editar a mano: se compone con
 --   pnpm deploy:sql
@@ -1471,6 +1471,34 @@ CREATE TRIGGER conversation_messages_message_key_immutable_trg
   BEFORE UPDATE ON conversation_messages
   FOR EACH ROW
   EXECUTE FUNCTION conversation_messages_message_key_immutable();
+
+-- ----------------------------------------------------------------------------
+-- Origen: drizzle/migrations/0039_project_drive_activation.sql
+-- ----------------------------------------------------------------------------
+
+-- 0039_project_drive_activation.sql
+-- Activa la custodia por proyecto de forma explícita y reversible, y abre el
+-- rol «Administrador de proyectos» para asignar y rotar la cuenta de Drive que
+-- respalda cada proyecto.
+ALTER TYPE "public"."user_role" ADD VALUE IF NOT EXISTS 'project_admin' BEFORE 'admin';
+
+ALTER TABLE "public"."knowledge_projects"
+  ADD COLUMN IF NOT EXISTS "drive_connection_user_id" integer REFERENCES "public"."users"("id") ON DELETE SET NULL;
+
+ALTER TABLE "public"."knowledge_projects"
+  ADD COLUMN IF NOT EXISTS "storage_mode" text NOT NULL DEFAULT 'local';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'knowledge_projects_storage_mode_check'
+  ) THEN
+    ALTER TABLE "public"."knowledge_projects"
+      ADD CONSTRAINT "knowledge_projects_storage_mode_check"
+      CHECK ("storage_mode" IN ('local', 'drive'));
+  END IF;
+END $$;
 
 -- ----------------------------------------------------------------------------
 -- Verificación autocertificada

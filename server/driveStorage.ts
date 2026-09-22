@@ -53,6 +53,30 @@ function missingFileError() {
   );
 }
 
+/**
+ * Error de la API de Drive con causa nombrada. Sin un código propio, un fallo
+ * de autenticación, de cuota o de red se presentaría al operador con la misma
+ * frase genérica; el código permite que el llamador lo declare con su motivo.
+ */
+function driveApiError(operation: string, status: number): Error {
+  const code =
+    status === 401
+      ? "drive_unauthenticated"
+      : status === 403
+        ? "drive_forbidden"
+        : status === 404
+          ? "ENOENT"
+          : status === 429
+            ? "drive_rate_limited"
+            : "drive_unavailable";
+  return Object.assign(
+    new Error(
+      `Google Drive rechazó ${operation} con estado HTTP ${status}.`
+    ),
+    { code }
+  );
+}
+
 export class DriveStorageBackend implements StorageBackend {
   constructor(
     private readonly tokenSource: DriveTokenSource,
@@ -97,9 +121,7 @@ export class DriveStorageBackend implements StorageBackend {
       { headers }
     );
     if (!response.ok) {
-      throw new Error(
-        `Google Drive rechazó el listado con estado HTTP ${response.status}.`
-      );
+      throw driveApiError("el listado", response.status);
     }
     const data = (await response.json()) as { files?: DriveFileRef[] };
     return data.files ?? [];
@@ -120,9 +142,7 @@ export class DriveStorageBackend implements StorageBackend {
       }),
     });
     if (!response.ok) {
-      throw new Error(
-        `Google Drive no pudo crear la carpeta con estado HTTP ${response.status}.`
-      );
+      throw driveApiError("la creación de la carpeta", response.status);
     }
     const data = (await response.json()) as { id?: string };
     return String(data.id);
@@ -183,9 +203,7 @@ export class DriveStorageBackend implements StorageBackend {
       { method: "POST", headers, body: body as unknown as BodyInit }
     );
     if (!response.ok) {
-      throw new Error(
-        `Google Drive rechazó la escritura con estado HTTP ${response.status}.`
-      );
+      throw driveApiError("la escritura", response.status);
     }
   }
 
@@ -199,9 +217,7 @@ export class DriveStorageBackend implements StorageBackend {
       { method: "PATCH", headers, body: data as unknown as BodyInit }
     );
     if (!response.ok) {
-      throw new Error(
-        `Google Drive rechazó la actualización con estado HTTP ${response.status}.`
-      );
+      throw driveApiError("la actualización", response.status);
     }
   }
 
@@ -225,9 +241,37 @@ export class DriveStorageBackend implements StorageBackend {
       { headers }
     );
     if (!response.ok) {
-      throw new Error(
-        `Google Drive rechazó la lectura con estado HTTP ${response.status}.`
-      );
+      throw driveApiError("la lectura", response.status);
+    }
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  /**
+   * Lectura parcial con rango. Google Drive respeta la cabecera `Range` sobre
+   * `alt=media`, de modo que el visor conserve el paginado de PDF y el
+   * desplazamiento de audio y video sin descargar el binario completo.
+   */
+  async readRange(
+    key: string,
+    start: number,
+    end: number
+  ): Promise<Buffer> {
+    const { parentId, name } = await this.resolveParentAndName(key);
+    const existing = await this.listByName(name, parentId);
+    if (!existing.length) throw missingFileError();
+    const headers = {
+      ...(await this.authHeaders()),
+      Range: `bytes=${start}-${end}`,
+    };
+    const response = await this.fetchImpl()(
+      `${DRIVE_API_BASE}/files/${existing[0].id}?alt=media`,
+      { headers }
+    );
+    if (response.status === 416) {
+      return Buffer.alloc(0);
+    }
+    if (!response.ok) {
+      throw driveApiError("la lectura con rango", response.status);
     }
     return Buffer.from(await response.arrayBuffer());
   }

@@ -19,6 +19,7 @@ import { sql } from "drizzle-orm";
 export const userRoleEnum = pgEnum("user_role", [
   "user",
   "reclutador",
+  "project_admin",
   "admin",
 ]);
 export const applicationStatusEnum = pgEnum("application_status", [
@@ -1130,6 +1131,13 @@ export const knowledgeProjects = pgTable(
     createdByUserId: integer("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
+    driveConnectionUserId: integer("drive_connection_user_id").references(
+      () => users.id,
+      { onDelete: "set null" }
+    ),
+    storageMode: text("storage_mode")
+      .default("local")
+      .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

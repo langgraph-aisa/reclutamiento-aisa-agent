@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.206
+# Gobierno de release JARVI RH 2.0.207
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.206**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.207**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.207
+El release **hace explícita y reversible la custodia en Drive y abre el rol «Administrador de proyectos»**. Migración `0039`.
+
+**Activación por proyecto.** `knowledge_projects` gana `storage_mode` (`local` | `drive`) y `drive_connection_user_id`: conectar una cuenta ya no redirige la custodia en silencio. `driveBackendForProject` exige `storage_mode='drive'`; `setProjectStorageMode` valida plataforma y conexión antes de conmutar, y `assignProjectDriveConnection` asigna o retira la cuenta que respalda el proyecto (por omisión, la del creador).
+
+**Migración y reversibilidad.** `migrateProjectStorage` copia los binarios institucionales y de candidato entre el volumen local y el Drive de la cuenta efectiva antes de conmutar, de modo que activar o desactivar no haga «desaparecer» documentos ya cargados. El visor recupera el paginado por rango en Drive (`readRange` con `Range` sobre `alt=media`) y los fallos de Google se declaran con su causa (`drive_unauthenticated`, `drive_forbidden`, `drive_rate_limited`, `drive_unavailable`).
+
+**Rol nuevo.** El enum de usuarios incorpora `project_admin`, con procedimiento propio (`projectAdminProcedure`) que autoriza el perfil, la conmutación, la asignación y la migración por proyecto.
 
 ### Alcance candidato 2.0.206
 El release **activa la custodia por proyecto en la entrega del visor y en los métodos de almacenamiento**. Sin migración.
@@ -813,4 +822,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.206.md](PRUEBAS_CAJA_NEGRA_2.0.206.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.207.md](PRUEBAS_CAJA_NEGRA_2.0.207.md).

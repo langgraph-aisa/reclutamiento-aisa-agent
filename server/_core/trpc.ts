@@ -91,3 +91,22 @@ export const adminProcedure = t.procedure
     })
   )
   .use(auditAuthorizedMutation);
+
+export const projectAdminProcedure = t.procedure
+  .use(
+    t.middleware(async opts => {
+      const { ctx, next } = opts;
+      if (
+        !ctx.user ||
+        !["admin", "project_admin"].includes(ctx.user.role)
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "Se requiere rol de administrador o de administrador de proyectos.",
+        });
+      }
+      return next({ ctx: { ...ctx, user: ctx.user } });
+    })
+  )
+  .use(auditAuthorizedMutation);

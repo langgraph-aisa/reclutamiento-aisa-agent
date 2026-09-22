@@ -32,6 +32,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import {
   adminProcedure,
+  projectAdminProcedure,
   recruiterProcedure,
   publicProcedure,
   router,
@@ -120,6 +121,12 @@ import {
   saveDriveOAuthSecret,
   unlinkDriveConnection,
 } from "./driveConnection";
+import {
+  assignProjectDriveConnection,
+  migrateProjectStorage,
+  projectStorageProfile,
+  setProjectStorageMode,
+} from "./driveProject";
 import {
   APICHAT_SECRET_KEYS,
   getApiChatConfiguration,
@@ -1367,7 +1374,7 @@ export const appRouter = router({
           id: z.number().optional(),
           name: z.string().min(2).max(200),
           email: z.string().email(),
-          role: z.enum(["admin", "reclutador"]),
+          role: z.enum(["admin", "reclutador", "project_admin"]),
           active: z.boolean().default(true),
         })
       )
@@ -6339,6 +6346,85 @@ export const appRouter = router({
         });
       }
     }),
+    projectProfile: projectAdminProcedure
+      .input(z.object({ projectId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        return projectStorageProfile(pool, input.projectId);
+      }),
+    setProjectStorage: projectAdminProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          mode: z.enum(["local", "drive"]),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const pool = await requirePool();
+        try {
+          await setProjectStorageMode(pool, input.projectId, input.mode);
+          return { ok: true as const };
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible conmutar el almacenamiento del proyecto."
+            ),
+          });
+        }
+      }),
+    assignProjectConnection: projectAdminProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          userId: z.number().int().positive().nullable(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const pool = await requirePool();
+        try {
+          await assignProjectDriveConnection(
+            pool,
+            input.projectId,
+            input.userId
+          );
+          return { ok: true as const };
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible asignar la cuenta de Drive del proyecto."
+            ),
+          });
+        }
+      }),
+    migrateProject: projectAdminProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          direction: z.enum(["to_drive", "to_local"]),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const pool = await requirePool();
+        try {
+          return await migrateProjectStorage(
+            pool,
+            input.projectId,
+            input.direction
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible migrar los documentos del proyecto."
+            ),
+          });
+        }
+      }),
   }),
 
   config: router({
