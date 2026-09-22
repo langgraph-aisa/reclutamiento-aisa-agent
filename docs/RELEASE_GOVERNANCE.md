@@ -1,8 +1,11 @@
-# Gobierno de release JARVI RH 2.0.210
+# Gobierno de release JARVI RH 2.0.211
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.210**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.211**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.211
+El release **retira el enlace público de la plaza**: la ficha deja de mostrar el «Enlace seguro» de la plaza y el botón «Formulario público», de modo que el único enlace visible es el del formulario (`/apply/f/{token}`). Sin migración.
 
 ### Alcance candidato 2.0.210
 El release **cierra la trazabilidad, la dependencia y el refuerzo del banco de precalificación y entrevista**. Migración `0041`.
@@ -847,4 +850,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.210.md](PRUEBAS_CAJA_NEGRA_2.0.210.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.211.md](PRUEBAS_CAJA_NEGRA_2.0.211.md).

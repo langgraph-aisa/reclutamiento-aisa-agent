@@ -288,7 +288,7 @@ La capacidad de describir un rollback no prueba continuidad. ISO 22301 exige ade
 
 ## Protocolo de caja negra
 
-La hoja [PRUEBAS_CAJA_NEGRA_2.0.210.md](PRUEBAS_CAJA_NEGRA_2.0.210.md) conserva las condiciones, estímulos y resultados observables del release para:
+La hoja [PRUEBAS_CAJA_NEGRA_2.0.211.md](PRUEBAS_CAJA_NEGRA_2.0.211.md) conserva las condiciones, estímulos y resultados observables del release para:
 
 - actividad global, conteo, drilldown, minimización y asignación del agente;
 - navegación de negocio y colapso persistente del menú;
