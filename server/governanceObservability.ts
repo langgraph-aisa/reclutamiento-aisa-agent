@@ -40,6 +40,7 @@ export type GovernanceCoverageSnapshot = {
 };
 
 const UNDEFINED_TABLE_ERROR = "42P01";
+const UNDEFINED_COLUMN_ERROR = "42703";
 
 export function isUndefinedTableError(error: unknown) {
   const code =
@@ -47,6 +48,14 @@ export function isUndefinedTableError(error: unknown) {
       ? (error as { code?: unknown }).code
       : undefined;
   return code === UNDEFINED_TABLE_ERROR;
+}
+
+export function isUndefinedColumnError(error: unknown) {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? (error as { code?: unknown }).code
+      : undefined;
+  return code === UNDEFINED_COLUMN_ERROR;
 }
 
 /**

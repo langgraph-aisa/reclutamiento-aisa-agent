@@ -2160,6 +2160,8 @@ export const appRouter = router({
           whatsappMessage: z.string().max(1000).optional(),
           defaultCountry: z.string().length(2).default("GT"),
           published: z.boolean().default(false),
+          screeningPrecalificacionEnabled: z.boolean().default(true),
+          screeningEntrevistaEnabled: z.boolean().default(true),
         })
       )
       .mutation(async ({ input, ctx }) => {
@@ -2194,7 +2196,7 @@ export const appRouter = router({
           : `${input.code.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
         if (input.id) {
           const result = await pool.query(
-            `UPDATE job_positions SET code=$1,title=$2,department=$3,location_label=$4,description=$5,agent_key=$6,whatsapp_message=$7,default_country=$8,published=$9,updated_at=now() WHERE id=$10 RETURNING *`,
+            `UPDATE job_positions SET code=$1,title=$2,department=$3,location_label=$4,description=$5,agent_key=$6,whatsapp_message=$7,default_country=$8,published=$9,screening_precalificacion_enabled=$10,screening_entrevista_enabled=$11,updated_at=now() WHERE id=$12 RETURNING *`,
             [
               input.code,
               normalizedInput.title,
@@ -2205,6 +2207,8 @@ export const appRouter = router({
               normalizedInput.whatsappMessage ?? null,
               input.defaultCountry,
               input.published,
+              input.screeningPrecalificacionEnabled,
+              input.screeningEntrevistaEnabled,
               input.id,
             ]
           );
@@ -2218,7 +2222,7 @@ export const appRouter = router({
           return result.rows[0];
         }
         const result = await pool.query(
-          `INSERT INTO job_positions (public_slug,code,title,department,location_label,description,agent_key,whatsapp_message,default_country,published,created_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+          `INSERT INTO job_positions (public_slug,code,title,department,location_label,description,agent_key,whatsapp_message,default_country,published,screening_precalificacion_enabled,screening_entrevista_enabled,created_by_user_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
           [
             publicSlug,
             input.code,
@@ -2230,6 +2234,8 @@ export const appRouter = router({
             normalizedInput.whatsappMessage ?? null,
             input.defaultCountry,
             input.published,
+            input.screeningPrecalificacionEnabled,
+            input.screeningEntrevistaEnabled,
             ctx.user.id,
           ]
         );
@@ -6297,6 +6303,41 @@ export const appRouter = router({
             code: "NOT_FOUND",
             message: "Pregunta no encontrada.",
           });
+        return result.rows[0];
+      }),
+    setPhaseEnabled: adminProcedure
+      .input(
+        z.object({
+          positionId: z.number().int().positive(),
+          phase: z.enum(["precalificacion", "entrevista"]),
+          enabled: z.boolean(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        const column =
+          input.phase === "precalificacion"
+            ? "screening_precalificacion_enabled"
+            : "screening_entrevista_enabled";
+        const result = await pool.query(
+          `UPDATE job_positions SET ${column}=$1,updated_at=now()
+            WHERE id=$2 RETURNING *`,
+          [input.enabled, input.positionId]
+        );
+        if (!result.rows[0])
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Plaza no encontrada.",
+          });
+        await pool.query(
+          `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+           VALUES ($1,'job_position',$2,'screening_phase_toggled',$3::jsonb)`,
+          [
+            ctx.user.id,
+            input.positionId,
+            JSON.stringify({ phase: input.phase, enabled: input.enabled }),
+          ]
+        );
         return result.rows[0];
       }),
     moveQuestion: adminProcedure

@@ -177,6 +177,14 @@ export const jobPositions = pgTable("job_positions", {
   whatsappMessage: text("whatsapp_message").default(
     "Gracias por postularse. Nos pondremos en contacto con usted para continuar con el proceso de evaluación."
   ),
+  screeningPrecalificacionEnabled: boolean(
+    "screening_precalificacion_enabled"
+  )
+    .default(true)
+    .notNull(),
+  screeningEntrevistaEnabled: boolean("screening_entrevista_enabled")
+    .default(true)
+    .notNull(),
   defaultCountry: varchar("default_country", { length: 2 })
     .default("GT")
     .notNull(),

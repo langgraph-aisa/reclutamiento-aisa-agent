@@ -6,9 +6,6 @@ import {
 } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
 import { scheduleAssessmentCycle } from "./assessmentAutomation";
-import {
-  composeCvClosingFromSettings,
-} from "./cvAnalysis";
 import { withLangfuseObservation } from "./observability/langfuse";
 import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
 
@@ -20,9 +17,6 @@ type ApplicationContact = {
   position_title: string | null;
   whatsapp_message?: string | null;
   global_whatsapp_message?: string | null;
-  /** Cierre editorial del módulo de análisis de CV. */
-  cv_thank_you_message?: string | null;
-  cv_contact_notice?: string | null;
 };
 
 type MessageRecord = {
@@ -53,18 +47,11 @@ async function ensureCvRequestMessageInternal(
     application.global_whatsapp_message
   );
   // La guardia salarial se evalúa antes de tocar la base: una plantilla que
-  // ofrezca remuneración se rechaza sin efectos laterales.
+  // ofrezca remuneración se rechaza sin efectos laterales. El mensaje base
+  // solicita el CV sin cierre: el agradecimiento y el aviso de contacto se
+  // emiten al cierre del proceso de evaluación (descarte o conclusión), no al
+  // recibir el formulario.
   assertNoAutomatedSalaryOffer(requestMessage);
-  const closing = composeCvClosingFromSettings({
-    name: application.full_name,
-    position: application.position_title,
-    thankYouMessage: application.cv_thank_you_message,
-    contactNotice: application.cv_contact_notice,
-  });
-  if (closing) assertNoAutomatedSalaryOffer(closing);
-  const message = [requestMessage, closing]
-    .filter(part => part.trim().length > 0)
-    .join("\n\n");
   // Serializa la creación por teléfono para que el receptor entrante pueda
   // volver a comprobar de forma unívoca la conversación dentro de su tx.
   await client.query(`SELECT pg_advisory_xact_lock(130, hashtext($1))`, [
@@ -87,7 +74,7 @@ async function ensureCvRequestMessageInternal(
      VALUES ($1,'outbound','text',$2,$3,'pending')
      ON CONFLICT (message_key) DO NOTHING
      RETURNING id,delivery_status`,
-    [conversationId, message, cvRequestMessageKey(application.id)]
+    [conversationId, requestMessage, cvRequestMessageKey(application.id)]
   );
   if (inserted.rows[0]) return { ...inserted.rows[0], created: true };
   const existing = await client.query<MessageRecord>(
@@ -137,9 +124,7 @@ export async function ensureCvRequestMessage(
 }
 
 const cvRequestContactSql = `SELECT a.id,a.status,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message,
-        (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message,
-        (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_thank_you_message' LIMIT 1) AS cv_thank_you_message,
-        (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_contact_notice' LIMIT 1) AS cv_contact_notice
+        (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message
    FROM applications a
    JOIN candidates c ON c.id=a.candidate_id
    JOIN job_positions p ON p.id=a.job_position_id

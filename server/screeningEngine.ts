@@ -8,7 +8,7 @@ import {
 } from "./agentProviders";
 import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
 import { composeCvClosingFromSettings } from "./cvAnalysis";
-import { isUndefinedTableError } from "./governanceObservability";
+import { isUndefinedColumnError, isUndefinedTableError } from "./governanceObservability";
 
 /**
  * Motor de precalificación y entrevista guiada por plaza.
@@ -417,25 +417,34 @@ type RunCandidate = {
   phase: string;
   current_question_index: number;
   status: string;
+  entrevista_enabled: boolean;
 };
 
 async function candidateRuns(
   pool: Pool,
   limit: number
 ): Promise<RunCandidate[]> {
-  const result = await pool.query<RunCandidate>(
-    `SELECT r.id AS run_id,r.application_id,conv.id AS conversation_id,
-            a.job_position_id AS position_id,r.phase,r.current_question_index,r.status
+  try {
+    const result = await pool.query<RunCandidate>(
+      `SELECT r.id AS run_id,r.application_id,conv.id AS conversation_id,
+            a.job_position_id AS position_id,r.phase,r.current_question_index,
+            r.status,p.screening_entrevista_enabled AS entrevista_enabled
        FROM screening_runs r
        JOIN applications a ON a.id=r.application_id
+       JOIN job_positions p ON p.id=a.job_position_id
        JOIN conversations conv ON conv.application_id=r.application_id
       WHERE r.status='en_curso'
         AND r.phase IN ('precalificacion','entrevista')
       ORDER BY r.id
       LIMIT $1`,
-    [limit]
-  );
-  return result.rows;
+      [limit]
+    );
+    return result.rows;
+  } catch (error) {
+    if (isUndefinedTableError(error) || isUndefinedColumnError(error))
+      return [];
+    throw error;
+  }
 }
 
 /** ¿El CV ya llegó al RAG personal de la postulación? */
@@ -472,6 +481,7 @@ export async function ensureScreeningRunsForReceivedCv(
                     SELECT 1 FROM conversations c
                      WHERE c.application_id = app.id
                   )
+              AND p.screening_precalificacion_enabled = true
               AND EXISTS (
                     SELECT 1 FROM screening_questions q
                      WHERE q.job_position_id = app.job_position_id AND q.active = true
@@ -487,7 +497,7 @@ export async function ensureScreeningRunsForReceivedCv(
     );
     return result.rowCount ?? 0;
   } catch (error) {
-    if (isUndefinedTableError(error)) return 0;
+    if (isUndefinedTableError(error) || isUndefinedColumnError(error)) return 0;
     throw error;
   }
 }
@@ -681,7 +691,10 @@ async function advanceScreening(
   const nextIndex = run.current_question_index + 1;
   if (nextIndex >= questionTotal) {
     const next = nextScreeningPhase(run.phase);
-    if (next) {
+    // La entrevista solo inicia si la plaza la mantiene habilitada. Apagada,
+    // el cierre institucional (agradecimiento y aviso de contacto) se emite al
+    // concluir la precalificación, sin anunciar que la persona precalificó.
+    if (next && run.entrevista_enabled) {
       await pool.query(
         `UPDATE screening_runs SET phase=$2,current_question_index=0,updated_at=now() WHERE id=$1`,
         [run.run_id, next]

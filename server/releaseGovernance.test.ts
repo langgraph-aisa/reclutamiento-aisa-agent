@@ -1365,6 +1365,7 @@ describe("black-box release contract", () => {
     expect(persona).toContain("una sola pregunta abierta");
     expect(engine).toContain("store: false");
     expect(engine).toContain("enqueueAgentReply");
+    expect(engine).toContain("applicationHasActiveEvaluationAutomation");
     expect(outbox).toContain("dispatchQueuedReplies");
     expect(routing).toContain("conversationPanelState");
     expect(routing).toContain("runConversationTurn");
@@ -1490,6 +1491,10 @@ describe("black-box release contract", () => {
       "utf8"
     );
     const routing = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+    const screeningEngine = fs.readFileSync(
+      path.resolve("server/screeningEngine.ts"),
+      "utf8"
+    );
 
     // El módulo reúne la configuración editorial del expediente de CV.
     expect(cvAnalysis).toContain("cv_thank_you_message");
@@ -1504,11 +1509,13 @@ describe("black-box release contract", () => {
     expect(cvAnalysis).toContain("export async function cvAwaitingState");
     expect(routing).toContain("cvAnalysis: adminProcedure.query");
 
-    // El cierre viaja en la misma lectura que alimenta el mensaje: no agrega
-    // consultas al despacho y usa el texto institucional cuando no se configuró.
-    expect(cvRequest).toContain("composeCvClosingFromSettings");
-    expect(cvRequest).toContain("AS cv_thank_you_message");
-    expect(cvRequest).toContain("AS cv_contact_notice");
+    // El mensaje base solicita el CV sin cierre: el agradecimiento y el aviso
+    // de contacto se emiten al cierre del proceso de evaluación (descarte o
+    // conclusión), en el motor de screening, no en la solicitud inicial.
+    expect(cvRequest).not.toContain("composeCvClosingFromSettings");
+    expect(cvRequest).not.toContain("AS cv_thank_you_message");
+    expect(screeningEngine).toContain("composeCvClosingFromSettings");
+    expect(screeningEngine).toContain("screeningCloseMessageKey");
 
     // La guardia salarial se evalúa antes de tocar la base.
     expect(

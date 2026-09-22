@@ -36,6 +36,10 @@ import { enqueueAgentReply } from "./conversationOutbox";
 import { assertCapability } from "./conversationRuntime";
 import { getConversationActivation } from "./conversationActivation";
 import {
+  isUndefinedColumnError,
+  isUndefinedTableError,
+} from "./governanceObservability";
+import {
   observeOpenAIClient,
   withLangfuseObservation,
 } from "./observability/langfuse";
@@ -371,6 +375,51 @@ async function escalateConversation(
 }
 
 /**
+ * ¿La postulación tiene algún protocolo de evaluación activo que autorice al
+ * agente a conversar? Con la prueba psicométrica apagada y las dos fases del
+ * banco de preguntas apagadas, el agente no conversa: solo solicita el CV una
+ * vez y deja el resto en silencio. La lectura es defensiva: si las columnas de
+ * los interruptores todavía no existen (migración pendiente), se conserva el
+ * comportamiento anterior para no silenciar instalaciones sin la migración.
+ */
+async function applicationHasActiveEvaluationAutomation(
+  pool: Pool,
+  applicationId: number
+) {
+  try {
+    const result = await pool.query<{
+      precalificacion: boolean;
+      entrevista: boolean;
+      psicometrico: boolean;
+    }>(
+      `SELECT p.screening_precalificacion_enabled AS precalificacion,
+              p.screening_entrevista_enabled AS entrevista,
+              EXISTS (
+                SELECT 1 FROM integration_settings s
+                 WHERE s.provider='assessments'
+                   AND s.setting_key='psychometric_autostart'
+                   AND s.setting_value='true'
+              ) AS psicometrico
+         FROM applications a
+         JOIN job_positions p ON p.id = a.job_position_id
+        WHERE a.id = $1`,
+      [applicationId]
+    );
+    const row = result.rows[0];
+    if (!row) return false;
+    return (
+      Boolean(row.precalificacion) ||
+      Boolean(row.entrevista) ||
+      Boolean(row.psicometrico)
+    );
+  } catch (error) {
+    if (isUndefinedColumnError(error) || isUndefinedTableError(error))
+      return true;
+    throw error;
+  }
+}
+
+/**
  * Ejecuta un turno completo del agente: rehidrata el hilo, razona, verifica la
  * conducta y encola la respuesta autorizada.
  */
@@ -415,6 +464,18 @@ async function runConversationTurnInternal(
     return {
       status: "skipped",
       reason: "La conversación no registra un mensaje entrante pendiente.",
+    };
+
+  if (
+    !(await applicationHasActiveEvaluationAutomation(
+      pool,
+      Number(state.application_id)
+    ))
+  )
+    return {
+      status: "skipped",
+      reason:
+        "La postulación no tiene ningún protocolo de evaluación activo; el agente no conversa fuera de la precalificación, la entrevista o la prueba psicométrica.",
     };
 
   if (await candidateDocumentsProcessing(pool, Number(state.application_id))) {

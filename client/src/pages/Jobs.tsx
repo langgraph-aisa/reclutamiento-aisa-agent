@@ -51,6 +51,8 @@ type Draft = {
   whatsappMessage: string;
   defaultCountry: string;
   published: boolean;
+  screeningPrecalificacionEnabled: boolean;
+  screeningEntrevistaEnabled: boolean;
 };
 const blank: Draft = {
   code: "",
@@ -63,6 +65,8 @@ const blank: Draft = {
     "Hola {{nombre}}, muchas gracias por su solicitud de empleo.\n\nLe saludamos de parte de AISA Solar. Dando seguimiento a su solicitud de empleo para la plaza “{{plaza}}”, por este medio agradeceríamos que pudiera enviarnos su CV para que sea evaluado por nuestro equipo de Recursos Humanos.\n\nQuedamos atentos a recibirlo. ¡Muchas gracias por su interés en formar parte de AISA Solar!",
   defaultCountry: "GT",
   published: false,
+  screeningPrecalificacionEnabled: true,
+  screeningEntrevistaEnabled: true,
 };
 
 export default function Jobs() {
@@ -90,6 +94,10 @@ export default function Jobs() {
   });
   const remove = trpc.positions.remove.useMutation({
     onSuccess: () => query.refetch(),
+  });
+  const setPhaseEnabled = trpc.screening.setPhaseEnabled.useMutation({
+    onSuccess: () => query.refetch(),
+    onError: error => toast.error(error.message),
   });
   const createForm = trpc.forms.upsert.useMutation({
     onSuccess: (created: any, variables) => {
@@ -204,6 +212,9 @@ export default function Jobs() {
       whatsappMessage: job.whatsapp_message ?? blank.whatsappMessage,
       defaultCountry: job.default_country ?? "GT",
       published: job.published,
+      screeningPrecalificacionEnabled:
+        job.screening_precalificacion_enabled ?? true,
+      screeningEntrevistaEnabled: job.screening_entrevista_enabled ?? true,
     });
     setShowForm(true);
   };
@@ -399,6 +410,44 @@ export default function Jobs() {
             </Badge>
           </div>
           {isAdmin && actionButtons(managingPosition)}
+          {isAdmin && (
+            <div className="flex flex-wrap items-center gap-5 rounded-2xl border border-border/70 bg-muted/40 p-3">
+              <label className="flex items-center gap-2 text-sm font-semibold text-primary">
+                <Switch
+                  checked={Boolean(
+                    managingPosition.screening_precalificacion_enabled
+                  )}
+                  onCheckedChange={enabled =>
+                    setPhaseEnabled.mutate({
+                      positionId: Number(managingPosition.id),
+                      phase: "precalificacion",
+                      enabled,
+                    })
+                  }
+                  disabled={setPhaseEnabled.isPending}
+                  aria-label="Activar la precalificación de la plaza"
+                />
+                Precalificación activa
+              </label>
+              <label className="flex items-center gap-2 text-sm font-semibold text-primary">
+                <Switch
+                  checked={Boolean(
+                    managingPosition.screening_entrevista_enabled
+                  )}
+                  onCheckedChange={enabled =>
+                    setPhaseEnabled.mutate({
+                      positionId: Number(managingPosition.id),
+                      phase: "entrevista",
+                      enabled,
+                    })
+                  }
+                  disabled={setPhaseEnabled.isPending}
+                  aria-label="Activar la entrevista de la plaza"
+                />
+                Entrevista activa
+              </label>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-700">
               {managingPosition.applications_count ?? 0} postulaciones
