@@ -114,6 +114,13 @@ import {
 } from "./agentSettings";
 import { initializeLangfuseFromDatabase } from "./observability/langfuse";
 import {
+  DRIVE_OAUTH_KEYS,
+  getDriveConnection,
+  getDriveOAuthConfiguration,
+  saveDriveOAuthSecret,
+  unlinkDriveConnection,
+} from "./driveConnection";
+import {
   APICHAT_SECRET_KEYS,
   getApiChatConfiguration,
   getApiChatEndpoints,
@@ -6314,6 +6321,26 @@ export const appRouter = router({
       }),
   }),
 
+  drive: router({
+    connection: roleProcedure.query(async ({ ctx }) => {
+      return getDriveConnection(await getPool(), ctx.user.id);
+    }),
+    unlink: roleProcedure.mutation(async ({ ctx }) => {
+      const pool = await requirePool();
+      try {
+        return await unlinkDriveConnection(pool, ctx.user.id, ctx.user.id);
+      } catch (error) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: safeIntegrationMessage(
+            error,
+            "No fue posible desconectar el Google Drive."
+          ),
+        });
+      }
+    }),
+  }),
+
   config: router({
     cvAnalysis: adminProcedure.query(async () =>
       loadCvAnalysisConfiguration(await getPool())
@@ -6350,6 +6377,9 @@ export const appRouter = router({
       }),
     apiChatConfiguration: adminProcedure.query(async () => {
       return getApiChatConfiguration(await getPool());
+    }),
+    driveOAuthConfiguration: adminProcedure.query(async () => {
+      return getDriveOAuthConfiguration(await getPool());
     }),
     apiChatReception: adminProcedure.query(async () => {
       return getApiChatReceptionReadiness(await getPool());
@@ -6596,6 +6626,31 @@ export const appRouter = router({
             message: safeIntegrationMessage(
               error,
               "No fue posible guardar la credencial de ApiChat."
+            ),
+          });
+        }
+      }),
+    saveDriveOAuthSecret: adminProcedure
+      .input(
+        z.object({
+          key: z.enum(DRIVE_OAUTH_KEYS),
+          value: z.string().trim().min(3).max(2_000).nullable(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveDriveOAuthSecret(
+            await requirePool(),
+            input.key,
+            input.value,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar la credencial de Google Drive."
             ),
           });
         }

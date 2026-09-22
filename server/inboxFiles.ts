@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { getPool, getUserById } from "./db";
 import { readLocalSession } from "./localAuth";
 import { verifyViewerToken, VIEWER_SECURITY_HEADERS } from "./viewerAccess";
+import { currentStorageBackend, type StorageStat } from "./storageBackend";
 
 /**
  * Almacenamiento de archivos de la bandeja conversacional.
@@ -43,16 +44,7 @@ export function inboxFilePath(key: string) {
 
 export async function writeInboxFile(key: string, data: Buffer) {
   const target = inboxFilePath(key);
-  await fs.promises.mkdir(path.dirname(target), { recursive: true });
-  // La ruta final sólo publica archivos completos, incluso durante un reintento.
-  const temporary = `${target}.${randomUUID()}.tmp`;
-  try {
-    await fs.promises.writeFile(temporary, data, { flag: "wx", mode: 0o600 });
-    await fs.promises.rename(temporary, target);
-  } catch (error) {
-    await fs.promises.rm(temporary, { force: true }).catch(() => undefined);
-    throw error;
-  }
+  await currentStorageBackend().write(target, data);
   return target;
 }
 
@@ -66,15 +58,15 @@ export async function writeInboxFile(key: string, data: Buffer) {
  * sistema de archivos, que el llamador declara con su propio código.
  */
 export async function readInboxFile(key: string) {
-  return fs.promises.readFile(inboxFilePath(key));
+  return currentStorageBackend().read(inboxFilePath(key));
 }
 
 export async function removeInboxFile(key: string) {
-  await fs.promises.rm(inboxFilePath(key), { force: true });
+  await currentStorageBackend().remove(inboxFilePath(key));
 }
 
-export function inboxFileStats(key: string) {
-  return fs.promises.stat(inboxFilePath(key));
+export function inboxFileStats(key: string): Promise<StorageStat> {
+  return currentStorageBackend().stat(inboxFilePath(key));
 }
 
 function sendRange(

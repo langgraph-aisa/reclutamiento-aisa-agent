@@ -13,6 +13,7 @@ import {
 } from "./agentProviders";
 import { observeOpenAIClient } from "./observability/langfuse";
 import { extractDocumentText } from "./documentExtraction";
+import { currentStorageBackend, type StorageStat } from "./storageBackend";
 
 export const KNOWLEDGE_PROVIDER = "knowledge";
 export const KNOWLEDGE_SUMMARY_WORD_LIMIT = 66;
@@ -275,21 +276,22 @@ function resolveStoredPath(storageKey: string) {
 
 export async function writeKnowledgeFile(storageKey: string, data: Buffer) {
   const target = resolveStoredPath(storageKey);
-  await fs.promises.mkdir(path.dirname(target), { recursive: true });
-  await fs.promises.writeFile(target, data);
+  await currentStorageBackend().write(target, data);
   return target;
 }
 
 export function readKnowledgeFile(storageKey: string) {
-  return fs.promises.readFile(resolveStoredPath(storageKey));
+  return currentStorageBackend().read(resolveStoredPath(storageKey));
 }
 
 export async function removeKnowledgeFile(storageKey: string) {
-  await fs.promises.rm(resolveStoredPath(storageKey), { force: true });
+  await currentStorageBackend().remove(resolveStoredPath(storageKey));
 }
 
-export function knowledgeFileStats(storageKey: string) {
-  return fs.promises.stat(resolveStoredPath(storageKey));
+export function knowledgeFileStats(
+  storageKey: string
+): Promise<StorageStat> {
+  return currentStorageBackend().stat(resolveStoredPath(storageKey));
 }
 
 export type KnowledgeStorageHealth = {

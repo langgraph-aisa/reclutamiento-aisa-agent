@@ -18,6 +18,7 @@ import { GuatemalaPhoneInput } from "@/components/GuatemalaPhoneInput";
 import {
   Check,
   CheckCircle2,
+  Cloud,
   Eye,
   EyeOff,
   Globe2,
@@ -103,6 +104,13 @@ export default function Config() {
   });
   const apiChatReception = trpc.config.apiChatReception.useQuery();
   const reception = apiChatReception.data;
+  const driveOAuthConfiguration = trpc.config.driveOAuthConfiguration.useQuery();
+  const saveDriveOAuthSecret = trpc.config.saveDriveOAuthSecret.useMutation({
+    onSuccess: async () => {
+      await driveOAuthConfiguration.refetch();
+    },
+    onError: error => toast.error(error.message),
+  });
   const verifyApiChatReception = trpc.config.verifyApiChatReception.useMutation({
     onSuccess: async result => {
       await apiChatReception.refetch();
@@ -293,6 +301,21 @@ export default function Config() {
       await saveApiChatSecret.mutateAsync({ key, value });
       toast.success(
         value ? "Credencial cifrada y guardada" : "Credencial eliminada"
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const persistDriveOAuthSecret = async (
+    key: "oauth_client_id" | "oauth_client_secret",
+    value: string | null
+  ) => {
+    try {
+      await saveDriveOAuthSecret.mutateAsync({ key, value });
+      toast.success(
+        value ? "Credencial de Google Drive guardada" : "Credencial eliminada"
       );
       return true;
     } catch {
@@ -1293,6 +1316,61 @@ export default function Config() {
                 cifra las credenciales con AES-256-GCM antes de guardarlas en
                 PostgreSQL. El navegador recibe únicamente máscaras de
                 confirmación.
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="rounded-3xl border-0 shadow-soft">
+            <CardHeader>
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+                  <Cloud className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl text-primary">
+                    Google Drive · plataforma OAuth
+                  </CardTitle>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    Credencial de la aplicación para que los propietarios de
+                    proyecto vinculen su Drive desde «Mi cuenta». El secreto se
+                    cifra y el navegador solo recibe máscaras.
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-2">
+                <CredentialField
+                  label="Client ID de OAuth"
+                  description="Identificador público de la aplicación en Google Cloud"
+                  placeholder="…apps.googleusercontent.com"
+                  secret={false}
+                  state={driveOAuthConfiguration.data?.clientId}
+                  pending={saveDriveOAuthSecret.isPending}
+                  onSave={value =>
+                    persistDriveOAuthSecret("oauth_client_id", value)
+                  }
+                  onRemove={() =>
+                    persistDriveOAuthSecret("oauth_client_id", null)
+                  }
+                />
+                <CredentialField
+                  label="Client Secret de OAuth"
+                  description="Secreto de la aplicación; se cifra antes de guardarse"
+                  placeholder="Ingrese el client secret"
+                  state={driveOAuthConfiguration.data?.secret}
+                  pending={saveDriveOAuthSecret.isPending}
+                  onSave={value =>
+                    persistDriveOAuthSecret("oauth_client_secret", value)
+                  }
+                  onRemove={() =>
+                    persistDriveOAuthSecret("oauth_client_secret", null)
+                  }
+                />
+              </div>
+              <div className="rounded-2xl border border-emerald-400/20 bg-secondary p-4 text-sm leading-6 text-secondary-foreground">
+                La URI de redireccionamiento debe coincidir en Google Cloud:
+                <span className="font-mono text-xs"> /api/drive/oauth/callback</span>.
+                El scope es <span className="font-mono text-xs">drive.file</span>.
               </div>
             </CardContent>
           </Card>

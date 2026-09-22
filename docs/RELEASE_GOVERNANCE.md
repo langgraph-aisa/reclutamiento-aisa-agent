@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.201
+# Gobierno de release JARVI RH 2.0.202
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.201**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.202**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.202
+El release **abre la custodia del RAG a Google Drive**. Sin migración ni cambio de comportamiento.
+
+**La costura de almacenamiento.** `server/storageBackend.ts` define la interfaz `StorageBackend` —escribir, leer, borrar y medir— y el backend local con escritura atómica. Los métodos vigentes (`writeKnowledgeFile`, `readKnowledgeFile`, `writeInboxFile`, `readInboxFile`) despachan al backend activo por un único punto de conmutación, de modo que un backend de Drive pueda sustituir al volumen local sin tocar los más de cuarenta puntos de llamada.
+
+**La conexión de Google Drive.** `server/driveConnection.ts` separa la credencial de plataforma —`oauth_client_id` y `oauth_client_secret`, administrada en Configuración y cifrada— de la conexión por usuario —el `refresh_token` que Google devuelve cuando la persona autoriza su Drive, cifrado bajo `refresh:<usuario>`—. El flujo OAuth usa el scope mínimo `drive.file`, estado firmado con caducidad, canje del código y revocación. La persona se autoriza a sí misma con un botón en «Mi cuenta» y puede desconectarse sin que la aplicación toque sus archivos.
+
+**Sin migración.** Reutiliza `integration_settings` y el cifrado vigente.
 
 ### Alcance candidato 2.0.201
 El release **publica el análisis de viabilidad de Google Drive como capa de custodia del RAG**. Es un release de gobierno y documentación: no toca el esquema ni cambia código.
@@ -768,4 +777,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.201.md](PRUEBAS_CAJA_NEGRA_2.0.201.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.202.md](PRUEBAS_CAJA_NEGRA_2.0.202.md).
