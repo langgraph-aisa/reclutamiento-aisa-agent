@@ -1074,6 +1074,56 @@ export const screeningRuns = pgTable(
   })
 );
 
+/**
+ * Traza del intento de cada pregunta de screening: la respuesta literal, el
+ * veredicto y su motivo. Un intento por recorrido y pregunta, de modo que una
+ * reentrega del webhook no vuelva a puntuar la misma respuesta y la dependencia
+ * entre preguntas se resuelva sin consultar la conversación.
+ */
+export const screeningAttempts = pgTable(
+  "screening_attempts",
+  {
+    id: serial("id").primaryKey(),
+    runId: integer("run_id")
+      .references(() => screeningRuns.id, { onDelete: "cascade" })
+      .notNull(),
+    questionId: integer("question_id")
+      .references(() => screeningQuestions.id, { onDelete: "cascade" })
+      .notNull(),
+    questionIndex: integer("question_index").notNull(),
+    phase: varchar("phase", { length: 24 }).notNull(),
+    fieldKey: varchar("field_key", { length: 100 }).notNull(),
+    promptMessageId: integer("prompt_message_id"),
+    answerMessageId: integer("answer_message_id"),
+    answerText: text("answer_text"),
+    judgement: varchar("judgement", { length: 24 }),
+    passed: boolean("passed"),
+    rationale: text("rationale"),
+    askedAt: timestamp("asked_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    answeredAt: timestamp("answered_at", { withTimezone: true }),
+  },
+  table => ({
+    runQuestionUq: uniqueIndex("screening_attempts_run_question_uq").on(
+      table.runId,
+      table.questionId
+    ),
+    runIdx: index("screening_attempts_run_idx").on(
+      table.runId,
+      table.questionIndex
+    ),
+    judgementCheck: check(
+      "screening_attempts_judgement_ck",
+      sql`${table.judgement} IS NULL OR ${table.judgement} IN ('aprobado','descartado','no_aplica','repetido')`
+    ),
+    indexCheck: check(
+      "screening_attempts_index_ck",
+      sql`${table.questionIndex} >= 0`
+    ),
+  })
+);
+
 export const protocolDeleteChallenges = pgTable(
   "protocol_delete_challenges",
   {

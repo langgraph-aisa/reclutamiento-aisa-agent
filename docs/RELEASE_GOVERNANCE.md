@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.209
+# Gobierno de release JARVI RH 2.0.210
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.209**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.210**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.210
+El release **cierra la trazabilidad, la dependencia y el refuerzo del banco de precalificación y entrevista**. Migración `0041`.
+
+**La traza.** `screening_attempts` conserva por recorrido y pregunta la respuesta literal, el veredicto y el motivo; la migración `0041` se incorpora al artefacto de despliegue.
+
+**La dependencia.** Una pregunta con `depends_on_field_key` solo se formula si la pregunta dependiente ya fue respondida con contenido; en caso contrario se asienta como no aplicable.
+
+**El refuerzo.** Cuando el descarte determinista no aprueba y la pregunta declara criterio de razonamiento, el modelo decide si la respuesta aun así satisface la condición; un fallo del modelo conserva el descarte determinista.
 
 ### Alcance candidato 2.0.209
 El release **suma el banco de precalificación y entrevista por plaza y el acceso a candidatos con el filtro de plaza ya aplicado**. Migración `0040`.
@@ -838,4 +847,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.209.md](PRUEBAS_CAJA_NEGRA_2.0.209.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.210.md](PRUEBAS_CAJA_NEGRA_2.0.210.md).

@@ -1,4 +1,11 @@
 import type { Pool } from "pg";
+import { z } from "zod";
+import { getAgentRuntimeSettings } from "./agentSettings";
+import {
+  buildResilientChain,
+  openAiCompatibleClient,
+  structuredOutput,
+} from "./agentProviders";
 import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
 import { composeCvClosingFromSettings } from "./cvAnalysis";
 import { isUndefinedTableError } from "./governanceObservability";
@@ -265,6 +272,74 @@ export function planScreeningStep(input: {
   return { ...base, action: "evaluar" };
 }
 
+/** Decide si una pregunta corresponde formularse según su dependencia. */
+export function questionApplies(
+  question: Pick<ScreeningQuestionRow, "depends_on_field_key">,
+  answeredFields: ReadonlySet<string>
+) {
+  if (!question.depends_on_field_key) return true;
+  return answeredFields.has(question.depends_on_field_key);
+}
+
+export type ScreeningReinforcement = {
+  passed: boolean;
+  usedModel: boolean;
+  rationale: string;
+};
+
+export type ScreeningReinforcementJudge = (input: {
+  prompt: string;
+  answer: string;
+  criteria: string;
+  fieldKey: string;
+}) => Promise<{ verdict: "satisface" | "no_satisface"; rationale: string }>;
+
+/**
+ * Refuerzo del descarte: cuando el determinismo no aprueba una respuesta y la
+ * pregunta declara criterio de razonamiento, el modelo decide si la respuesta
+ * aun así satisface la condición. Un fallo del modelo conserva el descarte
+ * determinista: nunca se aprueba por una infraestructura caída.
+ */
+export async function reinforceScreeningAnswer(
+  input: {
+    question: Pick<
+      ScreeningQuestionRow,
+      "field_key" | "prompt" | "evaluation_criteria"
+    >;
+    answer: string;
+  },
+  judge: ScreeningReinforcementJudge
+): Promise<ScreeningReinforcement> {
+  if (!input.question.evaluation_criteria) {
+    return {
+      passed: false,
+      usedModel: false,
+      rationale:
+        "Sin criterio de razonamiento; el descarte determinista se conserva.",
+    };
+  }
+  try {
+    const result = await judge({
+      prompt: input.question.prompt,
+      answer: input.answer,
+      criteria: input.question.evaluation_criteria,
+      fieldKey: input.question.field_key,
+    });
+    return {
+      passed: result.verdict === "satisface",
+      usedModel: true,
+      rationale: result.rationale,
+    };
+  } catch (error) {
+    return {
+      passed: false,
+      usedModel: true,
+      rationale:
+        "El refuerzo no pudo evaluarse; se conserva el descarte determinista.",
+    };
+  }
+}
+
 type Queryable = Pick<Pool, "query">;
 
 export async function screeningQuestionsForPhase(
@@ -494,10 +569,187 @@ async function closeScreening(
   );
 }
 
+async function recordScreeningAttemptAsked(
+  pool: Pool,
+  input: {
+    runId: number;
+    question: ScreeningQuestionRow;
+    questionIndex: number;
+    promptMessageId: number | null;
+  }
+) {
+  await pool.query(
+    `INSERT INTO screening_attempts
+       (run_id,question_id,question_index,phase,field_key,prompt_message_id)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     ON CONFLICT (run_id,question_id) DO NOTHING`,
+    [
+      input.runId,
+      input.question.id,
+      input.questionIndex,
+      input.question.phase,
+      input.question.field_key,
+      input.promptMessageId,
+    ]
+  );
+}
+
+async function recordScreeningAttemptSkipped(
+  pool: Pool,
+  input: {
+    runId: number;
+    question: ScreeningQuestionRow;
+    questionIndex: number;
+  }
+) {
+  await pool.query(
+    `INSERT INTO screening_attempts
+       (run_id,question_id,question_index,phase,field_key,judgement,passed,
+        rationale,asked_at,answered_at)
+     VALUES ($1,$2,$3,$4,$5,'no_aplica',NULL,
+             'La pregunta no aplica: su condición dependiente no se cumplió.',
+             now(),now())
+     ON CONFLICT (run_id,question_id) DO NOTHING`,
+    [
+      input.runId,
+      input.question.id,
+      input.questionIndex,
+      input.question.phase,
+      input.question.field_key,
+    ]
+  );
+}
+
+async function recordScreeningAttemptResolved(
+  pool: Pool,
+  input: {
+    runId: number;
+    questionId: number;
+    answerMessageId: number | null;
+    answerText: string;
+    judgement: "aprobado" | "descartado" | "repetido";
+    passed: boolean | null;
+    rationale: string;
+  }
+) {
+  await pool.query(
+    `UPDATE screening_attempts
+        SET answer_message_id=$3,answer_text=$4,judgement=$5,passed=$6,
+            rationale=$7,answered_at=now()
+      WHERE run_id=$1 AND question_id=$2`,
+    [
+      input.runId,
+      input.questionId,
+      input.answerMessageId,
+      input.answerText,
+      input.judgement,
+      input.passed,
+      input.rationale,
+    ]
+  );
+}
+
+/** Campos ya respondidos con contenido, para resolver dependencias. */
+async function answeredFieldKeysForRun(
+  pool: Pool,
+  runId: number
+): Promise<Set<string>> {
+  const result = await pool.query<{
+    field_key: string;
+    answer_text: string | null;
+  }>(
+    `SELECT field_key,answer_text FROM screening_attempts
+      WHERE run_id=$1 AND answer_text IS NOT NULL`,
+    [runId]
+  );
+  const keys = new Set<string>();
+  for (const row of result.rows) {
+    if (row.answer_text && !isTrivialScreeningAnswer(row.answer_text)) {
+      keys.add(row.field_key);
+    }
+  }
+  return keys;
+}
+
+/** Avanza el puntero o cierra la fase según queden o no preguntas. */
+async function advanceScreening(
+  pool: Pool,
+  run: RunCandidate,
+  questionTotal: number,
+  outcomes: Array<{ runId: number; action: string }>
+) {
+  const nextIndex = run.current_question_index + 1;
+  if (nextIndex >= questionTotal) {
+    const next = nextScreeningPhase(run.phase);
+    if (next) {
+      await pool.query(
+        `UPDATE screening_runs SET phase=$2,current_question_index=0,updated_at=now() WHERE id=$1`,
+        [run.run_id, next]
+      );
+    } else {
+      await closeScreening(pool, run, { disqualify: false });
+    }
+    outcomes.push({ runId: run.run_id, action: "avanzar" });
+  } else {
+    await pool.query(
+      `UPDATE screening_runs SET current_question_index=$2,updated_at=now() WHERE id=$1`,
+      [run.run_id, nextIndex]
+    );
+    outcomes.push({ runId: run.run_id, action: "evaluar" });
+  }
+}
+
+const ScreeningReinforcementSchema = z.object({
+  verdict: z.enum(["satisface", "no_satisface"]),
+  rationale: z.string(),
+});
+
+/** Invoca el modelo para reforzar el descarte con el criterio declarado. */
+async function reinforceWithModel(
+  pool: Pool,
+  input: {
+    prompt: string;
+    answer: string;
+    criteria: string;
+    fieldKey: string;
+  }
+): Promise<{ verdict: "satisface" | "no_satisface"; rationale: string }> {
+  const settings = await getAgentRuntimeSettings(pool);
+  const chain = buildResilientChain(settings);
+  const current = chain[0];
+  if (!current) throw new Error("Sin proveedor configurado para el refuerzo.");
+  const client = openAiCompatibleClient(
+    { provider: current.provider, slot: current.slot, apiKey: current.apiKey },
+    { timeout: 45_000, maxRetries: 0 }
+  );
+  const instructions = [
+    "Decida si la respuesta de la persona satisface el criterio declarado.",
+    "Responda «satisface» solo cuando la evidencia literal de la respuesta cumpla el criterio.",
+    "Responda «no_satisface» en caso contrario o cuando la respuesta sea ambigua.",
+  ].join(" ");
+  const output = await structuredOutput({
+    client,
+    provider: current.provider,
+    model: settings.model,
+    instructions,
+    input: JSON.stringify({
+      pregunta: input.prompt,
+      respuesta: input.answer,
+      criterio: input.criteria,
+      clave: input.fieldKey,
+    }),
+    schema: ScreeningReinforcementSchema,
+    schemaName: "refuerzo_descarte",
+    maxOutputTokens: 800,
+  });
+  return ScreeningReinforcementSchema.parse(output);
+}
+
 /**
  * Barrido de screening: crea las máquinas de estado para CV ya recibido y
- * avanza las preguntas configuradas. Se ejecuta antes del razonamiento general,
- * igual que el protocolo psicométrico.
+ * avanza las preguntas configuradas, con traza por intento, dependencia entre
+ * preguntas y refuerzo del descarte por modelo. Se ejecuta antes del
+ * razonamiento general, igual que el protocolo psicométrico.
  */
 export async function runScreeningStepSweep(
   pool: Pool,
@@ -514,7 +766,38 @@ export async function runScreeningStepSweep(
         run.position_id,
         run.phase as ScreeningPhase
       );
-      const question = questions[run.current_question_index];
+      if (questions.length === 0) {
+        await advanceScreening(pool, run, 0, outcomes);
+        continue;
+      }
+
+      const answeredFields = await answeredFieldKeysForRun(pool, run.run_id);
+
+      // Salta las preguntas cuya dependencia no se cumplió: no se formulan y
+      // quedan asentadas como no aplicables.
+      while (
+        run.current_question_index < questions.length &&
+        !questionApplies(questions[run.current_question_index]!, answeredFields)
+      ) {
+        const skipped = questions[run.current_question_index]!;
+        await recordScreeningAttemptSkipped(pool, {
+          runId: run.run_id,
+          question: skipped,
+          questionIndex: run.current_question_index,
+        });
+        run.current_question_index += 1;
+        await pool.query(
+          `UPDATE screening_runs SET current_question_index=$2,updated_at=now() WHERE id=$1`,
+          [run.run_id, run.current_question_index]
+        );
+      }
+
+      if (run.current_question_index >= questions.length) {
+        await advanceScreening(pool, run, questions.length, outcomes);
+        continue;
+      }
+
+      const question = questions[run.current_question_index]!;
       const asked = await pool.query<{ exists: string }>(
         `SELECT count(*)::text AS exists FROM conversation_messages
           WHERE message_key=$1`,
@@ -540,30 +823,24 @@ export async function runScreeningStepSweep(
         currentQuestionAsked,
         pendingAnswer: Boolean(pending.rows[0]),
       });
-      if (plan.action === "sin_preguntas") {
-        const next = nextScreeningPhase(run.phase);
-        if (next) {
-          await pool.query(
-            `UPDATE screening_runs SET phase=$2,current_question_index=0,updated_at=now() WHERE id=$1`,
-            [run.run_id, next]
-          );
-        } else {
-          await closeScreening(pool, run, { disqualify: false });
-        }
-        outcomes.push({ runId: run.run_id, action: "avanzar" });
-        continue;
-      }
-      if (plan.action === "preguntar" && question) {
+
+      if (plan.action === "preguntar") {
         const prompt = question.help_text
           ? `${question.prompt}\n\n${question.help_text}`
           : question.prompt;
-        await enqueueScreeningMessage(pool, {
+        const messageId = await enqueueScreeningMessage(pool, {
           conversationId: run.conversation_id,
           text: prompt,
           messageKey: screeningQuestionMessageKey(
             run.run_id,
             run.current_question_index
           ),
+        });
+        await recordScreeningAttemptAsked(pool, {
+          runId: run.run_id,
+          question,
+          questionIndex: run.current_question_index,
+          promptMessageId: messageId,
         });
         outcomes.push({ runId: run.run_id, action: "preguntar" });
         continue;
@@ -572,11 +849,46 @@ export async function runScreeningStepSweep(
         outcomes.push({ runId: run.run_id, action: "esperar" });
         continue;
       }
-      if (plan.action === "evaluar" && question) {
+      if (plan.action === "evaluar") {
         const answer = String(pending.rows[0]?.body ?? "");
+        const answerMessageId = pending.rows[0]?.id ?? null;
         if (question.hard_fail) {
           const judgement = judgeScreeningAnswer(question, answer);
+          if (judgement.disqualifying && question.evaluation_criteria) {
+            const reinforcement = await reinforceScreeningAnswer(
+              { question, answer },
+              judge => reinforceWithModel(pool, judge)
+            );
+            await recordScreeningAttemptResolved(pool, {
+              runId: run.run_id,
+              questionId: question.id,
+              answerMessageId,
+              answerText: answer,
+              judgement: reinforcement.passed ? "aprobado" : "descartado",
+              passed: reinforcement.passed,
+              rationale: reinforcement.rationale,
+            });
+            if (reinforcement.passed) {
+              await advanceScreening(pool, run, questions.length, outcomes);
+              continue;
+            }
+            await closeScreening(pool, run, {
+              disqualify: true,
+              reason: reinforcement.rationale,
+            });
+            outcomes.push({ runId: run.run_id, action: "descalificado" });
+            continue;
+          }
           if (judgement.disqualifying) {
+            await recordScreeningAttemptResolved(pool, {
+              runId: run.run_id,
+              questionId: question.id,
+              answerMessageId,
+              answerText: answer,
+              judgement: "descartado",
+              passed: false,
+              rationale: judgement.rationale,
+            });
             await closeScreening(pool, run, {
               disqualify: true,
               reason: judgement.rationale,
@@ -584,19 +896,23 @@ export async function runScreeningStepSweep(
             outcomes.push({ runId: run.run_id, action: "descalificado" });
             continue;
           }
-        } else if (isTrivialScreeningAnswer(answer)) {
-          // Una respuesta sin contenido en una pregunta que no descarta no
-          // avanza: se recuerda una sola vez; si la persona persiste, el
-          // protocolo avanza para no atascarse.
+          await recordScreeningAttemptResolved(pool, {
+            runId: run.run_id,
+            questionId: question.id,
+            answerMessageId,
+            answerText: answer,
+            judgement: "aprobado",
+            passed: true,
+            rationale: judgement.rationale,
+          });
+          await advanceScreening(pool, run, questions.length, outcomes);
+          continue;
+        }
+        if (isTrivialScreeningAnswer(answer)) {
           const repeated = await pool.query<{ exists: string }>(
             `SELECT count(*)::text AS exists FROM conversation_messages
               WHERE message_key=$1`,
-            [
-              screeningRepeatMessageKey(
-                run.run_id,
-                run.current_question_index
-              ),
-            ]
+            [screeningRepeatMessageKey(run.run_id, run.current_question_index)]
           );
           if (Number(repeated.rows[0]?.exists ?? 0) === 0) {
             await enqueueScreeningMessage(pool, {
@@ -607,29 +923,29 @@ export async function runScreeningStepSweep(
                 run.current_question_index
               ),
             });
+            await recordScreeningAttemptResolved(pool, {
+              runId: run.run_id,
+              questionId: question.id,
+              answerMessageId,
+              answerText: answer,
+              judgement: "repetido",
+              passed: null,
+              rationale: "Respuesta sin contenido; se recuerda la pregunta.",
+            });
             outcomes.push({ runId: run.run_id, action: "repetir" });
             continue;
           }
         }
-        const nextIndex = run.current_question_index + 1;
-        if (nextIndex >= questions.length) {
-          const next = nextScreeningPhase(run.phase);
-          if (next) {
-            await pool.query(
-              `UPDATE screening_runs SET phase=$2,current_question_index=0,updated_at=now() WHERE id=$1`,
-              [run.run_id, next]
-            );
-          } else {
-            await closeScreening(pool, run, { disqualify: false });
-          }
-          outcomes.push({ runId: run.run_id, action: "avanzar" });
-        } else {
-          await pool.query(
-            `UPDATE screening_runs SET current_question_index=$2,updated_at=now() WHERE id=$1`,
-            [run.run_id, nextIndex]
-          );
-          outcomes.push({ runId: run.run_id, action: "evaluar" });
-        }
+        await recordScreeningAttemptResolved(pool, {
+          runId: run.run_id,
+          questionId: question.id,
+          answerMessageId,
+          answerText: answer,
+          judgement: "aprobado",
+          passed: true,
+          rationale: "Respuesta registrada.",
+        });
+        await advanceScreening(pool, run, questions.length, outcomes);
         continue;
       }
       outcomes.push({ runId: run.run_id, action: plan.action });

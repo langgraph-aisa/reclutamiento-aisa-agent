@@ -1,9 +1,9 @@
 -- ============================================================================
--- JARVI RH 2.0.209 · Despliegue completo del servicio conversacional
+-- JARVI RH 2.0.210 · Despliegue completo del servicio conversacional
 -- ============================================================================
 -- Archivo GENERADO. No editar a mano: se compone con
 --   pnpm deploy:sql
--- a partir de las migraciones 0022 a 0040 más la consulta única de
+-- a partir de las migraciones 0022 a 0041 más la consulta única de
 -- verificación. Repetir su ejecución es seguro: todas las sentencias son
 -- idempotentes y ninguna contiene credenciales.
 --
@@ -1564,6 +1564,43 @@ CREATE TABLE IF NOT EXISTS "screening_runs" (
 
 CREATE INDEX IF NOT EXISTS "screening_runs_phase_idx"
   ON "screening_runs" ("phase", "status");
+
+-- ----------------------------------------------------------------------------
+-- Origen: drizzle/migrations/0041_screening_attempts.sql
+-- ----------------------------------------------------------------------------
+
+-- ============================================================================
+-- 0041 · Traza de los intentos de precalificación y entrevista
+-- ============================================================================
+-- Un intento por pregunta y por recorrido: conserva la respuesta literal, el
+-- veredicto y su motivo, de modo que el descarte sea auditable y la dependencia
+-- entre preguntas pueda resolverse sin consultar la conversación. Idempotente:
+-- se puede repetir sin efecto.
+
+CREATE TABLE IF NOT EXISTS "screening_attempts" (
+  "id" serial PRIMARY KEY,
+  "run_id" integer NOT NULL REFERENCES "screening_runs" ("id") ON DELETE CASCADE,
+  "question_id" integer NOT NULL REFERENCES "screening_questions" ("id") ON DELETE CASCADE,
+  "question_index" integer NOT NULL,
+  "phase" varchar(24) NOT NULL,
+  "field_key" varchar(100) NOT NULL,
+  "prompt_message_id" integer,
+  "answer_message_id" integer,
+  "answer_text" text,
+  "judgement" varchar(24),
+  "passed" boolean,
+  "rationale" text,
+  "asked_at" timestamptz NOT NULL DEFAULT now(),
+  "answered_at" timestamptz,
+  CONSTRAINT "screening_attempts_judgement_ck"
+    CHECK ("judgement" IS NULL OR "judgement" IN ('aprobado','descartado','no_aplica','repetido')),
+  CONSTRAINT "screening_attempts_index_ck" CHECK ("question_index" >= 0)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "screening_attempts_run_question_uq"
+  ON "screening_attempts" ("run_id", "question_id");
+CREATE INDEX IF NOT EXISTS "screening_attempts_run_idx"
+  ON "screening_attempts" ("run_id", "question_index");
 
 -- ----------------------------------------------------------------------------
 -- Verificación autocertificada

@@ -6,6 +6,8 @@ import {
   nextScreeningPhase,
   normalizeAnswer,
   planScreeningStep,
+  questionApplies,
+  reinforceScreeningAnswer,
   wordBoundaryMatch,
 } from "./screeningEngine";
 
@@ -87,6 +89,80 @@ describe("screeningEngine: juicio determinista de descarte", () => {
     expect(isTrivialScreeningAnswer("Tengo 12 meses de experiencia")).toBe(
       false
     );
+  });
+});
+
+describe("screeningEngine: dependencia y refuerzo", () => {
+  it("formula la pregunta sin dependencia y la dependiente ya respondida", () => {
+    expect(questionApplies({ depends_on_field_key: null }, new Set())).toBe(true);
+    expect(
+      questionApplies(
+        { depends_on_field_key: "tipo_de_vehiculo" },
+        new Set(["tipo_de_vehiculo"])
+      )
+    ).toBe(true);
+  });
+
+  it("no formula la pregunta cuya dependencia no se respondió", () => {
+    expect(
+      questionApplies(
+        { depends_on_field_key: "tipo_de_vehiculo" },
+        new Set()
+      )
+    ).toBe(false);
+  });
+
+  it("sin criterio de razonamiento el refuerzo conserva el descarte", async () => {
+    const result = await reinforceScreeningAnswer(
+      {
+        question: {
+          field_key: "licencia",
+          prompt: "¿Tiene licencia?",
+          evaluation_criteria: null,
+        },
+        answer: "no",
+      },
+      async () => ({ verdict: "satisface", rationale: "x" })
+    );
+    expect(result.passed).toBe(false);
+    expect(result.usedModel).toBe(false);
+  });
+
+  it("el refuerzo aprueba cuando el criterio la respalda", async () => {
+    const result = await reinforceScreeningAnswer(
+      {
+        question: {
+          field_key: "experiencia",
+          prompt: "¿Cuánta experiencia tiene?",
+          evaluation_criteria: "12 meses o más",
+        },
+        answer: "un año",
+      },
+      async () => ({
+        verdict: "satisface",
+        rationale: "Un año equivale a doce meses.",
+      })
+    );
+    expect(result.passed).toBe(true);
+    expect(result.usedModel).toBe(true);
+  });
+
+  it("un fallo del modelo conserva el descarte determinista", async () => {
+    const result = await reinforceScreeningAnswer(
+      {
+        question: {
+          field_key: "experiencia",
+          prompt: "¿Cuánta experiencia tiene?",
+          evaluation_criteria: "12 meses o más",
+        },
+        answer: "un año",
+      },
+      async () => {
+        throw new Error("sin red");
+      }
+    );
+    expect(result.passed).toBe(false);
+    expect(result.usedModel).toBe(true);
   });
 });
 
