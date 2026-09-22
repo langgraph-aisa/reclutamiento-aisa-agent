@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PublicFormPreview } from "@/components/PublicFormPreview";
 import { trpc } from "@/lib/trpc";
 import {
+  ArrowLeft,
   BriefcaseBusiness,
   Check,
   Copy,
@@ -212,10 +213,210 @@ export default function Jobs() {
     setDraft(blank);
     setShowForm(false);
   };
+  const [managingPositionId, setManagingPositionId] = useState<number | null>(
+    null
+  );
+  const managingPosition =
+    jobs.find((job: any) => Number(job.id) === managingPositionId) ?? null;
+
+  const actionButtons = (job: any) => (
+    <div className="mt-4 flex flex-wrap gap-2">
+      <Link href={`/admin/candidates?position=${job.id}`}>
+        <Button variant="outline" size="sm" className="rounded-full">
+          <Users className="mr-2 h-3.5 w-3.5" />
+          Candidatos
+        </Button>
+      </Link>
+      <Button
+        variant="outline"
+        size="sm"
+        className="rounded-full"
+        onClick={() =>
+          setScreeningTarget({
+            positionId: Number(job.id),
+            phase: "precalificacion",
+          })
+        }
+      >
+        <Sparkles className="mr-2 h-3.5 w-3.5" />
+        Precalificación IA
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        className="rounded-full"
+        onClick={() =>
+          setScreeningTarget({
+            positionId: Number(job.id),
+            phase: "entrevista",
+          })
+        }
+      >
+        <MessageSquareText className="mr-2 h-3.5 w-3.5" />
+        Entrevista IA
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => openEdit(job)}
+        className="rounded-full"
+      >
+        <Edit3 className="mr-2 h-3.5 w-3.5" />
+        Editar
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() =>
+          setPublished.mutate({ id: job.id, published: !job.published })
+        }
+        className="rounded-full"
+      >
+        {job.published ? "Despublicar" : "Publicar"}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() =>
+          window.confirm("¿Eliminar esta plaza y su formulario?") &&
+          remove.mutate({ id: job.id })
+        }
+        className="rounded-full text-red-700 hover:bg-red-50"
+      >
+        <Trash2 className="mr-2 h-3.5 w-3.5" />
+        Eliminar
+      </Button>
+    </div>
+  );
+
+  const renderProjects = (job: any) => (
+    <div className="rounded-2xl bg-sky-50/70 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Proyectos RAG
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="rounded-full"
+          onClick={() => openLinkDialog(Number(job.id))}
+        >
+          <FolderKanban className="mr-2 h-3.5 w-3.5" />
+          Vincular proyectos
+        </Button>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {linkedProjectsFor(Number(job.id)).length === 0 ? (
+          <span className="text-xs text-muted-foreground">
+            Sin proyectos vinculados
+          </span>
+        ) : (
+          linkedProjectsFor(Number(job.id)).map((link: any) => (
+            <Badge
+              key={link.project_id}
+              className="rounded-full bg-sky-100 text-sky-800"
+            >
+              {link.project_name}
+            </Badge>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const renderForms = (job: any) => (
+    <div className="rounded-2xl bg-muted/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Formularios y anuncios
+        </p>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => setImportPositionId(Number(job.id))}
+            >
+              <Upload className="mr-2 h-3.5 w-3.5" />
+              Importar Excel/CSV
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="rounded-full"
+              onClick={() =>
+                createForm.mutate({
+                  positionId: Number(job.id),
+                  title: `Formulario · ${job.title}`,
+                  intro: "Complete sus datos para postularse a esta plaza.",
+                })
+              }
+              disabled={createForm.isPending}
+            >
+              <Plus className="mr-2 h-3.5 w-3.5" />
+              Nuevo formulario
+            </Button>
+          </div>
+        )}
+      </div>
+      <PositionForms positionId={Number(job.id)} isAdmin={isAdmin} />
+    </div>
+  );
 
   return (
     <div className="space-y-7">
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      {managingPosition ? (
+        <div className="space-y-7">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <button
+                type="button"
+                onClick={() => setManagingPositionId(null)}
+                className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-primary"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Volver a plazas
+              </button>
+              <h1 className="text-3xl font-800 tracking-[-.03em] text-primary">
+                {managingPosition.title}
+              </h1>
+              <p className="mt-1 text-muted-foreground">
+                {managingPosition.department ?? "Sin área"} ·{" "}
+                {managingPosition.location_label ?? "Guatemala"}
+              </p>
+            </div>
+            <Badge
+              className={
+                managingPosition.published
+                  ? "rounded-full bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
+                  : "rounded-full bg-amber-100 text-amber-800 hover:bg-amber-100"
+              }
+            >
+              {managingPosition.published ? "Publicada" : "Borrador"}
+            </Badge>
+          </div>
+          {isAdmin && actionButtons(managingPosition)}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-700">
+              {managingPosition.applications_count ?? 0} postulaciones
+            </span>
+            <span className="rounded-full bg-violet-50 px-3 py-1 text-violet-700">
+              {managingPosition.agent_key}
+            </span>
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
+              <Globe2 className="mr-1 inline h-3.5 w-3.5" />
+              {managingPosition.default_country ?? "GT"}
+            </span>
+          </div>
+          {isAdmin && renderProjects(managingPosition)}
+          {renderForms(managingPosition)}
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[.18em] text-emerald-700">
             {isAdmin ? "Configuración" : "Vista de consulta"}
@@ -402,7 +603,7 @@ export default function Jobs() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4">
           {jobs.map((job: any) => (
             <Card key={job.id} className="rounded-3xl border-0 shadow-soft">
               <CardContent className="p-5">
@@ -419,93 +620,27 @@ export default function Jobs() {
                       </p>
                     </div>
                   </div>
-                  <Badge
-                    className={
-                      job.published
-                        ? "rounded-full bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
-                        : "rounded-full bg-amber-100 text-amber-800 hover:bg-amber-100"
-                    }
-                  >
-                    {job.published ? "Publicada" : "Borrador"}
-                  </Badge>
-                </div>
-                {isAdmin && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Link href={`/admin/candidates?position=${job.id}`}>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-full"
-                      >
-                        <Users className="mr-2 h-3.5 w-3.5" />
-                        Candidatos
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-full"
-                      onClick={() =>
-                        setScreeningTarget({
-                          positionId: Number(job.id),
-                          phase: "precalificacion",
-                        })
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      className={
+                        job.published
+                          ? "rounded-full bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
+                          : "rounded-full bg-amber-100 text-amber-800 hover:bg-amber-100"
                       }
                     >
-                      <Sparkles className="mr-2 h-3.5 w-3.5" />
-                      Precalificación IA
-                    </Button>
+                      {job.published ? "Publicada" : "Borrador"}
+                    </Badge>
                     <Button
-                      variant="outline"
                       size="sm"
                       className="rounded-full"
-                      onClick={() =>
-                        setScreeningTarget({
-                          positionId: Number(job.id),
-                          phase: "entrevista",
-                        })
-                      }
+                      onClick={() => setManagingPositionId(Number(job.id))}
                     >
-                      <MessageSquareText className="mr-2 h-3.5 w-3.5" />
-                      Entrevista IA
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openEdit(job)}
-                      className="rounded-full"
-                    >
-                      <Edit3 className="mr-2 h-3.5 w-3.5" />
-                      Editar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setPublished.mutate({
-                          id: job.id,
-                          published: !job.published,
-                        })
-                      }
-                      className="rounded-full"
-                    >
-                      {job.published ? "Despublicar" : "Publicar"}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        window.confirm(
-                          "¿Eliminar esta plaza y su formulario?"
-                        ) && remove.mutate({ id: job.id })
-                      }
-                      className="rounded-full text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="mr-2 h-3.5 w-3.5" />
-                      Eliminar
+                      <FolderKanban className="mr-2 h-3.5 w-3.5" />
+                      {isAdmin ? "Gestionar" : "Ver"}
                     </Button>
                   </div>
-                )}
+                </div>
+                {isAdmin && actionButtons(job)}
                 <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-700">
                     {job.applications_count ?? 0} postulaciones
@@ -517,83 +652,6 @@ export default function Jobs() {
                     <Globe2 className="mr-1 inline h-3.5 w-3.5" />
                     {job.default_country ?? "GT"}
                   </span>
-                </div>
-                {isAdmin && (
-                  <div className="mt-4 rounded-2xl bg-sky-50/70 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Proyectos RAG
-                      </p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="rounded-full"
-                        onClick={() => openLinkDialog(Number(job.id))}
-                      >
-                        <FolderKanban className="mr-2 h-3.5 w-3.5" />
-                        Vincular proyectos
-                      </Button>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {linkedProjectsFor(Number(job.id)).length === 0 ? (
-                        <span className="text-xs text-muted-foreground">
-                          Sin proyectos vinculados
-                        </span>
-                      ) : (
-                        linkedProjectsFor(Number(job.id)).map((link: any) => (
-                          <Badge
-                            key={link.project_id}
-                            className="rounded-full bg-sky-100 text-sky-800"
-                          >
-                            {link.project_name}
-                          </Badge>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-                <div className="mt-4 rounded-2xl bg-muted/40 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Formularios y anuncios
-                    </p>
-                    {isAdmin && (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full"
-                          onClick={() => setImportPositionId(Number(job.id))}
-                        >
-                          <Upload className="mr-2 h-3.5 w-3.5" />
-                          Importar Excel/CSV
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="rounded-full"
-                          onClick={() =>
-                            createForm.mutate({
-                              positionId: Number(job.id),
-                              title: `Formulario · ${job.title}`,
-                              intro:
-                                "Complete sus datos para postularse a esta plaza.",
-                            })
-                          }
-                          disabled={createForm.isPending}
-                        >
-                          <Plus className="mr-2 h-3.5 w-3.5" />
-                          Nuevo formulario
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  <PositionForms
-                    positionId={Number(job.id)}
-                    isAdmin={isAdmin}
-                  />
                 </div>
               </CardContent>
             </Card>
@@ -619,6 +677,8 @@ export default function Jobs() {
           </div>
         </CardContent>
       </Card>
+        </>
+      )}
 
       <ScreeningDialog
         target={screeningTarget}
