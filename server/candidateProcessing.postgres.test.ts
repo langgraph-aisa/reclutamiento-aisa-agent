@@ -160,12 +160,20 @@ describe.runIf(enabled)(
         )
       ).rows[0];
       expect(message.transcript).toContain("cinco años");
+      // El ciclo administrado exige el currículum antes de conversar: se asienta
+      // un CV analizado para que la conversación del perfil quede habilitada.
+      await database.pool.query(
+        `INSERT INTO candidate_knowledge_files
+           (application_id,original_name,storage_key,mime_type,extension,document_class,analysis_status)
+         VALUES($1,'cv.pdf','applications/1/cv.pdf','application/pdf','pdf','cv','analizado')`,
+        [applicationId]
+      );
       const { source } = await loadConversationContextSource(
         database.pool,
         applicationId,
         { methodologies: false }
       );
-      expect(source.attachments).toHaveLength(1);
+      expect(source.attachments).toHaveLength(2);
       expect(buildConversationContext(source).rendered).toContain(
         "Cinco años de experiencia"
       );

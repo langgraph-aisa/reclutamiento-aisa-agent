@@ -796,11 +796,6 @@ export async function runScreeningStepSweep(
   const outcomes: Array<{ runId: number; action: string }> = [];
   for (const run of runs) {
     try {
-      await recordScreeningStageEntry(
-        pool,
-        run,
-        "Sus preguntas se administran tal como están configuradas."
-      );
       const questions = await screeningQuestionsForPhase(
         pool,
         run.position_id,

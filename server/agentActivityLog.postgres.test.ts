@@ -122,7 +122,6 @@ describe.runIf(enabled)(
           turns: [],
           attachments: [],
         },
-        decision: { kind: "free" },
         signals,
       });
 

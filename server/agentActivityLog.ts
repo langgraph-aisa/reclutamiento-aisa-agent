@@ -4,7 +4,6 @@ import {
   AGENT_STAGES,
   type AgentStageConfiguration,
   type AgentStageKey,
-  type StageTurnDecision,
 } from "./agentStages";
 import { cvAwaitingState, type CvAwaitingState } from "./cvAnalysis";
 import type { ConversationContextSource } from "./conversationContext";
@@ -72,12 +71,13 @@ export type AgentLogSignals = {
   precalificacionActive: boolean;
   entrevistaActive: boolean;
   screeningDisqualified: boolean;
+  /** El cierre institucional ya fue emitido en la conversación. */
+  cierreEmitido: boolean;
 };
 
 export type AgentStageVerdictInput = {
   config: AgentStageConfiguration;
   source: ConversationContextSource;
-  decision: StageTurnDecision;
   signals: AgentLogSignals;
 };
 
@@ -137,7 +137,7 @@ export function agentLogLineWords(action: string, justification: string) {
 export function buildAgentStageVerdicts(
   input: AgentStageVerdictInput
 ): AgentLogVerdict[] {
-  const { config, source, decision, signals } = input;
+  const { config, source, signals } = input;
   const salaryQuestionOpen = source.cycles.some(
     cycle =>
       cycle.status === "abierto" && cycle.dimension === "remuneracion"
@@ -180,11 +180,7 @@ export function buildAgentStageVerdicts(
           "La plaza no tiene preguntas vigentes de precalificación; se omite sin preguntar."
         );
       if (phase === "precalificacion")
-        return executed(
-          "precalificacion",
-          "Precalificación",
-          "Sus preguntas se administran tal como están configuradas."
-        );
+        return pending("precalificacion", "Precalificación");
       if (screeningPassedPrecalificacion)
         return executed(
           "precalificacion",
@@ -209,11 +205,7 @@ export function buildAgentStageVerdicts(
           "La plaza no tiene preguntas vigentes de entrevista; se omite sin preguntar."
         );
       if (phase === "entrevista")
-        return executed(
-          "entrevista",
-          "Entrevista guiada",
-          "Sus preguntas se administran tal como están configuradas."
-        );
+        return pending("entrevista", "Entrevista guiada");
       if (screeningConcluded)
         return executed(
           "entrevista",
@@ -229,24 +221,18 @@ export function buildAgentStageVerdicts(
           "Conversación del perfil",
           DISABLED_REASON
         );
-      if (decision.kind === "free")
-        return executed(
-          "retroalimentacion",
-          "Conversación del perfil",
-          "El motor conversó sobre la información del perfil laboral."
-        );
       if (freeConversationHeld)
         return executed(
           "retroalimentacion",
           "Conversación del perfil",
-          "Ya se conversó el perfil laboral con la persona."
+          "El motor conversó sobre la información del perfil laboral."
         );
       return pending("retroalimentacion", "Conversación del perfil");
     },
     cierre: () => {
       if (!config.enabled.cierre)
         return skipped("cierre", "Cierre del proceso", DISABLED_REASON);
-      if (decision.kind === "closing")
+      if (signals.cierreEmitido)
         return executed(
           "cierre",
           "Cierre del proceso",
@@ -309,12 +295,6 @@ export function buildAgentStageVerdicts(
           "Expectativa salarial",
           "Ya fue declarada en el formulario; no se preguntó de nuevo."
         );
-      if (decision.kind === "salary_question")
-        return executed(
-          "expectativa_salarial",
-          "Expectativa salarial",
-          "Se preguntó y se normalizó en quetzales; quedó registrada."
-        );
       if (salaryQuestionOpen)
         return executed(
           "expectativa_salarial",
@@ -328,13 +308,39 @@ export function buildAgentStageVerdicts(
   return config.order.map(key => verdictFor[key]());
 }
 
+/** Primera etapa del ciclo, en el orden administrado, aún sin completar. */
+export function firstPendingStage(
+  verdicts: AgentLogVerdict[]
+): AgentLogVerdict | null {
+  return verdicts.find(verdict => !verdict.completed) ?? null;
+}
+
+/**
+ * Etapa anterior a la conversación del perfil que sigue sin completarse. Si
+ * existe, el motor no puede conversar libremente: antes debe cerrarse la etapa
+ * que la precede en el orden administrado.
+ */
+export function freeConversationBlocked(
+  verdicts: AgentLogVerdict[]
+): AgentLogVerdict | null {
+  const index = verdicts.findIndex(
+    verdict => verdict.stageKey === "retroalimentacion"
+  );
+  if (index < 0) return null;
+  return verdicts.slice(0, index).find(verdict => !verdict.completed) ?? null;
+}
+
 /**
  * Señales de la base que la bitácora necesita para resolver cada etapa: el
  * estado del currículum y la máquina de estados del banco de preguntas.
  */
 export async function loadAgentLogSignals(
   pool: Pool,
-  applicationId: number
+  applicationId: number,
+  conversationState?: {
+    automationState: string | null;
+    conversationStage: string | null;
+  }
 ): Promise<AgentLogSignals> {
   let cvState: CvAwaitingState = "sin_solicitud";
   try {
@@ -383,6 +389,9 @@ export async function loadAgentLogSignals(
     precalificacionActive: Number(row?.precalificacion_count ?? 0) > 0,
     entrevistaActive: Number(row?.entrevista_count ?? 0) > 0,
     screeningDisqualified: screeningStatus === "descalificado",
+    cierreEmitido:
+      conversationState?.automationState === "completed" ||
+      conversationState?.conversationStage === "cierre",
   };
 }
 

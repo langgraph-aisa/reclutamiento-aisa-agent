@@ -25,9 +25,9 @@ describe("etapas administrables del agente", () => {
     );
     expect(
       DEFAULT_AGENT_STAGE_ORDER.indexOf("solicitud_cv")
-    ).toBeGreaterThan(DEFAULT_AGENT_STAGE_ORDER.indexOf("cierre"));
+    ).toBeLessThan(DEFAULT_AGENT_STAGE_ORDER.indexOf("precalificacion"));
     expect(AGENT_STAGES[0].key).toBe("recepcion_formulario");
-    expect(AGENT_STAGES[7].key).toBe("expectativa_salarial");
+    expect(AGENT_STAGES[7].key).toBe("cierre");
     expect(AGENT_STAGES.every(stage => stage.name.trim().length > 0)).toBe(
       true
     );
@@ -111,6 +111,7 @@ describe("etapas administrables del agente", () => {
         cvAnalizado: true,
         salaryDeclared: true,
         salaryQuestionOpen: false,
+        freeConversationHeld: true,
       })
     ).toEqual({ kind: "closing" });
   });
@@ -122,8 +123,21 @@ describe("etapas administrables del agente", () => {
         cvAnalizado: true,
         salaryDeclared: false,
         salaryQuestionOpen: false,
+        freeConversationHeld: true,
       })
     ).toEqual({ kind: "salary_question" });
+  });
+
+  it("conversa el perfil antes que la expectativa aunque el CV esté analizado", () => {
+    expect(
+      decideStageTurn({
+        enabled: DEFAULT_AGENT_STAGE_ENABLED,
+        cvAnalizado: true,
+        salaryDeclared: false,
+        salaryQuestionOpen: false,
+        freeConversationHeld: false,
+      })
+    ).toEqual({ kind: "free" });
   });
 
   it("no repite la pregunta salarial cuando ya permanece abierta", () => {
@@ -133,6 +147,7 @@ describe("etapas administrables del agente", () => {
         cvAnalizado: true,
         salaryDeclared: false,
         salaryQuestionOpen: true,
+        freeConversationHeld: true,
       })
     ).toEqual({ kind: "free" });
   });
@@ -144,6 +159,7 @@ describe("etapas administrables del agente", () => {
         cvAnalizado: true,
         salaryDeclared: true,
         salaryQuestionOpen: false,
+        freeConversationHeld: true,
       })
     ).toEqual({ kind: "free" });
     expect(
@@ -155,6 +171,7 @@ describe("etapas administrables del agente", () => {
         cvAnalizado: true,
         salaryDeclared: false,
         salaryQuestionOpen: false,
+        freeConversationHeld: true,
       })
     ).toEqual({ kind: "free" });
     expect(
@@ -163,6 +180,7 @@ describe("etapas administrables del agente", () => {
         cvAnalizado: false,
         salaryDeclared: false,
         salaryQuestionOpen: false,
+        freeConversationHeld: false,
       })
     ).toEqual({ kind: "silent" });
   });

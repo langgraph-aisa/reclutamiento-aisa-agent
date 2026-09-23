@@ -57,6 +57,7 @@ import {
 } from "./agentStages";
 import {
   buildAgentStageVerdicts,
+  firstPendingStage,
   loadAgentLogSignals,
   recordAgentLogVerdicts,
 } from "./agentActivityLog";
@@ -690,11 +691,15 @@ async function runConversationTurnInternal(
           /cv|curriculum/i.test(attachment.category) &&
           attachment.status === "analizado"
       );
+      const freeConversationHeld = source.turns.some(
+        turn => turn.direction === "outbound"
+      );
       const decision = decideStageTurn({
         enabled: stagesConfig.enabled,
         cvAnalizado,
         salaryDeclared: source.salary.declared,
         salaryQuestionOpen,
+        freeConversationHeld,
       });
 
       // La bitácora de la IA asienta el estado de cada etapa del ciclo, en el
@@ -703,12 +708,15 @@ async function runConversationTurnInternal(
       // técnico pueda contrastar la decisión con su desenlace observado.
       const logSignals = await loadAgentLogSignals(
         pool,
-        Number(state.application_id)
+        Number(state.application_id),
+        {
+          automationState: state.automation_state,
+          conversationStage: state.conversation_stage,
+        }
       );
       const logVerdicts = buildAgentStageVerdicts({
         config: stagesConfig,
         source,
-        decision,
         signals: logSignals,
       });
       await recordAgentLogVerdicts(pool, {
@@ -716,6 +724,29 @@ async function runConversationTurnInternal(
         conversationId: state.id,
         verdicts: logVerdicts,
       });
+
+      // El motor no conversa como le venga en gana: solo ejecuta la primera
+      // etapa pendiente del ciclo administrado. Si la acción decidida no es esa
+      // etapa, el turno se omite hasta que la etapa anterior se complete.
+      const actionStage =
+        decision.kind === "closing"
+          ? "cierre"
+          : decision.kind === "salary_question"
+            ? "expectativa_salarial"
+            : decision.kind === "free"
+              ? "retroalimentacion"
+              : null;
+      const pendingStage = firstPendingStage(logVerdicts);
+      if (
+        actionStage &&
+        pendingStage &&
+        pendingStage.stageKey !== actionStage
+      ) {
+        return {
+          status: "skipped",
+          reason: `La etapa «${pendingStage.action}» del ciclo administrado aún no se completa.`,
+        };
+      }
 
       if (decision.kind === "closing" || decision.kind === "salary_question") {
         const outcome = await emitDeterministicStageTurn(

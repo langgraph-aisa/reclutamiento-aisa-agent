@@ -6,6 +6,7 @@ import {
   agentLogFingerprint,
   agentLogLineWords,
   buildAgentStageVerdicts,
+  firstPendingStage,
   type AgentLogSignals,
   type AgentStageVerdictInput,
 } from "./agentActivityLog";
@@ -72,6 +73,7 @@ function makeSignals(
     precalificacionActive: false,
     entrevistaActive: false,
     screeningDisqualified: false,
+    cierreEmitido: false,
     ...overrides,
   };
 }
@@ -83,7 +85,6 @@ function build(input: Omit<AgentStageVerdictInput, "config" | "source"> & {
   return buildAgentStageVerdicts({
     config: input.config ?? makeConfig(),
     source: input.source ?? makeSource(),
-    decision: input.decision,
     signals: input.signals,
   });
 }
@@ -94,7 +95,6 @@ describe("buildAgentStageVerdicts", () => {
       source: makeSource({
         salary: { expectationGtq: 5000, source: "formulario", declared: true },
       }),
-      decision: { kind: "free" },
       signals: makeSignals({ cvState: "recibido" }),
     });
     const expectativa = verdicts.find(v => v.stageKey === "expectativa_salarial");
@@ -102,9 +102,8 @@ describe("buildAgentStageVerdicts", () => {
     expect(expectativa?.skipReason).toContain("formulario");
   });
 
-  it("omite la precalificación sin preguntas activas y la marca completada", () => {
+  it("omite la precalificación sin preguntas vigentes y la marca completada", () => {
     const verdicts = build({
-      decision: { kind: "free" },
       signals: makeSignals({ precalificacionActive: false, cvState: "recibido" }),
     });
     const pre = verdicts.find(v => v.stageKey === "precalificacion");
@@ -112,17 +111,24 @@ describe("buildAgentStageVerdicts", () => {
     expect(pre?.skipReason).toContain("no tiene preguntas");
   });
 
-  it("registra el cierre ejecutado cuando el turno decide cerrar", () => {
+  it("registra el cierre ejecutado cuando ya fue emitido", () => {
     const verdicts = build({
       source: makeSource({
         salary: { expectationGtq: 5000, source: "chat", declared: true },
       }),
-      decision: { kind: "closing" },
-      signals: makeSignals({ cvState: "recibido" }),
+      signals: makeSignals({ cvState: "recibido", cierreEmitido: true }),
     });
     const cierre = verdicts.find(v => v.stageKey === "cierre");
     expect(cierre?.completed).toBe(true);
     expect(cierre?.skipReason).toBeNull();
+  });
+
+  it("deja pendiente el cierre mientras no fue emitido", () => {
+    const verdicts = build({
+      signals: makeSignals({ cvState: "recibido", cierreEmitido: false }),
+    });
+    const cierre = verdicts.find(v => v.stageKey === "cierre");
+    expect(cierre?.completed).toBe(false);
   });
 
   it("conserva el orden administrado de las etapas", () => {
@@ -138,7 +144,6 @@ describe("buildAgentStageVerdicts", () => {
     ];
     const verdicts = build({
       config: makeConfig({ order: reordered }),
-      decision: { kind: "free" },
       signals: makeSignals(),
     });
     expect(verdicts.map(v => v.stageKey)).toEqual(reordered);
@@ -147,7 +152,6 @@ describe("buildAgentStageVerdicts", () => {
   it("asienta una etapa desactivada con su motivo", () => {
     const verdicts = build({
       config: makeConfig({ enabled: { cierre: false } }),
-      decision: { kind: "free" },
       signals: makeSignals(),
     });
     const cierre = verdicts.find(v => v.stageKey === "cierre");
@@ -157,21 +161,57 @@ describe("buildAgentStageVerdicts", () => {
 
   it("deja pendiente la expectativa salarial no declarada y sin pregunta abierta", () => {
     const verdicts = build({
-      decision: { kind: "free" },
       signals: makeSignals({ cvState: "sin_solicitud" }),
     });
     const expectativa = verdicts.find(v => v.stageKey === "expectativa_salarial");
     expect(expectativa?.completed).toBe(false);
   });
 
-  it("marca ejecutada la conversación del perfil en un turno libre", () => {
+  it("marca ejecutada la conversación del perfil cuando ya hubo turno saliente", () => {
     const verdicts = build({
-      decision: { kind: "free" },
+      source: makeSource({
+        turns: [{ direction: "outbound", body: "Hola", createdAt: null }],
+      }),
       signals: makeSignals(),
     });
     const retro = verdicts.find(v => v.stageKey === "retroalimentacion");
     expect(retro?.completed).toBe(true);
     expect(retro?.category).toBe("nlp");
+  });
+
+  it("deja pendiente la conversación del perfil antes del primer turno saliente", () => {
+    const verdicts = build({
+      source: makeSource({ turns: [] }),
+      signals: makeSignals(),
+    });
+    const retro = verdicts.find(v => v.stageKey === "retroalimentacion");
+    expect(retro?.completed).toBe(false);
+  });
+});
+
+describe("firstPendingStage", () => {
+  it("señala la primera etapa sin completar en el orden administrado", () => {
+    const verdicts = build({
+      source: makeSource({ turns: [] }),
+      signals: makeSignals({ cvState: "sin_solicitud" }),
+    });
+    expect(firstPendingStage(verdicts)?.stageKey).toBe("solicitud_cv");
+  });
+
+  it("no señala nada cuando el ciclo quedó completo", () => {
+    const verdicts = build({
+      source: makeSource({
+        salary: { expectationGtq: 5000, source: "chat", declared: true },
+        turns: [{ direction: "outbound", body: "Hola", createdAt: null }],
+      }),
+      signals: makeSignals({
+        cvState: "recibido",
+        cierreEmitido: true,
+        screeningPhase: "concluido",
+        screeningStatus: "concluido",
+      }),
+    });
+    expect(firstPendingStage(verdicts)).toBeNull();
   });
 });
 
@@ -194,28 +234,25 @@ describe("taxonomía de categorías y extensión de línea", () => {
 
   it("mantiene cada línea del log en el máximo de palabras acordado", () => {
     const scenarios = [
-      { decision: { kind: "free" as const }, signals: makeSignals() },
+      { signals: makeSignals(), source: makeSource() },
       {
-        decision: { kind: "closing" as const },
+        signals: makeSignals({ cvState: "recibido", cierreEmitido: true }),
         source: makeSource({
           salary: { expectationGtq: 5000, source: "chat", declared: true },
+          turns: [{ direction: "outbound", body: "Hola", createdAt: null }],
         }),
-        signals: makeSignals({ cvState: "recibido" }),
       },
       {
-        decision: { kind: "salary_question" as const },
         signals: makeSignals({ cvState: "recibido" }),
-      },
-      {
-        decision: { kind: "silent" as const },
-        signals: makeSignals(),
+        source: makeSource({
+          turns: [{ direction: "outbound", body: "Hola", createdAt: null }],
+        }),
       },
     ];
     for (const scenario of scenarios) {
       const verdicts = buildAgentStageVerdicts({
         config: makeConfig(),
-        source: scenario.source ?? makeSource(),
-        decision: scenario.decision,
+        source: scenario.source,
         signals: scenario.signals,
       });
       for (const verdict of verdicts) {

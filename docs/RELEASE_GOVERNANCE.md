@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.217
+# Gobierno de release JARVI RH 2.0.218
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.217**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.218**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.218
+El release **corrige el orden del ciclo para que las etapas gobiernen la ejecución del motor**. Sin migración.
+
+**El defecto.** La secuencia de 2.0.216 —solicitud del currículum después del cierre— invertía las dependencias reales: la precalificación y la entrevista solo se administran cuando el currículum llegó, y el cierre solo se emite con la conversación y la expectativa ya registradas. El motor, al no poder cumplir ese orden, solicitaba el CV al enviar el formulario y conversaba libremente antes de la precalificación.
+
+**La secuencia.** `AGENT_STAGES` y `DEFAULT_AGENT_STAGE_ORDER` pasan al orden coherente: recepción, solicitud del currículum, espera del currículum, precalificación, entrevista, conversación del perfil, expectativa salarial y cierre. La secuencia heredada se reconduce a la de fábrica al leerla.
+
+**El cerrojo.** `buildAgentStageVerdicts` queda puramente basada en estado; `firstPendingStage` devuelve la primera etapa sin completar y `runConversationTurnInternal` solo ejecuta esa etapa: si la acción decidida no es la primera pendiente, el turno se omite. `decideStageTurn` prioriza la conversación del perfil antes de la expectativa y el cierre.
+
+**Sin migración.** Reutiliza `integration_settings` y las tablas conversacionales vigentes.
 
 ### Alcance candidato 2.0.217
 El release **asienta la bitácora de la IA del agente en la ficha del candidato**. Migración `0043`.
@@ -910,4 +921,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.217.md](PRUEBAS_CAJA_NEGRA_2.0.217.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.218.md](PRUEBAS_CAJA_NEGRA_2.0.218.md).
