@@ -70,6 +70,7 @@ import {
   loadAgentStageConfiguration,
   saveAgentStageConfiguration,
 } from "./agentStages";
+import { agentLogTrace } from "./agentActivityLog";
 import {
   completeAssessmentCycle,
   getAssessmentAutomation,
@@ -2582,6 +2583,19 @@ export const appRouter = router({
         });
       }
     }),
+  }),
+
+  /**
+   * Bitácora de la IA del agente conversacional, visible en la ficha de
+   * Revisión Humana. Es de solo lectura: el tablero se compone con el asiento
+   * vigente de cada etapa en el orden administrado y no asienta actividad.
+   */
+  agentLog: router({
+    trace: roleProcedure
+      .input(z.object({ applicationId: z.number().int().positive() }))
+      .query(async ({ input }) =>
+        agentLogTrace(await requirePool(), input.applicationId)
+      ),
   }),
 
   /**

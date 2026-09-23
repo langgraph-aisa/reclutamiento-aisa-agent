@@ -8,6 +8,7 @@ import {
 } from "./agentProviders";
 import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
 import { composeCvClosingFromSettings } from "./cvAnalysis";
+import { recordAgentStageEntry } from "./agentActivityLog";
 import { isUndefinedColumnError, isUndefinedTableError } from "./governanceObservability";
 
 /**
@@ -759,6 +760,27 @@ async function reinforceWithModel(
 }
 
 /**
+ * Asiento en la bitácora de la IA del avance de una fase de screening. El
+ * descarte y la conducción de las preguntas ocurren aquí, antes del turno
+ * conversacional, de modo que la ficha conserve la traza aunque el motor
+ * general no vuelva a consumir la conversación.
+ */
+async function recordScreeningStageEntry(
+  pool: Pool,
+  run: Pick<RunCandidate, "application_id" | "conversation_id" | "phase">,
+  justification: string
+) {
+  const precalificacion = run.phase === "precalificacion";
+  await recordAgentStageEntry(pool, {
+    applicationId: run.application_id,
+    conversationId: run.conversation_id,
+    stageKey: precalificacion ? "precalificacion" : "entrevista",
+    action: precalificacion ? "Precalificación" : "Entrevista guiada",
+    justification,
+  });
+}
+
+/**
  * Barrido de screening: crea las máquinas de estado para CV ya recibido y
  * avanza las preguntas configuradas, con traza por intento, dependencia entre
  * preguntas y refuerzo del descarte por modelo. Se ejecuta antes del
@@ -774,6 +796,11 @@ export async function runScreeningStepSweep(
   const outcomes: Array<{ runId: number; action: string }> = [];
   for (const run of runs) {
     try {
+      await recordScreeningStageEntry(
+        pool,
+        run,
+        "Sus preguntas se administran tal como están configuradas."
+      );
       const questions = await screeningQuestionsForPhase(
         pool,
         run.position_id,
@@ -889,6 +916,11 @@ export async function runScreeningStepSweep(
               disqualify: true,
               reason: reinforcement.rationale,
             });
+            await recordScreeningStageEntry(
+              pool,
+              run,
+              "Se administró y el candidato fue descartado por una respuesta no aprobada."
+            );
             outcomes.push({ runId: run.run_id, action: "descalificado" });
             continue;
           }
@@ -906,6 +938,11 @@ export async function runScreeningStepSweep(
               disqualify: true,
               reason: judgement.rationale,
             });
+            await recordScreeningStageEntry(
+              pool,
+              run,
+              "Se administró y el candidato fue descartado por una respuesta no aprobada."
+            );
             outcomes.push({ runId: run.run_id, action: "descalificado" });
             continue;
           }

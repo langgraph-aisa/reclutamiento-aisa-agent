@@ -55,6 +55,11 @@ import {
   type AgentStageConfiguration,
   type StageTurnDecision,
 } from "./agentStages";
+import {
+  buildAgentStageVerdicts,
+  loadAgentLogSignals,
+  recordAgentLogVerdicts,
+} from "./agentActivityLog";
 import { loadCvAnalysisConfiguration } from "./cvAnalysis";
 
 /**
@@ -691,6 +696,27 @@ async function runConversationTurnInternal(
         salaryDeclared: source.salary.declared,
         salaryQuestionOpen,
       });
+
+      // La bitácora de la IA asienta el estado de cada etapa del ciclo, en el
+      // orden administrado: la acción ejecutada y su justificación, o el motivo
+      // de la omisión. Se escribe antes de emitir el turno para que el comité
+      // técnico pueda contrastar la decisión con su desenlace observado.
+      const logSignals = await loadAgentLogSignals(
+        pool,
+        Number(state.application_id)
+      );
+      const logVerdicts = buildAgentStageVerdicts({
+        config: stagesConfig,
+        source,
+        decision,
+        signals: logSignals,
+      });
+      await recordAgentLogVerdicts(pool, {
+        applicationId: Number(state.application_id),
+        conversationId: state.id,
+        verdicts: logVerdicts,
+      });
+
       if (decision.kind === "closing" || decision.kind === "salary_question") {
         const outcome = await emitDeterministicStageTurn(
           pool,

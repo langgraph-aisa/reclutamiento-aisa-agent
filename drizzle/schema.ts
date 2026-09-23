@@ -1132,6 +1132,57 @@ export const screeningAttempts = pgTable(
   })
 );
 
+/**
+ * Bitácora de la IA del agente conversacional: una línea por etapa completada,
+ * con la acción ejecutada, su justificación técnica y el visto de completado.
+ * Las etapas omitidas también se asientan con su motivo. La huella deduplica
+ * líneas idénticas de una misma etapa para conservar solo el estado vigente.
+ */
+export const agentAiLog = pgTable(
+  "agent_ai_log",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    applicationId: integer("application_id")
+      .references(() => applications.id, { onDelete: "cascade" })
+      .notNull(),
+    conversationId: integer("conversation_id").references(
+      () => conversations.id,
+      { onDelete: "cascade" }
+    ),
+    stageKey: varchar("stage_key", { length: 40 }).notNull(),
+    category: varchar("category", { length: 32 }).notNull(),
+    action: text("action").notNull(),
+    justification: text("justification").notNull(),
+    completed: boolean("completed").default(true).notNull(),
+    skipReason: text("skip_reason"),
+    stageOrder: integer("stage_order").default(0).notNull(),
+    turnId: integer("turn_id"),
+    fingerprint: varchar("fingerprint", { length: 40 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  table => ({
+    appStageFingerprintUq: uniqueIndex(
+      "agent_ai_log_app_stage_fingerprint_uq"
+    ).on(table.applicationId, table.stageKey, table.fingerprint),
+    appIdx: index("agent_ai_log_app_idx").on(
+      table.applicationId,
+      table.stageOrder,
+      table.createdAt,
+      table.id
+    ),
+    categoryCheck: check(
+      "agent_ai_log_category_ck",
+      sql`${table.category} IN ('nlp','vision','audio','data','reasoning')`
+    ),
+    orderCheck: check(
+      "agent_ai_log_order_ck",
+      sql`${table.stageOrder} >= 0`
+    ),
+  })
+);
+
 export const protocolDeleteChallenges = pgTable(
   "protocol_delete_challenges",
   {

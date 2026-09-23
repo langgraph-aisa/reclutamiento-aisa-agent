@@ -10,6 +10,7 @@ import {
   CandidateConversationFeed,
   CandidatePersonalKnowledgePanel,
 } from "@/components/review/ReviewEvidencePanels";
+import { AgentAiLogPanel } from "@/components/review/AgentAiLogPanel";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { useEffect } from "react";
@@ -133,6 +134,14 @@ export default function HumanReview() {
       {/* El feed de WhatsApp va inmediatamente después del encabezado de
           identidad: es el contexto de la persona antes de leer su matriz. */}
       <CandidateConversationFeed
+        applicationId={applicationId}
+        candidateName={detail.data.application.full_name ?? null}
+      />
+
+      {/* La bitácora de la IA va justo debajo de la conversación: es la traza
+          de las etapas del agente, con la acción y su justificación, para
+          auditar si el flujo determinista se cumplió en el orden administrado. */}
+      <AgentAiLogPanel
         applicationId={applicationId}
         candidateName={detail.data.application.full_name ?? null}
       />

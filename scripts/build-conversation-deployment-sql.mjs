@@ -27,7 +27,8 @@ import { fileURLToPath } from "node:url";
  *  19. drizzle/migrations/0040_screening_questions.sql
  *  20. drizzle/migrations/0041_screening_attempts.sql
  *  21. drizzle/migrations/0042_screening_phase_switches.sql
- *  22. database/verificacion_servicio_conversacional.sql
+ *  22. drizzle/migrations/0043_agent_ai_log.sql
+ *  23. database/verificacion_servicio_conversacional.sql
  *
  * Salida:
  *   database/005_servicio_conversacional_listo.sql
@@ -64,6 +65,7 @@ const sources = [
   "drizzle/migrations/0040_screening_questions.sql",
   "drizzle/migrations/0041_screening_attempts.sql",
   "drizzle/migrations/0042_screening_phase_switches.sql",
+  "drizzle/migrations/0043_agent_ai_log.sql",
 ];
 
 const verificationPath = "database/verificacion_servicio_conversacional.sql";
@@ -84,7 +86,7 @@ const header = `-- =============================================================
 -- ============================================================================
 -- Archivo GENERADO. No editar a mano: se compone con
 --   pnpm deploy:sql
--- a partir de las migraciones 0022 a 0041 más la consulta única de
+-- a partir de las migraciones 0022 a 0043 más la consulta única de
 -- verificación. Repetir su ejecución es seguro: todas las sentencias son
 -- idempotentes y ninguna contiene credenciales.
 --

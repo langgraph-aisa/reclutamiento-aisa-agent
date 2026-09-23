@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.216
+# Gobierno de release JARVI RH 2.0.217
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.216**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.217**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.217
+El release **asienta la bitácora de la IA del agente en la ficha del candidato**. Migración `0043`.
+
+**El tablero.** `server/agentActivityLog.ts` compone, en el orden administrado de las etapas, la acción que el agente ejecutó y su justificación técnica —con el visto de completado—, y conserva las etapas omitidas con su motivo: la expectativa salarial ya declarada en el formulario, la fase sin preguntas vigentes o una etapa desactivada. La taxonomía de lectura son las cinco categorías funcionales de una API de IA.
+
+**La escritura.** `server/conversationEngine.ts` asienta los veredictos al decidir cada turno, con huella por etapa para no repetir la misma línea; la tabla `agent_ai_log` deduplica por postulación, etapa y huella.
+
+**La superficie.** `client/src/components/review/AgentAiLogPanel.tsx` muestra el visor de registros —fondo oscuro, una línea por etapa con su visto— justo debajo de la conversación de WhatsApp; el router `agentLog.trace` sirve el tablero en lectura.
+
+**La migración.** `0043_agent_ai_log.sql` crea la tabla y sus índices; se incorpora al artefacto único de despliegue.
 
 ### Alcance candidato 2.0.216
 El release **reordena el ciclo del agente y lo hace reordenable desde la hoja**. Sin migración.
@@ -899,4 +910,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.216.md](PRUEBAS_CAJA_NEGRA_2.0.216.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.217.md](PRUEBAS_CAJA_NEGRA_2.0.217.md).
