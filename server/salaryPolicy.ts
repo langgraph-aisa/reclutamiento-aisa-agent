@@ -40,13 +40,123 @@ function normalizedAmount(value: string) {
     : null;
 }
 
+/** Palabras de número en español para normalizar montos declarados. */
+const SPANISH_AMOUNT_WORDS: Record<string, number> = {
+  cero: 0,
+  un: 1,
+  uno: 1,
+  una: 1,
+  dos: 2,
+  tres: 3,
+  cuatro: 4,
+  cinco: 5,
+  seis: 6,
+  siete: 7,
+  ocho: 8,
+  nueve: 9,
+  diez: 10,
+  once: 11,
+  doce: 12,
+  trece: 13,
+  catorce: 14,
+  quince: 15,
+  dieciseis: 16,
+  diecisiete: 17,
+  dieciocho: 18,
+  diecinueve: 19,
+  veinte: 20,
+  veintiuno: 21,
+  veintidos: 22,
+  veintitres: 23,
+  veinticuatro: 24,
+  veinticinco: 25,
+  veintiseis: 26,
+  veintisiete: 27,
+  veintiocho: 28,
+  veintinueve: 29,
+  treinta: 30,
+  cuarenta: 40,
+  cincuenta: 50,
+  sesenta: 60,
+  setenta: 70,
+  ochenta: 80,
+  noventa: 90,
+  cien: 100,
+  ciento: 100,
+  doscientos: 200,
+  trescientos: 300,
+  cuatrocientos: 400,
+  quinientos: 500,
+  seiscientos: 600,
+  setecientos: 700,
+  ochocientos: 800,
+  novecientos: 900,
+};
+
+/**
+ * Interpreta un monto expresado con palabras («cinco mil», «un millón»,
+ * «Q 5 mil») o con dígitos, y devuelve el valor en quetzales. Un token que no
+ * es número ni multiplicador anula la interpretación para no inventar evidencia.
+ */
+function parseSpanishAmount(value: string): number | null {
+  const tokens = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[¿?¡!.,;:]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!tokens.length) return null;
+  let total = 0;
+  let current = 0;
+  for (const token of tokens) {
+    if (token === "mil") {
+      if (current === 0) current = 1;
+      total += current * 1_000;
+      current = 0;
+      continue;
+    }
+    if (token === "millon" || token === "millones") {
+      if (current === 0) current = 1;
+      total += current * 1_000_000;
+      current = 0;
+      continue;
+    }
+    if (/^[0-9][0-9.,]*$/.test(token)) {
+      const numeric = normalizedAmount(token);
+      if (numeric === null) return null;
+      current += numeric;
+      continue;
+    }
+    const word = SPANISH_AMOUNT_WORDS[token];
+    if (word === undefined) return null;
+    current += word;
+  }
+  total += current;
+  return total > 0 && total <= 100_000_000 ? total : null;
+}
+
+/** Monto que es el mensaje completo, sin otra declaración que lo contamine. */
+function standaloneAmount(normalized: string): number | null {
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (!words.length || words.length > 6) return null;
+  const allowed =
+    /^(q|gtq|quetzales?|k|mil|mill[oó]n(es)?|[0-9][0-9.,]*|[a-záéíóúñ]+)$/;
+  if (!words.every(word => allowed.test(word))) return null;
+  return parseSpanishAmount(normalized);
+}
+
 export function extractExplicitSalaryExpectation(
   text: string,
   source: SalaryEvidenceSource
 ): SalaryExpectationEvidence | null {
   const normalized = text.replace(/\s+/g, " ").trim();
   const intention = intentionPattern.exec(normalized);
-  if (!intention) return null;
+  if (!intention) {
+    // Respuesta breve que es solo un monto: evidencia literal explícita.
+    const standalone = standaloneAmount(normalized);
+    return standalone ? { amountGtq: standalone, source } : null;
+  }
   const windowEnd = Math.min(
     normalized.length,
     intention.index + intention[0].length + 140
@@ -60,6 +170,8 @@ export function extractExplicitSalaryExpectation(
     const amountGtq = match?.[1] ? normalizedAmount(match[1]) : null;
     if (amountGtq) return { amountGtq, source };
   }
+  const wordAmount = parseSpanishAmount(evidenceWindow);
+  if (wordAmount) return { amountGtq: wordAmount, source };
   const prefix = normalized.slice(Math.max(0, intention.index - 80), intention.index);
   if (!/[.;!?\n]/.test(prefix)) {
     for (const pattern of amountPatterns) {

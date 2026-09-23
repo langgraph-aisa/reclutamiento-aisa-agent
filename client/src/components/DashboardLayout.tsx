@@ -30,6 +30,7 @@ import { RELEASE_LABEL } from "@shared/release";
 import {
   BarChart3,
   Bot,
+  CalendarDays,
   ChevronDown,
   ShieldCheck,
   ShieldAlert,
@@ -103,6 +104,12 @@ const menuItems = [
     icon: Bot,
     label: "Agente de IA LangGraph",
     path: "/admin/agent-evaluator",
+    adminOnly: true,
+  },
+  {
+    icon: CalendarDays,
+    label: "Etapas de la IA",
+    path: "/admin/agent-stages",
     adminOnly: true,
   },
   {

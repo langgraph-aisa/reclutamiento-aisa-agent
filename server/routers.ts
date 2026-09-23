@@ -65,6 +65,12 @@ import {
 } from "./cvAnalysis";
 import { loadCvAnalysisConfiguration } from "./cvAnalysis";
 import {
+  AGENT_STAGE_KEYS,
+  buildAgentStagesView,
+  loadAgentStageConfiguration,
+  saveAgentStageConfiguration,
+} from "./agentStages";
+import {
   completeAssessmentCycle,
   getAssessmentAutomation,
   saveAssessmentAutomation,
@@ -6573,6 +6579,43 @@ export const appRouter = router({
             message: safeIntegrationMessage(
               error,
               "No fue posible evaluar la postulación."
+            ),
+          });
+        }
+      }),
+  }),
+
+  agentStages: router({
+    configuration: adminProcedure.query(async () => {
+      const configuration = await loadAgentStageConfiguration(
+        await getPool()
+      );
+      return buildAgentStagesView(configuration);
+    }),
+    save: adminProcedure
+      .input(
+        z.object({
+          enabled: z.record(z.enum(AGENT_STAGE_KEYS), z.boolean()),
+          messages: z.object({
+            confirmacion_cv: z.string().trim().max(1_000),
+            pregunta_salario: z.string().trim().max(1_000),
+            confirmacion_salario: z.string().trim().max(1_000),
+          }),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveAgentStageConfiguration(
+            await requirePool(),
+            input,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar las etapas del agente."
             ),
           });
         }

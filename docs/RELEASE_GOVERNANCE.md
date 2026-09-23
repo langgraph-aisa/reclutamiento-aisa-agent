@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.212
+# Gobierno de release JARVI RH 2.0.213
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.212**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.213**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.213
+El release **hace administrable el ciclo del agente y lo cierra deterministamente**. Sin migración.
+
+**La hoja.** `client/src/pages/AgentStages.tsx` (`/admin/agent-stages`, menú «Etapas de la IA» con icono de calendario) muestra las ocho etapas del procedimiento en orden, con interruptor y plantillas editables para la confirmación de recepción, la pregunta salarial y la confirmación del registro. El catálogo se sirve desde el servidor y no se copia al paquete del navegador.
+
+**El catálogo.** `server/agentStages.ts` declara el ciclo versionado y su decisión determinista (`decideStageTurn`): con el currículum analizado y la expectativa registrada, el cierre concluye la automatización; con el currículum analizado y la expectativa pendiente, se formula la pregunta salarial. La configuración vive en `integration_settings` (proveedor `agent_stages`) y su guardado se asienta en la auditoría.
+
+**El motor.** `server/conversationEngine.ts` emite los turnos deterministas y escribe `automation_state='completed'` en el cierre; `server/salaryPolicy.ts` normaliza importes en palabras («5 mil» → Q 5,000) y captura el monto aislado como respuesta directa.
+
+**Sin migración.** Reutiliza `integration_settings` y las tablas conversacionales vigentes.
 
 ### Alcance candidato 2.0.212
 El release **hace navegable el mapa de controles ISO/IEC 20000-1 y le suma lectura orientada**. Sin migración.
@@ -861,4 +872,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.212.md](PRUEBAS_CAJA_NEGRA_2.0.212.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.213.md](PRUEBAS_CAJA_NEGRA_2.0.213.md).

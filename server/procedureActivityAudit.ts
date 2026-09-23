@@ -18,6 +18,7 @@ type PoolProvider = () => Promise<ActivityQueryable | null>;
 const CONFIGURATION_NAMESPACES = new Set([
   "activity",
   "agent",
+  "agentStages",
   "config",
   "drive",
   "geo",
@@ -28,6 +29,7 @@ const CONFIGURATION_NAMESPACES = new Set([
 const PAGE_BY_NAMESPACE: Record<string, string> = {
   activity: "/admin/activity",
   agent: "/admin/agent-evaluator",
+  agentStages: "/admin/agent-stages",
   apiChatAudit: "/admin/apichat-audit",
   assessments: "/admin/assessments",
   candidates: "/admin/human-review",

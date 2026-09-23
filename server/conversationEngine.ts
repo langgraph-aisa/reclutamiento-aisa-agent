@@ -47,6 +47,15 @@ import {
   assertNoAutomatedSalaryOffer,
   immutableSalaryInstructions,
 } from "./salaryPolicy";
+import {
+  decideStageTurn,
+  formatQuetzales,
+  loadAgentStageConfiguration,
+  renderStageTemplate,
+  type AgentStageConfiguration,
+  type StageTurnDecision,
+} from "./agentStages";
+import { loadCvAnalysisConfiguration } from "./cvAnalysis";
 
 /**
  * Motor de razonamiento conversacional JARVI RH.
@@ -121,6 +130,7 @@ type ConversationState = {
   agent_turn_count: number;
   last_inbound_message_id: number | null;
   last_inbound_body: string | null;
+  full_name: string | null;
 };
 
 export function conversationStageForTurn(
@@ -276,8 +286,11 @@ async function loadConversationState(pool: Pool, conversationId: number) {
     `SELECT conv.id,conv.application_id,conv.automation_state,conv.agent_enabled,
             conv.human_takeover,conv.conversation_stage,conv.agent_turn_count,
             last_inbound.id AS last_inbound_message_id,
-            last_inbound.body AS last_inbound_body
+            last_inbound.body AS last_inbound_body,
+            c.full_name
        FROM conversations conv
+       JOIN applications a ON a.id=conv.application_id
+       JOIN candidates c ON c.id=a.candidate_id
        LEFT JOIN LATERAL (
          SELECT m.id,m.body FROM conversation_messages m
           WHERE m.conversation_id=conv.id AND m.direction='inbound'
@@ -420,6 +433,105 @@ async function applicationHasActiveEvaluationAutomation(
 }
 
 /**
+ * Emite un turno determinista del ciclo administrado: la pregunta de la
+ * expectativa salarial cuando el CV ya está analizado, o el cierre que
+ * agradece, entrega el aviso de contacto y concluye la automatización. Son
+ * mensajes institucionales compuestos desde la configuración de las etapas,
+ * no generados por el modelo.
+ */
+async function emitDeterministicStageTurn(
+  pool: Pool,
+  state: ConversationState,
+  source: ConversationContextSource,
+  context: BuiltConversationContext,
+  decision: Extract<StageTurnDecision, { kind: "closing" | "salary_question" }>,
+  stages: AgentStageConfiguration
+): Promise<ConversationTurnOutcome> {
+  const cvConfig = await loadCvAnalysisConfiguration(pool);
+  const name = state.full_name;
+  const closing = decision.kind === "closing";
+  const monto = closing ? formatQuetzales(source.salary.expectationGtq) : null;
+  const text = closing
+    ? [
+        renderStageTemplate(stages.messages.confirmacion_salario, {
+          name,
+          monto,
+        }),
+        cvConfig.contactNotice,
+      ]
+        .filter(part => part.length > 0)
+        .join("\n\n")
+    : [
+        renderStageTemplate(stages.messages.confirmacion_cv, { name }),
+        renderStageTemplate(stages.messages.pregunta_salario, { name }),
+      ]
+        .filter(part => part.length > 0)
+        .join("\n\n");
+
+  assertNoAutomatedSalaryOffer(text);
+
+  const turnId = await recordTurn(pool, {
+    conversationId: state.id,
+    inboundMessageId: Number(state.last_inbound_message_id),
+    turnIndex: Number(state.agent_turn_count ?? 0),
+    model: "deterministic",
+    responseId: null,
+    contextFingerprint: context.fingerprint,
+    contextCharacters: context.characters,
+    reply: text,
+    latencyMs: 0,
+    validationStatus: "aprobado",
+    validationReasons: [],
+    attempt: 1,
+  });
+  const enqueued = await enqueueAgentReply(pool, {
+    conversationId: state.id,
+    text,
+    turnId,
+    metadata: {
+      contextFingerprint: context.fingerprint,
+      stage: closing ? "cierre" : "confirmacion",
+      model: "deterministic",
+    },
+  });
+  await pool.query(
+    `UPDATE conversation_turns SET outbound_message_id=$1 WHERE id=$2`,
+    [enqueued.messageId, turnId]
+  );
+  if (!closing) {
+    await pool.query(
+      `INSERT INTO conversation_cycles
+         (conversation_id,dimension,question,status,opened_at)
+       VALUES ($1,'remuneracion',$2,'abierto',now())`,
+      [
+        state.id,
+        renderStageTemplate(stages.messages.pregunta_salario, { name }),
+      ]
+    );
+  }
+  if (closing) {
+    await pool.query(
+      `UPDATE conversations
+          SET conversation_stage='cierre',last_agent_turn_at=now(),
+              agent_turn_count=agent_turn_count+1,last_agent_error=NULL,
+              automation_state='completed',updated_at=now()
+        WHERE id=$1`,
+      [state.id]
+    );
+  } else {
+    await pool.query(
+      `UPDATE conversations
+          SET conversation_stage='confirmacion',last_agent_turn_at=now(),
+              agent_turn_count=agent_turn_count+1,last_agent_error=NULL,
+              updated_at=now()
+        WHERE id=$1`,
+      [state.id]
+    );
+  }
+  return { status: "sent", messageId: enqueued.messageId, turnId, reply: text };
+}
+
+/**
  * Ejecuta un turno completo del agente: rehidrata el hilo, razona, verifica la
  * conducta y encola la respuesta autorizada.
  */
@@ -464,6 +576,18 @@ async function runConversationTurnInternal(
     return {
       status: "skipped",
       reason: "La conversación no registra un mensaje entrante pendiente.",
+    };
+
+  if (
+    !(await applicationHasActiveEvaluationAutomation(
+      pool,
+      Number(state.application_id)
+    ))
+  )
+    return {
+      status: "skipped",
+      reason:
+        "La postulación no tiene ningún protocolo de evaluación activo; el agente no conversa fuera de la precalificación, la entrevista o la prueba psicométrica.",
     };
 
   if (
@@ -551,6 +675,56 @@ async function runConversationTurnInternal(
               open.trim().toLowerCase() === gap.suggestion.trim().toLowerCase()
           )
       );
+      const stagesConfig = await loadAgentStageConfiguration(pool);
+      const salaryQuestionOpen = source.cycles.some(
+        cycle =>
+          cycle.status === "abierto" && cycle.dimension === "remuneracion"
+      );
+      const cvAnalizado = source.attachments.some(
+        attachment =>
+          /cv|curriculum/i.test(attachment.category) &&
+          attachment.status === "analizado"
+      );
+      const decision = decideStageTurn({
+        enabled: stagesConfig.enabled,
+        cvAnalizado,
+        salaryDeclared: source.salary.declared,
+        salaryQuestionOpen,
+      });
+      if (decision.kind === "closing" || decision.kind === "salary_question") {
+        const outcome = await emitDeterministicStageTurn(
+          pool,
+          state,
+          source,
+          context,
+          decision,
+          stagesConfig
+        );
+        observation.update({
+          output: { status: outcome.status },
+          metadata: { outcome: "deterministic-stage" },
+        });
+        return outcome;
+      }
+      if (!stagesConfig.enabled.retroalimentacion) {
+        return {
+          status: "skipped",
+          reason:
+            "La conversación abierta del perfil está desactivada en las etapas del agente.",
+        };
+      }
+      if (
+        !(await applicationHasActiveEvaluationAutomation(
+          pool,
+          Number(state.application_id)
+        ))
+      )
+        return {
+          status: "skipped",
+          reason:
+            "La postulación no tiene ningún protocolo de evaluación activo; el agente no conversa fuera de la precalificación, la entrevista o la prueba psicométrica.",
+        };
+
       const stage = conversationStageForTurn(
         Number(state.agent_turn_count ?? 0),
         openQuestions.length

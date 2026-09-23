@@ -10,6 +10,7 @@ import Account from "./pages/Account";
 import ActivityAudit from "./pages/ActivityAudit";
 import Assessments from "./pages/Assessments";
 import AgentEvaluator from "./pages/AgentEvaluator";
+import AgentStages from "./pages/AgentStages";
 import Apply from "./pages/Apply";
 import Candidates from "./pages/Candidates";
 import Config from "./pages/Config";
@@ -133,6 +134,11 @@ function Router() {
       <Route path="/admin/agent-evaluator">
         <AdminShell>
           <AgentEvaluator />
+        </AdminShell>
+      </Route>
+      <Route path="/admin/agent-stages">
+        <AdminShell>
+          <AgentStages />
         </AdminShell>
       </Route>
       <Route path="/admin/activity">
