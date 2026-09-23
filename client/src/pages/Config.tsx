@@ -69,6 +69,7 @@ export default function Config() {
   });
   const saveSetting = trpc.config.saveSetting.useMutation();
   const cvAnalysis = trpc.config.cvAnalysis.useQuery();
+  const settings = trpc.config.settings.useQuery();
   const saveApiChatPreferences = trpc.config.saveApiChatPreferences.useMutation(
     {
       onSuccess: async () => {
@@ -276,6 +277,7 @@ export default function Config() {
   const [contactNotice, setContactNotice] = useState("");
   const [essenceWordLimit, setEssenceWordLimit] = useState(550);
   const [cvAnalysisLoaded, setCvAnalysisLoaded] = useState(false);
+  const [cvRequestLoaded, setCvRequestLoaded] = useState(false);
   const [catalogText, setCatalogText] = useState("");
   const [saved, setSaved] = useState(false);
   const [apiChat, setApiChat] = useState({
@@ -345,40 +347,70 @@ export default function Config() {
     setCvAnalysisLoaded(true);
   }, [cvAnalysis.data, cvAnalysisLoaded]);
 
+  useEffect(() => {
+    if (cvRequestLoaded || !settings.data) return;
+    const rows = settings.data as Array<{
+      setting_key: string;
+      setting_value: string | null;
+    }>;
+    const savedMessage = rows.find(
+      row => row.setting_key === "whatsapp_message"
+    );
+    if (savedMessage?.setting_value) {
+      setMessage(savedMessage.setting_value);
+    }
+    const savedCountry = rows.find(
+      row => row.setting_key === "default_country"
+    );
+    if (savedCountry?.setting_value) {
+      setCountry(savedCountry.setting_value);
+    }
+    setCvRequestLoaded(true);
+  }, [settings.data, cvRequestLoaded]);
+
   const save = async () => {
-    await saveSetting.mutateAsync({
-      provider: "recruitment",
-      settingKey: "default_country",
-      settingValue: country.toUpperCase(),
-      isSecret: false,
-    });
-    await saveSetting.mutateAsync({
-      provider: "recruitment",
-      settingKey: "whatsapp_message",
-      settingValue: message,
-      isSecret: false,
-    });
-    await saveSetting.mutateAsync({
-      provider: "recruitment",
-      settingKey: "cv_thank_you_message",
-      settingValue: thankYou,
-      isSecret: false,
-    });
-    await saveSetting.mutateAsync({
-      provider: "recruitment",
-      settingKey: "cv_contact_notice",
-      settingValue: contactNotice,
-      isSecret: false,
-    });
-    await saveSetting.mutateAsync({
-      provider: "recruitment",
-      settingKey: "cv_essence_word_limit",
-      settingValue: String(essenceWordLimit),
-      isSecret: false,
-    });
-    await cvAnalysis.refetch();
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 1600);
+    try {
+      await saveSetting.mutateAsync({
+        provider: "recruitment",
+        settingKey: "default_country",
+        settingValue: country.toUpperCase(),
+        isSecret: false,
+      });
+      await saveSetting.mutateAsync({
+        provider: "recruitment",
+        settingKey: "whatsapp_message",
+        settingValue: message,
+        isSecret: false,
+      });
+      await saveSetting.mutateAsync({
+        provider: "recruitment",
+        settingKey: "cv_thank_you_message",
+        settingValue: thankYou,
+        isSecret: false,
+      });
+      await saveSetting.mutateAsync({
+        provider: "recruitment",
+        settingKey: "cv_contact_notice",
+        settingValue: contactNotice,
+        isSecret: false,
+      });
+      await saveSetting.mutateAsync({
+        provider: "recruitment",
+        settingKey: "cv_essence_word_limit",
+        settingValue: String(essenceWordLimit),
+        isSecret: false,
+      });
+      await Promise.all([cvAnalysis.refetch(), settings.refetch()]);
+      setSaved(true);
+      toast.success("Evaluación de CV guardada");
+      window.setTimeout(() => setSaved(false), 1600);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "No fue posible guardar la evaluación de CV."
+      );
+    }
   };
   const addRecipient = async () => {
     if (!recipient.label || !recipient.phone) return;
