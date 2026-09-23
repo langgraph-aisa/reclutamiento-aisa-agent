@@ -6597,6 +6597,7 @@ export const appRouter = router({
       .input(
         z.object({
           enabled: z.record(z.enum(AGENT_STAGE_KEYS), z.boolean()),
+          order: z.array(z.enum(AGENT_STAGE_KEYS)).length(AGENT_STAGE_KEYS.length),
           messages: z.object({
             confirmacion_cv: z.string().trim().max(1_000),
             pregunta_salario: z.string().trim().max(1_000),

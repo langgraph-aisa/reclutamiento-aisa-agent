@@ -11,12 +11,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { CalendarDays, Save } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CalendarDays, GripVertical, Save } from "lucide-react";
+import { type DragEvent, useEffect, useState } from "react";
 import { toast } from "sonner";
+import type { AgentStageKey } from "../../../server/agentStages";
 
 type StageView = {
-  key: string;
+  key: AgentStageKey;
   order: number;
   name: string;
   description: string;
@@ -41,16 +42,23 @@ export default function AgentStages() {
   });
 
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [order, setOrder] = useState<AgentStageKey[]>([]);
   const [messages, setMessages] = useState<Record<string, string>>({
     confirmacion_cv: "",
     pregunta_salario: "",
     confirmacion_salario: "",
   });
   const [loaded, setLoaded] = useState(false);
+  const [draggingKey, setDraggingKey] = useState<AgentStageKey | null>(null);
 
   useEffect(() => {
     if (loaded || !configuration.data) return;
     setEnabled({ ...configuration.data.enabled });
+    setOrder(
+      configuration.data.order?.length
+        ? [...configuration.data.order]
+        : (configuration.data.stages as StageView[]).map(stage => stage.key)
+    );
     setMessages({
       confirmacion_cv: configuration.data.messages.confirmacion_cv,
       pregunta_salario: configuration.data.messages.pregunta_salario,
@@ -59,9 +67,41 @@ export default function AgentStages() {
     setLoaded(true);
   }, [configuration.data, loaded]);
 
+  const moveStage = (sourceKey: AgentStageKey, targetKey: AgentStageKey) => {
+    if (!sourceKey || sourceKey === targetKey) return;
+    setOrder(current => {
+      const next = [...current];
+      const from = next.indexOf(sourceKey);
+      const to = next.indexOf(targetKey);
+      if (from < 0 || to < 0) return current;
+      next.splice(from, 1);
+      next.splice(to, 0, sourceKey);
+      return next;
+    });
+  };
+
+  const handleDragStart =
+    (key: AgentStageKey) => (event: DragEvent<HTMLLIElement>) => {
+      setDraggingKey(key);
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", key);
+    };
+
+  const handleDragOver = (event: DragEvent<HTMLLIElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop =
+    (targetKey: AgentStageKey) => (event: DragEvent<HTMLLIElement>) => {
+      event.preventDefault();
+      if (draggingKey) moveStage(draggingKey, targetKey);
+    };
+
   const submit = () => {
     save.mutate({
       enabled,
+      order,
       messages: {
         confirmacion_cv: messages.confirmacion_cv,
         pregunta_salario: messages.pregunta_salario,
@@ -81,6 +121,12 @@ export default function AgentStages() {
   }
 
   const stages = (configuration.data?.stages ?? []) as StageView[];
+  const stageByKey = new Map(stages.map(stage => [stage.key, stage]));
+  const ordered = order.length
+    ? order
+        .map(key => stageByKey.get(key))
+        .filter((stage): stage is StageView => Boolean(stage))
+    : stages;
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -93,8 +139,8 @@ export default function AgentStages() {
         </h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
           El ciclo completo del agente conversacional, en su orden de ejecución.
-          Active o apague cada etapa y ajuste los mensajes que emite de forma
-          directa. El resto de la conversación respeta estas decisiones.
+          Arrastre una etapa para reordenarla, active o apague cada etapa y
+          ajuste los mensajes que emite de forma directa.
         </p>
       </div>
 
@@ -109,23 +155,35 @@ export default function AgentStages() {
                 Ciclo exacto del agente
               </CardTitle>
               <CardDescription>
-                Cada número corresponde a una etapa del procedimiento; el
-                interruptor gobierna su ejecución.
+                Arrastre una etapa para reacomodar el ciclo; el interruptor
+                gobierna su ejecución.
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <ol className="space-y-0">
-            {stages.map((stage, index) => (
-              <li key={stage.key} className="relative">
-                {index < stages.length - 1 && (
+            {ordered.map((stage, index) => (
+              <li
+                key={stage.key}
+                className="relative"
+                draggable
+                onDragStart={handleDragStart(stage.key)}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop(stage.key)}
+                onDragEnd={() => setDraggingKey(null)}
+              >
+                {index < ordered.length - 1 && (
                   <span
                     aria-hidden
                     className="absolute left-[1.25rem] top-10 h-[calc(100%-1.5rem)] w-px bg-border"
                   />
                 )}
-                <div className="relative flex gap-4 pb-5">
+                <div
+                  className={`relative flex gap-4 pb-5 ${
+                    draggingKey === stage.key ? "opacity-60" : ""
+                  }`}
+                >
                   <div
                     className={`z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
                       stage.enabled
@@ -133,17 +191,23 @@ export default function AgentStages() {
                         : "bg-muted text-muted-foreground"
                     }`}
                   >
-                    {stage.order}
+                    {index + 1}
                   </div>
-                  <div className="flex-1 space-y-3 rounded-2xl border border-border/70 bg-card p-4">
+                  <div className="flex-1 cursor-grab space-y-3 rounded-2xl border border-border/70 bg-card p-4 active:cursor-grabbing">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold leading-tight">
-                          {stage.name}
-                        </p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {stage.description}
-                        </p>
+                      <div className="flex items-start gap-2">
+                        <GripVertical
+                          aria-hidden
+                          className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground"
+                        />
+                        <div>
+                          <p className="font-semibold leading-tight">
+                            {stage.name}
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {stage.description}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge

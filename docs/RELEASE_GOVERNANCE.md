@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.215
+# Gobierno de release JARVI RH 2.0.216
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.215**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.216**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.216
+El release **reordena el ciclo del agente y lo hace reordenable desde la hoja**. Sin migración.
+
+**El orden.** La solicitud del currículum pasa a ocurrir después del cierre del proceso: el catálogo de `server/agentStages.ts` sitúa `solicitud_cv` tras `cierre`, y la secuencia de fábrica queda declarada en `DEFAULT_AGENT_STAGE_ORDER`.
+
+**La reordenación.** La configuración gana la clave `order` (permutación de las ocho etapas) en `integration_settings`, validada por `normalizeStageOrder`; la hoja «Etapas de la IA» permite arrastrar cada etapa y persistir la secuencia con el botón de guardado, que se asienta en la auditoría.
+
+**Sin migración.** Reutiliza `integration_settings`.
 
 ### Alcance candidato 2.0.215
 El release **vuelve verificable la credencial de plataforma de Google Drive**. Sin migración.
@@ -890,4 +899,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.215.md](PRUEBAS_CAJA_NEGRA_2.0.215.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.216.md](PRUEBAS_CAJA_NEGRA_2.0.216.md).

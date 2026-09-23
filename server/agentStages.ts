@@ -9,8 +9,9 @@ import type { Pool } from "pg";
  * el cliente: se sirve por el procedimiento autenticado y el paquete del
  * navegador no conserva descripciones metodológicas.
  *
- * Dos cosas viven bajo el proveedor `agent_stages` en `integration_settings`:
+ * Tres cosas viven bajo el proveedor `agent_stages` en `integration_settings`:
  *  - `enabled`: documento JSON con el interruptor de cada etapa.
+ *  - `order`: documento JSON con la secuencia administrada de las etapas.
  *  - `confirmacion_cv`, `pregunta_salario`, `confirmacion_salario`: plantillas
  *    de los mensajes deterministas que emite el motor fuera de la conversación
  *    libre.
@@ -59,16 +60,8 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     messageKeys: [],
   },
   {
-    key: "solicitud_cv",
-    order: 2,
-    name: "Solicitud del currículum",
-    description:
-      "El mensaje de evaluación solicita el currículum y deja el expediente en espera de la respuesta por el mismo medio.",
-    messageKeys: [],
-  },
-  {
     key: "precalificacion",
-    order: 3,
+    order: 2,
     name: "Precalificación",
     description:
       "Se verifica la precalificación activa de la plaza y se administran sus preguntas tal como están configuradas.",
@@ -76,7 +69,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
   },
   {
     key: "entrevista",
-    order: 4,
+    order: 3,
     name: "Entrevista guiada",
     description:
       "Si supera la precalificación, se verifica la entrevista activa de la plaza y se administran sus preguntas.",
@@ -84,7 +77,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
   },
   {
     key: "retroalimentacion",
-    order: 5,
+    order: 4,
     name: "Conversación del perfil",
     description:
       "El motor de respuesta abierta conversa únicamente sobre la información del perfil laboral, sin excepción.",
@@ -92,10 +85,18 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
   },
   {
     key: "cierre",
-    order: 6,
+    order: 5,
     name: "Cierre del proceso",
     description:
       "Se emite el agradecimiento y el aviso de contacto, y se vuelve a ejecutar la evaluación con la conversación.",
+    messageKeys: [],
+  },
+  {
+    key: "solicitud_cv",
+    order: 6,
+    name: "Solicitud del currículum",
+    description:
+      "Tras el cierre se solicita el currículum y el expediente queda en espera de la respuesta por el mismo medio.",
     messageKeys: [],
   },
   {
@@ -128,6 +129,18 @@ export const DEFAULT_AGENT_STAGE_ENABLED: Record<AgentStageKey, boolean> = {
   expectativa_salarial: true,
 };
 
+/** Secuencia de fábrica del ciclo: el currículum se solicita tras el cierre. */
+export const DEFAULT_AGENT_STAGE_ORDER: AgentStageKey[] = [
+  "recepcion_formulario",
+  "precalificacion",
+  "entrevista",
+  "retroalimentacion",
+  "cierre",
+  "solicitud_cv",
+  "espera_cv",
+  "expectativa_salarial",
+];
+
 /** Plantillas de fábrica de los mensajes deterministas. */
 export const DEFAULT_AGENT_STAGE_MESSAGES: Record<
   AgentStageMessageKey,
@@ -143,6 +156,7 @@ export const DEFAULT_AGENT_STAGE_MESSAGES: Record<
 
 export type AgentStageConfiguration = {
   enabled: Record<AgentStageKey, boolean>;
+  order: AgentStageKey[];
   messages: Record<AgentStageMessageKey, string>;
 };
 
@@ -186,18 +200,60 @@ export function serializeStageEnabled(enabled: Record<AgentStageKey, boolean>) {
   return JSON.stringify(document);
 }
 
+function isStageKey(value: unknown): value is AgentStageKey {
+  return (
+    typeof value === "string" &&
+    (AGENT_STAGE_KEYS as readonly string[]).includes(value)
+  );
+}
+
+/** Normaliza una secuencia de etapas: exige una permutación de las ocho. */
+export function normalizeStageOrder(
+  order: readonly AgentStageKey[]
+): AgentStageKey[] {
+  const unique = Array.from(new Set(order.filter(isStageKey)));
+  return unique.length === AGENT_STAGE_KEYS.length
+    ? unique
+    : [...DEFAULT_AGENT_STAGE_ORDER];
+}
+
+/** Lee el documento `order` y conserva la secuencia de fábrica ante ausencias. */
+export function stageOrderFromValue(value: string | null | undefined) {
+  if (!value) return [...DEFAULT_AGENT_STAGE_ORDER];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return [...DEFAULT_AGENT_STAGE_ORDER];
+  }
+  return Array.isArray(parsed)
+    ? normalizeStageOrder(parsed as AgentStageKey[])
+    : [...DEFAULT_AGENT_STAGE_ORDER];
+}
+
+export function serializeStageOrder(order: readonly AgentStageKey[]) {
+  return JSON.stringify(normalizeStageOrder(order));
+}
+
 export function buildAgentStagesView(
   configuration: AgentStageConfiguration
 ): AgentStagesView {
+  const order = stageOrderFromValue(serializeStageOrder(configuration.order));
+  const byKey = new Map(
+    AGENT_STAGES.map(definition => [definition.key, definition])
+  );
   return {
     enabled: configuration.enabled,
+    order,
     messages: configuration.messages,
-    stages: AGENT_STAGES.map(definition => ({
-      ...definition,
-      enabled: configuration.enabled[definition.key] === true,
+    stages: order.map((key, index) => ({
+      ...(byKey.get(key) as AgentStageDefinition),
+      order: index + 1,
+      enabled: configuration.enabled[key] === true,
     })),
     defaults: {
       enabled: { ...DEFAULT_AGENT_STAGE_ENABLED },
+      order: [...DEFAULT_AGENT_STAGE_ORDER],
       messages: { ...DEFAULT_AGENT_STAGE_MESSAGES },
     },
   };
@@ -209,6 +265,7 @@ export async function loadAgentStageConfiguration(
 ): Promise<AgentStageConfiguration> {
   const configuration: AgentStageConfiguration = {
     enabled: { ...DEFAULT_AGENT_STAGE_ENABLED },
+    order: [...DEFAULT_AGENT_STAGE_ORDER],
     messages: { ...DEFAULT_AGENT_STAGE_MESSAGES },
   };
   if (!pool) return configuration;
@@ -218,11 +275,15 @@ export async function loadAgentStageConfiguration(
   }>(
     `SELECT setting_key,setting_value FROM integration_settings
       WHERE provider=$1 AND setting_key = ANY($2)`,
-    [AGENT_STAGES_PROVIDER, ["enabled", ...messageKeys()]]
+    [AGENT_STAGES_PROVIDER, ["enabled", "order", ...messageKeys()]]
   );
   for (const row of result.rows) {
     if (row.setting_key === "enabled") {
       configuration.enabled = stageEnabledFromValue(row.setting_value);
+      continue;
+    }
+    if (row.setting_key === "order") {
+      configuration.order = stageOrderFromValue(row.setting_value);
       continue;
     }
     const key = row.setting_key as AgentStageMessageKey;
@@ -234,6 +295,7 @@ export async function loadAgentStageConfiguration(
 
 export type SaveAgentStageInput = {
   enabled: Record<AgentStageKey, boolean>;
+  order: AgentStageKey[];
   messages: Record<AgentStageMessageKey, string>;
 };
 
@@ -245,6 +307,7 @@ export async function saveAgentStageConfiguration(
 ): Promise<AgentStagesView> {
   const configuration: AgentStageConfiguration = {
     enabled: stageEnabledFromValue(serializeStageEnabled(input.enabled)),
+    order: stageOrderFromValue(serializeStageOrder(input.order)),
     messages: {
       confirmacion_cv: input.messages.confirmacion_cv.trim()
         ? input.messages.confirmacion_cv.trim()
@@ -265,6 +328,12 @@ export async function saveAgentStageConfiguration(
        ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=now()`,
       [AGENT_STAGES_PROVIDER, serializeStageEnabled(configuration.enabled)]
     );
+    await pool.query(
+      `INSERT INTO integration_settings (provider,setting_key,setting_value,is_secret,updated_at)
+       VALUES ($1,'order',$2,false,now())
+       ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=now()`,
+      [AGENT_STAGES_PROVIDER, serializeStageOrder(configuration.order)]
+    );
     for (const key of messageKeys()) {
       await pool.query(
         `INSERT INTO integration_settings (provider,setting_key,setting_value,is_secret,updated_at)
@@ -278,7 +347,10 @@ export async function saveAgentStageConfiguration(
        VALUES ($1,'agent_stages',0,'agent_stages_saved',$2::jsonb)`,
       [
         actorUserId,
-        JSON.stringify({ enabled: configuration.enabled }),
+        JSON.stringify({
+          enabled: configuration.enabled,
+          order: configuration.order,
+        }),
       ]
     );
     await pool.query("COMMIT");
