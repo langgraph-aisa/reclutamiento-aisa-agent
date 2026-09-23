@@ -195,7 +195,19 @@ describe("firstPendingStage", () => {
       source: makeSource({ turns: [] }),
       signals: makeSignals({ cvState: "sin_solicitud" }),
     });
-    expect(firstPendingStage(verdicts)?.stageKey).toBe("solicitud_cv");
+    expect(firstPendingStage(verdicts)?.stageKey).toBe("retroalimentacion");
+  });
+
+  it("señala la precalificación pendiente cuando la plaza declara preguntas y el CV no llegó", () => {
+    const verdicts = build({
+      source: makeSource({ turns: [] }),
+      signals: makeSignals({
+        cvState: "sin_solicitud",
+        precalificacionActive: true,
+        entrevistaActive: true,
+      }),
+    });
+    expect(firstPendingStage(verdicts)?.stageKey).toBe("precalificacion");
   });
 
   it("no señala nada cuando el ciclo quedó completo", () => {

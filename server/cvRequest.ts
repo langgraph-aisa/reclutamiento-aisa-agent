@@ -36,6 +36,29 @@ export function cvRequestMessageKey(applicationId: number) {
   return `cv_request:${applicationId}`;
 }
 
+/**
+ * Garantiza la conversación de una postulación sin emitir mensaje alguno. La
+ * usa la recepción del formulario: el ciclo del agente conversa primero —la
+ * precalificación y la entrevista— y solo solicita el currículum al llegar a
+ * esa etapa, de modo que la conversación debe existir desde la recepción.
+ */
+export async function ensureConversationForApplication(
+  pool: Pool,
+  applicationId: number
+): Promise<number | null> {
+  const existing = await pool.query(
+    `SELECT id FROM conversations WHERE application_id=$1 AND provider='apichat' ORDER BY id LIMIT 1`,
+    [applicationId]
+  );
+  if (existing.rows[0]) return Number(existing.rows[0].id);
+  const inserted = await pool.query(
+    `INSERT INTO conversations (application_id,provider,status)
+     VALUES ($1,'apichat','pendiente') RETURNING id`,
+    [applicationId]
+  );
+  return inserted.rows[0] ? Number(inserted.rows[0].id) : null;
+}
+
 async function ensureCvRequestMessageInternal(
   client: PoolClient,
   application: ApplicationContact

@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.218
+# Gobierno de release JARVI RH 2.0.219
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.218**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.219**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.219
+El release **fija el ciclo en el orden de la gerencia y hace que el motor lo ejecute tal cual**. Sin migración.
+
+**El orden.** `AGENT_STAGES` y `DEFAULT_AGENT_STAGE_ORDER` quedan fijados: recepción, precalificación, entrevista, conversación del perfil, cierre, solicitud del currículum, espera del currículum y expectativa salarial. La secuencia invertida de 2.0.218 se reconduce a la oficial al leerla.
+
+**El motor.** La solicitud del currículum ya no se despacha en la recepción ni en la evaluación automática: se emite en la etapa «Solicitud del currículum», tras el cierre. La precalificación y la entrevista ya no esperan el currículum —se administran en cuanto la recepción deja la conversación preparada—, y el cierre emite el agradecimiento y el aviso de contacto sin exigir salario ni CV. `runConversationTurnInternal` ejecuta solo la primera etapa pendiente y omite cualquier acción posterior.
+
+**La expectativa.** Cierra el expediente: formula la pregunta, confirma el registro y concluye la automatización.
+
+**Sin migración.** Reutiliza `integration_settings` y las tablas conversacionales vigentes.
 
 ### Alcance candidato 2.0.218
 El release **corrige el orden del ciclo para que las etapas gobiernen la ejecución del motor**. Sin migración.
@@ -921,4 +932,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.218.md](PRUEBAS_CAJA_NEGRA_2.0.218.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.219.md](PRUEBAS_CAJA_NEGRA_2.0.219.md).

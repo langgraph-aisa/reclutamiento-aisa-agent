@@ -50,15 +50,12 @@ export type AgentStageDefinition = {
 };
 
 /**
- * Catálogo institucional del ciclo del agente, en el orden real de ejecución.
- *
- * El orden es una dependencia, no un adorno: la precalificación y la entrevista
- * solo se administran cuando el currículum ya llegó al expediente, y el cierre
- * solo se emite cuando la conversación del perfil y la expectativa salarial ya
- * quedaron registradas. Por eso la solicitud y la espera del currículum
- * preceden a la precalificación, y el cierre cierra la secuencia. La secuencia
- * de 2.0.216 —que situaba la solicitud del currículum después del cierre—
- * invertía esa dependencia y el motor no podía cumplirla: se corrige aquí.
+ * Catálogo institucional del ciclo del agente, en el orden fijo que gobierna
+ * la ejecución del motor. La secuencia la define la gerencia y no se altera:
+ * recepción, precalificación, entrevista, conversación del perfil, cierre,
+ * solicitud del currículum, espera del currículum y expectativa salarial. El
+ * motor debe ejecutar las etapas en este orden; cualquier etapa anterior
+ * pendiente detiene las siguientes.
  */
 export const AGENT_STAGES: AgentStageDefinition[] = [
   {
@@ -70,24 +67,8 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     messageKeys: [],
   },
   {
-    key: "solicitud_cv",
-    order: 2,
-    name: "Solicitud del currículum",
-    description:
-      "Se solicita el currículum por el mismo medio de la postulación y el expediente queda en espera de la respuesta.",
-    messageKeys: [],
-  },
-  {
-    key: "espera_cv",
-    order: 3,
-    name: "Espera del currículum",
-    description:
-      "Se supervisa el correo del solicitante para confirmar la recepción; al recibir el documento se confirma su recepción.",
-    messageKeys: ["confirmacion_cv"],
-  },
-  {
     key: "precalificacion",
-    order: 4,
+    order: 2,
     name: "Precalificación",
     description:
       "Se verifica la precalificación activa de la plaza y se administran sus preguntas tal como están configuradas.",
@@ -95,35 +76,51 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
   },
   {
     key: "entrevista",
-    order: 5,
+    order: 3,
     name: "Entrevista guiada",
     description:
-      "Si supera la precalificación, se verifica la entrevista activa de la plaza y se administran sus preguntas.",
+      "Si está habilitada, se verifica la entrevista activa de la plaza y se administran sus preguntas.",
     messageKeys: [],
   },
   {
     key: "retroalimentacion",
-    order: 6,
+    order: 4,
     name: "Conversación del perfil",
     description:
       "El motor de respuesta abierta conversa únicamente sobre la información del perfil laboral, sin excepción.",
     messageKeys: [],
   },
   {
-    key: "expectativa_salarial",
-    order: 7,
-    name: "Expectativa salarial",
-    description:
-      "Se pregunta la expectativa, se normaliza en quetzales y se avisa de forma breve que quedó registrada; no se hace nada más.",
-    messageKeys: ["pregunta_salario", "confirmacion_salario"],
-  },
-  {
     key: "cierre",
-    order: 8,
+    order: 5,
     name: "Cierre del proceso",
     description:
       "Se emite el agradecimiento y el aviso de contacto, y se vuelve a ejecutar la evaluación con la conversación.",
     messageKeys: [],
+  },
+  {
+    key: "solicitud_cv",
+    order: 6,
+    name: "Solicitud del currículum",
+    description:
+      "Tras el cierre se solicita el currículum y el expediente queda en espera de la respuesta por el mismo medio.",
+    messageKeys: [],
+  },
+  {
+    key: "espera_cv",
+    order: 7,
+    name: "Espera del currículum",
+    description:
+      "Al recibir el documento se confirma su recepción y se entrega de nuevo el aviso de contacto, sin saludar otra vez.",
+    messageKeys: ["confirmacion_cv"],
+  },
+  {
+    key: "expectativa_salarial",
+    order: 8,
+    name: "Expectativa salarial",
+    description:
+      "Se pregunta la expectativa, se normaliza en quetzales y se avisa de forma breve que quedó registrada; no se hace nada más.",
+    messageKeys: ["pregunta_salario", "confirmacion_salario"],
   },
 ];
 
@@ -140,19 +137,18 @@ export const DEFAULT_AGENT_STAGE_ENABLED: Record<AgentStageKey, boolean> = {
 };
 
 /**
- * Secuencia de fábrica del ciclo: coherente con las dependencias del motor. El
- * currículum se solicita y se espera antes de la precalificación, y el cierre
- * cierra la secuencia tras la expectativa salarial.
+ * Secuencia de fábrica del ciclo, fijada por la gerencia. El currículum se
+ * solicita tras el cierre y la expectativa salarial cierra el expediente.
  */
 export const DEFAULT_AGENT_STAGE_ORDER: AgentStageKey[] = [
   "recepcion_formulario",
-  "solicitud_cv",
-  "espera_cv",
   "precalificacion",
   "entrevista",
   "retroalimentacion",
-  "expectativa_salarial",
   "cierre",
+  "solicitud_cv",
+  "espera_cv",
+  "expectativa_salarial",
 ];
 
 /** Plantillas de fábrica de los mensajes deterministas. */
@@ -222,21 +218,19 @@ function isStageKey(value: unknown): value is AgentStageKey {
 }
 
 /**
- * Secuencia heredada de 2.0.216: situaba la solicitud del currículum después
- * del cierre, invirtiendo la dependencia real (la precalificación exige el
- * currículum y el cierre exige la expectativa salarial). El motor no podía
- * cumplirla y conversaba fuera de orden; al leerla se reconduce a la secuencia
- * coherente de fábrica.
+ * Secuencia invertida de 2.0.218 —currículum antes de la precalificación y
+ * cierre al final— que contradecía el orden fijado por la gerencia. Al leerla
+ * se reconduce a la secuencia oficial.
  */
 const LEGACY_AGENT_STAGE_ORDER: AgentStageKey[] = [
   "recepcion_formulario",
+  "solicitud_cv",
+  "espera_cv",
   "precalificacion",
   "entrevista",
   "retroalimentacion",
-  "cierre",
-  "solicitud_cv",
-  "espera_cv",
   "expectativa_salarial",
+  "cierre",
 ];
 
 function sameStageOrder(
@@ -402,48 +396,6 @@ export async function saveAgentStageConfiguration(
     throw error;
   }
   return buildAgentStagesView(configuration);
-}
-
-/** Decisión determinista del siguiente turno del motor conversacional. */
-export type StageTurnDecision =
-  | { kind: "closing" }
-  | { kind: "salary_question" }
-  | { kind: "free" }
-  | { kind: "silent" };
-
-export type StageTurnInput = {
-  enabled: Record<AgentStageKey, boolean>;
-  /** El currículum llegó al RAG personal y su análisis está vigente. */
-  cvAnalizado: boolean;
-  /** La expectativa salarial quedó registrada con evidencia literal. */
-  salaryDeclared: boolean;
-  /** Ya existe una pregunta abierta sobre la remuneración. */
-  salaryQuestionOpen: boolean;
-  /** Ya se conversó el perfil laboral con la persona. */
-  freeConversationHeld: boolean;
-};
-
-export function decideStageTurn(input: StageTurnInput): StageTurnDecision {
-  // La conversación del perfil precede a la expectativa salarial y al cierre:
-  // si aún no se conversó y la etapa está habilitada, el turno es libre antes
-  // que cualquier mensaje determinista.
-  if (input.enabled.retroalimentacion && !input.freeConversationHeld) {
-    return { kind: "free" };
-  }
-  if (input.cvAnalizado) {
-    if (input.salaryDeclared) {
-      return input.enabled.cierre ? { kind: "closing" } : { kind: "free" };
-    }
-    if (
-      input.enabled.espera_cv &&
-      input.enabled.expectativa_salarial &&
-      !input.salaryQuestionOpen
-    ) {
-      return { kind: "salary_question" };
-    }
-    return { kind: "free" };
-  }
-  return input.enabled.retroalimentacion ? { kind: "free" } : { kind: "silent" };
 }
 
 /** Sustituye las variables declaradas en una plantilla de etapa. */

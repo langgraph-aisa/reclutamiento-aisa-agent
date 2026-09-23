@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./cvRequest", () => ({ requestCvForApplication: vi.fn() }));
 vi.mock("./agentEvaluator", () => ({
   evaluateApplicationWithAgent: vi.fn(),
 }));
 
 import { evaluateApplicationWithAgent } from "./agentEvaluator";
-import { requestCvForApplication } from "./cvRequest";
 import {
   EVALUATION_AUTOMATION_COMPLETED,
   EVALUATION_AUTOMATION_FAILED,
@@ -102,37 +100,21 @@ function auditedAction(calls: Array<{ sql: string; values: unknown[] }>) {
 
 describe("cadena de la evaluación automática", () => {
   beforeEach(() => {
-    vi.mocked(requestCvForApplication).mockReset();
     vi.mocked(evaluateApplicationWithAgent).mockReset();
   });
 
-  it("solicita el CV y evalúa: la nota persistida es el criterio de éxito", async () => {
-    vi.mocked(requestCvForApplication).mockResolvedValue({
-      status: "sent",
-    } as never);
+  it("evalúa: la nota persistida es el criterio de éxito", async () => {
     vi.mocked(evaluateApplicationWithAgent).mockResolvedValue({
       score: 77,
     } as never);
     const { pool, calls } = fakePool("2026-09-17T15:00:00.000Z");
     const outcome = await evaluatePendingApplication(pool, 42);
-    expect(outcome).toMatchObject({ status: "completed", cvStatus: "sent" });
+    expect(outcome).toMatchObject({ status: "completed" });
     expect(auditedAction(calls)).toBe(EVALUATION_AUTOMATION_COMPLETED);
     expect(EVALUATION_AUTOMATION_MAX_ATTEMPTS).toBe(3);
   });
 
-  it("un fallo al solicitar el CV no evalúa ni marca la postulación", async () => {
-    vi.mocked(requestCvForApplication).mockRejectedValue(
-      new Error("ApiChat no disponible")
-    );
-    const { pool, calls } = fakePool(null);
-    const outcome = await evaluatePendingApplication(pool, 42);
-    expect(outcome).toMatchObject({ status: "failed", stage: "cv_request" });
-    expect(evaluateApplicationWithAgent).not.toHaveBeenCalled();
-    expect(auditedAction(calls)).toBe(EVALUATION_AUTOMATION_FAILED);
-  });
-
   it("sin nota persistida la unidad falla aunque el modelo haya respondido", async () => {
-    vi.mocked(requestCvForApplication).mockResolvedValue(null as never);
     vi.mocked(evaluateApplicationWithAgent).mockResolvedValue({
       score: 77,
     } as never);
@@ -143,7 +125,6 @@ describe("cadena de la evaluación automática", () => {
   });
 
   it("asienta el motivo del fallo sin exponer contenido del candidato", async () => {
-    vi.mocked(requestCvForApplication).mockResolvedValue(null as never);
     vi.mocked(evaluateApplicationWithAgent).mockRejectedValue(
       new Error("La respuesta del proveedor no fue válida.")
     );

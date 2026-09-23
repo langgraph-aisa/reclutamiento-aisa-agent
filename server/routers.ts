@@ -39,6 +39,7 @@ import {
 } from "./_core/trpc";
 import {
   deliverCvRequestMessage,
+  ensureConversationForApplication,
   ensureCvRequestMessage,
   requestCvForApplication,
   type CvRequestDelivery,
@@ -75,6 +76,7 @@ import {
   completeAssessmentCycle,
   getAssessmentAutomation,
   saveAssessmentAutomation,
+  scheduleAssessmentCycle,
 } from "./assessmentAutomation";
 import {
   confirmEvaluationAutomation,
@@ -1984,14 +1986,26 @@ export const appRouter = router({
           );
           await client.query("COMMIT");
           setImmediate(() => {
-            // Toda postulación registrada solicita el CV de inmediato y sin
-            // excepción. Se prepara y despacha fuera de la transacción para que
-            // un fallo del proveedor nunca revierta la postulación.
-            void requestCvForApplication(pool, applicationId).catch(error => {
+            // El ciclo del agente conversa primero —precalificación, entrevista
+            // y cierre— y solicita el currículum al llegar a esa etapa; aquí solo
+            // se deja la conversación creada, el ciclo psicométrico programado y
+            // la evaluación automática ejecutada. Todo fuera de la transacción
+            // para que un fallo del proveedor nunca revierta la postulación.
+            void ensureConversationForApplication(pool, applicationId).catch(
+              error => {
+                console.warn(
+                  `[cvRequest] Application ${applicationId}: ${safeIntegrationMessage(
+                    error,
+                    "No fue posible preparar la conversación automáticamente."
+                  )}`
+                );
+              }
+            );
+            void scheduleAssessmentCycle(pool, applicationId).catch(error => {
               console.warn(
-                `[cvRequest] Application ${applicationId}: ${safeIntegrationMessage(
+                `[assessment] Application ${applicationId}: ${safeIntegrationMessage(
                   error,
-                  "No fue posible solicitar el CV automáticamente."
+                  "No fue posible programar el ciclo psicométrico."
                 )}`
               );
             });

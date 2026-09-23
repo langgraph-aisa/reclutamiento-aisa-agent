@@ -459,9 +459,12 @@ async function cvReceived(pool: Pool, applicationId: number) {
 }
 
 /**
- * Crea la máquina de estados de la postulación cuando el CV ya fue recibido y
- * la plaza declara preguntas activas. Sin preguntas configuradas no se crea
- * nada: el flujo conversacional ordinario se conserva para esas plazas.
+ * Crea la máquina de estados de la postulación cuando la conversación existe y
+ * la plaza declara preguntas activas. La precalificación y la entrevista son
+ * las etapas 2 y 3 del ciclo —antes de la conversación del perfil y del
+ * cierre—, de modo que no esperan el currículum: se administran en cuanto la
+ * recepción del formulario deja la conversación preparada. Sin preguntas
+ * configuradas no se crea nada: el flujo conversacional ordinario se conserva.
  */
 export async function ensureScreeningRunsForReceivedCv(
   pool: Pool
@@ -475,10 +478,6 @@ export async function ensureScreeningRunsForReceivedCv(
              FROM applications app
              JOIN job_positions p ON p.id = app.job_position_id
             WHERE EXISTS (
-                    SELECT 1 FROM candidate_knowledge_files f
-                     WHERE f.application_id = app.id AND f.document_class = 'cv'
-                  )
-              AND EXISTS (
                     SELECT 1 FROM conversations c
                      WHERE c.application_id = app.id
                   )

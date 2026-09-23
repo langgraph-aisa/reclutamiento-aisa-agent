@@ -48,12 +48,10 @@ import {
   immutableSalaryInstructions,
 } from "./salaryPolicy";
 import {
-  decideStageTurn,
   formatQuetzales,
   loadAgentStageConfiguration,
   renderStageTemplate,
   type AgentStageConfiguration,
-  type StageTurnDecision,
 } from "./agentStages";
 import {
   buildAgentStageVerdicts,
@@ -61,7 +59,11 @@ import {
   loadAgentLogSignals,
   recordAgentLogVerdicts,
 } from "./agentActivityLog";
-import { loadCvAnalysisConfiguration } from "./cvAnalysis";
+import {
+  composeCvClosingFromSettings,
+  loadCvAnalysisConfiguration,
+} from "./cvAnalysis";
+import { requestCvForApplication } from "./cvRequest";
 
 /**
  * Motor de razonamiento conversacional JARVI RH.
@@ -439,43 +441,18 @@ async function applicationHasActiveEvaluationAutomation(
 }
 
 /**
- * Emite un turno determinista del ciclo administrado: la pregunta de la
- * expectativa salarial cuando el CV ya está analizado, o el cierre que
- * agradece, entrega el aviso de contacto y concluye la automatización. Son
- * mensajes institucionales compuestos desde la configuración de las etapas,
- * no generados por el modelo.
+ * Asienta y encola un mensaje determinista del ciclo administrado, compuesto
+ * desde la configuración de las etapas, y actualiza el estado de la
+ * conversación. Devuelve los identificadores del turno y del mensaje.
  */
-async function emitDeterministicStageTurn(
+async function emitDeterministicMessage(
   pool: Pool,
   state: ConversationState,
-  source: ConversationContextSource,
   context: BuiltConversationContext,
-  decision: Extract<StageTurnDecision, { kind: "closing" | "salary_question" }>,
-  stages: AgentStageConfiguration
-): Promise<ConversationTurnOutcome> {
-  const cvConfig = await loadCvAnalysisConfiguration(pool);
-  const name = state.full_name;
-  const closing = decision.kind === "closing";
-  const monto = closing ? formatQuetzales(source.salary.expectationGtq) : null;
-  const text = closing
-    ? [
-        renderStageTemplate(stages.messages.confirmacion_salario, {
-          name,
-          monto,
-        }),
-        cvConfig.contactNotice,
-      ]
-        .filter(part => part.length > 0)
-        .join("\n\n")
-    : [
-        renderStageTemplate(stages.messages.confirmacion_cv, { name }),
-        renderStageTemplate(stages.messages.pregunta_salario, { name }),
-      ]
-        .filter(part => part.length > 0)
-        .join("\n\n");
-
+  text: string,
+  stage: string
+) {
   assertNoAutomatedSalaryOffer(text);
-
   const turnId = await recordTurn(pool, {
     conversationId: state.id,
     inboundMessageId: Number(state.last_inbound_message_id),
@@ -496,7 +473,7 @@ async function emitDeterministicStageTurn(
     turnId,
     metadata: {
       contextFingerprint: context.fingerprint,
-      stage: closing ? "cierre" : "confirmacion",
+      stage,
       model: "deterministic",
     },
   });
@@ -504,37 +481,131 @@ async function emitDeterministicStageTurn(
     `UPDATE conversation_turns SET outbound_message_id=$1 WHERE id=$2`,
     [enqueued.messageId, turnId]
   );
-  if (!closing) {
-    await pool.query(
-      `INSERT INTO conversation_cycles
-         (conversation_id,dimension,question,status,opened_at)
-       VALUES ($1,'remuneracion',$2,'abierto',now())`,
-      [
-        state.id,
-        renderStageTemplate(stages.messages.pregunta_salario, { name }),
-      ]
+  await pool.query(
+    `UPDATE conversations
+        SET conversation_stage=$2,last_agent_turn_at=now(),
+            agent_turn_count=agent_turn_count+1,last_agent_error=NULL,
+            updated_at=now()
+      WHERE id=$1`,
+    [state.id, stage]
+  );
+  return { messageId: enqueued.messageId, turnId };
+}
+
+/**
+ * Cierre del proceso (etapa 5): emite el agradecimiento y el aviso de contacto
+ * y dispara la solicitud del currículum, que es la etapa siguiente. No cierra
+ * la automatización: el expediente aún espera el currículum y la expectativa.
+ */
+async function emitCierreTurn(
+  pool: Pool,
+  state: ConversationState,
+  source: ConversationContextSource,
+  context: BuiltConversationContext,
+  cvConfig: Awaited<ReturnType<typeof loadCvAnalysisConfiguration>>
+): Promise<ConversationTurnOutcome> {
+  const text = composeCvClosingFromSettings({
+    name: state.full_name,
+    position: source.position.title,
+    thankYouMessage: cvConfig.thankYouMessage,
+    contactNotice: cvConfig.contactNotice,
+  });
+  const { messageId, turnId } = await emitDeterministicMessage(
+    pool,
+    state,
+    context,
+    text,
+    "cierre"
+  );
+  // La solicitud del currículum sigue al cierre: se despacha en su propia
+  // transacción y su marca idempotente evita duplicados.
+  void requestCvForApplication(pool, Number(state.application_id)).catch(
+    error => {
+      console.warn(
+        `[cvRequest] Application ${state.application_id}: ${
+          error instanceof Error ? error.name : "unknown"
+        }`
+      );
+    }
+  );
+  return { status: "sent", messageId, turnId, reply: text };
+}
+
+/**
+ * Espera del currículum (etapa 7): confirma la recepción del documento.
+ */
+async function emitCvReceiptTurn(
+  pool: Pool,
+  state: ConversationState,
+  context: BuiltConversationContext,
+  stages: AgentStageConfiguration
+): Promise<ConversationTurnOutcome> {
+  const text = renderStageTemplate(stages.messages.confirmacion_cv, {
+    name: state.full_name,
+  });
+  const { messageId, turnId } = await emitDeterministicMessage(
+    pool,
+    state,
+    context,
+    text,
+    "espera_cv"
+  );
+  return { status: "sent", messageId, turnId, reply: text };
+}
+
+/**
+ * Expectativa salarial (etapa 8): formula la pregunta o confirma el registro,
+ * según si la pregunta ya permanece abierta.
+ */
+async function emitSalaryTurn(
+  pool: Pool,
+  state: ConversationState,
+  source: ConversationContextSource,
+  context: BuiltConversationContext,
+  stages: AgentStageConfiguration
+): Promise<ConversationTurnOutcome> {
+  const confirming = source.cycles.some(
+    cycle =>
+      cycle.status === "abierto" && cycle.dimension === "remuneracion"
+  );
+  if (confirming) {
+    const text = renderStageTemplate(stages.messages.confirmacion_salario, {
+      name: state.full_name,
+      monto: formatQuetzales(source.salary.expectationGtq),
+    });
+    const { messageId, turnId } = await emitDeterministicMessage(
+      pool,
+      state,
+      context,
+      text,
+      "cierre"
     );
-  }
-  if (closing) {
     await pool.query(
       `UPDATE conversations
-          SET conversation_stage='cierre',last_agent_turn_at=now(),
-              agent_turn_count=agent_turn_count+1,last_agent_error=NULL,
-              automation_state='completed',updated_at=now()
-        WHERE id=$1`,
-      [state.id]
-    );
-  } else {
-    await pool.query(
-      `UPDATE conversations
-          SET conversation_stage='confirmacion',last_agent_turn_at=now(),
-              agent_turn_count=agent_turn_count+1,last_agent_error=NULL,
+          SET automation_state='completed',automation_completed_at=now(),
               updated_at=now()
         WHERE id=$1`,
       [state.id]
     );
+    return { status: "sent", messageId, turnId, reply: text };
   }
-  return { status: "sent", messageId: enqueued.messageId, turnId, reply: text };
+  const text = renderStageTemplate(stages.messages.pregunta_salario, {
+    name: state.full_name,
+  });
+  const { messageId, turnId } = await emitDeterministicMessage(
+    pool,
+    state,
+    context,
+    text,
+    "confirmacion"
+  );
+  await pool.query(
+    `INSERT INTO conversation_cycles
+       (conversation_id,dimension,question,status,opened_at)
+     VALUES ($1,'remuneracion',$2,'abierto',now())`,
+    [state.id, text]
+  );
+  return { status: "sent", messageId, turnId, reply: text };
 }
 
 /**
@@ -582,18 +653,6 @@ async function runConversationTurnInternal(
     return {
       status: "skipped",
       reason: "La conversación no registra un mensaje entrante pendiente.",
-    };
-
-  if (
-    !(await applicationHasActiveEvaluationAutomation(
-      pool,
-      Number(state.application_id)
-    ))
-  )
-    return {
-      status: "skipped",
-      reason:
-        "La postulación no tiene ningún protocolo de evaluación activo; el agente no conversa fuera de la precalificación, la entrevista o la prueba psicométrica.",
     };
 
   if (
@@ -682,30 +741,11 @@ async function runConversationTurnInternal(
           )
       );
       const stagesConfig = await loadAgentStageConfiguration(pool);
-      const salaryQuestionOpen = source.cycles.some(
-        cycle =>
-          cycle.status === "abierto" && cycle.dimension === "remuneracion"
-      );
-      const cvAnalizado = source.attachments.some(
-        attachment =>
-          /cv|curriculum/i.test(attachment.category) &&
-          attachment.status === "analizado"
-      );
-      const freeConversationHeld = source.turns.some(
-        turn => turn.direction === "outbound"
-      );
-      const decision = decideStageTurn({
-        enabled: stagesConfig.enabled,
-        cvAnalizado,
-        salaryDeclared: source.salary.declared,
-        salaryQuestionOpen,
-        freeConversationHeld,
-      });
 
-      // La bitácora de la IA asienta el estado de cada etapa del ciclo, en el
-      // orden administrado: la acción ejecutada y su justificación, o el motivo
-      // de la omisión. Se escribe antes de emitir el turno para que el comité
-      // técnico pueda contrastar la decisión con su desenlace observado.
+      // La bitácora de la IA asienta el estado de cada etapa del ciclo fijo, en
+      // su orden: la acción ejecutada y su justificación, o el motivo de la
+      // omisión. Se escribe antes de emitir el turno para que el comité técnico
+      // pueda contrastar la decisión con su desenlace observado.
       const logSignals = await loadAgentLogSignals(
         pool,
         Number(state.application_id),
@@ -725,44 +765,88 @@ async function runConversationTurnInternal(
         verdicts: logVerdicts,
       });
 
-      // El motor no conversa como le venga en gana: solo ejecuta la primera
-      // etapa pendiente del ciclo administrado. Si la acción decidida no es esa
-      // etapa, el turno se omite hasta que la etapa anterior se complete.
-      const actionStage =
-        decision.kind === "closing"
-          ? "cierre"
-          : decision.kind === "salary_question"
-            ? "expectativa_salarial"
-            : decision.kind === "free"
-              ? "retroalimentacion"
-              : null;
+      // El motor ejecuta únicamente la primera etapa pendiente del ciclo fijo:
+      // ninguna etapa posterior se emite mientras una anterior siga pendiente.
       const pendingStage = firstPendingStage(logVerdicts);
-      if (
-        actionStage &&
-        pendingStage &&
-        pendingStage.stageKey !== actionStage
-      ) {
-        return {
-          status: "skipped",
-          reason: `La etapa «${pendingStage.action}» del ciclo administrado aún no se completa.`,
-        };
+
+      if (pendingStage) {
+        switch (pendingStage.stageKey) {
+          case "precalificacion":
+          case "entrevista":
+            return {
+              status: "skipped",
+              reason: `La etapa «${pendingStage.action}» del ciclo administrado aún no se completa.`,
+            };
+          case "solicitud_cv":
+            await requestCvForApplication(pool, Number(state.application_id));
+            observation.update({
+              output: { status: "skipped" },
+              metadata: { outcome: "cv-request-dispatched" },
+            });
+            return {
+              status: "skipped",
+              reason:
+                "La solicitud del currículum fue despachada y el expediente espera la respuesta.",
+            };
+          case "espera_cv":
+            if (logSignals.cvState === "recibido") {
+              const outcome = await emitCvReceiptTurn(
+                pool,
+                state,
+                context,
+                stagesConfig
+              );
+              observation.update({
+                output: { status: outcome.status },
+                metadata: {
+                  outcome: "deterministic-stage",
+                  stage: "espera_cv",
+                },
+              });
+              return outcome;
+            }
+            return {
+              status: "skipped",
+              reason:
+                "El currículum solicitado aún no llega; el turno espera su recepción.",
+            };
+          case "cierre": {
+            const cvConfig = await loadCvAnalysisConfiguration(pool);
+            const outcome = await emitCierreTurn(
+              pool,
+              state,
+              source,
+              context,
+              cvConfig
+            );
+            observation.update({
+              output: { status: outcome.status },
+              metadata: { outcome: "deterministic-stage", stage: "cierre" },
+            });
+            return outcome;
+          }
+          case "expectativa_salarial": {
+            const outcome = await emitSalaryTurn(
+              pool,
+              state,
+              source,
+              context,
+              stagesConfig
+            );
+            observation.update({
+              output: { status: outcome.status },
+              metadata: {
+                outcome: "deterministic-stage",
+                stage: "expectativa_salarial",
+              },
+            });
+            return outcome;
+          }
+          case "retroalimentacion":
+            break; // la conversación libre se ejecuta a continuación
+        }
       }
 
-      if (decision.kind === "closing" || decision.kind === "salary_question") {
-        const outcome = await emitDeterministicStageTurn(
-          pool,
-          state,
-          source,
-          context,
-          decision,
-          stagesConfig
-        );
-        observation.update({
-          output: { status: outcome.status },
-          metadata: { outcome: "deterministic-stage" },
-        });
-        return outcome;
-      }
       if (!stagesConfig.enabled.retroalimentacion) {
         return {
           status: "skipped",

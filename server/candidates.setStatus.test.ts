@@ -6,11 +6,13 @@ const {
   ensureCvRequestMessage,
   deliverCvRequestMessage,
   requestCvForApplication,
+  ensureConversationForApplication,
 } = vi.hoisted(() => ({
   getPool: vi.fn(),
   ensureCvRequestMessage: vi.fn(),
   deliverCvRequestMessage: vi.fn(),
   requestCvForApplication: vi.fn().mockResolvedValue(null),
+  ensureConversationForApplication: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("./db", () => ({
@@ -23,6 +25,7 @@ vi.mock("./cvRequest", () => ({
   ensureCvRequestMessage,
   deliverCvRequestMessage,
   requestCvForApplication,
+  ensureConversationForApplication,
 }));
 
 import { appRouter } from "./routers";

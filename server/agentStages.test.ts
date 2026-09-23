@@ -5,7 +5,6 @@ import {
   DEFAULT_AGENT_STAGE_MESSAGES,
   DEFAULT_AGENT_STAGE_ORDER,
   buildAgentStagesView,
-  decideStageTurn,
   formatQuetzales,
   normalizeStageOrder,
   renderStageTemplate,
@@ -25,9 +24,9 @@ describe("etapas administrables del agente", () => {
     );
     expect(
       DEFAULT_AGENT_STAGE_ORDER.indexOf("solicitud_cv")
-    ).toBeLessThan(DEFAULT_AGENT_STAGE_ORDER.indexOf("precalificacion"));
+    ).toBeGreaterThan(DEFAULT_AGENT_STAGE_ORDER.indexOf("cierre"));
     expect(AGENT_STAGES[0].key).toBe("recepcion_formulario");
-    expect(AGENT_STAGES[7].key).toBe("cierre");
+    expect(AGENT_STAGES[7].key).toBe("expectativa_salarial");
     expect(AGENT_STAGES.every(stage => stage.name.trim().length > 0)).toBe(
       true
     );
@@ -104,85 +103,11 @@ describe("etapas administrables del agente", () => {
     expect(view.stages[7].order).toBe(8);
   });
 
-  it("decide el cierre cuando el CV está analizado y el salario declarado", () => {
-    expect(
-      decideStageTurn({
-        enabled: DEFAULT_AGENT_STAGE_ENABLED,
-        cvAnalizado: true,
-        salaryDeclared: true,
-        salaryQuestionOpen: false,
-        freeConversationHeld: true,
-      })
-    ).toEqual({ kind: "closing" });
-  });
-
-  it("decide la pregunta salarial cuando el CV llegó y el salario falta", () => {
-    expect(
-      decideStageTurn({
-        enabled: DEFAULT_AGENT_STAGE_ENABLED,
-        cvAnalizado: true,
-        salaryDeclared: false,
-        salaryQuestionOpen: false,
-        freeConversationHeld: true,
-      })
-    ).toEqual({ kind: "salary_question" });
-  });
-
-  it("conversa el perfil antes que la expectativa aunque el CV esté analizado", () => {
-    expect(
-      decideStageTurn({
-        enabled: DEFAULT_AGENT_STAGE_ENABLED,
-        cvAnalizado: true,
-        salaryDeclared: false,
-        salaryQuestionOpen: false,
-        freeConversationHeld: false,
-      })
-    ).toEqual({ kind: "free" });
-  });
-
-  it("no repite la pregunta salarial cuando ya permanece abierta", () => {
-    expect(
-      decideStageTurn({
-        enabled: DEFAULT_AGENT_STAGE_ENABLED,
-        cvAnalizado: true,
-        salaryDeclared: false,
-        salaryQuestionOpen: true,
-        freeConversationHeld: true,
-      })
-    ).toEqual({ kind: "free" });
-  });
-
-  it("respeta los interruptores apagados", () => {
-    expect(
-      decideStageTurn({
-        enabled: { ...DEFAULT_AGENT_STAGE_ENABLED, cierre: false },
-        cvAnalizado: true,
-        salaryDeclared: true,
-        salaryQuestionOpen: false,
-        freeConversationHeld: true,
-      })
-    ).toEqual({ kind: "free" });
-    expect(
-      decideStageTurn({
-        enabled: {
-          ...DEFAULT_AGENT_STAGE_ENABLED,
-          espera_cv: false,
-        },
-        cvAnalizado: true,
-        salaryDeclared: false,
-        salaryQuestionOpen: false,
-        freeConversationHeld: true,
-      })
-    ).toEqual({ kind: "free" });
-    expect(
-      decideStageTurn({
-        enabled: { ...DEFAULT_AGENT_STAGE_ENABLED, retroalimentacion: false },
-        cvAnalizado: false,
-        salaryDeclared: false,
-        salaryQuestionOpen: false,
-        freeConversationHeld: false,
-      })
-    ).toEqual({ kind: "silent" });
+  it("conserva el orden fijo de la gerencia: currículum tras el cierre y expectativa al final", () => {
+    const keys = DEFAULT_AGENT_STAGE_ORDER;
+    expect(keys.indexOf("solicitud_cv")).toBeGreaterThan(keys.indexOf("cierre"));
+    expect(keys.indexOf("espera_cv")).toBeGreaterThan(keys.indexOf("solicitud_cv"));
+    expect(keys[keys.length - 1]).toBe("expectativa_salarial");
   });
 
   it("sustituye las variables de la plantilla", () => {

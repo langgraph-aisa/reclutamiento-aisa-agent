@@ -1,6 +1,5 @@
 import type { Pool } from "pg";
 import { evaluateApplicationWithAgent } from "./agentEvaluator";
-import { requestCvForApplication } from "./cvRequest";
 import {
   createLoginCode,
   hashLoginCode,
@@ -322,9 +321,9 @@ function safeReason(error: unknown) {
 }
 
 /**
- * Evalúa una postulación aplicando la cadena completa de la postulación
- * pública: primero la solicitud del CV por el webhook —que registra además el
- * ciclo de pruebas de la plaza— y después la evaluación del perfil laboral.
+ * Evalúa una postulación aplicando la evaluación del perfil laboral. La
+ * solicitud del currículum ya no se encadena aquí: pertenece a la etapa
+ * «Solicitud del currículum» del ciclo conversacional y se emite en su turno.
  *
  * Éxito significa que la **nota quedó persistida**: el ciclo no avanza porque
  * el proveedor haya respondido, sino porque el hecho quedó escrito.
@@ -333,18 +332,6 @@ export async function evaluatePendingApplication(
   pool: Pool,
   applicationId: number
 ) {
-  let cvStatus = "no_solicitado";
-  try {
-    const delivery = await requestCvForApplication(pool, applicationId);
-    cvStatus = delivery?.status ?? "sin_contacto";
-  } catch (error) {
-    // Un fallo transitorio merece reintento: la evaluación no se marca hecha.
-    await auditUnit(pool, applicationId, EVALUATION_AUTOMATION_FAILED, {
-      stage: "cv_request",
-      reason: safeReason(error),
-    });
-    return { status: "failed" as const, stage: "cv_request" };
-  }
   try {
     const evaluation = await evaluateApplicationWithAgent(pool, applicationId);
     const persisted = await pool.query<{ evaluation_at: string | null }>(
@@ -359,13 +346,12 @@ export async function evaluatePendingApplication(
       return { status: "failed" as const, stage: "not_persisted" };
     }
     await auditUnit(pool, applicationId, EVALUATION_AUTOMATION_COMPLETED, {
-      cvStatus,
       score:
         typeof (evaluation as { score?: unknown })?.score === "number"
           ? (evaluation as { score: number }).score
           : null,
     });
-    return { status: "completed" as const, cvStatus };
+    return { status: "completed" as const };
   } catch (error) {
     await auditUnit(pool, applicationId, EVALUATION_AUTOMATION_FAILED, {
       stage: "evaluation",
