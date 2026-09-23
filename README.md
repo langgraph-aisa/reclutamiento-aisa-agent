@@ -4,12 +4,12 @@
   <img src="client/public/brand/aisa-logo.png" width="190" alt="Alternativas Inteligentes S. A., AISA" />
 </p>
 
-<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.214</h1><p></p>
+<h1 align="justify">Empleos de Energia Solar en Guatemala | Talento AISA · JARVI RH 2.0.215</h1><p></p>
 
 <p>Empleos de energia solar en guatemala, bolsa de empleo líder en Guatemala especializada en energía solar, refrigeración ecoeficiente y sistemas de bombeo agrícola. Conectamos talento técnico e ingenieros expertos en proyectos fotovoltaicos aplicados a la industria de alimentos y agro guatemalteco.</p>
 <p></p>
 <p align="left">
-  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.214-0b2d4b" alt="JARVI RH 2.0.214" />
+  <img src="https://img.shields.io/badge/JARVI%20RH-2.0.215-0b2d4b" alt="JARVI RH 2.0.215" />
   <img src="https://img.shields.io/badge/estado-producci%C3%B3n-16a34a" alt="Estado: producción" />
   <img src="https://img.shields.io/badge/rama-main-334155" alt="Rama main" />
   <img src="https://img.shields.io/badge/Langfuse%20SDK-5.11.1-orange" alt="Langfuse SDK 5.11.1" />
@@ -24,7 +24,7 @@
 <p align="center">
   <img src="client/public/brand/talento-aisa-personaje.png" width="240" alt="Personaje de Talento AISA, agente técnico de energía solar" />
   <br />
-  <sub>Agente JARVI RH 2.0.214 de Talento AISA (IA Evaluadora).</sub>
+  <sub>Agente JARVI RH 2.0.215 de Talento AISA (IA Evaluadora).</sub>
 </p>
 
 Talento AISA vincula capacidades técnicas con proyectos industriales, energéticos, alimentarios y agrícolas de Alternativas Inteligentes, S. A. JARVI RH integra plazas, formularios y protocolos versionados, evaluación asistida por IA, revisión humana, conversaciones ApiChat, solicitud controlada de currículum y auditoría administrativa. Automatiza trabajo repetitivo sin transferir al modelo la responsabilidad institucional de contratar, fijar remuneración o atribuir rasgos psicológicos: el personal autorizado conserva la decisión.
@@ -34,6 +34,10 @@ Talento AISA vincula capacidades técnicas con proyectos industriales, energéti
 ACTUALIZACIÓN DE LA VERSIÓN
 
 <!-- release-history:start -->
+
+### 22SEP2026 · JARVI RH 2.0.215
+
+- El Client Secret de Google Drive declara su estado descifrando lo guardado: la insignia deja de mentir tras una rotación de clave, el panel muestra la máscara del secreto y el flujo OAuth degrada a una redirección explicativa. Sin migración.
 
 ### 22SEP2026 · JARVI RH 2.0.214
 
@@ -107,14 +111,12 @@ ACTUALIZACIÓN DE LA VERSIÓN
 
 ### 19SEP2026 · JARVI RH 2.0.197
 
-- El mensaje de la solicitud deja de enviarse dos veces: confirmar el envío sobrescribía la clave local de idempotencia y el asiento dejaba de encontrarse. La clave local es un hecho del artefacto y no se toca.
-- La corrección alcanza los tres caminos de envío —buzón del agente, solicitud de CV y bandeja—, porque el defecto se había repetido en todos.
+- El mensaje de la solicitud deja de enviarse dos veces: confirmar el envío sobrescribía la clave local de idempotencia. La corrección alcanza los tres caminos de envío.
 
 ### 19SEP2026 · JARVI RH 2.0.196
 
-- El fallo de red vuelve a tener causa: `network_error` era la misma palabra para un puerto cerrado, un tiempo agotado, un nombre que no resuelve y un certificado rechazado, de modo que el operador no podía saber qué corregir. El motivo técnico se conserva y se publica.
-- El intento de descarga prefiere TLS sobre la dirección sin cifrar que declaró el proveedor: si el host atiende en 443, el archivo entra **con integridad de transporte** en lugar de renunciar a ella sin necesidad. Sólo se recurre a la dirección declarada cuando el intento cifrado no pudo establecer la conexión.
-- El asiento de custodia declara el esquema que **tuvo** el transporte, no el declarado: deducirlo del texto afirmaba «sin cifrado» sobre una descarga cifrada.
+- El fallo de red vuelve a tener causa: un puerto cerrado, un tiempo agotado, un nombre que no resuelve y un certificado rechazado compartían la palabra `network_error`; el motivo técnico se conserva y se publica.
+- La descarga prefiere TLS sobre la dirección sin cifrar declarada y el asiento declara el esquema **observado**, no el declarado.
 
 ### 19SEP2026 · JARVI RH 2.0.195
 
@@ -567,7 +569,7 @@ pnpm check
 pnpm build
 ```
 
-`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md), [transporte base64 y visor](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md), [caja negra 2.0.214](docs/PRUEBAS_CAJA_NEGRA_2.0.214.md) y [análisis de la recuperación del adjunto conservado](docs/ANALISIS_RECUPERACION_ADJUNTO_2.0.188.md).
+`package.json` es la fuente canónica de versión; cada push a `main` incrementa exactamente un release y GitHub Actions verifica metadata, comparación Git, caja negra, regresión, TypeScript y build. La base requiere `DATABASE_URL`; producción configura `JWT_SECRET`, SMTP y la clave de cifrado del agente. Las credenciales de ApiChat y del agente se administran cifradas. Las migraciones `0014` a `0017` se aplican con respaldo, revisión SQL y segregación de funciones. Guías complementarias: [observabilidad Langfuse 2.0.131](docs/OBSERVABILIDAD_LANGFUSE_2.0.131.md), [análisis cognitivo y DORA 2.0.130](docs/ANALISIS_COGNITIVO_DORA_2.0.130.md), [implementación](docs/IMPLEMENTACION.md), [instalación](docs/INSTALLATION.md), [ApiChat directo](docs/APICHAT_DIRECTO.md), [agente evaluador](docs/AGENTE_EVALUADOR.md), [revisión humana](docs/REVISION_HUMANA_360.md), [gobierno](docs/RELEASE_GOVERNANCE.md), [transporte base64 y visor](docs/ANALISIS_TRANSPORTE_BASE64_VISOR.md), [caja negra 2.0.215](docs/PRUEBAS_CAJA_NEGRA_2.0.215.md) y [análisis de la recuperación del adjunto conservado](docs/ANALISIS_RECUPERACION_ADJUNTO_2.0.188.md).
 
 ## 8. Capa cognitiva, resiliencia y alcance verificable
 

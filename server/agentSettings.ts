@@ -101,6 +101,35 @@ function dedicatedEncryptionMaterial() {
   return encryptionMaterial(value);
 }
 
+/**
+ * Estado observable de la raíz de cifrado. A diferencia de
+ * `dedicatedEncryptionMaterial`, no lanza: sirve para que el panel declare
+ * exactamente por qué una credencial no se puede cifrar o descifrar.
+ */
+export function agentEncryptionKeyState(): {
+  state: "lista" | "ausente" | "insuficiente";
+  message: string | null;
+} {
+  const value = environmentMaterial(process.env.AGENT_SETTINGS_ENCRYPTION_KEY);
+  if (!value) {
+    return {
+      state: "ausente",
+      message:
+        "No existe AGENT_SETTINGS_ENCRYPTION_KEY: el servidor no puede cifrar ni descifrar credenciales.",
+    };
+  }
+  if (
+    process.env.NODE_ENV === "production" &&
+    Buffer.byteLength(value, "utf8") < MINIMUM_PRODUCTION_ENCRYPTION_KEY_BYTES
+  ) {
+    return {
+      state: "insuficiente",
+      message: `AGENT_SETTINGS_ENCRYPTION_KEY debe contener al menos ${MINIMUM_PRODUCTION_ENCRYPTION_KEY_BYTES} bytes UTF-8 en producción.`,
+    };
+  }
+  return { state: "lista", message: null };
+}
+
 function decryptionMaterials() {
   const dedicated = environmentMaterial(
     process.env.AGENT_SETTINGS_ENCRYPTION_KEY

@@ -4,6 +4,7 @@ import type { Pool, PoolClient } from "pg";
 import { getPool, getUserById } from "./db";
 import { readLocalSession } from "./localAuth";
 import {
+  agentEncryptionKeyState,
   decryptAgentSecret,
   encryptAgentSecret,
   integrationSecretContext,
@@ -84,7 +85,19 @@ async function upsertSetting(
   );
 }
 
-/** Configuración de plataforma visible para el operador (sin el secreto). */
+/** Estado verificable de la credencial de plataforma. */
+export type DriveSecretState = "usable" | "indescifrable" | "ausente";
+
+/**
+ * Configuración de plataforma visible para el operador.
+ *
+ * El estado del secreto se decide **descifrándolo** con la clave vigente, no
+ * por el formato del texto cifrado: una rotación de
+ * `AGENT_SETTINGS_ENCRYPTION_KEY` deja un valor `enc:v2:` ilegible y el panel
+ * debe declararlo «indescifrable», nunca «Configurada». La máscara se compone
+ * del valor descifrado, de modo que el operador confirme qué quedó guardado
+ * al rotar la credencial.
+ */
 export async function getDriveOAuthConfiguration(pool: Pool | null) {
   const rows = pool ? await settingRows(pool) : [];
   const clientId = (
@@ -95,13 +108,27 @@ export async function getDriveOAuthConfiguration(pool: Pool | null) {
   const secretRow = rows.find(
     row => row.setting_key === "oauth_client_secret"
   );
-  let secretConfigured = false;
+  let secretState: DriveSecretState = "ausente";
+  let secretMasked: string | null = null;
+  let secretReason: string | null = null;
   if (secretRow?.setting_value) {
-    try {
-      secretConfigured =
-        secretRow.is_secret && isEncryptedAgentSecret(secretRow.setting_value);
-    } catch {
-      secretConfigured = false;
+    if (!secretRow.is_secret || !isEncryptedAgentSecret(secretRow.setting_value)) {
+      secretState = "indescifrable";
+      secretReason =
+        "El valor guardado no tiene el formato cifrado administrado por el servidor.";
+    } else {
+      try {
+        const plain = decryptAgentSecret(
+          secretRow.setting_value,
+          integrationSecretContext(GOOGLE_DRIVE_PROVIDER, "oauth_client_secret")
+        );
+        secretState = "usable";
+        secretMasked = maskAgentSecret(plain);
+      } catch {
+        secretState = "indescifrable";
+        secretReason =
+          "El secreto guardado no se descifra con la clave vigente; probablemente rotó AGENT_SETTINGS_ENCRYPTION_KEY.";
+      }
     }
   }
   const latest = rows
@@ -117,14 +144,22 @@ export async function getDriveOAuthConfiguration(pool: Pool | null) {
       masked: clientId || null,
     },
     secret: {
-      configured: secretConfigured,
-      masked: null as string | null,
+      configured: secretState === "usable",
+      masked: secretMasked,
+      state: secretState,
+      reason: secretReason,
     },
     updatedAt: latest ?? null,
   };
 }
 
-/** Credenciales de plataforma descifradas para el flujo OAuth. */
+/**
+ * Credenciales de plataforma descifradas para el flujo OAuth.
+ *
+ * Devuelve `null` —nunca lanza— cuando la credencial falta o no se puede
+ * descifrar: el camino de autorización degrada a una redirección explicativa
+ * en lugar de un error HTTP sin contexto.
+ */
 export async function driveOAuthRuntime(
   pool: Pool
 ): Promise<{ clientId: string; clientSecret: string } | null> {
@@ -141,11 +176,32 @@ export async function driveOAuthRuntime(
   if (!secretRow.is_secret || !isEncryptedAgentSecret(secretRow.setting_value)) {
     return null;
   }
-  const clientSecret = decryptAgentSecret(
-    secretRow.setting_value,
-    integrationSecretContext(GOOGLE_DRIVE_PROVIDER, "oauth_client_secret")
-  );
-  return { clientId, clientSecret };
+  try {
+    const clientSecret = decryptAgentSecret(
+      secretRow.setting_value,
+      integrationSecretContext(GOOGLE_DRIVE_PROVIDER, "oauth_client_secret")
+    );
+    return { clientId, clientSecret };
+  } catch {
+    return null;
+  }
+}
+
+/** Diagnóstico accionable de la credencial de plataforma para el operador. */
+export async function driveOAuthDiagnostics(pool: Pool | null) {
+  const configuration = await getDriveOAuthConfiguration(pool);
+  const encryptionKey = agentEncryptionKeyState();
+  const ready =
+    configuration.clientId.configured &&
+    configuration.secret.configured &&
+    encryptionKey.state === "lista";
+  return {
+    clientId: configuration.clientId,
+    secret: configuration.secret,
+    encryptionKey,
+    ready,
+    updatedAt: configuration.updatedAt,
+  };
 }
 
 export async function saveDriveOAuthSecret(

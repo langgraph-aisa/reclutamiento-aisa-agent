@@ -122,6 +122,7 @@ import {
 import { initializeLangfuseFromDatabase } from "./observability/langfuse";
 import {
   DRIVE_OAUTH_KEYS,
+  driveOAuthDiagnostics,
   getDriveConnection,
   getDriveOAuthConfiguration,
   saveDriveOAuthSecret,
@@ -6796,6 +6797,9 @@ export const appRouter = router({
     }),
     driveOAuthConfiguration: adminProcedure.query(async () => {
       return getDriveOAuthConfiguration(await getPool());
+    }),
+    driveOAuthDiagnostics: adminProcedure.query(async () => {
+      return driveOAuthDiagnostics(await getPool());
     }),
     apiChatReception: adminProcedure.query(async () => {
       return getApiChatReceptionReadiness(await getPool());

@@ -106,9 +106,13 @@ export default function Config() {
   const apiChatReception = trpc.config.apiChatReception.useQuery();
   const reception = apiChatReception.data;
   const driveOAuthConfiguration = trpc.config.driveOAuthConfiguration.useQuery();
+  const driveOAuthDiagnostics = trpc.config.driveOAuthDiagnostics.useQuery();
   const saveDriveOAuthSecret = trpc.config.saveDriveOAuthSecret.useMutation({
     onSuccess: async () => {
-      await driveOAuthConfiguration.refetch();
+      await Promise.all([
+        driveOAuthConfiguration.refetch(),
+        driveOAuthDiagnostics.refetch(),
+      ]);
     },
     onError: error => toast.error(error.message),
   });
@@ -1399,6 +1403,36 @@ export default function Config() {
                   }
                 />
               </div>
+              {driveOAuthDiagnostics.data ? (
+                <div className="rounded-2xl border border-border/70 bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
+                  {driveOAuthDiagnostics.data.ready ? (
+                    <p>
+                      La credencial de plataforma está completa y descifrable:
+                      el vínculo desde «Mi cuenta» puede iniciarse.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {!driveOAuthDiagnostics.data.clientId.configured && (
+                        <li>Falta el Client ID de OAuth.</li>
+                      )}
+                      {driveOAuthDiagnostics.data.secret.state === "ausente" && (
+                        <li>Falta el Client Secret de OAuth.</li>
+                      )}
+                      {driveOAuthDiagnostics.data.secret.state ===
+                        "indescifrable" && (
+                        <li>
+                          El Client Secret guardado no se descifra con la clave
+                          vigente: {driveOAuthDiagnostics.data.secret.reason}
+                        </li>
+                      )}
+                      {driveOAuthDiagnostics.data.encryptionKey.state !==
+                        "lista" && (
+                        <li>{driveOAuthDiagnostics.data.encryptionKey.message}</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
               <div className="rounded-2xl border border-emerald-400/20 bg-secondary p-4 text-sm leading-6 text-secondary-foreground">
                 La URI de redireccionamiento debe coincidir en Google Cloud:
                 <span className="font-mono text-xs"> /api/drive/oauth/callback</span>.

@@ -161,6 +161,36 @@ describe("credencial de plataforma y conexión por usuario", () => {
     });
   });
 
+  it("expone la máscara del secreto descifrado para confirmar la rotación", async () => {
+    const { pool } = fakePool();
+    await saveDriveOAuthSecret(pool, "oauth_client_secret", "secret-value", 7);
+    const configuration = await getDriveOAuthConfiguration(pool);
+    expect(configuration.secret.configured).toBe(true);
+    expect(configuration.secret.masked).toBe("••••••••alue");
+  });
+
+  it("declara indescifrable el secreto cuando rota la clave de cifrado", async () => {
+    const { pool } = fakePool();
+    await saveDriveOAuthSecret(
+      pool,
+      "oauth_client_id",
+      "client-id.apps.googleusercontent.com",
+      7
+    );
+    await saveDriveOAuthSecret(pool, "oauth_client_secret", "secret-value", 7);
+
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "otra-clave-rotada-con-mas-de-treinta-y-dos-caracteres"
+    );
+
+    const configuration = await getDriveOAuthConfiguration(pool);
+    expect(configuration.secret.configured).toBe(false);
+    expect(configuration.secret.state).toBe("indescifrable");
+    expect(configuration.secret.reason).toBeTruthy();
+    await expect(driveOAuthRuntime(pool)).resolves.toBeNull();
+  });
+
   it("vincula, lee y desconecta la cuenta de Drive del usuario", async () => {
     const { pool, stored } = fakePool();
     const linked = await linkDriveConnection(pool, {

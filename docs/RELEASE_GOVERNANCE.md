@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.214
+# Gobierno de release JARVI RH 2.0.215
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.214**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.215**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.215
+El release **vuelve verificable la credencial de plataforma de Google Drive**. Sin migración.
+
+**El defecto.** La insignia «Configurada» del Client Secret se decidía por el formato del texto cifrado (`enc:v2:`) y no por descifrarlo: una rotación de `AGENT_SETTINGS_ENCRYPTION_KEY` dejaba un secreto ilegible declarado como configurado, el panel no mostraba máscara alguna del valor guardado y el flujo OAuth terminaba en un error sin contexto.
+
+**La corrección.** `server/driveConnection.ts` descifra el secreto para decidir su estado (`usable`, `indescifrable`, `ausente`) y devuelve la máscara del valor descifrado; `driveOAuthRuntime` degrada a `null` —redirección explicativa `?drive=unconfigured`— en lugar de lanzar. `server/agentSettings.ts` expone el estado de la raíz de cifrado y `server/routers.ts` publica `config.driveOAuthDiagnostics`; la hoja de Configuración muestra la máscara y un aviso que nombra la causa cuando el secreto no se puede descifrar.
+
+**Sin migración.** Reutiliza `integration_settings` y el cifrado vigente.
 
 ### Alcance candidato 2.0.214
 El release **devuelve a la caja «Mensaje base» el valor realmente guardado**. Sin migración.
@@ -881,4 +890,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.214.md](PRUEBAS_CAJA_NEGRA_2.0.214.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.215.md](PRUEBAS_CAJA_NEGRA_2.0.215.md).
