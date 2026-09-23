@@ -2067,6 +2067,7 @@ export const appRouter = router({
               .string()
               .regex(/^\d{4}-\d{2}-\d{2}$/)
               .optional(),
+            year: z.number().int().min(2000).max(2100).optional(),
           })
           .optional()
       )

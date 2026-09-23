@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.211
+# Gobierno de release JARVI RH 2.0.212
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.211**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.212**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.212
+El release **hace navegable el mapa de controles ISO/IEC 20000-1 y le suma lectura orientada**. Sin migración.
+
+**El mapa.** `client/src/pages/ActivityAudit.tsx` conserva el heatmap anual de contribuciones y agrega una botonera atrás/adelante que mueve el año entre 2023 y el año en curso de Guatemala; el título distingue «este año» del año histórico y la grilla entra animada al cambiar de año.
+
+**La lectura.** Bajo la grilla aparecen los meses del año alineados a sus columnas; a la derecha, los días de semana abreviados (`Lu`–`Do`) alineados a las filas; una leyenda «Menos → Más» declara el rango de contribución de cada celda verde.
+
+**El contrato.** `server/activityAudit.ts` filtra el heatmap y los eventos por año en `America/Guatemala` con `make_date` y adapta el título al año solicitado; el router admite el parámetro `year` validado (2000–2100).
+
+**Sin migración.** Reutiliza `audit_log` y `admin_activity_events`.
 
 ### Alcance candidato 2.0.211
 El release **retira el enlace público de la plaza**: la ficha deja de mostrar el «Enlace seguro» de la plaza y el botón «Formulario público», de modo que el único enlace visible es el del formulario (`/apply/f/{token}`). Sin migración.
@@ -850,4 +861,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.211.md](PRUEBAS_CAJA_NEGRA_2.0.211.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.212.md](PRUEBAS_CAJA_NEGRA_2.0.212.md).

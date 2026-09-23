@@ -193,20 +193,41 @@ export async function recordAdminActivity(
   return projectedActivity({ ...result.rows[0], actor_name: null });
 }
 
+function guatemalaYear() {
+  return Number(
+    new Intl.DateTimeFormat("en", {
+      year: "numeric",
+      timeZone: "America/Guatemala",
+    }).format(new Date())
+  );
+}
+
 export async function getActivityOverview(
   pool: Pool,
-  input: { pagePath?: string; limit?: number; date?: string }
+  input: { pagePath?: string; limit?: number; date?: string; year?: number }
 ) {
   const limit = Math.max(1, Math.min(input.limit ?? 50, 200));
   const pagePath = input.pagePath
     ? normalizeAdminPath(input.pagePath)
     : undefined;
+  const currentYear = guatemalaYear();
+  const year = input.year ?? currentYear;
+  const title =
+    year === currentYear
+      ? "Contribuciones a Talento AISA este año"
+      : `Contribuciones a Talento AISA en ${year}`;
+  const yearStart = input.date ? null : `${year}-01-01`;
+  const yearEnd = input.date ? null : `${year + 1}-01-01`;
   const auditResult = await pool.query<AuditRow>(
     `SELECT al.id,al.actor_user_id,u.name AS actor_name,u.email AS actor_email,
             al.entity_type,al.entity_id,al.action,al.created_at
        FROM audit_log al
        LEFT JOIN users u ON u.id=al.actor_user_id
       WHERE ($1::date IS NULL OR (al.created_at AT TIME ZONE 'America/Guatemala')::date=$1::date)
+        AND ($4::date IS NULL OR (
+             (al.created_at AT TIME ZONE 'America/Guatemala')::date >= $4::date
+         AND (al.created_at AT TIME ZONE 'America/Guatemala')::date <  $5::date
+        ))
         AND ($2::text IS NULL OR
           CASE al.entity_type
             WHEN 'application' THEN '/admin/human-review'
@@ -223,17 +244,21 @@ export async function getActivityOverview(
           END = $2)
       ORDER BY al.created_at DESC,al.id DESC
       LIMIT $3`,
-    [input.date ?? null, pagePath ?? null, limit * 2]
+    [input.date ?? null, pagePath ?? null, limit * 2, yearStart, yearEnd]
   );
   const activityResult = await pool.query<ActivityRow>(
     `SELECT ae.*,u.name AS actor_name
        FROM admin_activity_events ae
        LEFT JOIN users u ON u.id=ae.actor_user_id
       WHERE ($1::date IS NULL OR (ae.created_at AT TIME ZONE 'America/Guatemala')::date=$1::date)
+        AND ($4::date IS NULL OR (
+             (ae.created_at AT TIME ZONE 'America/Guatemala')::date >= $4::date
+         AND (ae.created_at AT TIME ZONE 'America/Guatemala')::date <  $5::date
+        ))
         AND ($2::text IS NULL OR ae.page_path=$2)
       ORDER BY ae.created_at DESC,ae.id DESC
       LIMIT $3`,
-    [input.date ?? null, pagePath ?? null, limit * 2]
+    [input.date ?? null, pagePath ?? null, limit * 2, yearStart, yearEnd]
   );
   const events = [
     ...auditResult.rows.map(projectedAudit),
@@ -255,25 +280,21 @@ export async function getActivityOverview(
        FROM (
          SELECT (created_at AT TIME ZONE 'America/Guatemala')::date AS day
            FROM audit_log
-          WHERE created_at >= (
-            date_trunc('year',now() AT TIME ZONE 'America/Guatemala')
-            AT TIME ZONE 'America/Guatemala'
-          )
+          WHERE (created_at AT TIME ZONE 'America/Guatemala')::date >= make_date($1::int,1,1)
+            AND (created_at AT TIME ZONE 'America/Guatemala')::date <  make_date($1::int+1,1,1)
          UNION ALL
          SELECT (created_at AT TIME ZONE 'America/Guatemala')::date AS day
            FROM admin_activity_events
           WHERE outcome IN ('guardado','configuracion','error')
-            AND created_at >= (
-              date_trunc('year',now() AT TIME ZONE 'America/Guatemala')
-              AT TIME ZONE 'America/Guatemala'
-            )
+            AND (created_at AT TIME ZONE 'America/Guatemala')::date >= make_date($1::int,1,1)
+            AND (created_at AT TIME ZONE 'America/Guatemala')::date <  make_date($1::int+1,1,1)
        ) terminal_events
       GROUP BY day
       ORDER BY day`,
-    []
+    [year]
   );
   return {
-    title: "Contribuciones a Talento AISA este año",
+    title,
     timezone: "America/Guatemala",
     events,
     heatmap: heatmapResult.rows,

@@ -459,6 +459,22 @@
   animation-duration: 1.2s;
 }
 
+/* Mapa de controles ISO: entrada suave al cambiar de año con la botonera. */
+@keyframes activity-heatmap-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.activity-heatmap-enter {
+  animation: activity-heatmap-enter 320ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .agent-ready::before,
   .agent-waiting::before {
