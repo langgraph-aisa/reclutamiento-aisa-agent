@@ -42,6 +42,12 @@ export class ApiChatDeliveryUnknownError extends Error {
   }
 }
 
+/**
+ * Compone el mensaje del paso 6 «Solicitud del currículum». La plantilla de
+ * la etapa es la fuente única: el mensaje administrable en la hoja «Etapas de
+ * la IA» precede a cualquier texto heredado. El mensaje legado de la plaza y
+ * la plantilla histórica quedan solo como último respaldo sin variables.
+ */
 export function renderCvRequestMessage(
   fullName: string | null | undefined,
   positionTitle: string | null | undefined,
@@ -54,10 +60,10 @@ export function renderCvRequestMessage(
   const globalTemplate = fallbackTemplate?.trim();
   const hasVariables = (value: string | undefined) =>
     value?.includes("{{nombre}}") && value.includes("{{plaza}}");
-  const template = hasVariables(customTemplate)
-    ? customTemplate!
-    : hasVariables(globalTemplate)
-      ? globalTemplate!
+  const template = hasVariables(globalTemplate)
+    ? globalTemplate!
+    : hasVariables(customTemplate)
+      ? customTemplate!
       : CV_REQUEST_TEMPLATE;
   return template
     .replaceAll("{{nombre}}", name)

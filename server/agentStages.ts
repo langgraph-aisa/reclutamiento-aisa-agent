@@ -46,6 +46,7 @@ export const AGENT_STAGE_MESSAGE_KEYS = [
   "bienvenida_formulario",
   "solicitud_cv",
   "confirmacion_cv",
+  "recordatorio_cv",
   "pregunta_salario",
   "confirmacion_salario",
   "aviso_contacto",
@@ -153,7 +154,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     name: "Espera del currículum",
     description:
       "Al recibir el documento se confirma su recepción y se entrega de nuevo el aviso de contacto, sin saludar otra vez.",
-    messageKeys: ["confirmacion_cv"],
+    messageKeys: ["confirmacion_cv", "recordatorio_cv"],
     instructionKey: "instruccion_espera_cv",
   },
   {
@@ -217,6 +218,8 @@ export const DEFAULT_AGENT_STAGE_MESSAGES: Record<
     "{{nombre}}, gracias por participar en el proceso de {{plaza}}, ¿puede enviarnos por esta vía su CV?",
   confirmacion_cv:
     "{{nombre}}, confirmamos la recepción de su documento; queda registrado en su expediente y pendiente de verificación.",
+  recordatorio_cv:
+    "{{nombre}}, su expediente sigue a la espera de su currículum; puede adjuntarlo por este mismo medio cuando le sea posible.",
   pregunta_salario:
     "Para completar su expediente, ¿podría indicar su expectativa de remuneración mensual en quetzales?",
   confirmacion_salario:
@@ -241,9 +244,9 @@ export const DEFAULT_AGENT_STAGE_INSTRUCTIONS: Record<
   instruccion_entrevista:
     "Administre las preguntas de entrevista guiada de la plaza tal como están configuradas, en su orden y sin improvisar ni añadir preguntas. Aplique el descarte declarado de cada pregunta.",
   instruccion_retroalimentacion:
-    "Evalúe el perfil laboral del candidato con la información del formulario y de la conversación. Cuando exista duda o ambigüedad sobre un dato del perfil laboral, formule una sola pregunta que la desambigüe. Al reunir la información necesaria, ejecute la evaluación automática del candidato para actualizar su ficha, como si el operador hubiera pulsado «Evaluar con agente IA».",
+    "Evalúe el perfil laboral del candidato con la información del formulario y de la conversación. Cuando exista duda o ambigüedad sobre un dato del perfil laboral, formule una sola pregunta que la desambigüe. Al reunir la información necesaria, concluya la conversación: la evaluación automática del candidato se ejecuta en el cierre del proceso.",
   instruccion_cierre:
-    "Concluya la conversación del perfil, pase el expediente a la solicitud del currículum y vuelva a ejecutar la evaluación con la conversación.",
+    "Concluya la conversación del perfil, ejecute la evaluación automática del candidato y pase el expediente a la solicitud del currículum.",
   instruccion_solicitud_cv:
     "Emita el agradecimiento y la solicitud del currículum por este mismo medio; el expediente queda en espera de la respuesta.",
   instruccion_espera_cv:
@@ -503,6 +506,9 @@ export async function saveAgentStageConfiguration(
       confirmacion_cv: input.messages.confirmacion_cv.trim()
         ? input.messages.confirmacion_cv.trim()
         : DEFAULT_AGENT_STAGE_MESSAGES.confirmacion_cv,
+      recordatorio_cv: input.messages.recordatorio_cv.trim()
+        ? input.messages.recordatorio_cv.trim()
+        : DEFAULT_AGENT_STAGE_MESSAGES.recordatorio_cv,
       pregunta_salario: input.messages.pregunta_salario.trim()
         ? input.messages.pregunta_salario.trim()
         : DEFAULT_AGENT_STAGE_MESSAGES.pregunta_salario,

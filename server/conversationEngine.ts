@@ -45,6 +45,7 @@ import {
 } from "./observability/langfuse";
 import {
   assertNoAutomatedSalaryOffer,
+  extractExplicitSalaryExpectation,
   immutableSalaryInstructions,
 } from "./salaryPolicy";
 import {
@@ -546,8 +547,9 @@ async function emitCvReceiptTurn(
 }
 
 /**
- * Expectativa salarial (etapa 8): formula la pregunta o confirma el registro,
- * según si la pregunta ya permanece abierta.
+ * Expectativa salarial (etapa 8): formula la pregunta o captura la respuesta.
+ * Esta etapa es la única vía que actualiza la pretensión salarial de la ficha:
+ * el monto de la persona se persiste aquí, al responder la pregunta abierta.
  */
 async function emitSalaryTurn(
   pool: Pool,
@@ -556,24 +558,58 @@ async function emitSalaryTurn(
   context: BuiltConversationContext,
   stages: AgentStageConfiguration
 ): Promise<ConversationTurnOutcome> {
-  const confirming = source.cycles.some(
+  // La respuesta de la persona cerró el ciclo abierto con el identificador de
+  // su mensaje: el monto se captura y se confirma en este mismo turno.
+  const answered = source.cycles.some(
     cycle =>
-      cycle.status === "abierto" && cycle.dimension === "remuneracion"
+      cycle.dimension === "remuneracion" &&
+      cycle.status === "cerrado" &&
+      cycle.evidenceMessageId === Number(state.last_inbound_message_id)
   );
-  if (confirming) {
-    const text = renderStageTemplate(stages.messages.confirmacion_salario, {
-      name: state.full_name,
-      monto: formatQuetzales(source.salary.expectationGtq),
-    });
-    const { messageId, turnId } = await emitDeterministicMessage(
-      pool,
-      state,
-      context,
-      text,
-      "expectativa_salarial"
+  if (answered) {
+    const expectation = extractExplicitSalaryExpectation(
+      String(state.last_inbound_body ?? ""),
+      "message"
     );
-    // La automatización concluye en la etapa siguiente, el aviso de contacto.
-    return { status: "sent", messageId, turnId, reply: text };
+    if (expectation) {
+      const updated = await pool.query(
+        `UPDATE applications
+            SET salary_expectation_gtq=$1,
+                salary_expectation_source='expectativa_salarial',
+                salary_expectation_captured_at=now(),updated_at=now()
+          WHERE id=$2
+            AND (salary_expectation_gtq=0 OR $1 < salary_expectation_gtq)
+          RETURNING id`,
+        [expectation.amountGtq, state.application_id]
+      );
+      if (updated.rows[0]) {
+        await pool.query(
+          `INSERT INTO audit_log
+             (actor_user_id,entity_type,entity_id,action,after_json)
+           VALUES (NULL,'application',$1,'agent_salary_expectation_captured',$2::jsonb)`,
+          [
+            state.application_id,
+            JSON.stringify({
+              source: "expectativa_salarial",
+              selection: "lowest_gtq",
+            }),
+          ]
+        );
+      }
+      const text = renderStageTemplate(stages.messages.confirmacion_salario, {
+        name: state.full_name,
+        monto: formatQuetzales(expectation.amountGtq),
+      });
+      const { messageId, turnId } = await emitDeterministicMessage(
+        pool,
+        state,
+        context,
+        text,
+        "expectativa_salarial"
+      );
+      // La automatización concluye en la etapa siguiente, el aviso de contacto.
+      return { status: "sent", messageId, turnId, reply: text };
+    }
   }
   const text = renderStageTemplate(stages.messages.pregunta_salario, {
     name: state.full_name,
@@ -598,6 +634,32 @@ async function emitSalaryTurn(
  * Ejecuta un turno completo del agente: rehidrata el hilo, razona, verifica la
  * conducta y encola la respuesta autorizada.
  */
+/**
+ * Ejecuta la evaluación automática del candidato al concluir la conversación
+ * del perfil: el mismo acto del botón «Evaluar con agente IA», una sola vez en
+ * el ciclo —en el cierre—. La máquina de estados garantiza la unicidad: tras
+ * el cierre, el expediente pasa a la espera del currículum y la etapa no
+ * vuelve a quedar pendiente. Un fallo del evaluador no impide el turno.
+ */
+async function runProfileEvaluation(
+  pool: Pool,
+  applicationId: number,
+  evaluate?: (applicationId: number) => Promise<unknown>
+) {
+  try {
+    const runEvaluation =
+      evaluate ??
+      ((id: number) => evaluateApplicationWithAgent(pool, id));
+    await runEvaluation(applicationId);
+  } catch (error) {
+    console.warn(
+      `[ConversationEngine] La evaluación automática no pudo ejecutarse para la postulación ${applicationId} (${
+        error instanceof Error ? error.name : "unknown"
+      }).`
+    );
+  }
+}
+
 async function runConversationTurnInternal(
   pool: Pool,
   input: {
@@ -822,9 +884,15 @@ async function runConversationTurnInternal(
           case "cierre": {
             // El cierre ya no emite el agradecimiento ni el aviso de contacto:
             // cada uno pertenece a su propia etapa. Aquí la conversación del
-            // perfil concluye y la solicitud del currículum queda despachada
-            // con su plantilla del paso 6.
+            // perfil concluye, la evaluación automática del candidato se
+            // ejecuta una sola vez y la solicitud del currículum queda
+            // despachada con su plantilla del paso 6.
             await requestCvForApplication(pool, Number(state.application_id));
+            await runProfileEvaluation(
+              pool,
+              Number(state.application_id),
+              input.dependencies?.evaluate
+            );
             observation.update({
               output: { status: "skipped" },
               metadata: { outcome: "cv-request-dispatched", stage: "cierre" },
@@ -1055,24 +1123,6 @@ async function runConversationTurnInternal(
               WHERE id=$1`,
             [state.id, stage]
           );
-          // La etapa «Conversación del perfil» ejecuta la evaluación
-          // automática del candidato al reunir la información: el mismo acto
-          // del botón «Evaluar con agente IA», de modo que la ficha quede
-          // actualizada sin intervención del operador. Un fallo del evaluador
-          // no impide el turno conversacional.
-          try {
-            const runEvaluation =
-              input.dependencies?.evaluate ??
-              ((applicationId: number) =>
-                evaluateApplicationWithAgent(pool, applicationId));
-            await runEvaluation(Number(state.application_id));
-          } catch (error) {
-            console.warn(
-              `[ConversationEngine] La evaluación automática del paso 4 no pudo ejecutarse para la postulación ${state.application_id} (${
-                error instanceof Error ? error.name : "unknown"
-              }).`
-            );
-          }
           observation.update({
             output: {
               status: "sent",

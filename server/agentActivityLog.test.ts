@@ -94,16 +94,16 @@ function build(input: Omit<AgentStageVerdictInput, "config" | "source"> & {
 }
 
 describe("buildAgentStageVerdicts", () => {
-  it("marca completada y omite la expectativa salarial ya declarada en el formulario", () => {
+  it("marca completada y omite la expectativa salarial ya declarada en el expediente", () => {
     const verdicts = build({
       source: makeSource({
-        salary: { expectationGtq: 5000, source: "formulario", declared: true },
+        salary: { expectationGtq: 5000, source: "expectativa_salarial", declared: true },
       }),
       signals: makeSignals({ cvState: "recibido" }),
     });
     const expectativa = verdicts.find(v => v.stageKey === "expectativa_salarial");
     expect(expectativa?.completed).toBe(true);
-    expect(expectativa?.skipReason).toContain("formulario");
+    expect(expectativa?.skipReason).toContain("expediente");
   });
 
   it("omite la precalificación sin preguntas vigentes y la marca completada", () => {

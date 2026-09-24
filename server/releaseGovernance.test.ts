@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.229");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.229");
+    expect(APP_VERSION).toBe("2.0.230");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.230");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -599,7 +599,7 @@ describe("black-box release contract", () => {
     // client/src/pages/AgentStages.tsx).
     // 2.0.225: +2 por la bitácora de la IA del agente (server/agentActivityLog.ts y
     // client/src/components/review/AgentAiLogPanel.tsx).
-    // 2.0.229: sin archivos nuevos: la celda desplegable de respuestas vive en
+    // 2.0.230: sin archivos nuevos: la celda desplegable de respuestas vive en
     // la matriz vigente (client/src/pages/Candidates.tsx).
     expect(audit.files).toHaveLength(160);
     expect(audit.findings).toEqual([]);
@@ -1303,7 +1303,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.229");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.230");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1313,17 +1313,17 @@ describe("black-box release contract", () => {
     // lugar y un techo propio.
     //
     // El techo del registro se elevó de 2600 a 3500 y después a 3600, 3700,
-    // 3800, 3900, 4000, 4100 y 4200: la entrega acumulada de resúmenes de
-    // commit ya no cabía y comprimir las entradas antiguas estaba borrando la
-    // trazabilidad que el registro existe para conservar. Un techo que obliga
-    // a destruir el registro no protege nada.
+    // 3800, 3900, 4000, 4100, 4200 y 4300: la entrega acumulada de resúmenes
+    // de commit ya no cabía y comprimir las entradas antiguas estaba borrando
+    // la trazabilidad que el registro existe para conservar. Un techo que
+    // obliga a destruir el registro no protege nada.
     expect(proseWordCount).toBeGreaterThanOrEqual(2_400);
     expect(proseWordCount).toBeLessThanOrEqual(2_900);
-    expect(historyWordCount).toBeLessThanOrEqual(4_200);
+    expect(historyWordCount).toBeLessThanOrEqual(4_300);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.229");
+    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.230");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1689,15 +1689,16 @@ describe("black-box release contract", () => {
       "utf8"
     );
 
-    // El catálogo declara una instrucción por etapa y la instrucción del paso 4
-    // desambigua el perfil y ejecuta la evaluación automática del candidato.
+    // El catálogo declara una instrucción por etapa; el paso 4 desambigua el
+    // perfil y la evaluación automática se ejecuta una sola vez, en el cierre.
     expect(stages).toContain("AGENT_STAGE_INSTRUCTION_KEYS");
     expect(stages).toContain("DEFAULT_AGENT_STAGE_INSTRUCTIONS");
     expect(stages).toContain("instruccion_retroalimentacion");
+    expect(stages).toContain("instruccion_cierre");
     expect(stages).toContain(
       "ejecute la evaluación automática del candidato"
     );
-    expect(stages).toContain("«Evaluar con agente IA»");
+    expect(stages).toContain("se ejecuta en el cierre del proceso");
 
     // El criterio se persiste junto al ciclo administrado.
     expect(stages).toContain("instructions: Record<AgentStageInstructionKey");
@@ -1729,9 +1730,10 @@ describe("black-box release contract", () => {
     );
     expect(engine).toContain("evaluateApplicationWithAgent");
     expect(engine).toContain("evaluate");
+    expect(engine).toContain("runProfileEvaluation");
   });
 
-  it("declara el ciclo automático de pruebas treinta segundos después del formulario", () => {
+  it("activa la prueba psicométrica solo desde la ficha del candidato, tras concluir las etapas de la IA", () => {
     const automation = fs.readFileSync(
       path.resolve("server/assessmentAutomation.ts"),
       "utf8"
@@ -1749,6 +1751,10 @@ describe("black-box release contract", () => {
       "utf8"
     );
     const routing = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+    const humanReview = fs.readFileSync(
+      path.resolve("client/src/pages/HumanReview.tsx"),
+      "utf8"
+    );
     const migration = fs.readFileSync(
       path.resolve("drizzle/migrations/0028_assessment_cycles.sql"),
       "utf8"
@@ -1777,8 +1783,22 @@ describe("black-box release contract", () => {
     expect(automation).toContain('state: "apagado"');
     expect(automation).toContain("assessment_cycle_started");
 
-    // El ciclo se registra al solicitar el CV y lo promueve el barrido.
-    expect(cvRequest).toContain("scheduleAssessmentCycle(pool, applicationId)");
+    // La prueba ya no es un flujo determinista: se activa y apaga únicamente
+    // desde la ficha del candidato y exige las nueve etapas concluidas.
+    expect(automation).toContain("etapas_incompletas");
+    expect(cvRequest).not.toContain(
+      "scheduleAssessmentCycle(pool, applicationId)"
+    );
+    expect(routing).toContain("toggleForApplication");
+    expect(routing).toContain("applicationCycle: roleProcedure");
+    expect(humanReview).toContain("Prueba psicométrica");
+    expect(humanReview).toContain("toggleForApplication");
+
+    // El barrido recuerda el currículum pendiente una sola vez por postulación
+    // y la recepción ya no captura la pretensión salarial: solo el paso 8.
+    expect(worker).toContain("runCvReminderSweep(pool");
+    expect(cvRequest).toContain("CV_REMINDER_DELAY_HOURS");
+    expect(inbox).not.toContain("extractExplicitSalaryExpectation");
     expect(worker).toContain("runAssessmentCycleSweep(pool");
     expect(worker).toContain("assessment,");
 
@@ -1817,7 +1837,7 @@ describe("black-box release contract", () => {
     expect(worker).toContain("const protocol = await runAssessmentStepSweep");
     expect(worker).toContain("runScreeningStepSweep(pool");
     expect(worker).toContain("conversationsInScreening");
-    expect(worker).toContain("return { assessment, protocol, screening, turns }");
+    expect(worker).toContain("return { assessment, protocol, reminders, screening, turns }");
 
     // Identidad única del acto: la ficha lee el ciclo y no la entidad legada.
     expect(inbox).toContain("FROM assessment_cycles cycle");
@@ -1853,7 +1873,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.229");
+    expect(governance).toContain("Alcance candidato 2.0.230");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2135,7 +2155,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.229");
+    expect(governance).toContain("Alcance candidato 2.0.230");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

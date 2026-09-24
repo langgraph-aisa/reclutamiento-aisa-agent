@@ -5,11 +5,11 @@ import {
   sendApiChatText,
 } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
-import { scheduleAssessmentCycle } from "./assessmentAutomation";
 import {
   loadAgentStageConfiguration,
   renderStageTemplate,
 } from "./agentStages";
+import { isUndefinedTableError } from "./governanceObservability";
 import { withLangfuseObservation } from "./observability/langfuse";
 import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
 
@@ -37,6 +37,100 @@ export type CvRequestDelivery =
 
 export function cvRequestMessageKey(applicationId: number) {
   return `cv_request:${applicationId}`;
+}
+
+/** Identidad del recordatorio del paso «Espera del currículum». */
+export function cvReminderMessageKey(applicationId: number) {
+  return `cv_reminder:${applicationId}`;
+}
+
+/**
+ * Plazo del recordatorio del currículum: la persona recibe un aviso único
+ * cuando la solicitud lleva más de esta ventana sin respuesta.
+ */
+export const CV_REMINDER_DELAY_HOURS = 24;
+
+/**
+ * Barrido del recordatorio del paso «Espera del currículum»: una única vez por
+ * postulación, pasado el plazo, recuerda a la persona que su expediente espera
+ * el documento. Respeta el comportamiento del agente y el interruptor de la
+ * etapa; la conversación bajo control humano no recibe el recordatorio.
+ */
+export async function runCvReminderSweep(
+  pool: Pool,
+  options: { limit?: number; now?: Date } = {}
+): Promise<number[]> {
+  const stages = await loadAgentStageConfiguration(pool);
+  if (!stages.flowEnabled || !stages.enabled.espera_cv) return [];
+  const limit = Math.min(Math.max(1, options.limit ?? 10), 100);
+  const cutoff = new Date(
+    (options.now ?? new Date()).getTime() -
+      CV_REMINDER_DELAY_HOURS * 3_600_000
+  );
+  let pending: Array<{
+    application_id: number;
+    conversation_id: number;
+    full_name: string | null;
+  }> = [];
+  try {
+    const result = await pool.query<{
+      application_id: number;
+      conversation_id: number;
+      full_name: string | null;
+    }>(
+      `SELECT app.id AS application_id, conv.id AS conversation_id, c.full_name
+         FROM applications app
+         JOIN conversations conv ON conv.application_id=app.id
+         JOIN candidates c ON c.id=app.candidate_id
+        WHERE conv.agent_enabled=true AND conv.human_takeover=false
+          AND conv.automation_state IN ('agent','handoff_pending')
+          AND EXISTS (
+            SELECT 1 FROM conversation_messages req
+             WHERE req.conversation_id=conv.id
+               AND req.message_key='cv_request:' || app.id::text
+               AND req.created_at <= $2
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM conversation_messages rem
+             WHERE rem.conversation_id=conv.id
+               AND rem.message_key='cv_reminder:' || app.id::text
+          )
+        ORDER BY app.id
+        LIMIT $1`,
+      [limit, cutoff]
+    );
+    pending = result.rows;
+  } catch (error) {
+    if (!isUndefinedTableError(error)) throw error;
+  }
+  const reminded: number[] = [];
+  for (const row of pending) {
+    const text = renderStageTemplate(stages.messages.recordatorio_cv, {
+      name: row.full_name,
+    });
+    assertNoAutomatedSalaryOffer(text);
+    const inserted = await pool.query<{ id: number }>(
+      `INSERT INTO conversation_messages
+         (conversation_id,direction,message_type,body,message_key,delivery_status)
+       VALUES ($1,'outbound','text',$2,$3,'queued')
+       ON CONFLICT (message_key) DO NOTHING
+       RETURNING id`,
+      [row.conversation_id, text, cvReminderMessageKey(row.application_id)]
+    );
+    if (!inserted.rows[0]) continue;
+    try {
+      await pool.query(
+        `INSERT INTO conversation_outbox (conversation_id,message_id,kind,status)
+         VALUES ($1,$2,'text','queued')
+         ON CONFLICT (message_id) DO NOTHING`,
+        [row.conversation_id, inserted.rows[0].id]
+      );
+    } catch (error) {
+      if (!isUndefinedTableError(error)) throw error;
+    }
+    reminded.push(row.application_id);
+  }
+  return reminded;
 }
 
 /**
@@ -284,10 +378,9 @@ export async function requestCvForApplication(
   } finally {
     client.release();
   }
-  // Encadenado declarado: el CV se solicita de forma inmediata y el ciclo de
-  // pruebas de la plaza queda registrado para iniciar treinta segundos después.
-  // Con el interruptor apagado no se registra obligación alguna.
-  await scheduleAssessmentCycle(pool, applicationId);
+  // La prueba psicométrica dejó de encadenarse a la solicitud del currículum:
+  // se activa únicamente desde la ficha del candidato, tras concluir las nueve
+  // etapas de la IA.
   return messageId ? deliverCvRequestMessage(pool, messageId) : null;
 }
 

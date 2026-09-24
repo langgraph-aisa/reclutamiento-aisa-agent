@@ -1999,14 +1999,9 @@ export const appRouter = router({
                 )}`
               );
             });
-            void scheduleAssessmentCycle(pool, applicationId).catch(error => {
-              console.warn(
-                `[assessment] Application ${applicationId}: ${safeIntegrationMessage(
-                  error,
-                  "No fue posible programar el ciclo psicométrico."
-                )}`
-              );
-            });
+            // La prueba psicométrica ya no se programa desde el formulario:
+            // se activa únicamente desde la ficha del candidato, tras
+            // concluir las nueve etapas de la IA.
             void evaluateApplicationWithAgent(pool, applicationId).catch(
               error => {
                 const message = safeIntegrationMessage(
@@ -3443,6 +3438,95 @@ export const appRouter = router({
     automation: roleProcedure.query(async () =>
       getAssessmentAutomation(await getPool())
     ),
+    /**
+     * Estado de la prueba psicométrica de una postulación y si el ciclo de las
+     * nueve etapas de la IA quedó concluido: la prueba solo puede activarse
+     * desde la ficha del candidato, nunca como flujo determinista.
+     */
+    applicationCycle: roleProcedure
+      .input(z.object({ applicationId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const cycle = await pool.query<{
+          id: number;
+          state: string;
+          ready_at: string | null;
+        }>(
+          `SELECT id,state,ready_at FROM assessment_cycles
+            WHERE application_id=$1 ORDER BY id LIMIT 1`,
+          [input.applicationId]
+        );
+        const conversation = await pool.query<{ automation_state: string }>(
+          `SELECT automation_state FROM conversations
+            WHERE application_id=$1 AND provider='apichat'
+            ORDER BY id LIMIT 1`,
+          [input.applicationId]
+        );
+        return {
+          cycle: cycle.rows[0] ?? null,
+          stagesCompleted:
+            conversation.rows[0]?.automation_state === "completed",
+        };
+      }),
+    /**
+     * Interruptor por candidato de la prueba psicométrica: encendido programa
+     * el ciclo solo si las etapas de la IA concluyeron; apagado cancela el
+     * ciclo pendiente y rechaza apagar una prueba en curso.
+     */
+    toggleForApplication: roleProcedure
+      .input(
+        z.object({
+          applicationId: z.number().int().positive(),
+          enabled: z.boolean(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const pool = await requirePool();
+        if (input.enabled) {
+          const result = await scheduleAssessmentCycle(
+            pool,
+            input.applicationId
+          );
+          if (!result.scheduled && result.reason === "etapas_incompletas") {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                "El candidato debe concluir las nueve etapas de la IA antes de activar la prueba psicométrica.",
+            });
+          }
+          return result;
+        }
+        const cancelled = await pool.query(
+          `DELETE FROM assessment_cycles
+            WHERE application_id=$1 AND state='listo'
+            RETURNING id`,
+          [input.applicationId]
+        );
+        if (!cancelled.rows[0]) {
+          const active = await pool.query<{ state: string }>(
+            `SELECT state FROM assessment_cycles
+              WHERE application_id=$1 ORDER BY id LIMIT 1`,
+            [input.applicationId]
+          );
+          if (active.rows[0]?.state === "en_curso") {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                "La prueba psicométrica está en curso y no puede apagarse; ciérrela desde la prueba.",
+            });
+          }
+        }
+        await pool.query(
+          `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+           VALUES ($1,'assessment_cycle',$2,'assessment_cycle_deactivated',$3::jsonb)`,
+          [
+            ctx.user.id,
+            input.applicationId,
+            JSON.stringify({ automatic: false }),
+          ]
+        );
+        return { scheduled: false, reason: "desactivada" };
+      }),
     saveAutomation: adminProcedure
       .input(z.object({ enabled: z.boolean() }))
       .mutation(async ({ input, ctx }) =>
@@ -6533,6 +6617,7 @@ export const appRouter = router({
             bienvenida_formulario: z.string().trim().max(1_000),
             solicitud_cv: z.string().trim().max(1_000),
             confirmacion_cv: z.string().trim().max(1_000),
+            recordatorio_cv: z.string().trim().max(1_000),
             pregunta_salario: z.string().trim().max(1_000),
             confirmacion_salario: z.string().trim().max(1_000),
             aviso_contacto: z.string().trim().max(1_000),

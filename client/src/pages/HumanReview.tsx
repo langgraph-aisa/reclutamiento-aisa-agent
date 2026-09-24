@@ -1,6 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { CandidateReviewSummary } from "@/components/review/CandidateReviewSummary";
 import { RecruiterAgentPanel } from "@/components/review/RecruiterAgentPanel";
 import { CandidateCvAnalysisPanel } from "@/components/review/CandidateCvAnalysisPanel";
@@ -190,6 +192,28 @@ function CandidateDetail({
     onError: error => toast.error(`No fue posible evaluar: ${error.message}`),
   });
 
+  // La prueba psicométrica ya no es un flujo determinista: se activa y apaga
+  // únicamente desde la ficha, y exige que el candidato haya concluido las
+  // nueve etapas de la IA.
+  const assessmentCycle = trpc.assessments.applicationCycle.useQuery(
+    { applicationId: data.application.id },
+    { enabled: Boolean(data.application.id) }
+  );
+  const cycle = assessmentCycle.data?.cycle ?? null;
+  const cycleEnabled = Boolean(cycle && cycle.state !== "concluido");
+  const toggleAssessment =
+    trpc.assessments.toggleForApplication.useMutation({
+      onSuccess: async () => {
+        toast.success(
+          cycleEnabled
+            ? "Prueba psicométrica desactivada."
+            : "Prueba psicométrica activada para el candidato."
+        );
+        await assessmentCycle.refetch();
+      },
+      onError: error => toast.error(error.message),
+    });
+
   return (
     <Card className="rounded-3xl border-0 bg-[#0b2d4b] text-white shadow-lift dark:bg-[#162333]">
       <CardHeader className="grid gap-4 lg:grid-cols-2 lg:items-start lg:gap-6">
@@ -233,6 +257,30 @@ function CandidateDetail({
                 ? "Reevaluar con agente IA"
                 : "Evaluar con agente IA"}
           </Button>
+          <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/25 bg-white/10 px-3 py-2">
+            <Label className="text-sm font-medium text-white">
+              Prueba psicométrica
+            </Label>
+            <Switch
+              checked={cycleEnabled}
+              disabled={
+                toggleAssessment.isPending || assessmentCycle.isLoading
+              }
+              onCheckedChange={value =>
+                toggleAssessment.mutate({
+                  applicationId: data.application.id,
+                  enabled: value,
+                })
+              }
+              aria-label="Activar la prueba psicométrica del candidato"
+            />
+          </div>
+          {!assessmentCycle.data?.stagesCompleted && (
+            <p className="text-xs leading-5 text-white/65">
+              Solo puede activarse cuando el candidato concluye las nueve
+              etapas de la IA.
+            </p>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-5">

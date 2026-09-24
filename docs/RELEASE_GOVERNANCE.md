@@ -1,8 +1,23 @@
-# Gobierno de release JARVI RH 2.0.229
+# Gobierno de release JARVI RH 2.0.230
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.229**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.230**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.230
+El release **aplica el consenso del consejo al ciclo conversacional**. Sin migración.
+
+**Salario solo en el paso 8.** La recepción de mensajes deja de capturar la pretensión salarial; `emitSalaryTurn` es la única vía que actualiza `salary_expectation_gtq`, al responder la pregunta abierta de la etapa 8.
+
+**Psicométrico por ficha.** `scheduleAssessmentCycle` exige que la conversación haya concluido las nueve etapas (`automation_state='completed'`) y ya no se encadena desde el formulario ni desde la solicitud del CV; la ficha del candidato gana el interruptor «Prueba psicométrica» (`applicationCycle` y `toggleForApplication`) con su aviso de etapas inconclusas.
+
+**Evaluación una vez en el cierre.** La evaluación automática del candidato sale del turno libre y se ejecuta una sola vez en la etapa de cierre, al despachar la solicitud del currículum.
+
+**Paso 6 con fuente única.** `renderCvRequestMessage` prefiere la plantilla de la etapa; el mensaje legado de la plaza y la plantilla histórica quedan como último respaldo sin variables.
+
+**Recordatorio del CV.** El barrido `runCvReminderSweep` recuerda una sola vez, a las 24 horas, el currículum pendiente con la plantilla administrable `recordatorio_cv` del paso 7.
+
+**Sin migración.** Reutiliza `integration_settings`, `conversation_messages` y la columna `evidence_message_id` vigente.
 
 ### Alcance candidato 2.0.229
 El release **publica la auditoría del ciclo de nueve etapas** y es un release de gobierno y documentación: no toca el esquema ni cambia código. El documento [AUDITORIA_FLUJO_CONVERSACIONAL_9_ETAPAS_2.0.228.md](AUDITORIA_FLUJO_CONVERSACIONAL_9_ETAPAS_2.0.228.md) verifica el orden 1→9 por la invariante de la primera etapa pendiente, inventaría los residuos de otras versiones —el mensaje base por plaza del paso 6, el protocolo psicométrico intercalado y la evaluación acoplada del paso 4— y enumera doce cuellos de botella para la prueba de QA, con las consultas de verificación de producción.
@@ -1020,4 +1035,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.229.md](PRUEBAS_CAJA_NEGRA_2.0.229.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.230.md](PRUEBAS_CAJA_NEGRA_2.0.230.md).

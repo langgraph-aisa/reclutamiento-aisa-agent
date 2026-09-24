@@ -24,7 +24,6 @@ import {
 } from "./expedienteSignal";
 import {
   assertNoAutomatedSalaryOffer,
-  extractExplicitSalaryExpectation,
 } from "./salaryPolicy";
 
 export type InboxAutomationState =
@@ -1274,34 +1273,8 @@ async function recordNormalizedInboundEventInternal(
           WHERE id=$1`,
         [conversationId, input.direction, providerTime]
       );
-      if (input.text && input.direction === "inbound") {
-        const expectation = extractExplicitSalaryExpectation(
-          input.text,
-          "message"
-        );
-        if (expectation) {
-          const salaryUpdate = await client.query(
-            `UPDATE applications
-                SET salary_expectation_gtq=$1,salary_expectation_source='message',
-                    salary_expectation_captured_at=now(),updated_at=now()
-              WHERE id=$2
-                AND (salary_expectation_gtq=0 OR $1 < salary_expectation_gtq)
-              RETURNING id`,
-            [expectation.amountGtq, input.applicationId]
-          );
-          if (salaryUpdate.rows[0]) {
-            await client.query(
-              `INSERT INTO audit_log
-                 (actor_user_id,entity_type,entity_id,action,after_json)
-               VALUES (NULL,'application',$1,'agent_salary_expectation_captured',$2::jsonb)`,
-              [
-                input.applicationId,
-                JSON.stringify({ source: "message", selection: "lowest_gtq" }),
-              ]
-            );
-          }
-        }
-      }
+      // La pretensión salarial no se captura en la recepción: la etapa 8
+      // «Expectativa salarial» es la única vía que actualiza la ficha.
     }
     await client.query("COMMIT");
     return {

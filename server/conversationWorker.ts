@@ -6,6 +6,7 @@ import {
   runAssessmentStepSweep,
 } from "./assessmentAutomation";
 import { runScreeningStepSweep } from "./screeningEngine";
+import { runCvReminderSweep } from "./cvRequest";
 import { assertCapability } from "./conversationRuntime";
 import { getConversationActivation } from "./conversationActivation";
 import { isUndefinedTableError } from "./governanceObservability";
@@ -110,6 +111,12 @@ export async function runConversationReasoning(
   // reanuda al encender el interruptor— en ambos modos.
   const assessment = await runAssessmentCycleSweep(pool, { now: options.now });
   const protocol = await runAssessmentStepSweep(pool, { now: options.now });
+  let reminders: number[] = [];
+  try {
+    reminders = await runCvReminderSweep(pool, { now: options.now });
+  } catch (error) {
+    if (!isUndefinedTableError(error)) throw error;
+  }
   let screening: Array<{ runId: number; action: string }> = [];
   try {
     screening = await runScreeningStepSweep(pool, { now: options.now });
@@ -137,7 +144,7 @@ export async function runConversationReasoning(
       turns.push({ conversationId, status: "error" });
     }
   }
-  return { assessment, protocol, screening, turns };
+  return { assessment, protocol, reminders, screening, turns };
 }
 
 export async function runConversationSweep(

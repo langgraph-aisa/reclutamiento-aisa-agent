@@ -203,7 +203,9 @@ describe.runIf(enabled)(
       );
       expect(outcomes.filter(value => value.status === "sent")).toHaveLength(1);
       expect(generator).toHaveBeenCalledOnce();
-      expect(evaluate).toHaveBeenCalledOnce();
+      // La evaluación automática ya no se ejecuta por turno libre: se reserva
+      // para el cierre del proceso, una sola vez en el ciclo.
+      expect(evaluate).not.toHaveBeenCalled();
       expect(
         (
           await database.pool.query(

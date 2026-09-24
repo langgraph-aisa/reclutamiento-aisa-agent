@@ -57,6 +57,7 @@ export type ConversationCycleInput = {
   question: string;
   status: string;
   openedAt?: string | null;
+  evidenceMessageId?: number | null;
 };
 
 export type ConversationTurnInput = {
@@ -631,6 +632,7 @@ export async function loadConversationContextSource(
     ),
     pool.query(
       `SELECT cc.id,cc.dimension,cc.question,cc.status,cc.opened_at,cc.answer_excerpt,
+              cc.evidence_message_id,
               ck.topic,ck.detail,ck.evidence_excerpt
          FROM conversations conv
          LEFT JOIN conversation_cycles cc ON cc.conversation_id=conv.id
@@ -689,6 +691,10 @@ export async function loadConversationContextSource(
         openedAt: item.opened_at
           ? new Date(item.opened_at).toISOString()
           : null,
+        evidenceMessageId:
+          item.evidence_message_id != null
+            ? Number(item.evidence_message_id)
+            : null,
       });
     }
     if (item.topic && item.detail && item.evidence_excerpt) {

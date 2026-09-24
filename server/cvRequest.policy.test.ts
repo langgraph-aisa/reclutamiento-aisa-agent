@@ -18,7 +18,7 @@ const stepTemplate =
   "{{nombre}}, gracias por participar en el proceso de {{plaza}}, ¿puede enviarnos por esta vía su CV?";
 
 describe("política salarial en mensajería automática", () => {
-  it("rechaza una plantilla de solicitud de CV que ofrezca remuneración", async () => {
+  it("rechaza una plantilla de la etapa que ofrezca remuneración", async () => {
     const query = vi.fn();
 
     await expect(
@@ -26,17 +26,16 @@ describe("política salarial en mensajería automática", () => {
         { query } as never,
         {
           ...application,
-          whatsapp_message:
-            "Hola {{nombre}}. Para {{plaza}} le ofrecemos un salario de Q 9,000. Envíe su currículum.",
+          whatsapp_message: null,
         },
-        stepTemplate
+        "Hola {{nombre}}. Para {{plaza}} le ofrecemos un salario de Q 9,000. Envíe su currículum."
       )
     ).rejects.toThrow(/oferta o propuesta económica/);
 
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("permite una solicitud institucional sin propuesta económica", async () => {
+  it("ignora el mensaje legado de la plaza y compone con la plantilla de la etapa", async () => {
     const query = vi
       .fn()
       .mockResolvedValueOnce({ rows: [] })
@@ -50,7 +49,7 @@ describe("política salarial en mensajería automática", () => {
       {
         ...application,
         whatsapp_message:
-          "Hola {{nombre}}. Gracias por su interés en {{plaza}}. Envíe su currículum para continuar.",
+          "Mensaje legado de la plaza con salario Q 9,000 que ya no gobierna la solicitud.",
       },
       stepTemplate
     );
@@ -64,6 +63,14 @@ describe("política salarial en mensajería automática", () => {
     ]);
     expect(String(query.mock.calls[2]?.[0])).toContain(
       "INSERT INTO conversation_messages"
+    );
+    // La plantilla de la etapa es la fuente única: el texto insertado no
+    // contiene la oferta legada de la plaza.
+    expect(JSON.stringify(query.mock.calls[2]?.[1])).not.toContain(
+      "legado de la plaza"
+    );
+    expect(JSON.stringify(query.mock.calls[2]?.[1])).toContain(
+      "gracias por participar"
     );
   });
 });

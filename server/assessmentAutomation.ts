@@ -418,6 +418,18 @@ export async function scheduleAssessmentCycle(
   if (!automation.enabled) {
     return { scheduled: false, reason: "automation_disabled" };
   }
+  // La prueba psicométrica ya no es un flujo determinista: solo puede
+  // activarse desde la ficha del candidato y únicamente cuando el ciclo de
+  // las nueve etapas de la IA quedó concluido (paso 9, aviso de contacto).
+  const conversation = await pool.query<{ automation_state: string }>(
+    `SELECT conv.automation_state FROM conversations conv
+      WHERE conv.application_id=$1 AND conv.provider='apichat'
+      ORDER BY conv.id LIMIT 1`,
+    [applicationId]
+  );
+  if (conversation.rows[0]?.automation_state !== "completed") {
+    return { scheduled: false, reason: "etapas_incompletas" };
+  }
   const protocols = await activeProtocols(pool, applicationId);
   if (!protocols.length) {
     return { scheduled: false, reason: "no_active_protocols" };

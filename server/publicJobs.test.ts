@@ -834,10 +834,11 @@ describe("publicJobs.submit solicitud automática de CV", () => {
     await new Promise(resolve => setImmediate(resolve));
 
     // La solicitud del currículum pertenece a la etapa 6 del ciclo, no a la
-    // recepción: aquí la conversación se abre con la bienvenida del paso 1 y se
-    // programa el ciclo.
+    // recepción: aquí la conversación se abre con la bienvenida del paso 1. La
+    // prueba psicométrica dejó de ser un flujo determinista: ya no se programa
+    // desde el formulario, se activa desde la ficha del candidato.
     expect(dispatchWelcomeMessage).toHaveBeenCalledWith(pool, 900);
     expect(requestCvForApplication).not.toHaveBeenCalled();
-    expect(scheduleAssessmentCycle).toHaveBeenCalledWith(pool, 900);
+    expect(scheduleAssessmentCycle).not.toHaveBeenCalled();
   });
 });

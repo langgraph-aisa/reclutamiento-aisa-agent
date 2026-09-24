@@ -48,6 +48,17 @@ describe("ApiChat message rendering", () => {
       )
     ).toBe("Global: Ana / Ventas");
   });
+
+  it("prefiere la plantilla de la etapa sobre el mensaje legado de la plaza", () => {
+    expect(
+      renderCvRequestMessage(
+        "Ana",
+        "Ventas",
+        "Plaza: {{nombre}} / {{plaza}}",
+        "Etapa: {{nombre}} / {{plaza}}"
+      )
+    ).toBe("Etapa: Ana / Ventas");
+  });
 });
 
 describe("ApiChat configuration", () => {

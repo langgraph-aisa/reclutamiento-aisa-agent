@@ -315,7 +315,7 @@ export function buildAgentStageVerdicts(
         return skipped(
           "expectativa_salarial",
           "Expectativa salarial",
-          "Ya fue declarada en el formulario; no se preguntó de nuevo."
+          "Ya fue declarada en el expediente; no se pregunta de nuevo."
         );
       if (salaryQuestionOpen)
         return executed(

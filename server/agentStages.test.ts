@@ -121,12 +121,25 @@ describe("etapas administrables del agente", () => {
     );
   });
 
-  it("el criterio del paso 4 desambigua el perfil y ejecuta la evaluación automática", () => {
+  it("el criterio del paso 4 desambigua el perfil y la evaluación se ejecuta en el cierre", () => {
     const instruccion =
       DEFAULT_AGENT_STAGE_INSTRUCTIONS.instruccion_retroalimentacion;
     expect(instruccion).toContain("desambigüe");
     expect(instruccion).toContain("evaluación automática");
-    expect(instruccion).toContain("Evaluar con agente IA");
+    expect(DEFAULT_AGENT_STAGE_INSTRUCTIONS.instruccion_cierre).toContain(
+      "evaluación automática"
+    );
+  });
+
+  it("asocia el recordatorio del currículum al paso de espera", () => {
+    const espera = AGENT_STAGES.find(stage => stage.key === "espera_cv");
+    expect(espera?.messageKeys).toEqual([
+      "confirmacion_cv",
+      "recordatorio_cv",
+    ]);
+    expect(DEFAULT_AGENT_STAGE_MESSAGES.recordatorio_cv).toContain(
+      "{{nombre}}"
+    );
   });
 
   it("asocia el mensaje de bienvenida al paso de recepción del formulario", () => {

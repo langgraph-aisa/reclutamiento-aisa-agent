@@ -139,3 +139,15 @@ SELECT message_key,delivery_status,attempt_count,last_error
 ## 8. Dictamen
 
 El orden 1→9 está garantizado por la invariante de la primera etapa pendiente y no existe otra vía que redacte respuestas del agente con el flujo encendido. Los residuos R-01 (texto del paso 6), R-04 (protocolo psicométrico intercalado) y R-05 (evaluación acoplada) son los únicos que pueden hacer que la QA observe algo distinto del diseño; los cuellos B-05 (espera del CV) y B-09 (prueba psicométrica) pueden detener la prueba. Para la ejecución de hoy se recomienda: plaza sin protocolo psicométrico activo, formulario sin expectativa salarial declarada, un CV real en PDF, una conversación por pasada sin tráfico concurrente y verificación de `delivery_status` después de cada mensaje institucional.
+
+---
+
+## 9. Addendum · Consenso del consejo aplicado en JARVI RH 2.0.230
+
+La entrega **2.0.230** elimina de forma definitiva los cuellos y residuos identificados:
+
+- **B-09 / R-04 resuelto** — la prueba psicométrica dejó de ser un flujo determinista: no se encadena al formulario ni a la solicitud del CV; `scheduleAssessmentCycle` exige el paso 9 concluido y la ficha del candidato la activa y apaga con su interruptor (`applicationCycle` / `toggleForApplication`).
+- **R-05 resuelto** — la evaluación automática sale del turno libre y se ejecuta una sola vez, en el cierre (`runProfileEvaluation` en `case "cierre"`).
+- **R-01 resuelto** — `renderCvRequestMessage` prefiere la plantilla del paso 6: el mensaje legado de la plaza y la plantilla histórica quedan como último respaldo sin variables.
+- **B-05 resuelto** — el paso 7 recuerda el currículum pendiente una sola vez a las 24 horas (`runCvReminderSweep`, plantilla administrable `recordatorio_cv`).
+- **Salario único** — la recepción de mensajes ya no captura la pretensión salarial; únicamente el paso 8 «Expectativa salarial» actualiza la ficha.
