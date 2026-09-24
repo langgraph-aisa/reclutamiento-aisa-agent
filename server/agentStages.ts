@@ -10,6 +10,9 @@ import type { Pool } from "pg";
  * navegador no conserva descripciones metodológicas.
  *
  * Bajo el proveedor `agent_stages` en `integration_settings` viven:
+ *  - `flow_enabled`: interruptor maestro del comportamiento del agente. Apagado,
+ *    el motor determinista no ejecuta ninguna acción; encendido, ejecuta el
+ *    ciclo exacto de las nueve etapas y nada más.
  *  - `enabled`: documento JSON con el interruptor de cada etapa.
  *  - `order`: documento JSON con la secuencia administrada de las etapas.
  *  - `bienvenida_formulario`, `solicitud_cv`, `confirmacion_cv`,
@@ -21,6 +24,9 @@ import type { Pool } from "pg";
  */
 
 export const AGENT_STAGES_PROVIDER = "agent_stages";
+
+/** Clave del interruptor maestro del comportamiento del agente. */
+export const AGENT_STAGE_FLOW_KEY = "flow_enabled";
 
 export const AGENT_STAGE_KEYS = [
   "recepcion_formulario",
@@ -200,6 +206,8 @@ export const DEFAULT_AUTOMATIC_EVALUATION_CV_MESSAGE =
   "{{nombre}}, su postulación para {{plaza}} quedó registrada; ¿puede enviarnos por esta vía su CV para continuar con su evaluación?";
 
 export type AgentStageConfiguration = {
+  /** Interruptor maestro: apagado, el motor determinista no ejecuta acción. */
+  flowEnabled: boolean;
   enabled: Record<AgentStageKey, boolean>;
   order: AgentStageKey[];
   messages: Record<AgentStageMessageKey, string>;
@@ -218,6 +226,15 @@ function stageKeys() {
 
 function messageKeys() {
   return [...AGENT_STAGE_MESSAGE_KEYS];
+}
+
+/**
+ * Lee el interruptor maestro del comportamiento del agente. Solo el literal
+ * `false` apaga el flujo: la ausencia conserva el ciclo activo, para que una
+ * instalación sin documento no quede muda.
+ */
+export function parseStageFlowEnabled(value: string | null | undefined) {
+  return String(value ?? "").trim().toLowerCase() !== "false";
 }
 
 /** Lee el documento `enabled` y conserva los valores de fábrica ante ausencias. */
@@ -315,6 +332,7 @@ export function buildAgentStagesView(
     AGENT_STAGES.map(definition => [definition.key, definition])
   );
   return {
+    flowEnabled: configuration.flowEnabled,
     enabled: configuration.enabled,
     order,
     messages: configuration.messages,
@@ -324,6 +342,7 @@ export function buildAgentStagesView(
       enabled: configuration.enabled[key] === true,
     })),
     defaults: {
+      flowEnabled: true,
       enabled: { ...DEFAULT_AGENT_STAGE_ENABLED },
       order: [...DEFAULT_AGENT_STAGE_ORDER],
       messages: { ...DEFAULT_AGENT_STAGE_MESSAGES },
@@ -336,6 +355,7 @@ export async function loadAgentStageConfiguration(
   pool: Queryable | null
 ): Promise<AgentStageConfiguration> {
   const configuration: AgentStageConfiguration = {
+    flowEnabled: true,
     enabled: { ...DEFAULT_AGENT_STAGE_ENABLED },
     order: [...DEFAULT_AGENT_STAGE_ORDER],
     messages: { ...DEFAULT_AGENT_STAGE_MESSAGES },
@@ -347,9 +367,16 @@ export async function loadAgentStageConfiguration(
   }>(
     `SELECT setting_key,setting_value FROM integration_settings
       WHERE provider=$1 AND setting_key = ANY($2)`,
-    [AGENT_STAGES_PROVIDER, ["enabled", "order", ...messageKeys()]]
+    [
+      AGENT_STAGES_PROVIDER,
+      [AGENT_STAGE_FLOW_KEY, "enabled", "order", ...messageKeys()],
+    ]
   );
   for (const row of result.rows) {
+    if (row.setting_key === AGENT_STAGE_FLOW_KEY) {
+      configuration.flowEnabled = parseStageFlowEnabled(row.setting_value);
+      continue;
+    }
     if (row.setting_key === "enabled") {
       configuration.enabled = stageEnabledFromValue(row.setting_value);
       continue;
@@ -366,6 +393,7 @@ export async function loadAgentStageConfiguration(
 }
 
 export type SaveAgentStageInput = {
+  flowEnabled: boolean;
   enabled: Record<AgentStageKey, boolean>;
   order: AgentStageKey[];
   messages: Record<AgentStageMessageKey, string>;
@@ -378,6 +406,7 @@ export async function saveAgentStageConfiguration(
   actorUserId: number
 ): Promise<AgentStagesView> {
   const configuration: AgentStageConfiguration = {
+    flowEnabled: input.flowEnabled !== false,
     enabled: stageEnabledFromValue(serializeStageEnabled(input.enabled)),
     order: stageOrderFromValue(serializeStageOrder(input.order)),
     messages: {
@@ -405,6 +434,16 @@ export async function saveAgentStageConfiguration(
   try {
     await pool.query(
       `INSERT INTO integration_settings (provider,setting_key,setting_value,is_secret,updated_at)
+       VALUES ($1,$2,$3,false,now())
+       ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=now()`,
+      [
+        AGENT_STAGES_PROVIDER,
+        AGENT_STAGE_FLOW_KEY,
+        configuration.flowEnabled ? "true" : "false",
+      ]
+    );
+    await pool.query(
+      `INSERT INTO integration_settings (provider,setting_key,setting_value,is_secret,updated_at)
        VALUES ($1,'enabled',$2,false,now())
        ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=now()`,
       [AGENT_STAGES_PROVIDER, serializeStageEnabled(configuration.enabled)]
@@ -429,6 +468,7 @@ export async function saveAgentStageConfiguration(
       [
         actorUserId,
         JSON.stringify({
+          flowEnabled: configuration.flowEnabled,
           enabled: configuration.enabled,
           order: configuration.order,
         }),
@@ -440,6 +480,40 @@ export async function saveAgentStageConfiguration(
     throw error;
   }
   return buildAgentStagesView(configuration);
+}
+
+/**
+ * Apaga el comportamiento del agente y deshabilita las nueve etapas cuando la
+ * evaluación automática toma el control: el flujo determinista queda bloqueado
+ * y el motor no ejecuta ninguna acción del ciclo. El acto se asienta aparte.
+ */
+export async function disableAgentFlowForAutomaticEvaluation(
+  pool: Pool,
+  actorUserId: number | null
+): Promise<void> {
+  const enabled: Record<AgentStageKey, boolean> = Object.fromEntries(
+    stageKeys().map(key => [key, false])
+  ) as Record<AgentStageKey, boolean>;
+  await pool.query(
+    `INSERT INTO integration_settings (provider,setting_key,setting_value,is_secret,updated_at)
+     VALUES ($1,$2,'false',false,now())
+     ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=now()`,
+    [AGENT_STAGES_PROVIDER, AGENT_STAGE_FLOW_KEY]
+  );
+  await pool.query(
+    `INSERT INTO integration_settings (provider,setting_key,setting_value,is_secret,updated_at)
+     VALUES ($1,'enabled',$2,false,now())
+     ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=now()`,
+    [AGENT_STAGES_PROVIDER, serializeStageEnabled(enabled)]
+  );
+  await pool.query(
+    `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+     VALUES ($1,'agent_stages',0,'agent_stages_flow_disabled',$2::jsonb)`,
+    [
+      actorUserId,
+      JSON.stringify({ reason: "evaluacion_automatica", enabled }),
+    ]
+  );
 }
 
 /**

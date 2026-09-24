@@ -180,4 +180,27 @@ describe("bienvenida del paso de recepción", () => {
       )
     ).toBe(false);
   });
+
+  it("no ejecuta ninguna acción cuando el comportamiento del agente está apagado", async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (String(sql).includes("FROM integration_settings"))
+        return {
+          rows: [
+            { setting_key: "flow_enabled", setting_value: "false" },
+          ],
+        };
+      return { rows: [] };
+    });
+    const client = { query, release: vi.fn() };
+    const pool = { query, connect: vi.fn().mockResolvedValue(client) };
+
+    const result = await dispatchWelcomeMessage(pool as never, 17);
+
+    expect(result).toBeNull();
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("INSERT INTO conversations")
+      )
+    ).toBe(false);
+  });
 });

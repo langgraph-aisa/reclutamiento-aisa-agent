@@ -77,12 +77,16 @@ const welcomeContactSql = `SELECT c.full_name,p.title AS position_title
  * conversación y la abre con la plantilla editable del paso 1
  * (`bienvenida_formulario`), una sola vez por postulación. La solicitud del
  * currículum conserva su propio mensaje y se emite en su etapa, tras el cierre.
+ *
+ * Con el comportamiento del agente apagado (`flow_enabled=false`) no ejecuta
+ * ninguna acción: ni crea la conversación ni emite mensaje.
  */
 export async function dispatchWelcomeMessage(
   pool: Pool,
   applicationId: number
 ): Promise<CvRequestDelivery | null> {
   const stages = await loadAgentStageConfiguration(pool);
+  if (!stages.flowEnabled) return null;
   const conversationId = await ensureConversationForApplication(
     pool,
     applicationId

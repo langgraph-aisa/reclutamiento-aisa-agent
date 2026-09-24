@@ -724,6 +724,16 @@ async function runConversationTurnInternal(
       );
       const stagesConfig = await loadAgentStageConfiguration(pool);
 
+      // Comportamiento del agente apagado: el motor determinista no ejecuta
+      // ninguna acción —ni las nueve etapas ni la conversación libre—, de modo
+      // que el agente nunca responde fuera del ciclo administrado.
+      if (!stagesConfig.flowEnabled)
+        return {
+          status: "skipped",
+          reason:
+            "El comportamiento del agente está apagado: el ciclo determinista no ejecuta ninguna acción.",
+        };
+
       // La bitácora de la IA asienta el estado de cada etapa del ciclo fijo, en
       // su orden: la acción ejecutada y su justificación, o el motivo de la
       // omisión. Se escribe antes de emitir el turno para que el comité técnico

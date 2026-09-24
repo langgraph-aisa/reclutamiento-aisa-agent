@@ -1,12 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   AGENT_STAGES,
+  AGENT_STAGE_FLOW_KEY,
+  AGENT_STAGES_PROVIDER,
   DEFAULT_AGENT_STAGE_ENABLED,
   DEFAULT_AGENT_STAGE_MESSAGES,
   DEFAULT_AGENT_STAGE_ORDER,
   buildAgentStagesView,
+  disableAgentFlowForAutomaticEvaluation,
   formatQuetzales,
   normalizeStageOrder,
+  parseStageFlowEnabled,
   renderStageTemplate,
   serializeStageEnabled,
   serializeStageOrder,
@@ -39,6 +43,37 @@ describe("etapas administrables del agente", () => {
       DEFAULT_AGENT_STAGE_ENABLED
     );
     expect(stageEnabledFromValue("{}")).toEqual(DEFAULT_AGENT_STAGE_ENABLED);
+  });
+
+  it("interpreta el interruptor maestro del comportamiento del agente", () => {
+    expect(parseStageFlowEnabled(null)).toBe(true);
+    expect(parseStageFlowEnabled("")).toBe(true);
+    expect(parseStageFlowEnabled("true")).toBe(true);
+    expect(parseStageFlowEnabled("false")).toBe(false);
+    expect(parseStageFlowEnabled("FALSE")).toBe(false);
+  });
+
+  it("apaga el flujo y deshabilita las nueve etapas cuando la evaluación automática toma el control", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    await disableAgentFlowForAutomaticEvaluation({ query } as never, null);
+
+    const integrationWrites = query.mock.calls.filter(call =>
+      String(call[0]).includes("INSERT INTO integration_settings")
+    );
+    const flow = integrationWrites.find(
+      call => call[1][1] === AGENT_STAGE_FLOW_KEY
+    );
+    expect(flow?.[1]).toEqual([AGENT_STAGES_PROVIDER, AGENT_STAGE_FLOW_KEY]);
+    expect(String(flow?.[0])).toContain("'false'");
+    const enabledCall = integrationWrites.find(call =>
+      String(call[0]).includes("'enabled'")
+    );
+    const document = JSON.parse(String(enabledCall?.[1][1])) as Record<
+      string,
+      boolean
+    >;
+    expect(Object.keys(document)).toHaveLength(9);
+    expect(Object.values(document)).toEqual(Array(9).fill(false));
   });
 
   it("serializa y lee un documento de interruptores redondo", () => {

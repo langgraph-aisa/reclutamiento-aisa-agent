@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.221
+# Gobierno de release JARVI RH 2.0.222
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.221**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.222**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.222
+El release **da al comportamiento del agente un interruptor maestro y lo hace excluyente con la evaluación automática**. Sin migración.
+
+**El interruptor maestro.** La hoja «Etapas de la IA» gana «Comportamiento del agente» (`flow_enabled`). Apagado, el motor determinista no ejecuta ninguna acción —ni bienvenida, ni etapas, ni conversación libre—; encendido, ejecuta exactamente las nueve etapas en orden y nada más.
+
+**La exclusión mutua.** Encender la evaluación automática apaga y bloquea el flujo: el backend deshabilita el interruptor maestro y las nueve etapas con asiento `agent_stages_flow_disabled`, y la hoja muestra el ciclo bloqueado. Encender el flujo con la evaluación automática activa se rechaza con motivo declarado.
+
+**Las compuertas.** `runConversationTurnInternal` y `dispatchWelcomeMessage` devuelven sin acción cuando el flujo está apagado, de modo que el agente nunca responde fuera del ciclo administrado.
+
+**Sin migración.** Reutiliza `integration_settings` y las tablas conversacionales vigentes.
 
 ### Alcance candidato 2.0.221
 El release **concentra la solicitud de CV en las etapas del agente y retira toda otra vía**. Sin migración.
@@ -952,4 +963,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.221.md](PRUEBAS_CAJA_NEGRA_2.0.221.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.222.md](PRUEBAS_CAJA_NEGRA_2.0.222.md).

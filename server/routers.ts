@@ -6525,6 +6525,7 @@ export const appRouter = router({
     save: adminProcedure
       .input(
         z.object({
+          flowEnabled: z.boolean(),
           enabled: z.record(z.enum(AGENT_STAGE_KEYS), z.boolean()),
           order: z.array(z.enum(AGENT_STAGE_KEYS)).length(AGENT_STAGE_KEYS.length),
           messages: z.object({
@@ -6539,12 +6540,28 @@ export const appRouter = router({
       )
       .mutation(async ({ input, ctx }) => {
         try {
+          // El comportamiento del agente y la evaluación automática son
+          // modos excluyentes: con el ciclo automático activo no puede
+          // encenderse el flujo de etapas.
+          if (input.flowEnabled) {
+            const automation = await getEvaluationAutomation(
+              await requirePool()
+            );
+            if (automation.state !== "apagado") {
+              throw new TRPCError({
+                code: "PRECONDITION_FAILED",
+                message:
+                  "La evaluación automática está activa: apáguela para encender el comportamiento del agente.",
+              });
+            }
+          }
           return await saveAgentStageConfiguration(
             await requirePool(),
             input,
             ctx.user.id
           );
         } catch (error) {
+          if (error instanceof TRPCError) throw error;
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: safeIntegrationMessage(

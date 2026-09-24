@@ -45,6 +45,32 @@ export default function AgentStages() {
     onError: error => toast.error(error.message),
   });
 
+  // La evaluación automática y el comportamiento del agente son modos
+  // excluyentes: con el ciclo automático activo, el flujo de etapas queda
+  // bloqueado y deshabilitado de forma automática.
+  const automationStatus = trpc.evaluationAutomation.status.useQuery(
+    undefined,
+    {
+      refetchInterval: 5_000,
+      refetchIntervalInBackground: false,
+      retry: false,
+    }
+  );
+  const flowBlocked =
+    (automationStatus.data?.state ?? "apagado") !== "apagado";
+
+  // Cuando la evaluación automática toma el control, el flujo queda apagado y
+  // las nueve etapas deshabilitadas en la interfaz.
+  useEffect(() => {
+    if (!flowBlocked) return;
+    setFlowEnabled(false);
+    setEnabled(current =>
+      Object.fromEntries(Object.keys(current).map(key => [key, false]))
+    );
+    configuration.refetch();
+  }, [flowBlocked, configuration]);
+
+  const [flowEnabled, setFlowEnabled] = useState(true);
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [order, setOrder] = useState<AgentStageKey[]>([]);
   const [messages, setMessages] = useState<Record<string, string>>({
@@ -60,6 +86,7 @@ export default function AgentStages() {
 
   useEffect(() => {
     if (loaded || !configuration.data) return;
+    setFlowEnabled(configuration.data.flowEnabled);
     setEnabled({ ...configuration.data.enabled });
     setOrder(
       configuration.data.order?.length
@@ -111,6 +138,7 @@ export default function AgentStages() {
 
   const submit = () => {
     save.mutate({
+      flowEnabled,
       enabled,
       order,
       messages: {
@@ -161,11 +189,11 @@ export default function AgentStages() {
 
         <Card className="rounded-3xl border-0 shadow-soft">
         <CardHeader>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <CalendarDays className="h-5 w-5" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <CardTitle className="text-xl text-primary">
                 Ciclo exacto del agente
               </CardTitle>
@@ -174,7 +202,51 @@ export default function AgentStages() {
                 gobierna su ejecución.
               </CardDescription>
             </div>
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className={
+                  flowBlocked
+                    ? "rounded-full border-slate-300 text-slate-700"
+                    : flowEnabled
+                      ? "rounded-full border-emerald-300 text-emerald-700"
+                      : "rounded-full"
+                }
+              >
+                {flowBlocked
+                  ? "Bloqueado"
+                  : flowEnabled
+                    ? "Comportamiento activo"
+                    : "Comportamiento apagado"}
+              </Badge>
+              <Switch
+                checked={flowEnabled && !flowBlocked}
+                disabled={flowBlocked || save.isPending}
+                onCheckedChange={value => setFlowEnabled(value)}
+                aria-label="Comportamiento del agente"
+              />
+            </div>
           </div>
+          {flowBlocked ? (
+            <p className="text-sm leading-6 text-muted-foreground">
+              La evaluación automática está activa: el flujo de etapas quedó
+              deshabilitado de forma automática y todas sus etapas están
+              bloqueadas. Apague la evaluación automática para devolver el
+              control al ciclo exacto del agente.
+            </p>
+          ) : !flowEnabled ? (
+            <p className="text-sm leading-6 text-muted-foreground">
+              El comportamiento del agente está apagado: no ejecuta ninguna
+              acción del ciclo —ni bienvenida, ni preguntas, ni solicitud de CV,
+              ni cierre—. Puede editar las etapas y los mensajes mientras tanto.
+            </p>
+          ) : (
+            <p className="text-sm leading-6 text-muted-foreground">
+              Encendido, el agente determinista ejecuta exactamente el paso 1,
+              luego el 2, el 3, el 4, el 5, el 6, el 7, el 8 y termina con el 9:
+              no puede hacer nada más que estas nueve etapas.
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           <ol className="space-y-0">
@@ -236,7 +308,8 @@ export default function AgentStages() {
                           {stage.enabled ? "Habilitada" : "Deshabilitada"}
                         </Badge>
                         <Switch
-                          checked={stage.enabled}
+                          checked={stage.enabled && !flowBlocked}
+                          disabled={flowBlocked}
                           onCheckedChange={value =>
                             setEnabled(current => ({
                               ...current,

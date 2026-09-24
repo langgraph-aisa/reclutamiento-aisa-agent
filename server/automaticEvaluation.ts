@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import { evaluateApplicationWithAgent } from "./agentEvaluator";
 import {
+  disableAgentFlowForAutomaticEvaluation,
   loadAutomaticEvaluationCvMessage,
 } from "./agentStages";
 import { requestCvForApplication } from "./cvRequest";
@@ -617,6 +618,12 @@ export async function confirmEvaluationAutomation(
     actorUserId: input.actorUserId,
     detail: { target, challengeId, confirmedByEmail: true },
   });
+  if (target === "encendido") {
+    // Modos excluyentes: encender la evaluación automática apaga y bloquea el
+    // comportamiento del agente —el flujo determinista de las nueve etapas—,
+    // de modo que el proceso quede dirigido por el ciclo de cola.
+    await disableAgentFlowForAutomaticEvaluation(pool, input.actorUserId);
+  }
   const counters = await evaluationAutomationCounters(pool);
   // El aviso del encendido es inmediato; el del apagado lo envía el barrido al
   // consumar la parada, porque hasta entonces el ciclo sigue trabajando.
