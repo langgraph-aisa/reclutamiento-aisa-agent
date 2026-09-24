@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.226");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.226");
+    expect(APP_VERSION).toBe("2.0.227");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.227");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -599,7 +599,7 @@ describe("black-box release contract", () => {
     // client/src/pages/AgentStages.tsx).
     // 2.0.225: +2 por la bitácora de la IA del agente (server/agentActivityLog.ts y
     // client/src/components/review/AgentAiLogPanel.tsx).
-    // 2.0.226: sin archivos nuevos: la celda desplegable de respuestas vive en
+    // 2.0.227: sin archivos nuevos: la celda desplegable de respuestas vive en
     // la matriz vigente (client/src/pages/Candidates.tsx).
     expect(audit.files).toHaveLength(160);
     expect(audit.findings).toEqual([]);
@@ -1303,7 +1303,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.226");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.227");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1313,17 +1313,17 @@ describe("black-box release contract", () => {
     // lugar y un techo propio.
     //
     // El techo del registro se elevó de 2600 a 3500 y después a 3600, 3700,
-    // 3800, 3900 y 4000: la entrega acumulada de resúmenes de commit ya no
-    // cabía y comprimir las entradas antiguas estaba borrando la trazabilidad
-    // que el registro existe para conservar. Un techo que obliga a destruir el
-    // registro no protege nada.
+    // 3800, 3900, 4000 y 4100: la entrega acumulada de resúmenes de commit ya
+    // no cabía y comprimir las entradas antiguas estaba borrando la
+    // trazabilidad que el registro existe para conservar. Un techo que obliga
+    // a destruir el registro no protege nada.
     expect(proseWordCount).toBeGreaterThanOrEqual(2_400);
     expect(proseWordCount).toBeLessThanOrEqual(2_900);
-    expect(historyWordCount).toBeLessThanOrEqual(4_000);
+    expect(historyWordCount).toBeLessThanOrEqual(4_100);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.226");
+    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.227");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1670,6 +1670,55 @@ describe("black-box release contract", () => {
     ]);
   });
 
+  it("declara el criterio de IA de cada etapa y lo aplica en la conversación del perfil", () => {
+    const stages = fs.readFileSync(
+      path.resolve("server/agentStages.ts"),
+      "utf8"
+    );
+    const sheet = fs.readFileSync(
+      path.resolve("client/src/pages/AgentStages.tsx"),
+      "utf8"
+    );
+    const engine = fs.readFileSync(
+      path.resolve("server/conversationEngine.ts"),
+      "utf8"
+    );
+    const routing = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+
+    // El catálogo declara una instrucción por etapa y la instrucción del paso 4
+    // desambigua el perfil y ejecuta la evaluación automática del candidato.
+    expect(stages).toContain("AGENT_STAGE_INSTRUCTION_KEYS");
+    expect(stages).toContain("DEFAULT_AGENT_STAGE_INSTRUCTIONS");
+    expect(stages).toContain("instruccion_retroalimentacion");
+    expect(stages).toContain(
+      "ejecute la evaluación automática del candidato"
+    );
+    expect(stages).toContain("«Evaluar con agente IA»");
+
+    // El criterio se persiste junto al ciclo administrado.
+    expect(stages).toContain("instructions: Record<AgentStageInstructionKey");
+    expect(routing).toContain("AGENT_STAGE_INSTRUCTION_KEYS");
+
+    // La hoja administra la cajilla de criterio y las acciones por etapa:
+    // editar, subir, bajar y borrar, además del arrastre y del guardado.
+    expect(sheet).toContain("Criterio IA");
+    expect(sheet).toContain("instructionKey");
+    expect(sheet).toContain("moveStageBy");
+    expect(sheet).toContain("removeStage");
+    expect(sheet).toContain("draggable");
+
+    // El motor inyecta el criterio de la etapa en las instrucciones del modelo
+    // y ejecuta la evaluación automática al terminar un turno de conversación
+    // libre, sin que un fallo del evaluador impida el turno.
+    expect(engine).toContain("stageInstruction");
+    expect(engine).toContain("CRITERIO DE LA ETAPA");
+    expect(engine).toContain(
+      "instructions.instruccion_retroalimentacion"
+    );
+    expect(engine).toContain("evaluateApplicationWithAgent");
+    expect(engine).toContain("evaluate");
+  });
+
   it("declara el ciclo automático de pruebas treinta segundos después del formulario", () => {
     const automation = fs.readFileSync(
       path.resolve("server/assessmentAutomation.ts"),
@@ -1792,7 +1841,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.226");
+    expect(governance).toContain("Alcance candidato 2.0.227");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2074,7 +2123,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.226");
+    expect(governance).toContain("Alcance candidato 2.0.227");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

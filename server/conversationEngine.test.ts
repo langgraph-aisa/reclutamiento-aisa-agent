@@ -125,4 +125,34 @@ describe("motor conversacional: contrato verificable", () => {
       "Mensaje más reciente de la persona: Hola"
     );
   });
+
+  it("incorpora el criterio de IA de la etapa cuando la hoja lo declara", () => {
+    const context = buildConversationContext(
+      baseSource,
+      new Date("2026-09-16")
+    );
+    const instructions = buildConversationInstructions(
+      baseSource,
+      context,
+      [],
+      "apertura",
+      "Evalúe el perfil laboral del candidato y desambigüe sus dudas."
+    );
+    expect(instructions).toContain("CRITERIO DE LA ETAPA");
+    expect(instructions).toContain("Evalúe el perfil laboral del candidato");
+  });
+
+  it("omite el criterio cuando la etapa no declara instrucción", () => {
+    const context = buildConversationContext(
+      baseSource,
+      new Date("2026-09-16")
+    );
+    const instructions = buildConversationInstructions(
+      baseSource,
+      context,
+      [],
+      "apertura"
+    );
+    expect(instructions).not.toContain("CRITERIO DE LA ETAPA");
+  });
 });

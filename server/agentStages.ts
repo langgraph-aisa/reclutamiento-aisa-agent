@@ -53,6 +53,26 @@ export const AGENT_STAGE_MESSAGE_KEYS = [
 
 export type AgentStageMessageKey = (typeof AGENT_STAGE_MESSAGE_KEYS)[number];
 
+/**
+ * Criterio de IA de cada etapa: la instrucción editable que orienta al modelo
+ * sobre lo que la etapa debe hacer. Vive bajo el proveedor `agent_stages` con
+ * su propia clave por etapa, junto a los mensajes deterministas.
+ */
+export const AGENT_STAGE_INSTRUCTION_KEYS = [
+  "instruccion_recepcion_formulario",
+  "instruccion_precalificacion",
+  "instruccion_entrevista",
+  "instruccion_retroalimentacion",
+  "instruccion_cierre",
+  "instruccion_solicitud_cv",
+  "instruccion_espera_cv",
+  "instruccion_expectativa_salarial",
+  "instruccion_aviso_contacto",
+] as const;
+
+export type AgentStageInstructionKey =
+  (typeof AGENT_STAGE_INSTRUCTION_KEYS)[number];
+
 export type AgentStageDefinition = {
   key: AgentStageKey;
   order: number;
@@ -60,6 +80,8 @@ export type AgentStageDefinition = {
   description: string;
   /** Plantillas deterministas que emite la etapa; vacío cuando no emite. */
   messageKeys: AgentStageMessageKey[];
+  /** Criterio de IA editable de la etapa, administrado en la misma hoja. */
+  instructionKey: AgentStageInstructionKey;
 };
 
 /**
@@ -78,6 +100,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     description:
       "Al enviar el formulario se localiza cuál se completó, se emite el mensaje de bienvenida y se ejecuta la evaluación automática para actualizar la ficha.",
     messageKeys: ["bienvenida_formulario"],
+    instructionKey: "instruccion_recepcion_formulario",
   },
   {
     key: "precalificacion",
@@ -86,6 +109,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     description:
       "Se verifica la precalificación activa de la plaza y se administran sus preguntas tal como están configuradas.",
     messageKeys: [],
+    instructionKey: "instruccion_precalificacion",
   },
   {
     key: "entrevista",
@@ -94,6 +118,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     description:
       "Si está habilitada, se verifica la entrevista activa de la plaza y se administran sus preguntas.",
     messageKeys: [],
+    instructionKey: "instruccion_entrevista",
   },
   {
     key: "retroalimentacion",
@@ -102,6 +127,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     description:
       "El motor de respuesta abierta conversa únicamente sobre la información del perfil laboral, sin excepción.",
     messageKeys: [],
+    instructionKey: "instruccion_retroalimentacion",
   },
   {
     key: "cierre",
@@ -110,6 +136,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     description:
       "La conversación del perfil concluye y el expediente pasa a la solicitud del currículum; la evaluación se vuelve a ejecutar con la conversación.",
     messageKeys: [],
+    instructionKey: "instruccion_cierre",
   },
   {
     key: "solicitud_cv",
@@ -118,6 +145,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     description:
       "Tras el cierre se emite el agradecimiento y la solicitud del currículum por el mismo medio, y el expediente queda en espera de la respuesta.",
     messageKeys: ["solicitud_cv"],
+    instructionKey: "instruccion_solicitud_cv",
   },
   {
     key: "espera_cv",
@@ -126,6 +154,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     description:
       "Al recibir el documento se confirma su recepción y se entrega de nuevo el aviso de contacto, sin saludar otra vez.",
     messageKeys: ["confirmacion_cv"],
+    instructionKey: "instruccion_espera_cv",
   },
   {
     key: "expectativa_salarial",
@@ -134,6 +163,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     description:
       "Se pregunta la expectativa, se normaliza en quetzales y se avisa de forma breve que quedó registrada; no se hace nada más.",
     messageKeys: ["pregunta_salario", "confirmacion_salario"],
+    instructionKey: "instruccion_expectativa_salarial",
   },
   {
     key: "aviso_contacto",
@@ -142,6 +172,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     description:
       "Se declara que el contacto de las etapas siguientes ocurre por este mismo medio y el ciclo queda concluido.",
     messageKeys: ["aviso_contacto"],
+    instructionKey: "instruccion_aviso_contacto",
   },
 ];
 
@@ -195,6 +226,35 @@ export const DEFAULT_AGENT_STAGE_MESSAGES: Record<
 };
 
 /**
+ * Criterios de IA de fábrica de cada etapa. El del paso 4 «Conversación del
+ * perfil» orienta el desempate de dudas y la evaluación automática del
+ * candidato, que este nodo ejecuta al reunir la información.
+ */
+export const DEFAULT_AGENT_STAGE_INSTRUCTIONS: Record<
+  AgentStageInstructionKey,
+  string
+> = {
+  instruccion_recepcion_formulario:
+    "Localice el formulario completado, emita el mensaje de bienvenida con las variables declaradas y ejecute la evaluación automática para actualizar la ficha del candidato.",
+  instruccion_precalificacion:
+    "Administre las preguntas de precalificación de la plaza tal como están configuradas, en su orden y sin improvisar ni añadir preguntas. Aplique el descarte declarado de cada pregunta.",
+  instruccion_entrevista:
+    "Administre las preguntas de entrevista guiada de la plaza tal como están configuradas, en su orden y sin improvisar ni añadir preguntas. Aplique el descarte declarado de cada pregunta.",
+  instruccion_retroalimentacion:
+    "Evalúe el perfil laboral del candidato con la información del formulario y de la conversación. Cuando exista duda o ambigüedad sobre un dato del perfil laboral, formule una sola pregunta que la desambigüe. Al reunir la información necesaria, ejecute la evaluación automática del candidato para actualizar su ficha, como si el operador hubiera pulsado «Evaluar con agente IA».",
+  instruccion_cierre:
+    "Concluya la conversación del perfil, pase el expediente a la solicitud del currículum y vuelva a ejecutar la evaluación con la conversación.",
+  instruccion_solicitud_cv:
+    "Emita el agradecimiento y la solicitud del currículum por este mismo medio; el expediente queda en espera de la respuesta.",
+  instruccion_espera_cv:
+    "Al recibir el documento, confirme su recepción y entregue de nuevo el aviso de contacto, sin saludar otra vez.",
+  instruccion_expectativa_salarial:
+    "Pregunte la expectativa de remuneración, normalícela en quetzales y avise de forma breve que quedó registrada; no haga nada más.",
+  instruccion_aviso_contacto:
+    "Declare que el contacto de las etapas siguientes ocurre por este mismo medio y concluya el ciclo.",
+};
+
+/**
  * Plantilla de solicitud de CV del ciclo de evaluación automática, para las
  * postulaciones en cola. Vive bajo el proveedor `agent_stages` con su propia
  * clave —no es un mensaje de etapa—, de modo que la cola conserva su texto
@@ -211,6 +271,8 @@ export type AgentStageConfiguration = {
   enabled: Record<AgentStageKey, boolean>;
   order: AgentStageKey[];
   messages: Record<AgentStageMessageKey, string>;
+  /** Criterio de IA editable de cada etapa. */
+  instructions: Record<AgentStageInstructionKey, string>;
 };
 
 export type AgentStagesView = AgentStageConfiguration & {
@@ -226,6 +288,10 @@ function stageKeys() {
 
 function messageKeys() {
   return [...AGENT_STAGE_MESSAGE_KEYS];
+}
+
+function instructionKeys() {
+  return [...AGENT_STAGE_INSTRUCTION_KEYS];
 }
 
 /**
@@ -336,6 +402,7 @@ export function buildAgentStagesView(
     enabled: configuration.enabled,
     order,
     messages: configuration.messages,
+    instructions: configuration.instructions,
     stages: order.map((key, index) => ({
       ...(byKey.get(key) as AgentStageDefinition),
       order: index + 1,
@@ -346,6 +413,7 @@ export function buildAgentStagesView(
       enabled: { ...DEFAULT_AGENT_STAGE_ENABLED },
       order: [...DEFAULT_AGENT_STAGE_ORDER],
       messages: { ...DEFAULT_AGENT_STAGE_MESSAGES },
+      instructions: { ...DEFAULT_AGENT_STAGE_INSTRUCTIONS },
     },
   };
 }
@@ -359,6 +427,7 @@ export async function loadAgentStageConfiguration(
     enabled: { ...DEFAULT_AGENT_STAGE_ENABLED },
     order: [...DEFAULT_AGENT_STAGE_ORDER],
     messages: { ...DEFAULT_AGENT_STAGE_MESSAGES },
+    instructions: { ...DEFAULT_AGENT_STAGE_INSTRUCTIONS },
   };
   if (!pool) return configuration;
   const result = await pool.query<{
@@ -369,7 +438,13 @@ export async function loadAgentStageConfiguration(
       WHERE provider=$1 AND setting_key = ANY($2)`,
     [
       AGENT_STAGES_PROVIDER,
-      [AGENT_STAGE_FLOW_KEY, "enabled", "order", ...messageKeys()],
+      [
+        AGENT_STAGE_FLOW_KEY,
+        "enabled",
+        "order",
+        ...messageKeys(),
+        ...instructionKeys(),
+      ],
     ]
   );
   for (const row of result.rows) {
@@ -385,6 +460,14 @@ export async function loadAgentStageConfiguration(
       configuration.order = stageOrderFromValue(row.setting_value);
       continue;
     }
+    if (instructionKeys().includes(row.setting_key as AgentStageInstructionKey)) {
+      const value = String(row.setting_value ?? "").trim();
+      if (value) {
+        configuration.instructions[row.setting_key as AgentStageInstructionKey] =
+          value;
+      }
+      continue;
+    }
     const key = row.setting_key as AgentStageMessageKey;
     const value = String(row.setting_value ?? "").trim();
     if (value) configuration.messages[key] = value;
@@ -397,6 +480,7 @@ export type SaveAgentStageInput = {
   enabled: Record<AgentStageKey, boolean>;
   order: AgentStageKey[];
   messages: Record<AgentStageMessageKey, string>;
+  instructions: Record<AgentStageInstructionKey, string>;
 };
 
 /** Persiste el ciclo administrado y deja el acto asentado en la auditoría. */
@@ -429,6 +513,14 @@ export async function saveAgentStageConfiguration(
         ? input.messages.aviso_contacto.trim()
         : DEFAULT_AGENT_STAGE_MESSAGES.aviso_contacto,
     },
+    instructions: Object.fromEntries(
+      instructionKeys().map(key => [
+        key,
+        input.instructions?.[key]?.trim()
+          ? input.instructions[key].trim()
+          : DEFAULT_AGENT_STAGE_INSTRUCTIONS[key],
+      ])
+    ) as Record<AgentStageInstructionKey, string>,
   };
   await pool.query("BEGIN");
   try {
@@ -460,6 +552,14 @@ export async function saveAgentStageConfiguration(
          VALUES ($1,$2,$3,false,now())
          ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=now()`,
         [AGENT_STAGES_PROVIDER, key, configuration.messages[key]]
+      );
+    }
+    for (const key of instructionKeys()) {
+      await pool.query(
+        `INSERT INTO integration_settings (provider,setting_key,setting_value,is_secret,updated_at)
+         VALUES ($1,$2,$3,false,now())
+         ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=now()`,
+        [AGENT_STAGES_PROVIDER, key, configuration.instructions[key]]
       );
     }
     await pool.query(

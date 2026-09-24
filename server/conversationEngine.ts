@@ -60,6 +60,7 @@ import {
   recordAgentLogVerdicts,
 } from "./agentActivityLog";
 import { requestCvForApplication } from "./cvRequest";
+import { evaluateApplicationWithAgent } from "./agentEvaluator";
 
 /**
  * Motor de razonamiento conversacional JARVI RH.
@@ -167,7 +168,8 @@ export function buildConversationInstructions(
   source: ConversationContextSource,
   context: BuiltConversationContext,
   gaps: ConversationGap[],
-  stage: ConversationStage
+  stage: ConversationStage,
+  stageInstruction?: string
 ) {
   const pending = gaps.length
     ? gaps
@@ -186,7 +188,9 @@ IDENTIDAD DEL AGENTE
 - Cuenta responsable declarada: ${JARVI_HR_IDENTITY_EMAIL}.
 - Etapa actual de la conversación: ${stage}.
 
-REGLAS DE SALIDA
+${stageInstruction ? `CRITERIO DE LA ETAPA
+${stageInstruction}
+` : ""}REGLAS DE SALIDA
 - La respuesta se destina a la persona por WhatsApp y debe ser breve y natural.
 - Cierre siempre con una única pregunta abierta sobre un solo tema pendiente.
 - Nunca formule dos preguntas en el mismo mensaje.
@@ -601,6 +605,8 @@ async function runConversationTurnInternal(
     dependencies?: {
       generator?: ConversationGenerator;
       settings?: typeof getAgentRuntimeSettings;
+      /** Ejecuta la evaluación automática del candidato (paso 4). */
+      evaluate?: (applicationId: number) => Promise<unknown>;
     };
     now?: Date;
   }
@@ -894,7 +900,8 @@ async function runConversationTurnInternal(
         source,
         context,
         gaps,
-        stage
+        stage,
+        stagesConfig.instructions.instruccion_retroalimentacion
       );
       const userInput = buildConversationUserInput(
         source,
@@ -1048,6 +1055,24 @@ async function runConversationTurnInternal(
               WHERE id=$1`,
             [state.id, stage]
           );
+          // La etapa «Conversación del perfil» ejecuta la evaluación
+          // automática del candidato al reunir la información: el mismo acto
+          // del botón «Evaluar con agente IA», de modo que la ficha quede
+          // actualizada sin intervención del operador. Un fallo del evaluador
+          // no impide el turno conversacional.
+          try {
+            const runEvaluation =
+              input.dependencies?.evaluate ??
+              ((applicationId: number) =>
+                evaluateApplicationWithAgent(pool, applicationId));
+            await runEvaluation(Number(state.application_id));
+          } catch (error) {
+            console.warn(
+              `[ConversationEngine] La evaluación automática del paso 4 no pudo ejecutarse para la postulación ${state.application_id} (${
+                error instanceof Error ? error.name : "unknown"
+              }).`
+            );
+          }
           observation.update({
             output: {
               status: "sent",

@@ -4,6 +4,7 @@ import {
   AGENT_STAGE_FLOW_KEY,
   AGENT_STAGES_PROVIDER,
   DEFAULT_AGENT_STAGE_ENABLED,
+  DEFAULT_AGENT_STAGE_INSTRUCTIONS,
   DEFAULT_AGENT_STAGE_MESSAGES,
   DEFAULT_AGENT_STAGE_ORDER,
   buildAgentStagesView,
@@ -97,14 +98,35 @@ describe("etapas administrables del agente", () => {
 
   it("compone la vista con el catálogo y los valores efectivos", () => {
     const view = buildAgentStagesView({
+      flowEnabled: true,
       enabled: { ...DEFAULT_AGENT_STAGE_ENABLED, cierre: false },
       order: [...DEFAULT_AGENT_STAGE_ORDER],
       messages: { ...DEFAULT_AGENT_STAGE_MESSAGES },
+      instructions: { ...DEFAULT_AGENT_STAGE_INSTRUCTIONS },
     });
     expect(view.stages).toHaveLength(9);
     const cierre = view.stages.find(stage => stage.key === "cierre");
     expect(cierre?.enabled).toBe(false);
     expect(view.defaults.enabled.cierre).toBe(true);
+  });
+
+  it("declara el criterio de IA de cada etapa con su clave propia", () => {
+    expect(
+      AGENT_STAGES.every(stage =>
+        stage.instructionKey.startsWith("instruccion_")
+      )
+    ).toBe(true);
+    expect(AGENT_STAGES.length).toBe(
+      Object.keys(DEFAULT_AGENT_STAGE_INSTRUCTIONS).length
+    );
+  });
+
+  it("el criterio del paso 4 desambigua el perfil y ejecuta la evaluación automática", () => {
+    const instruccion =
+      DEFAULT_AGENT_STAGE_INSTRUCTIONS.instruccion_retroalimentacion;
+    expect(instruccion).toContain("desambigüe");
+    expect(instruccion).toContain("evaluación automática");
+    expect(instruccion).toContain("Evaluar con agente IA");
   });
 
   it("asocia el mensaje de bienvenida al paso de recepción del formulario", () => {
@@ -157,9 +179,11 @@ describe("etapas administrables del agente", () => {
   it("compone la vista en el orden administrado", () => {
     const reordered = [...DEFAULT_AGENT_STAGE_ORDER].reverse();
     const view = buildAgentStagesView({
+      flowEnabled: true,
       enabled: { ...DEFAULT_AGENT_STAGE_ENABLED },
       order: reordered,
       messages: { ...DEFAULT_AGENT_STAGE_MESSAGES },
+      instructions: { ...DEFAULT_AGENT_STAGE_INSTRUCTIONS },
     });
     expect(view.stages.map(stage => stage.key)).toEqual(reordered);
     expect(view.stages[0].order).toBe(1);

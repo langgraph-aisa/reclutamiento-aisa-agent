@@ -190,16 +190,20 @@ describe.runIf(enabled)(
           model: "test-model",
           secrets: { openai_api_key: "test-only", openai_api_key_backup: "" },
         }) as never;
+      // El paso 4 ejecuta la evaluación automática tras el turno libre; la
+      // prueba la sustituye para no invocar el evaluador real.
+      const evaluate = vi.fn(async () => undefined);
       const outcomes = await Promise.all(
         [1, 2].map(() =>
           runConversationTurn(database.pool, {
             conversationId,
-            dependencies: { generator, settings },
+            dependencies: { generator, settings, evaluate },
           })
         )
       );
       expect(outcomes.filter(value => value.status === "sent")).toHaveLength(1);
       expect(generator).toHaveBeenCalledOnce();
+      expect(evaluate).toHaveBeenCalledOnce();
       expect(
         (
           await database.pool.query(

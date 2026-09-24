@@ -63,6 +63,7 @@ import {
 } from "./cvAnalysis";
 import { loadCvAnalysisConfiguration } from "./cvAnalysis";
 import {
+  AGENT_STAGE_INSTRUCTION_KEYS,
   AGENT_STAGE_KEYS,
   buildAgentStagesView,
   loadAgentStageConfiguration,
@@ -6536,6 +6537,10 @@ export const appRouter = router({
             confirmacion_salario: z.string().trim().max(1_000),
             aviso_contacto: z.string().trim().max(1_000),
           }),
+          instructions: z.record(
+            z.enum(AGENT_STAGE_INSTRUCTION_KEYS),
+            z.string().trim().max(2_000)
+          ),
         })
       )
       .mutation(async ({ input, ctx }) => {

@@ -308,3 +308,11 @@ Los hallazgos H-04 a H-07 y H-09 conservan su vigencia y sus acciones correctiva
 La entrega **2.0.225** corrige la causa residual que detenía el ciclo en el paso 2: la identidad del mensaje de cada pregunta del banco no incluía la fase, de modo que la primera pregunta de la entrevista (`screening_item:<run>:0`) colisionaba con la primera de la precalificación (`screening_item:<run>:0`). El motor creía formulada una pregunta que nunca emitió —o la evaluaba contra una respuesta ajena a la pregunta—, la entrevista guiada jamás arrancaba y la persona esperaba el paso 3 indefinidamente.
 
 `server/screeningEngine.ts` califica ahora las claves por fase —`screening_item:<run>:<fase>:<índice>`— tanto para la pregunta como para el recordatorio; la clave legada se conserva únicamente para reconocer preguntas de precalificación ya formuladas en conversaciones en curso, de modo que una serie atascada en la entrevista se destraba y formula la pregunta pendiente. La fuente de conversación del agente queda verificada: bienvenida (paso 1), preguntas del banco (pasos 2 y 3), motor determinista (pasos 4 a 9) y los avisos gobernados del descarte y de la evaluación automática en modo excluyente.
+
+---
+
+## 12. Addendum · Criterio de IA por etapa y evaluación automática en el paso 4 · JARVI RH 2.0.227
+
+La entrega **2.0.227** completa el gobierno del paso 4: cada etapa del ciclo declara su **criterio de IA editable** (`AGENT_STAGE_INSTRUCTION_KEYS`, persistido bajo `agent_stages`), y la hoja «Etapas de la IA» lo administra con la cajilla «Criterio IA», el lápiz para editar, las flechas para mover la etapa, el borrado —que deshabilita el paso conservando las nueve etapas institucionales— y el arrastre, todo asentado al guardar.
+
+El criterio del paso 4 queda guardado de forma definitiva: el modelo debe **evaluar el perfil laboral** del candidato con el formulario y la conversación, formular una sola pregunta que **desambigüe** cualquier duda del perfil y, al reunir la información, **ejecutar la evaluación automática** —el mismo acto del botón «Evaluar con agente IA»—. El motor inyecta la sección «CRITERIO DE LA ETAPA» en las instrucciones del modelo y ejecuta la evaluación al terminar cada turno de conversación libre, sin que un fallo del evaluador detenga el ciclo.

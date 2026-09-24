@@ -12,8 +12,16 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { CalendarDays, GripVertical, Save } from "lucide-react";
-import { type DragEvent, useEffect, useState } from "react";
+import {
+  ArrowDown,
+  ArrowUp,
+  CalendarDays,
+  GripVertical,
+  Pencil,
+  Save,
+  Trash2,
+} from "lucide-react";
+import { type DragEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { AgentStageKey } from "../../../server/agentStages";
 
@@ -23,6 +31,7 @@ type StageView = {
   name: string;
   description: string;
   messageKeys: string[];
+  instructionKey: string;
   enabled: boolean;
 };
 
@@ -81,8 +90,11 @@ export default function AgentStages() {
     confirmacion_salario: "",
     aviso_contacto: "",
   });
+  const [instructions, setInstructions] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
   const [draggingKey, setDraggingKey] = useState<AgentStageKey | null>(null);
+  const [editingKey, setEditingKey] = useState<AgentStageKey | null>(null);
+  const instructionRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   useEffect(() => {
     if (loaded || !configuration.data) return;
@@ -102,6 +114,7 @@ export default function AgentStages() {
       confirmacion_salario: configuration.data.messages.confirmacion_salario,
       aviso_contacto: configuration.data.messages.aviso_contacto,
     });
+    setInstructions({ ...configuration.data.instructions });
     setLoaded(true);
   }, [configuration.data, loaded]);
 
@@ -116,6 +129,27 @@ export default function AgentStages() {
       next.splice(to, 0, sourceKey);
       return next;
     });
+  };
+
+  const moveStageBy = (key: AgentStageKey, offset: number) => {
+    setOrder(current => {
+      const next = [...current];
+      const from = next.indexOf(key);
+      const to = from + offset;
+      if (from < 0 || to < 0 || to >= next.length) return current;
+      const [stage] = next.splice(from, 1);
+      next.splice(to, 0, stage!);
+      return next;
+    });
+  };
+
+  // «Borrar» una etapa la deshabilita: el ciclo institucional conserva sus
+  // nueve etapas y el motor las omite con su motivo declarado.
+  const removeStage = (key: AgentStageKey) => {
+    setEnabled(current => ({ ...current, [key]: false }));
+    toast.info(
+      "La etapa quedó deshabilitada: el ciclo conserva las nueve etapas institucionales y la omite con su motivo."
+    );
   };
 
   const handleDragStart =
@@ -149,6 +183,7 @@ export default function AgentStages() {
         confirmacion_salario: messages.confirmacion_salario,
         aviso_contacto: messages.aviso_contacto,
       },
+      instructions,
     });
   };
 
@@ -183,7 +218,8 @@ export default function AgentStages() {
           <p className="mt-2 max-w-2xl text-muted-foreground">
             El ciclo completo del agente conversacional, en su orden de
             ejecución. Arrastre una etapa para reordenarla, active o apague cada
-            etapa y ajuste los mensajes que emite de forma directa.
+            etapa, ajuste los mensajes que emite de forma directa y escriba el
+            criterio de IA que orienta al modelo en cada paso.
           </p>
         </div>
 
@@ -296,29 +332,108 @@ export default function AgentStages() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className={
-                            stage.enabled
-                              ? "rounded-full border-emerald-300 text-emerald-700"
-                              : "rounded-full"
-                          }
-                        >
-                          {stage.enabled ? "Habilitada" : "Deshabilitada"}
-                        </Badge>
-                        <Switch
-                          checked={stage.enabled && !flowBlocked}
-                          disabled={flowBlocked}
-                          onCheckedChange={value =>
-                            setEnabled(current => ({
-                              ...current,
-                              [stage.key]: value,
-                            }))
-                          }
-                          aria-label={`Alternar la etapa ${stage.name}`}
-                        />
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className={
+                              stage.enabled
+                                ? "rounded-full border-emerald-300 text-emerald-700"
+                                : "rounded-full"
+                            }
+                          >
+                            {stage.enabled ? "Habilitada" : "Deshabilitada"}
+                          </Badge>
+                          <Switch
+                            checked={stage.enabled && !flowBlocked}
+                            disabled={flowBlocked}
+                            onCheckedChange={value =>
+                              setEnabled(current => ({
+                                ...current,
+                                [stage.key]: value,
+                              }))
+                            }
+                            aria-label={`Alternar la etapa ${stage.name}`}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-full"
+                            disabled={index === 0}
+                            onClick={() => moveStageBy(stage.key, -1)}
+                            aria-label={`Subir la etapa ${stage.name}`}
+                            title="Subir de posición"
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-full"
+                            disabled={index === ordered.length - 1}
+                            onClick={() => moveStageBy(stage.key, 1)}
+                            aria-label={`Bajar la etapa ${stage.name}`}
+                            title="Bajar de posición"
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant={
+                              editingKey === stage.key ? "secondary" : "ghost"
+                            }
+                            size="icon"
+                            className="h-8 w-8 rounded-full"
+                            onClick={() => {
+                              setEditingKey(current =>
+                                current === stage.key ? null : stage.key
+                              );
+                              requestAnimationFrame(() =>
+                                instructionRefs.current[stage.key]?.focus()
+                              );
+                            }}
+                            aria-label={`Editar el criterio IA de ${stage.name}`}
+                            title="Editar el criterio de IA"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-full text-red-500 hover:text-red-600"
+                            onClick={() => removeStage(stage.key)}
+                            aria-label={`Deshabilitar la etapa ${stage.name}`}
+                            title="Borrar el paso (queda deshabilitado)"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
+                    </div>
+                    <div className="space-y-1.5 border-t border-border/60 pt-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-sm font-semibold text-primary">
+                          Criterio IA
+                        </Label>
+                        <span className="text-xs text-muted-foreground">
+                          Instrucción exacta que orienta al modelo en este paso.
+                        </span>
+                      </div>
+                      <Textarea
+                        ref={node => {
+                          instructionRefs.current[stage.key] = node;
+                        }}
+                        value={instructions[stage.instructionKey] ?? ""}
+                        onChange={event =>
+                          setInstructions(current => ({
+                            ...current,
+                            [stage.instructionKey]: event.target.value,
+                          }))
+                        }
+                        rows={editingKey === stage.key ? 7 : 3}
+                        className="rounded-xl"
+                      />
                     </div>
                     {stage.messageKeys.length > 0 && (
                       <div className="space-y-3 border-t border-border/60 pt-3">

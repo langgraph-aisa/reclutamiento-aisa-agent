@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.226
+# Gobierno de release JARVI RH 2.0.227
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.226**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.227**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.227
+El release **da a cada etapa su criterio de IA editable y ejecuta la evaluación automática desde el paso 4**. Sin migración.
+
+**La cajilla «Criterio IA».** El catálogo declara una instrucción por etapa —`AGENT_STAGE_INSTRUCTION_KEYS`— con sus valores de fábrica en `DEFAULT_AGENT_STAGE_INSTRUCTIONS`; se persisten bajo el proveedor `agent_stages` y la hoja «Etapas de la IA» las administra con la cajilla por paso, el lápiz para editar, las flechas para mover la etapa, el borrado —que deshabilita el paso y conserva las nueve etapas institucionales— y el arrastre, todo asentado al guardar.
+
+**El paso 4.** El criterio del paso 4 orienta al modelo a evaluar el perfil laboral con el formulario y la conversación, a formular una sola pregunta que desambigüe las dudas del perfil y, al reunir la información, a ejecutar la evaluación automática del candidato: el mismo acto del botón «Evaluar con agente IA». El motor inyecta el criterio de la etapa en las instrucciones del modelo —sección «CRITERIO DE LA ETAPA»— y, al terminar cada turno de conversación libre, ejecuta la evaluación sin que un fallo del evaluador impida el turno.
+
+**Sin migración.** Reutiliza `integration_settings` y las tablas conversacionales vigentes.
 
 ### Alcance candidato 2.0.226
 El release **fija la altura de las respuestas del banco de preguntas en la matriz de candidatos y las hace desplegables en su lugar**. Sin migración.
@@ -1001,4 +1010,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.226.md](PRUEBAS_CAJA_NEGRA_2.0.226.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.227.md](PRUEBAS_CAJA_NEGRA_2.0.227.md).
