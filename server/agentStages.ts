@@ -9,12 +9,12 @@ import type { Pool } from "pg";
  * el cliente: se sirve por el procedimiento autenticado y el paquete del
  * navegador no conserva descripciones metodológicas.
  *
- * Tres cosas viven bajo el proveedor `agent_stages` en `integration_settings`:
+ * Bajo el proveedor `agent_stages` en `integration_settings` viven:
  *  - `enabled`: documento JSON con el interruptor de cada etapa.
  *  - `order`: documento JSON con la secuencia administrada de las etapas.
- *  - `confirmacion_cv`, `pregunta_salario`, `confirmacion_salario`: plantillas
- *    de los mensajes deterministas que emite el motor fuera de la conversación
- *    libre.
+ *  - `bienvenida_formulario`, `confirmacion_cv`, `pregunta_salario`,
+ *    `confirmacion_salario`: plantillas de los mensajes deterministas que
+ *    emite el motor fuera de la conversación libre.
  */
 
 export const AGENT_STAGES_PROVIDER = "agent_stages";
@@ -33,6 +33,7 @@ export const AGENT_STAGE_KEYS = [
 export type AgentStageKey = (typeof AGENT_STAGE_KEYS)[number];
 
 export const AGENT_STAGE_MESSAGE_KEYS = [
+  "bienvenida_formulario",
   "confirmacion_cv",
   "pregunta_salario",
   "confirmacion_salario",
@@ -63,8 +64,8 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     order: 1,
     name: "Recepción del formulario",
     description:
-      "Al enviar el formulario se localiza cuál se completó, se emite el mensaje de evaluación y se ejecuta la evaluación automática para actualizar la ficha.",
-    messageKeys: [],
+      "Al enviar el formulario se localiza cuál se completó, se emite el mensaje de bienvenida y se ejecuta la evaluación automática para actualizar la ficha.",
+    messageKeys: ["bienvenida_formulario"],
   },
   {
     key: "precalificacion",
@@ -156,6 +157,8 @@ export const DEFAULT_AGENT_STAGE_MESSAGES: Record<
   AgentStageMessageKey,
   string
 > = {
+  bienvenida_formulario:
+    "¡Hola {{nombre}}, soy el asistente de evaluación de AISA! Le daré seguimiento a su solicitud para la plaza “{{plaza}}” con algunas preguntas. Responda con sus propias palabras; le tomará menos de 5 minutos. ¡Empecemos!",
   confirmacion_cv:
     "{{nombre}}, confirmamos la recepción de su documento; queda registrado en su expediente y pendiente de verificación.",
   pregunta_salario:
@@ -346,6 +349,9 @@ export async function saveAgentStageConfiguration(
     enabled: stageEnabledFromValue(serializeStageEnabled(input.enabled)),
     order: stageOrderFromValue(serializeStageOrder(input.order)),
     messages: {
+      bienvenida_formulario: input.messages.bienvenida_formulario.trim()
+        ? input.messages.bienvenida_formulario.trim()
+        : DEFAULT_AGENT_STAGE_MESSAGES.bienvenida_formulario,
       confirmacion_cv: input.messages.confirmacion_cv.trim()
         ? input.messages.confirmacion_cv.trim()
         : DEFAULT_AGENT_STAGE_MESSAGES.confirmacion_cv,

@@ -71,6 +71,19 @@ describe("etapas administrables del agente", () => {
     expect(view.defaults.enabled.cierre).toBe(true);
   });
 
+  it("asocia el mensaje de bienvenida al paso de recepción del formulario", () => {
+    const recepcion = AGENT_STAGES.find(
+      stage => stage.key === "recepcion_formulario"
+    );
+    expect(recepcion?.messageKeys).toEqual(["bienvenida_formulario"]);
+    expect(DEFAULT_AGENT_STAGE_MESSAGES.bienvenida_formulario).toContain(
+      "{{nombre}}"
+    );
+    expect(DEFAULT_AGENT_STAGE_MESSAGES.bienvenida_formulario).toContain(
+      "{{plaza}}"
+    );
+  });
+
   it("normaliza y serializa la secuencia de etapas", () => {
     expect(stageOrderFromValue(null)).toEqual(DEFAULT_AGENT_STAGE_ORDER);
     expect(stageOrderFromValue("no-es-json")).toEqual(

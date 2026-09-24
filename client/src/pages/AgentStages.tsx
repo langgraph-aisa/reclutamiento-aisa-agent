@@ -26,6 +26,7 @@ type StageView = {
 };
 
 const MESSAGE_LABELS: Record<string, string> = {
+  bienvenida_formulario: "Mensaje de bienvenida",
   confirmacion_cv: "Mensaje de confirmación de recepción",
   pregunta_salario: "Pregunta de expectativa salarial",
   confirmacion_salario: "Confirmación del registro",
@@ -44,6 +45,7 @@ export default function AgentStages() {
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
   const [order, setOrder] = useState<AgentStageKey[]>([]);
   const [messages, setMessages] = useState<Record<string, string>>({
+    bienvenida_formulario: "",
     confirmacion_cv: "",
     pregunta_salario: "",
     confirmacion_salario: "",
@@ -60,6 +62,8 @@ export default function AgentStages() {
         : (configuration.data.stages as StageView[]).map(stage => stage.key)
     );
     setMessages({
+      bienvenida_formulario:
+        configuration.data.messages.bienvenida_formulario,
       confirmacion_cv: configuration.data.messages.confirmacion_cv,
       pregunta_salario: configuration.data.messages.pregunta_salario,
       confirmacion_salario: configuration.data.messages.confirmacion_salario,
@@ -103,6 +107,7 @@ export default function AgentStages() {
       enabled,
       order,
       messages: {
+        bienvenida_formulario: messages.bienvenida_formulario,
         confirmacion_cv: messages.confirmacion_cv,
         pregunta_salario: messages.pregunta_salario,
         confirmacion_salario: messages.confirmacion_salario,

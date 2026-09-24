@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { ensureCvRequestMessage, requestCvForApplication } from "./cvRequest";
+import {
+  dispatchWelcomeMessage,
+  ensureCvRequestMessage,
+  requestCvForApplication,
+  welcomeMessageKey,
+} from "./cvRequest";
 
 const application = {
   id: 17,
@@ -89,5 +94,86 @@ describe("solicitud automática de CV", () => {
       )
     ).toBe(true);
     expect(result).toEqual({ status: "in_progress" });
+  });
+});
+
+describe("bienvenida del paso de recepción", () => {
+  it("abre la conversación con la plantilla editable una sola vez", async () => {
+    const query = vi.fn(async (sql: string) => {
+      const text = String(sql);
+      if (text.includes("FROM integration_settings")) return { rows: [] };
+      if (text.includes("FROM conversations WHERE application_id"))
+        return { rows: [{ id: 9 }] };
+      if (text.includes("JOIN candidates c ON c.id=a.candidate_id"))
+        return {
+          rows: [
+            {
+              full_name: "Persona de prueba",
+              position_title: "Ejecutivo comercial",
+            },
+          ],
+        };
+      if (text.includes("INSERT INTO conversation_messages"))
+        return { rows: [{ id: 31, delivery_status: "pending" }] };
+      if (
+        text.includes("UPDATE conversation_messages") &&
+        text.includes("RETURNING cm.id")
+      )
+        return { rows: [] };
+      if (
+        text.includes("SELECT delivery_status,last_error FROM conversation_messages")
+      )
+        return { rows: [{ delivery_status: "pending", last_error: null }] };
+      return { rows: [] };
+    });
+    const client = { query, release: vi.fn() };
+    const pool = { query, connect: vi.fn().mockResolvedValue(client) };
+
+    const result = await dispatchWelcomeMessage(pool as never, 17);
+
+    const insertCall = query.mock.calls.find(call =>
+      String(call[0]).includes("INSERT INTO conversation_messages")
+    );
+    expect(insertCall).toBeDefined();
+    // La bienvenida usa su propia clave de idempotencia y sustituye las
+    // variables de la plantilla del paso 1.
+    expect(insertCall?.[1]).toEqual([
+      9,
+      expect.stringContaining("Persona de prueba"),
+      welcomeMessageKey(17),
+    ]);
+    expect(String(insertCall?.[1]?.[1])).toContain("Ejecutivo comercial");
+    expect(result).toEqual({ status: "in_progress" });
+  });
+
+  it("no emite bienvenida cuando el paso de recepción está desactivado", async () => {
+    const query = vi.fn(async (sql: string) => {
+      const text = String(sql);
+      if (text.includes("FROM integration_settings"))
+        return {
+          rows: [
+            {
+              setting_key: "enabled",
+              setting_value: JSON.stringify({
+                recepcion_formulario: false,
+              }),
+            },
+          ],
+        };
+      if (text.includes("FROM conversations WHERE application_id"))
+        return { rows: [{ id: 9 }] };
+      return { rows: [] };
+    });
+    const client = { query, release: vi.fn() };
+    const pool = { query, connect: vi.fn().mockResolvedValue(client) };
+
+    const result = await dispatchWelcomeMessage(pool as never, 17);
+
+    expect(result).toBeNull();
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("INSERT INTO conversation_messages")
+      )
+    ).toBe(false);
   });
 });

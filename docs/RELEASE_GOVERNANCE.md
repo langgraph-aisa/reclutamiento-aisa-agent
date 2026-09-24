@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.219
+# Gobierno de release JARVI RH 2.0.220
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.219**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.220**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.220
+El release **mueve el mensaje de bienvenida del formulario al paso «Recepción del formulario» de la hoja «Etapas de la IA»**. Sin migración.
+
+**El cambio.** La caja «Mensaje base» vivía en Configuración, bajo «Evaluación de CV con IA», y se guardaba como `whatsapp_message` global. Ahora la plantilla editable es un mensaje determinista del ciclo —`bienvenida_formulario`, bajo el proveedor `agent_stages`— asociado al paso 1, y la caja desaparece de Configuración.
+
+**La emisión.** `dispatchWelcomeMessage` garantiza la conversación en la recepción y la abre con la plantilla del paso 1, una sola vez por postulación; respeta el interruptor del paso y sustituye `{{nombre}}` y `{{plaza}}`. La solicitud del currículum conserva su propio mensaje —la plaza lo personaliza con `job_positions.whatsapp_message`— y se emite en su etapa, tras el cierre.
+
+**Sin migración.** Reutiliza `integration_settings` y las tablas conversacionales vigentes.
 
 ### Alcance candidato 2.0.219
 El release **fija el ciclo en el orden de la gerencia y hace que el motor lo ejecute tal cual**. Sin migración.
@@ -932,4 +941,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.219.md](PRUEBAS_CAJA_NEGRA_2.0.219.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.220.md](PRUEBAS_CAJA_NEGRA_2.0.220.md).

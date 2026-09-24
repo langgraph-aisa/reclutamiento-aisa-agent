@@ -16,7 +16,7 @@ vi.mock("./cvRequest", () => ({
   ensureCvRequestMessage: vi.fn(),
   deliverCvRequestMessage: vi.fn(),
   requestCvForApplication: vi.fn().mockResolvedValue(null),
-  ensureConversationForApplication: vi.fn().mockResolvedValue(901),
+  dispatchWelcomeMessage: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("./assessmentAutomation", () => ({
@@ -813,7 +813,7 @@ describe("publicJobs.submit solicitud automática de CV", () => {
   }
 
   it("deja la conversación preparada sin solicitar el currículum en la recepción", async () => {
-    const { ensureConversationForApplication, requestCvForApplication } =
+    const { dispatchWelcomeMessage, requestCvForApplication } =
       await import("./cvRequest");
     const { scheduleAssessmentCycle } = await import("./assessmentAutomation");
     const { pool, query } = submissionPool();
@@ -834,8 +834,9 @@ describe("publicJobs.submit solicitud automática de CV", () => {
     await new Promise(resolve => setImmediate(resolve));
 
     // La solicitud del currículum pertenece a la etapa 6 del ciclo, no a la
-    // recepción: aquí solo se prepara la conversación y se programa el ciclo.
-    expect(ensureConversationForApplication).toHaveBeenCalledWith(pool, 900);
+    // recepción: aquí la conversación se abre con la bienvenida del paso 1 y se
+    // programa el ciclo.
+    expect(dispatchWelcomeMessage).toHaveBeenCalledWith(pool, 900);
     expect(requestCvForApplication).not.toHaveBeenCalled();
     expect(scheduleAssessmentCycle).toHaveBeenCalledWith(pool, 900);
   });

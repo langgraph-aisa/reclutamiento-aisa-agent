@@ -6,6 +6,10 @@ import {
 } from "./apichat";
 import { getApiChatRuntimeSettings } from "./apiChatSettings";
 import { scheduleAssessmentCycle } from "./assessmentAutomation";
+import {
+  loadAgentStageConfiguration,
+  renderStageTemplate,
+} from "./agentStages";
 import { withLangfuseObservation } from "./observability/langfuse";
 import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
 
@@ -57,6 +61,75 @@ export async function ensureConversationForApplication(
     [applicationId]
   );
   return inserted.rows[0] ? Number(inserted.rows[0].id) : null;
+}
+
+export function welcomeMessageKey(applicationId: number) {
+  return `welcome:${applicationId}`;
+}
+
+const welcomeContactSql = `SELECT c.full_name,p.title AS position_title
+   FROM applications a
+   JOIN candidates c ON c.id=a.candidate_id
+   JOIN job_positions p ON p.id=a.job_position_id
+  WHERE a.id=$1`;
+
+/**
+ * Despacha la bienvenida del paso «Recepción del formulario»: garantiza la
+ * conversación y la abre con la plantilla editable del paso 1
+ * (`bienvenida_formulario`), una sola vez por postulación. La solicitud del
+ * currículum conserva su propio mensaje y se emite en su etapa, tras el cierre.
+ */
+export async function dispatchWelcomeMessage(
+  pool: Pool,
+  applicationId: number
+): Promise<CvRequestDelivery | null> {
+  const stages = await loadAgentStageConfiguration(pool);
+  const conversationId = await ensureConversationForApplication(
+    pool,
+    applicationId
+  );
+  if (!conversationId) return null;
+  if (!stages.enabled.recepcion_formulario) return null;
+  const client = await pool.connect();
+  let messageId: number | null = null;
+  try {
+    await client.query("BEGIN");
+    const contactResult = await client.query<{
+      full_name: string | null;
+      position_title: string | null;
+    }>(welcomeContactSql, [applicationId]);
+    const contact = contactResult.rows[0];
+    if (!contact) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+    const body = renderStageTemplate(stages.messages.bienvenida_formulario, {
+      name: contact.full_name,
+      position: contact.position_title,
+    });
+    assertNoAutomatedSalaryOffer(body);
+    const inserted = await client.query<MessageRecord>(
+      `INSERT INTO conversation_messages (conversation_id,direction,message_type,body,message_key,delivery_status)
+       VALUES ($1,'outbound','text',$2,$3,'pending')
+       ON CONFLICT (message_key) DO NOTHING
+       RETURNING id,delivery_status`,
+      [conversationId, body, welcomeMessageKey(applicationId)]
+    );
+    if (inserted.rows[0]) {
+      messageId = inserted.rows[0].id;
+      await client.query(
+        `UPDATE applications SET whatsapp_status='pendiente',last_whatsapp_error=NULL,updated_at=now() WHERE id=$1`,
+        [applicationId]
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  return messageId ? deliverCvRequestMessage(pool, messageId) : null;
 }
 
 async function ensureCvRequestMessageInternal(

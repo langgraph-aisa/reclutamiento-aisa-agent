@@ -55,12 +55,6 @@ const ENDPOINT_CONSUMER_LABELS: Record<string, string> = {
   moderacion: "Moderación",
 };
 
-const defaultMessage = `Hola {{nombre}}, muchas gracias por su solicitud de empleo.
-
-Le saludamos de parte de AISA Solar. Dando seguimiento a su solicitud de empleo para la plaza “{{plaza}}”, por este medio agradeceríamos que pudiera enviarnos su CV para que sea evaluado por nuestro equipo de Recursos Humanos.
-
-Quedamos atentos a recibirlo. ¡Muchas gracias por su interés en formar parte de AISA Solar!`;
-
 export default function Config() {
   const recipients = trpc.config.recipients.useQuery();
   const apiChatConfiguration = trpc.config.apiChatConfiguration.useQuery();
@@ -276,7 +270,6 @@ export default function Config() {
   });
   const [recipient, setRecipient] = useState({ label: "", phone: "" });
   const [country, setCountry] = useState("GT");
-  const [message, setMessage] = useState(defaultMessage);
   const [thankYou, setThankYou] = useState("");
   const [contactNotice, setContactNotice] = useState("");
   const [essenceWordLimit, setEssenceWordLimit] = useState(550);
@@ -357,12 +350,6 @@ export default function Config() {
       setting_key: string;
       setting_value: string | null;
     }>;
-    const savedMessage = rows.find(
-      row => row.setting_key === "whatsapp_message"
-    );
-    if (savedMessage?.setting_value) {
-      setMessage(savedMessage.setting_value);
-    }
     const savedCountry = rows.find(
       row => row.setting_key === "default_country"
     );
@@ -378,12 +365,6 @@ export default function Config() {
         provider: "recruitment",
         settingKey: "default_country",
         settingValue: country.toUpperCase(),
-        isSecret: false,
-      });
-      await saveSetting.mutateAsync({
-        provider: "recruitment",
-        settingKey: "whatsapp_message",
-        settingValue: message,
         isSecret: false,
       });
       await saveSetting.mutateAsync({
@@ -1452,35 +1433,18 @@ export default function Config() {
               </p>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-primary">
-                    País predeterminado
-                  </Label>
-                  <Input
-                    value={country}
-                    onChange={e =>
-                      setCountry(e.target.value.toUpperCase().slice(0, 2))
-                    }
-                    className="rounded-2xl"
-                    placeholder="GT"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-primary">
-                    Mensaje base
-                  </Label>
-                  <Textarea
-                    value={message}
-                    onChange={e => setMessage(e.target.value)}
-                    rows={7}
-                    className="rounded-2xl"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Debe conservar las variables {"{{nombre}}"} y {"{{plaza}}"}.
-                    Cada plaza puede personalizar su mensaje.
-                  </p>
-                </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-primary">
+                  País predeterminado
+                </Label>
+                <Input
+                  value={country}
+                  onChange={e =>
+                    setCountry(e.target.value.toUpperCase().slice(0, 2))
+                  }
+                  className="rounded-2xl"
+                  placeholder="GT"
+                />
               </div>
               <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
                 <div className="space-y-2">

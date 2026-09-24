@@ -39,7 +39,7 @@ import {
 } from "./_core/trpc";
 import {
   deliverCvRequestMessage,
-  ensureConversationForApplication,
+  dispatchWelcomeMessage,
   ensureCvRequestMessage,
   requestCvForApplication,
   type CvRequestDelivery,
@@ -1986,21 +1986,19 @@ export const appRouter = router({
           );
           await client.query("COMMIT");
           setImmediate(() => {
-            // El ciclo del agente conversa primero —precalificación, entrevista
-            // y cierre— y solicita el currículum al llegar a esa etapa; aquí solo
-            // se deja la conversación creada, el ciclo psicométrico programado y
-            // la evaluación automática ejecutada. Todo fuera de la transacción
-            // para que un fallo del proveedor nunca revierta la postulación.
-            void ensureConversationForApplication(pool, applicationId).catch(
-              error => {
-                console.warn(
-                  `[cvRequest] Application ${applicationId}: ${safeIntegrationMessage(
-                    error,
-                    "No fue posible preparar la conversación automáticamente."
-                  )}`
-                );
-              }
-            );
+            // El paso «Recepción del formulario» deja la conversación creada y
+            // abre con la bienvenida; la precalificación, la entrevista y el
+            // cierre se administran después, y el currículum se solicita al
+            // llegar a su etapa. Todo fuera de la transacción para que un fallo
+            // del proveedor nunca revierta la postulación.
+            void dispatchWelcomeMessage(pool, applicationId).catch(error => {
+              console.warn(
+                `[cvRequest] Application ${applicationId}: ${safeIntegrationMessage(
+                  error,
+                  "No fue posible preparar la conversación automáticamente."
+                )}`
+              );
+            });
             void scheduleAssessmentCycle(pool, applicationId).catch(error => {
               console.warn(
                 `[assessment] Application ${applicationId}: ${safeIntegrationMessage(
@@ -6627,6 +6625,7 @@ export const appRouter = router({
           enabled: z.record(z.enum(AGENT_STAGE_KEYS), z.boolean()),
           order: z.array(z.enum(AGENT_STAGE_KEYS)).length(AGENT_STAGE_KEYS.length),
           messages: z.object({
+            bienvenida_formulario: z.string().trim().max(1_000),
             confirmacion_cv: z.string().trim().max(1_000),
             pregunta_salario: z.string().trim().max(1_000),
             confirmacion_salario: z.string().trim().max(1_000),
