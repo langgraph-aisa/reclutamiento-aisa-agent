@@ -72,6 +72,9 @@ function makeSignals(
     screeningStatus: null,
     precalificacionActive: false,
     entrevistaActive: false,
+    entrevistaEnabled: true,
+    entrevistaAdministered: false,
+    freeConversationHeld: false,
     screeningDisqualified: false,
     cierreEmitido: false,
     avisoContactoEmitido: false,
@@ -169,25 +172,86 @@ describe("buildAgentStageVerdicts", () => {
     expect(expectativa?.completed).toBe(false);
   });
 
-  it("marca ejecutada la conversación del perfil cuando ya hubo turno saliente", () => {
+  it("marca ejecutada la conversación del perfil solo cuando hubo un turno de conversación libre", () => {
     const verdicts = build({
       source: makeSource({
         turns: [{ direction: "outbound", body: "Hola", createdAt: null }],
       }),
-      signals: makeSignals(),
+      signals: makeSignals({ freeConversationHeld: true }),
     });
     const retro = verdicts.find(v => v.stageKey === "retroalimentacion");
     expect(retro?.completed).toBe(true);
     expect(retro?.category).toBe("nlp");
   });
 
-  it("deja pendiente la conversación del perfil antes del primer turno saliente", () => {
+  it("no marca la conversación del perfil por mensajes del banco de preguntas o deterministas", () => {
+    // La bienvenida, las preguntas de screening y los avisos deterministas son
+    // mensajes salientes, pero no constituyen conversación libre del motor.
+    const verdicts = build({
+      source: makeSource({
+        turns: [
+          { direction: "outbound", body: "¿Reside usted dentro del departamento?", createdAt: null },
+          { direction: "inbound", body: "Sí", createdAt: null },
+        ],
+      }),
+      signals: makeSignals({ freeConversationHeld: false }),
+    });
+    const retro = verdicts.find(v => v.stageKey === "retroalimentacion");
+    expect(retro?.completed).toBe(false);
+  });
+
+  it("deja pendiente la conversación del perfil antes del primer turno de conversación libre", () => {
     const verdicts = build({
       source: makeSource({ turns: [] }),
       signals: makeSignals(),
     });
     const retro = verdicts.find(v => v.stageKey === "retroalimentacion");
     expect(retro?.completed).toBe(false);
+  });
+
+  it("omite la entrevista cuando la plaza la tiene deshabilitada aunque el ciclo esté concluido", () => {
+    const verdicts = build({
+      signals: makeSignals({
+        screeningPhase: "concluido",
+        screeningStatus: "concluido",
+        precalificacionActive: true,
+        entrevistaActive: true,
+        entrevistaEnabled: false,
+      }),
+    });
+    const entrevista = verdicts.find(v => v.stageKey === "entrevista");
+    expect(entrevista?.completed).toBe(true);
+    expect(entrevista?.skipReason).toContain("no tiene habilitada");
+  });
+
+  it("asienta la entrevista ejecutada solo cuando una pregunta fue administrada", () => {
+    const verdicts = build({
+      signals: makeSignals({
+        screeningPhase: "concluido",
+        screeningStatus: "concluido",
+        precalificacionActive: true,
+        entrevistaActive: true,
+        entrevistaAdministered: true,
+      }),
+    });
+    const entrevista = verdicts.find(v => v.stageKey === "entrevista");
+    expect(entrevista?.completed).toBe(true);
+    expect(entrevista?.skipReason).toBeNull();
+  });
+
+  it("omite la entrevista no administrada cuando el ciclo cerró en la precalificación", () => {
+    const verdicts = build({
+      signals: makeSignals({
+        screeningPhase: "concluido",
+        screeningStatus: "concluido",
+        precalificacionActive: true,
+        entrevistaActive: true,
+        entrevistaAdministered: false,
+      }),
+    });
+    const entrevista = verdicts.find(v => v.stageKey === "entrevista");
+    expect(entrevista?.completed).toBe(true);
+    expect(entrevista?.skipReason).toContain("No se administró");
   });
 });
 
@@ -224,6 +288,7 @@ describe("firstPendingStage", () => {
         avisoContactoEmitido: true,
         screeningPhase: "concluido",
         screeningStatus: "concluido",
+        freeConversationHeld: true,
       }),
     });
     expect(firstPendingStage(verdicts)).toBeNull();

@@ -9,7 +9,14 @@ import {
 import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
 import { composeCvClosingFromSettings } from "./cvAnalysis";
 import { recordAgentStageEntry } from "./agentActivityLog";
-import { isUndefinedColumnError, isUndefinedTableError } from "./governanceObservability";
+import {
+  loadAgentStageConfiguration,
+  type AgentStageKey,
+} from "./agentStages";
+import {
+  isUndefinedColumnError,
+  isUndefinedTableError,
+} from "./governanceObservability";
 
 /**
  * Motor de precalificación y entrevista guiada por plaza.
@@ -436,6 +443,8 @@ async function candidateRuns(
        JOIN conversations conv ON conv.application_id=r.application_id
       WHERE r.status='en_curso'
         AND r.phase IN ('precalificacion','entrevista')
+        AND conv.agent_enabled=true
+        AND conv.human_takeover=false
       ORDER BY r.id
       LIMIT $1`,
       [limit]
@@ -507,41 +516,46 @@ async function closeScreening(
   run: RunCandidate,
   input: { disqualify: boolean; reason?: string }
 ) {
-  const closing = await pool.query<{
-    name: string | null;
-    title: string;
-    thank_you_message: string | null;
-    contact_notice: string | null;
-  }>(
-    `SELECT c.full_name AS name, p.title,
-            settings.thank_you_message, settings.contact_notice
-       FROM applications a
-       JOIN candidates c ON c.id = a.candidate_id
-       JOIN job_positions p ON p.id = a.job_position_id
-       LEFT JOIN LATERAL (
-         SELECT
-           MAX(CASE WHEN s.setting_key='cv_thank_you_message' THEN s.setting_value END) AS thank_you_message,
-           MAX(CASE WHEN s.setting_key='cv_contact_notice' THEN s.setting_value END) AS contact_notice
-           FROM integration_settings s
-          WHERE s.provider='recruitment'
-       ) settings ON true
-      WHERE a.id=$1`,
-    [run.application_id]
-  );
-  const row = closing.rows[0];
-  if (!row) return;
-  const text = composeCvClosingFromSettings({
-    name: row.name,
-    position: row.title,
-    thankYouMessage: row.thank_you_message,
-    contactNotice: row.contact_notice,
-  });
-  await enqueueScreeningMessage(pool, {
-    conversationId: run.conversation_id,
-    text,
-    messageKey: screeningCloseMessageKey(run.run_id),
-  });
+  // Cierre ordinario: no se emite mensaje alguno. El agradecimiento, la
+  // solicitud del currículum y el aviso de contacto pertenecen a las etapas
+  // administrables del ciclo (pasos 5 a 9) y los emite el motor determinista;
+  // el screening solo cierra la máquina de estados para que el ciclo avance.
   if (input.disqualify) {
+    // Descarte: la persona recibe el aviso institucional de cierre, compuesto
+    // con el agradecimiento institucional —sin solicitud de currículum, que
+    // está reservada al paso 6 del ciclo— y el aviso de contacto vigente.
+    const closing = await pool.query<{
+      name: string | null;
+      title: string;
+      contact_notice: string | null;
+    }>(
+      `SELECT c.full_name AS name, p.title,
+              settings.contact_notice
+         FROM applications a
+         JOIN candidates c ON c.id = a.candidate_id
+         JOIN job_positions p ON p.id = a.job_position_id
+         LEFT JOIN LATERAL (
+           SELECT MAX(CASE WHEN s.setting_key='cv_contact_notice' THEN s.setting_value END) AS contact_notice
+             FROM integration_settings s
+            WHERE s.provider='recruitment'
+         ) settings ON true
+        WHERE a.id=$1`,
+      [run.application_id]
+    );
+    const row = closing.rows[0];
+    if (row) {
+      const text = composeCvClosingFromSettings({
+        name: row.name,
+        position: row.title,
+        thankYouMessage: null,
+        contactNotice: row.contact_notice,
+      });
+      await enqueueScreeningMessage(pool, {
+        conversationId: run.conversation_id,
+        text,
+        messageKey: screeningCloseMessageKey(run.run_id),
+      });
+    }
     await pool.query(
       `UPDATE applications
           SET status='no_calificado',
@@ -784,17 +798,39 @@ async function recordScreeningStageEntry(
  * avanza las preguntas configuradas, con traza por intento, dependencia entre
  * preguntas y refuerzo del descarte por modelo. Se ejecuta antes del
  * razonamiento general, igual que el protocolo psicométrico.
+ *
+ * El barrido respeta el ciclo administrado: con el comportamiento del agente
+ * apagado no ejecuta acción; con la etapa de la fase desactivada cierra la
+ * máquina sin preguntar; y una conversación bajo control humano no recibe
+ * preguntas —la serie se reanuda al devolver el control al agente.
  */
 export async function runScreeningStepSweep(
   pool: Pool,
   options: { limit?: number; now?: Date } = {}
 ) {
+  const stages = await loadAgentStageConfiguration(pool);
+  // Comportamiento del agente apagado: el screening no administra preguntas
+  // ni crea máquinas de estado. Apagado, el motor determinista no ejecuta
+  // acción alguna —ni el banco de preguntas ni los mensajes de etapa—.
+  if (!stages.flowEnabled) return [];
   const limit = Math.min(Math.max(1, options.limit ?? 20), 100);
-  await ensureScreeningRunsForReceivedCv(pool);
+  if (stages.enabled.precalificacion) {
+    await ensureScreeningRunsForReceivedCv(pool);
+  }
   const runs = await candidateRuns(pool, limit);
   const outcomes: Array<{ runId: number; action: string }> = [];
   for (const run of runs) {
     try {
+      // Etapa apagada en la hoja «Etapas de la IA»: la máquina de la fase se
+      // cierra sin formular preguntas y sin emitir mensaje; el motor
+      // determinista omite la etapa con su motivo y continúa el ciclo.
+      const phaseStage: AgentStageKey =
+        run.phase === "precalificacion" ? "precalificacion" : "entrevista";
+      if (!stages.enabled[phaseStage]) {
+        await closeScreening(pool, run, { disqualify: false });
+        outcomes.push({ runId: run.run_id, action: "etapa_desactivada" });
+        continue;
+      }
       const questions = await screeningQuestionsForPhase(
         pool,
         run.position_id,

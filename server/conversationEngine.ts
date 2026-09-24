@@ -757,6 +757,17 @@ async function runConversationTurnInternal(
         verdicts: logVerdicts,
       });
 
+      // Descartado en el screening: el ciclo determinista no continúa. La
+      // conversación del perfil, el cierre y la solicitud del currículum no se
+      // administran a un expediente no calificado; el aviso institucional de
+      // cierre ya fue emitido por el barrido al descartar.
+      if (logSignals.screeningDisqualified)
+        return {
+          status: "skipped",
+          reason:
+            "El candidato fue descartado en la precalificación; el ciclo no continúa.",
+        };
+
       // El motor ejecuta únicamente la primera etapa pendiente del ciclo fijo:
       // ninguna etapa posterior se emite mientras una anterior siga pendiente.
       const pendingStage = firstPendingStage(logVerdicts);

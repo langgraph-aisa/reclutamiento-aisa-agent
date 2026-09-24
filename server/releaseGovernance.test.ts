@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.223");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.223");
+    expect(APP_VERSION).toBe("2.0.224");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.224");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -573,7 +573,7 @@ describe("black-box release contract", () => {
     // 2.0.209: +1 por el motor de precalificación y entrevista (server/screeningEngine.ts).
     // 2.0.213: +2 por las etapas administrables del agente (server/agentStages.ts y
     // client/src/pages/AgentStages.tsx).
-    // 2.0.223: +2 por la bitácora de la IA del agente (server/agentActivityLog.ts y
+    // 2.0.224: +2 por la bitácora de la IA del agente (server/agentActivityLog.ts y
     // client/src/components/review/AgentAiLogPanel.tsx).
     expect(audit.files).toHaveLength(160);
     expect(audit.findings).toEqual([]);
@@ -1277,7 +1277,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.223");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.224");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1286,18 +1286,18 @@ describe("black-box release contract", () => {
     // La prosa académica se conserva acotada; el registro histórico mantiene su
     // lugar y un techo propio.
     //
-    // El techo del registro se elevó de 2600 a 3500 y después a 3600, 3700 y
-    // 3800: la entrega acumulada de resúmenes de commit ya no cabía y comprimir
-    // las entradas antiguas estaba borrando la trazabilidad que el registro
-    // existe para conservar. Un techo que obliga a destruir el registro no
-    // protege nada.
+    // El techo del registro se elevó de 2600 a 3500 y después a 3600, 3700,
+    // 3800 y 3900: la entrega acumulada de resúmenes de commit ya no cabía y
+    // comprimir las entradas antiguas estaba borrando la trazabilidad que el
+    // registro existe para conservar. Un techo que obliga a destruir el
+    // registro no protege nada.
     expect(proseWordCount).toBeGreaterThanOrEqual(2_400);
     expect(proseWordCount).toBeLessThanOrEqual(2_900);
-    expect(historyWordCount).toBeLessThanOrEqual(3_800);
+    expect(historyWordCount).toBeLessThanOrEqual(3_900);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.223");
+    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.224");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1522,6 +1522,10 @@ describe("black-box release contract", () => {
       path.resolve("server/screeningEngine.ts"),
       "utf8"
     );
+    const conversationEngine = fs.readFileSync(
+      path.resolve("server/conversationEngine.ts"),
+      "utf8"
+    );
 
     // El módulo reúne la configuración editorial del expediente de CV.
     expect(cvAnalysis).toContain("cv_thank_you_message");
@@ -1539,14 +1543,28 @@ describe("black-box release contract", () => {
     // El mensaje base solicita el CV sin cierre: el agradecimiento y el aviso
     // de contacto ya no viven en la hoja de configuración —se trasladaron a la
     // hoja «Etapas de la IA» como mensajes del paso «Solicitud del currículum»
-    // y del paso «Aviso de contacto»—, y el motor de screening conserva su
-    // cierre de descarte con los valores institucionales.
+    // y del paso «Aviso de contacto»—. El cierre ordinario del screening ya no
+    // emite mensaje institucional alguno: cierra la máquina de estados y deja
+    // que el motor administre los pasos 5 a 9; solo el descarte conserva el
+    // aviso de cierre, sin solicitud de currículum.
     expect(cvRequest).not.toContain("composeCvClosingFromSettings");
     expect(cvRequest).not.toContain("AS cv_thank_you_message");
     expect(cvRequest).toContain("stages.messages.solicitud_cv");
     expect(cvRequest).toContain("fallbackTemplate");
     expect(screeningEngine).toContain("composeCvClosingFromSettings");
     expect(screeningEngine).toContain("screeningCloseMessageKey");
+    expect(screeningEngine).not.toContain("cv_thank_you_message");
+    expect(screeningEngine).toContain("thankYouMessage: null");
+    expect(screeningEngine).toContain("solo cierra la máquina de estados");
+    expect(screeningEngine).toContain("stages.flowEnabled");
+    expect(screeningEngine).toContain("conv.human_takeover=false");
+    expect(screeningEngine).toContain('action: "etapa_desactivada"');
+
+    // El motor determinista no conversa con un expediente descartado: la
+    // conversación del perfil, el cierre y la solicitud del currículum no se
+    // administran después del descarte del screening.
+    expect(conversationEngine).toContain("logSignals.screeningDisqualified");
+    expect(conversationEngine).toContain("el ciclo no continúa");
 
     // La guardia salarial se evalúa antes de tocar la base.
     expect(
@@ -1735,7 +1753,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.223");
+    expect(governance).toContain("Alcance candidato 2.0.224");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2017,7 +2035,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.223");
+    expect(governance).toContain("Alcance candidato 2.0.224");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

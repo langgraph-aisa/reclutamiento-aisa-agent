@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.223
+# Gobierno de release JARVI RH 2.0.224
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.223**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.224**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.224
+El release **saca el cierre institucional del motor de screening y gobierna el barrido con el ciclo administrado**. Sin migración.
+
+**El cierre sin mensaje.** `closeScreening` ya no redacta ni envía el agradecimiento, la solicitud del currículum ni el aviso de contacto en el cierre ordinario: cierra la máquina de estados y deja que el motor determinista administre los pasos 5 a 9 con sus plantillas. Solo el descarte conserva el aviso institucional, compuesto sin solicitud de currículum —reservada al paso 6— y con el agradecimiento institucional.
+
+**Las compuertas del barrido.** `runScreeningStepSweep` consulta la configuración de las etapas: con el comportamiento apagado no ejecuta acción; con la etapa de la fase desactivada cierra la máquina sin preguntar; y una conversación bajo control humano no recibe preguntas —la serie se reanuda al devolver el control al agente.
+
+**La bitácora veraz.** La conversación del perfil solo se marca ejecutada cuando existe un turno real del motor de IA —no por mensajes del banco ni deterministas—, y la entrevista distingue «administrada» de «no administrada»: el cierre en la precalificación ya no asienta una entrevista que nunca ocurrió. El motor no conversa con expedientes descartados en el screening.
+
+**Sin migración.** Reutiliza `integration_settings`, las tablas conversacionales y el banco de preguntas vigentes.
 
 ### Alcance candidato 2.0.223
 El release **devuelve el panel administrativo a la portada autenticada**. Sin migración.
@@ -972,4 +983,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.223.md](PRUEBAS_CAJA_NEGRA_2.0.223.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.224.md](PRUEBAS_CAJA_NEGRA_2.0.224.md).

@@ -7,7 +7,7 @@ import {
 } from "./agentStages";
 import { cvAwaitingState, type CvAwaitingState } from "./cvAnalysis";
 import type { ConversationContextSource } from "./conversationContext";
-import { isUndefinedTableError } from "./governanceObservability";
+import { isUndefinedColumnError, isUndefinedTableError } from "./governanceObservability";
 import { loadAgentStageConfiguration } from "./agentStages";
 
 /**
@@ -71,6 +71,12 @@ export type AgentLogSignals = {
   screeningStatus: string | null;
   precalificacionActive: boolean;
   entrevistaActive: boolean;
+  /** La plaza mantiene habilitada la entrevista guiada. */
+  entrevistaEnabled: boolean;
+  /** Al menos una pregunta de entrevista fue administrada al candidato. */
+  entrevistaAdministered: boolean;
+  /** Hubo al menos un turno de conversación libre con el motor de IA. */
+  freeConversationHeld: boolean;
   screeningDisqualified: boolean;
   /** El cierre institucional ya fue emitido en la conversación. */
   cierreEmitido: boolean;
@@ -145,9 +151,6 @@ export function buildAgentStageVerdicts(
     cycle =>
       cycle.status === "abierto" && cycle.dimension === "remuneracion"
   );
-  const freeConversationHeld = source.turns.some(
-    turn => turn.direction === "outbound"
-  );
   const phase = signals.screeningPhase;
   const screeningConcluded = phase === "concluido";
   const screeningPassedPrecalificacion =
@@ -201,6 +204,12 @@ export function buildAgentStageVerdicts(
           "Entrevista guiada",
           "No se administró: el candidato fue descartado en la precalificación."
         );
+      if (!signals.entrevistaEnabled)
+        return skipped(
+          "entrevista",
+          "Entrevista guiada",
+          "La plaza no tiene habilitada la entrevista; se omite sin preguntar."
+        );
       if (!signals.entrevistaActive)
         return skipped(
           "entrevista",
@@ -210,11 +219,17 @@ export function buildAgentStageVerdicts(
       if (phase === "entrevista")
         return pending("entrevista", "Entrevista guiada");
       if (screeningConcluded)
-        return executed(
-          "entrevista",
-          "Entrevista guiada",
-          "Concluyó y el expediente pasó a la conversación del perfil."
-        );
+        return signals.entrevistaAdministered
+          ? executed(
+              "entrevista",
+              "Entrevista guiada",
+              "Concluyó y el expediente pasó a la conversación del perfil."
+            )
+          : skipped(
+              "entrevista",
+              "Entrevista guiada",
+              "No se administró: el ciclo cerró en la precalificación sin formular preguntas de entrevista."
+            );
       return pending("entrevista", "Entrevista guiada");
     },
     retroalimentacion: () => {
@@ -224,7 +239,7 @@ export function buildAgentStageVerdicts(
           "Conversación del perfil",
           DISABLED_REASON
         );
-      if (freeConversationHeld)
+      if (signals.freeConversationHeld)
         return executed(
           "retroalimentacion",
           "Conversación del perfil",
@@ -375,6 +390,8 @@ export async function loadAgentLogSignals(
     status: string | null;
     precalificacion_count: number;
     entrevista_count: number;
+    entrevista_enabled: boolean;
+    entrevista_attempts: number;
   } | null = null;
   try {
     const result = await pool.query<{
@@ -382,6 +399,8 @@ export async function loadAgentLogSignals(
       status: string | null;
       precalificacion_count: number;
       entrevista_count: number;
+      entrevista_enabled: boolean;
+      entrevista_attempts: number;
     }>(
       `SELECT s.phase, s.status,
               COALESCE((SELECT count(*) FROM screening_questions q
@@ -391,7 +410,12 @@ export async function loadAgentLogSignals(
               COALESCE((SELECT count(*) FROM screening_questions q
                          WHERE q.job_position_id = p.id
                            AND q.phase = 'entrevista' AND q.active), 0)::int
-                AS entrevista_count
+                AS entrevista_count,
+              COALESCE(p.screening_entrevista_enabled, true) AS entrevista_enabled,
+              COALESCE((SELECT count(*) FROM screening_attempts sa
+                         WHERE sa.run_id = s.id
+                           AND sa.phase = 'entrevista'), 0)::int
+                AS entrevista_attempts
          FROM applications a
          JOIN job_positions p ON p.id = a.job_position_id
          LEFT JOIN screening_runs s ON s.application_id = a.id
@@ -400,7 +424,27 @@ export async function loadAgentLogSignals(
     );
     row = result.rows[0] ?? null;
   } catch (error) {
-    if (!isUndefinedTableError(error)) throw error;
+    if (!isUndefinedTableError(error) && !isUndefinedColumnError(error))
+      throw error;
+  }
+  // Conversación libre real: solo un turno emitido por el motor de IA cuenta.
+  // La bienvenida, las preguntas del banco y los mensajes deterministas no
+  // convierten la etapa «Conversación del perfil» en ejecutada.
+  let freeConversationHeld = false;
+  try {
+    const turns = await pool.query<{ held: string }>(
+      `SELECT count(*)::text AS held
+         FROM conversation_turns t
+         JOIN conversations conv ON conv.id = t.conversation_id
+        WHERE conv.application_id=$1
+          AND t.model IS NOT NULL
+          AND t.model <> 'deterministic'`,
+      [applicationId]
+    );
+    freeConversationHeld = Number(turns.rows[0]?.held ?? 0) > 0;
+  } catch (error) {
+    if (!isUndefinedTableError(error) && !isUndefinedColumnError(error))
+      throw error;
   }
   const screeningPhase = row?.phase ? String(row.phase) : null;
   const screeningStatus = row?.status ? String(row.status) : null;
@@ -410,6 +454,9 @@ export async function loadAgentLogSignals(
     screeningStatus,
     precalificacionActive: Number(row?.precalificacion_count ?? 0) > 0,
     entrevistaActive: Number(row?.entrevista_count ?? 0) > 0,
+    entrevistaEnabled: Boolean(row?.entrevista_enabled ?? true),
+    entrevistaAdministered: Number(row?.entrevista_attempts ?? 0) > 0,
+    freeConversationHeld,
     screeningDisqualified: screeningStatus === "descalificado",
     cierreEmitido:
       conversationState?.automationState === "completed" ||
