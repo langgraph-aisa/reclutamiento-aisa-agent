@@ -36,6 +36,9 @@
   --color-sidebar-accent-foreground: oklch(0.22 0.045 252);
   --color-sidebar-border: oklch(0.84 0.03 255);
   --color-sidebar-ring: oklch(0.55 0.12 170);
+  /* Criterio de IA: morado institucional e información en azul. */
+  --color-ai: #7c3aed;
+  --color-info: #2563eb;
   --radius: 1rem;
 }
 
@@ -72,6 +75,8 @@
   --aisa-attention: #f2b84b;
   --aisa-error: #ff6b6b;
   --aisa-input-fill: #344456;
+  --color-ai: #a78bfa;
+  --color-info: #58a6ff;
 }
 
 .high-contrast {
@@ -102,6 +107,8 @@
   --color-sidebar-accent-foreground: #ffffff;
   --color-sidebar-border: #aab7c5;
   --color-sidebar-ring: #58a6ff;
+  --color-ai: #c4b5fd;
+  --color-info: #79c0ff;
 }
 
 /* Dark AISA assigns functional roles instead of inverting the Day palette.

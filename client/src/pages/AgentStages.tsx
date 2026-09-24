@@ -16,6 +16,7 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarDays,
+  ClipboardList,
   GripVertical,
   Pencil,
   Save,
@@ -411,15 +412,19 @@ export default function AgentStages() {
                         </div>
                       </div>
                     </div>
-                    <div className="space-y-1.5 border-t border-border/60 pt-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <Label className="text-sm font-semibold text-primary">
+                    <div className="rounded-xl border border-ai/40 bg-ai/10 p-3">
+                      <div className="flex items-center gap-2">
+                        <ClipboardList
+                          aria-hidden
+                          className="h-4 w-4 shrink-0 text-ai"
+                        />
+                        <Label className="text-sm font-semibold tracking-wide text-info">
                           Criterio IA
                         </Label>
-                        <span className="text-xs text-muted-foreground">
-                          Instrucción exacta que orienta al modelo en este paso.
-                        </span>
                       </div>
+                      <p className="mt-1 pl-6 text-xs text-muted-foreground">
+                        Instrucción exacta que orienta al modelo en este paso.
+                      </p>
                       <Textarea
                         ref={node => {
                           instructionRefs.current[stage.key] = node;
@@ -432,7 +437,7 @@ export default function AgentStages() {
                           }))
                         }
                         rows={editingKey === stage.key ? 7 : 3}
-                        className="rounded-xl"
+                        className="mt-2 rounded-xl border-ai/40 bg-(--aisa-input-fill) text-violet-200 placeholder:text-violet-300/60"
                       />
                     </div>
                     {stage.messageKeys.length > 0 && (

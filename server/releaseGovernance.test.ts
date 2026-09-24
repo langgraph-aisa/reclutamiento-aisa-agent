@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.227");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.227");
+    expect(APP_VERSION).toBe("2.0.228");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.228");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -599,7 +599,7 @@ describe("black-box release contract", () => {
     // client/src/pages/AgentStages.tsx).
     // 2.0.225: +2 por la bitácora de la IA del agente (server/agentActivityLog.ts y
     // client/src/components/review/AgentAiLogPanel.tsx).
-    // 2.0.227: sin archivos nuevos: la celda desplegable de respuestas vive en
+    // 2.0.228: sin archivos nuevos: la celda desplegable de respuestas vive en
     // la matriz vigente (client/src/pages/Candidates.tsx).
     expect(audit.files).toHaveLength(160);
     expect(audit.findings).toEqual([]);
@@ -1303,7 +1303,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.227");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.228");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1323,7 +1323,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.227");
+    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.228");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1684,6 +1684,10 @@ describe("black-box release contract", () => {
       "utf8"
     );
     const routing = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+    const theme = fs.readFileSync(
+      path.resolve("client/src/index.css"),
+      "utf8"
+    );
 
     // El catálogo declara una instrucción por etapa y la instrucción del paso 4
     // desambigua el perfil y ejecuta la evaluación automática del candidato.
@@ -1700,12 +1704,20 @@ describe("black-box release contract", () => {
     expect(routing).toContain("AGENT_STAGE_INSTRUCTION_KEYS");
 
     // La hoja administra la cajilla de criterio y las acciones por etapa:
-    // editar, subir, bajar y borrar, además del arrastre y del guardado.
+    // editar, subir, bajar y borrar, además del arrastre y del guardado. La
+    // cajilla lleva la iconografía y el color morado institucional del criterio
+    // de IA, con el título en azul, para distinguirse de los mensajes.
     expect(sheet).toContain("Criterio IA");
     expect(sheet).toContain("instructionKey");
     expect(sheet).toContain("moveStageBy");
     expect(sheet).toContain("removeStage");
     expect(sheet).toContain("draggable");
+    expect(sheet).toContain("ClipboardList");
+    expect(sheet).toContain("border-ai/40");
+    expect(sheet).toContain("bg-ai/10");
+    expect(sheet).toContain("text-info");
+    expect(theme).toContain("--color-ai");
+    expect(theme).toContain("--color-info");
 
     // El motor inyecta el criterio de la etapa en las instrucciones del modelo
     // y ejecuta la evaluación automática al terminar un turno de conversación
@@ -1841,7 +1853,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.227");
+    expect(governance).toContain("Alcance candidato 2.0.228");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2123,7 +2135,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.227");
+    expect(governance).toContain("Alcance candidato 2.0.228");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });
