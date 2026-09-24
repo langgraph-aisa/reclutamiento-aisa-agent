@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.225
+# Gobierno de release JARVI RH 2.0.226
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.225**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.226**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.226
+El release **fija la altura de las respuestas del banco de preguntas en la matriz de candidatos y las hace desplegables en su lugar**. Sin migración.
+
+**El defecto.** Una respuesta larga estiraba su fila hasta ocupar la vista entera: el evaluador no podía ver más registros en una sola pantalla y el barrido por filas se convertía en un desplazamiento largo.
+
+**La celda estrecha.** `client/src/pages/Candidates.tsx` recorta cada respuesta a dos líneas como máximo, de modo que la fila conserva una altura fija y estrecha. Un botón circular con el signo más despliega la respuesta completa dentro de su celda; desplegada, el mismo botón muestra el signo menos y la repliega a dos líneas. El clic detiene la propagación para no seleccionar la fila ni abrir la ficha, el estado se declara con `aria-expanded` y el texto completo sigue disponible en el título del enlace y en la ficha de Revisión Humana.
+
+**Sin migración.** Es un cambio de interfaz sobre la matriz vigente; la lectura autorizada de cada evidencia conserva su ficha en Revisión Humana.
 
 ### Alcance candidato 2.0.225
 El release **califica por fase la identidad de cada pregunta del banco de screening y destraba el paso 3**. Sin migración.
@@ -992,4 +1001,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.225.md](PRUEBAS_CAJA_NEGRA_2.0.225.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.226.md](PRUEBAS_CAJA_NEGRA_2.0.226.md).

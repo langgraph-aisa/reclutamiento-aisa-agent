@@ -33,7 +33,9 @@ import {
   Loader2,
   MessageCircle,
   MessageSquareText,
+  Minus,
   Phone,
+  Plus,
   Search,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
@@ -555,20 +557,10 @@ export default function Candidates() {
                             key={column.fieldKey}
                             className="max-w-[240px] border-b border-r px-3 py-2 align-top"
                           >
-                            {answer ? (
-                              <Link
-                                href={`/admin/human-review?application=${candidate.id}`}
-                                onClick={event => event.stopPropagation()}
-                                className="line-clamp-2 block w-full text-left leading-5 text-primary hover:text-sky-800 hover:underline dark:hover:text-white"
-                                title={formatAnswer(answer)}
-                              >
-                                {formatAnswer(answer)}
-                              </Link>
-                            ) : (
-                              <span className="text-muted-foreground/50">
-                                —
-                              </span>
-                            )}
+                            <ExpandableAnswerCell
+                              candidate={candidate}
+                              answer={answer}
+                            />
                           </td>
                         );
                       })}
@@ -699,5 +691,65 @@ function SortableHead({
         )}
       </button>
     </th>
+  );
+}
+
+/**
+ * Respuesta del banco de preguntas dentro de la matriz de candidatos.
+ *
+ * La celda conserva una altura fija y estrecha —dos líneas como máximo— para
+ * que la fila no robe la vista y quepan más registros en una sola pantalla. El
+ * botón con el signo más despliega la respuesta completa en su lugar; una vez
+ * desplegada, el mismo botón muestra el signo menos y la repliega. El clic no
+ * selecciona la fila ni abre la ficha: el enlace conserva el texto completo en
+ * su título y la ficha de Revisión Humana sigue siendo la lectura autorizada.
+ */
+function ExpandableAnswerCell({
+  candidate,
+  answer,
+}: {
+  candidate: any;
+  answer?: any;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!answer) {
+    return <span className="text-muted-foreground/50">—</span>;
+  }
+
+  return (
+    <div className="flex min-w-0 items-start gap-1">
+      <Link
+        href={`/admin/human-review?application=${candidate.id}`}
+        onClick={event => event.stopPropagation()}
+        className={`min-w-0 flex-1 text-left leading-5 text-primary hover:text-sky-800 hover:underline dark:hover:text-white ${
+          expanded ? "" : "line-clamp-2"
+        }`}
+        title={formatAnswer(answer)}
+      >
+        {formatAnswer(answer)}
+      </Link>
+      <button
+        type="button"
+        onClick={event => {
+          event.stopPropagation();
+          setExpanded(current => !current);
+        }}
+        aria-expanded={expanded}
+        aria-label={expanded ? "Contraer la respuesta" : "Ampliar la respuesta"}
+        title={
+          expanded
+            ? "Contraer la respuesta a dos líneas"
+            : "Mostrar la respuesta completa"
+        }
+        className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border border-sky-300 bg-card text-sky-800 outline-none hover:bg-sky-50 focus-visible:ring-2 focus-visible:ring-ring dark:border-sky-700 dark:text-sky-200 dark:hover:bg-neutral-800"
+      >
+        {expanded ? (
+          <Minus className="h-3 w-3" aria-hidden="true" />
+        ) : (
+          <Plus className="h-3 w-3" aria-hidden="true" />
+        )}
+      </button>
+    </div>
   );
 }

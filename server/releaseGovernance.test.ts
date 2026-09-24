@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.225");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.225");
+    expect(APP_VERSION).toBe("2.0.226");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.226");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -345,6 +345,30 @@ describe("black-box release contract", () => {
     expect(logo[25]).toBe(6);
   });
 
+  it("fija la altura de las respuestas y las despliega con un signo más", () => {
+    const candidatesPage = fs.readFileSync(
+      path.resolve("client/src/pages/Candidates.tsx"),
+      "utf8"
+    );
+
+    // La celda nace estrecha: dos líneas como máximo para que la fila no robe
+    // la vista y quepan más registros en una sola pantalla.
+    expect(candidatesPage).toContain("function ExpandableAnswerCell");
+    expect(candidatesPage).toContain('expanded ? "" : "line-clamp-2"');
+    expect(candidatesPage).toContain("<ExpandableAnswerCell");
+    // El signo más amplía la respuesta completa y el menos la repliega: el
+    // control declara su estado y su clic no roba la selección de la fila.
+    expect(candidatesPage).toContain("aria-expanded={expanded}");
+    expect(candidatesPage).toContain('"Ampliar la respuesta"');
+    expect(candidatesPage).toContain('"Contraer la respuesta"');
+    expect(candidatesPage).toContain("setExpanded(current => !current)");
+    expect(candidatesPage).toContain("<Minus");
+    expect(candidatesPage).toContain("<Plus");
+    // El texto completo sigue disponible sin desplegar: el título del enlace lo
+    // conserva y la ficha de Revisión Humana sigue siendo la lectura autorizada.
+    expect(candidatesPage).toContain("title={formatAnswer(answer)}");
+  });
+
   it("connects public identity, geographic catalog, persistence, and agent context", () => {
     const login = fs.readFileSync(
       path.resolve("client/src/pages/Login.tsx"),
@@ -575,6 +599,8 @@ describe("black-box release contract", () => {
     // client/src/pages/AgentStages.tsx).
     // 2.0.225: +2 por la bitácora de la IA del agente (server/agentActivityLog.ts y
     // client/src/components/review/AgentAiLogPanel.tsx).
+    // 2.0.226: sin archivos nuevos: la celda desplegable de respuestas vive en
+    // la matriz vigente (client/src/pages/Candidates.tsx).
     expect(audit.files).toHaveLength(160);
     expect(audit.findings).toEqual([]);
     expect(publicCopyAudit.files).toHaveLength(160);
@@ -1277,7 +1303,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.225");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.226");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1287,17 +1313,17 @@ describe("black-box release contract", () => {
     // lugar y un techo propio.
     //
     // El techo del registro se elevó de 2600 a 3500 y después a 3600, 3700,
-    // 3800 y 3900: la entrega acumulada de resúmenes de commit ya no cabía y
-    // comprimir las entradas antiguas estaba borrando la trazabilidad que el
-    // registro existe para conservar. Un techo que obliga a destruir el
+    // 3800, 3900 y 4000: la entrega acumulada de resúmenes de commit ya no
+    // cabía y comprimir las entradas antiguas estaba borrando la trazabilidad
+    // que el registro existe para conservar. Un techo que obliga a destruir el
     // registro no protege nada.
     expect(proseWordCount).toBeGreaterThanOrEqual(2_400);
     expect(proseWordCount).toBeLessThanOrEqual(2_900);
-    expect(historyWordCount).toBeLessThanOrEqual(3_900);
+    expect(historyWordCount).toBeLessThanOrEqual(4_000);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.225");
+    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.226");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1766,7 +1792,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.225");
+    expect(governance).toContain("Alcance candidato 2.0.226");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2048,7 +2074,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.225");
+    expect(governance).toContain("Alcance candidato 2.0.226");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });
