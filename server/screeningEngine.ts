@@ -89,8 +89,29 @@ export type ScreeningStepPlan = {
   remainingQuestions: number;
 };
 
-/** Identidad del mensaje de cada pregunta; un reintento no la duplica. */
-export function screeningQuestionMessageKey(runId: number, index: number) {
+/**
+ * Identidad del mensaje de cada pregunta, calificada por fase. La
+ * precalificación y la entrevista comparten índices y, sin la fase, la clave
+ * de la primera pregunta de la entrevista colisiona con la de la primera de la
+ * precalificación: el motor creía formulada una pregunta que nunca emitió, la
+ * entrevista jamás arrancaba y el ciclo se detenía en la precalificación. Un
+ * reintento no duplica el mensaje.
+ */
+export function screeningQuestionMessageKey(
+  runId: number,
+  index: number,
+  phase: string
+) {
+  return `screening_item:${runId}:${phase}:${index}`;
+}
+
+/**
+ * Clave legada de la pregunta, sin fase: la escribía el motor cuando ambas
+ * fases compartían índice y colisionaban. Se conserva únicamente para
+ * reconocer preguntas de precalificación ya formuladas en conversaciones en
+ * curso; nunca se usa para formular preguntas de entrevista.
+ */
+function legacyScreeningQuestionMessageKey(runId: number, index: number) {
   return `screening_item:${runId}:${index}`;
 }
 
@@ -99,8 +120,17 @@ export function screeningCloseMessageKey(runId: number) {
   return `screening_close:${runId}`;
 }
 
-/** Identidad del recordatorio; un reintento no lo duplica. */
-export function screeningRepeatMessageKey(runId: number, index: number) {
+/** Identidad del recordatorio, calificada por fase igual que la pregunta. */
+export function screeningRepeatMessageKey(
+  runId: number,
+  index: number,
+  phase: string
+) {
+  return `screening_repeat:${runId}:${phase}:${index}`;
+}
+
+/** Clave legada del recordatorio, sin fase: solo lectura de precalificación. */
+function legacyScreeningRepeatMessageKey(runId: number, index: number) {
   return `screening_repeat:${runId}:${index}`;
 }
 
@@ -868,10 +898,29 @@ export async function runScreeningStepSweep(
       }
 
       const question = questions[run.current_question_index]!;
+      const phaseQuestionKey = screeningQuestionMessageKey(
+        run.run_id,
+        run.current_question_index,
+        run.phase
+      );
+      // La fase anterior a la entrevista conserva su clave legada para no
+      // reformular preguntas ya enviadas en conversaciones en curso; la
+      // entrevista solo reconoce su clave calificada, porque la legada le
+      // pertenece a la precalificación.
+      const askedKeys =
+        run.phase === "precalificacion"
+          ? [
+              phaseQuestionKey,
+              legacyScreeningQuestionMessageKey(
+                run.run_id,
+                run.current_question_index
+              ),
+            ]
+          : [phaseQuestionKey];
       const asked = await pool.query<{ exists: string }>(
         `SELECT count(*)::text AS exists FROM conversation_messages
-          WHERE message_key=$1`,
-        [screeningQuestionMessageKey(run.run_id, run.current_question_index)]
+          WHERE message_key = ANY($1::text[])`,
+        [askedKeys]
       );
       const currentQuestionAsked = Number(asked.rows[0]?.exists ?? 0) > 0;
       const pending = await pool.query<{ id: number; body: string }>(
@@ -903,7 +952,8 @@ export async function runScreeningStepSweep(
           text: prompt,
           messageKey: screeningQuestionMessageKey(
             run.run_id,
-            run.current_question_index
+            run.current_question_index,
+            run.phase
           ),
         });
         await recordScreeningAttemptAsked(pool, {
@@ -989,19 +1039,31 @@ export async function runScreeningStepSweep(
           continue;
         }
         if (isTrivialScreeningAnswer(answer)) {
+          const phaseRepeatKey = screeningRepeatMessageKey(
+            run.run_id,
+            run.current_question_index,
+            run.phase
+          );
+          const repeatKeys =
+            run.phase === "precalificacion"
+              ? [
+                  phaseRepeatKey,
+                  legacyScreeningRepeatMessageKey(
+                    run.run_id,
+                    run.current_question_index
+                  ),
+                ]
+              : [phaseRepeatKey];
           const repeated = await pool.query<{ exists: string }>(
             `SELECT count(*)::text AS exists FROM conversation_messages
-              WHERE message_key=$1`,
-            [screeningRepeatMessageKey(run.run_id, run.current_question_index)]
+              WHERE message_key = ANY($1::text[])`,
+            [repeatKeys]
           );
           if (Number(repeated.rows[0]?.exists ?? 0) === 0) {
             await enqueueScreeningMessage(pool, {
               conversationId: run.conversation_id,
               text: "Para continuar, por favor responda la pregunta anterior. Si no la entendió, escríbalo y una persona se hará cargo.",
-              messageKey: screeningRepeatMessageKey(
-                run.run_id,
-                run.current_question_index
-              ),
+              messageKey: phaseRepeatKey,
             });
             await recordScreeningAttemptResolved(pool, {
               runId: run.run_id,

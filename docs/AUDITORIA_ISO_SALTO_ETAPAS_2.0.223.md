@@ -300,3 +300,11 @@ La entrega **2.0.224** implementa las acciones correctivas de prioridad 1 de la 
 - **H-03** — la bitácora de la IA exige evidencia real: la conversación del perfil solo se asienta con un turno del motor de IA, y la entrevista distingue «administrada» de «no administrada». El motor, además, no conversa con expedientes descartados en el screening.
 
 Los hallazgos H-04 a H-07 y H-09 conservan su vigencia y sus acciones correctivas de prioridad 2 y 3; las verificaciones de producción V-01 a V-07 siguen siendo el cierre operativo de esta auditoría.
+
+---
+
+## 11. Addendum · Destrabe del paso 3 en JARVI HR 2.0.225
+
+La entrega **2.0.225** corrige la causa residual que detenía el ciclo en el paso 2: la identidad del mensaje de cada pregunta del banco no incluía la fase, de modo que la primera pregunta de la entrevista (`screening_item:<run>:0`) colisionaba con la primera de la precalificación (`screening_item:<run>:0`). El motor creía formulada una pregunta que nunca emitió —o la evaluaba contra una respuesta ajena a la pregunta—, la entrevista guiada jamás arrancaba y la persona esperaba el paso 3 indefinidamente.
+
+`server/screeningEngine.ts` califica ahora las claves por fase —`screening_item:<run>:<fase>:<índice>`— tanto para la pregunta como para el recordatorio; la clave legada se conserva únicamente para reconocer preguntas de precalificación ya formuladas en conversaciones en curso, de modo que una serie atascada en la entrevista se destraba y formula la pregunta pendiente. La fuente de conversación del agente queda verificada: bienvenida (paso 1), preguntas del banco (pasos 2 y 3), motor determinista (pasos 4 a 9) y los avisos gobernados del descarte y de la evaluación automática en modo excluyente.

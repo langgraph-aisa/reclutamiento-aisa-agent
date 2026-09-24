@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.224");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.224");
+    expect(APP_VERSION).toBe("2.0.225");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.225");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -573,7 +573,7 @@ describe("black-box release contract", () => {
     // 2.0.209: +1 por el motor de precalificación y entrevista (server/screeningEngine.ts).
     // 2.0.213: +2 por las etapas administrables del agente (server/agentStages.ts y
     // client/src/pages/AgentStages.tsx).
-    // 2.0.224: +2 por la bitácora de la IA del agente (server/agentActivityLog.ts y
+    // 2.0.225: +2 por la bitácora de la IA del agente (server/agentActivityLog.ts y
     // client/src/components/review/AgentAiLogPanel.tsx).
     expect(audit.files).toHaveLength(160);
     expect(audit.findings).toEqual([]);
@@ -1277,7 +1277,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.224");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.225");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1297,7 +1297,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.224");
+    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.225");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1560,6 +1560,19 @@ describe("black-box release contract", () => {
     expect(screeningEngine).toContain("conv.human_takeover=false");
     expect(screeningEngine).toContain('action: "etapa_desactivada"');
 
+    // La identidad del mensaje de cada pregunta se califica por fase: sin la
+    // fase, la primera pregunta de la entrevista colisiona con la de la
+    // precalificación y el ciclo se detiene antes del paso 3. La clave legada
+    // se conserva solo para reconocer preguntas ya formuladas.
+    expect(screeningEngine).toContain(
+      "return `screening_item:${runId}:${phase}:${index}`"
+    );
+    expect(screeningEngine).toContain(
+      "return `screening_repeat:${runId}:${phase}:${index}`"
+    );
+    expect(screeningEngine).toContain("legacyScreeningQuestionMessageKey");
+    expect(screeningEngine).toContain("message_key = ANY($1::text[])");
+
     // El motor determinista no conversa con un expediente descartado: la
     // conversación del perfil, el cierre y la solicitud del currículum no se
     // administran después del descarte del screening.
@@ -1753,7 +1766,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.224");
+    expect(governance).toContain("Alcance candidato 2.0.225");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2035,7 +2048,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.224");
+    expect(governance).toContain("Alcance candidato 2.0.225");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

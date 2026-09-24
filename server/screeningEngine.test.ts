@@ -8,8 +8,31 @@ import {
   planScreeningStep,
   questionApplies,
   reinforceScreeningAnswer,
+  screeningCloseMessageKey,
+  screeningQuestionMessageKey,
+  screeningRepeatMessageKey,
   wordBoundaryMatch,
 } from "./screeningEngine";
+
+describe("screeningEngine: identidad de mensajes calificada por fase", () => {
+  it("distingue la precalificación de la entrevista con la misma posición", () => {
+    const precalificacion = screeningQuestionMessageKey(7, 0, "precalificacion");
+    const entrevista = screeningQuestionMessageKey(7, 0, "entrevista");
+    expect(precalificacion).not.toBe(entrevista);
+    expect(precalificacion).toContain("precalificacion");
+    expect(entrevista).toContain("entrevista");
+  });
+
+  it("conserva la identidad del cierre por run sin mezclar fases", () => {
+    expect(screeningCloseMessageKey(7)).toBe("screening_close:7");
+  });
+
+  it("califica el recordatorio por fase para no reutilizar el de otra serie", () => {
+    const precalificacion = screeningRepeatMessageKey(7, 2, "precalificacion");
+    const entrevista = screeningRepeatMessageKey(7, 2, "entrevista");
+    expect(precalificacion).not.toBe(entrevista);
+  });
+});
 
 describe("screeningEngine: juicio determinista de descarte", () => {
   it("normaliza tildes y mayúsculas sin alterar el contenido", () => {
