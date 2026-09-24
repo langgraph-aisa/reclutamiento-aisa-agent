@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.220
+# Gobierno de release JARVI RH 2.0.221
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.220**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.221**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.221
+El release **concentra la solicitud de CV en las etapas del agente y retira toda otra vía**. Sin migración.
+
+**La solicitud de CV.** El mensaje de agradecimiento y solicitud de CV sale de Configuración y se administra como mensaje del paso 6 «Solicitud del currículum» (`solicitud_cv`). Es el único paso del ciclo autorizado por gerencia para pedir el documento: el cierre ya no lo despacha, el cambio de estado no lo encadena y el reintento manual desaparece.
+
+**El aviso de contacto.** Sale de Configuración y se administra como mensaje del nuevo paso 9 «Aviso de contacto» (`aviso_contacto`), que cierra el ciclo y concluye la automatización.
+
+**La evaluación automática.** El panel se mueve del menú lateral a la hoja «Etapas de la IA», en la caja derecha, y gana su propia plantilla de solicitud de CV (`solicitud_cv_cola`) para los perfiles en cola, editable e independiente del paso 6.
+
+**Sin migración.** Reutiliza `integration_settings` y las tablas conversacionales vigentes.
 
 ### Alcance candidato 2.0.220
 El release **mueve el mensaje de bienvenida del formulario al paso «Recepción del formulario» de la hoja «Etapas de la IA»**. Sin migración.
@@ -941,4 +952,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.220.md](PRUEBAS_CAJA_NEGRA_2.0.220.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.221.md](PRUEBAS_CAJA_NEGRA_2.0.221.md).

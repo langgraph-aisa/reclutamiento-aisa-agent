@@ -270,8 +270,6 @@ export default function Config() {
   });
   const [recipient, setRecipient] = useState({ label: "", phone: "" });
   const [country, setCountry] = useState("GT");
-  const [thankYou, setThankYou] = useState("");
-  const [contactNotice, setContactNotice] = useState("");
   const [essenceWordLimit, setEssenceWordLimit] = useState(550);
   const [cvAnalysisLoaded, setCvAnalysisLoaded] = useState(false);
   const [cvRequestLoaded, setCvRequestLoaded] = useState(false);
@@ -338,8 +336,6 @@ export default function Config() {
 
   useEffect(() => {
     if (cvAnalysisLoaded || !cvAnalysis.data) return;
-    setThankYou(cvAnalysis.data.thankYouMessage);
-    setContactNotice(cvAnalysis.data.contactNotice);
     setEssenceWordLimit(cvAnalysis.data.essenceWordLimit);
     setCvAnalysisLoaded(true);
   }, [cvAnalysis.data, cvAnalysisLoaded]);
@@ -365,24 +361,6 @@ export default function Config() {
         provider: "recruitment",
         settingKey: "default_country",
         settingValue: country.toUpperCase(),
-        isSecret: false,
-      });
-      await saveSetting.mutateAsync({
-        provider: "recruitment",
-        settingKey: "cv_thank_you_message",
-        settingValue: thankYou,
-        isSecret: false,
-      });
-      await saveSetting.mutateAsync({
-        provider: "recruitment",
-        settingKey: "cv_contact_notice",
-        settingValue: contactNotice,
-        isSecret: false,
-      });
-      await saveSetting.mutateAsync({
-        provider: "recruitment",
-        settingKey: "cv_essence_word_limit",
-        settingValue: String(essenceWordLimit),
         isSecret: false,
       });
       await Promise.all([cvAnalysis.refetch(), settings.refetch()]);
@@ -1446,55 +1424,21 @@ export default function Config() {
                   placeholder="GT"
                 />
               </div>
-              <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-primary">
-                    Mensaje de agradecimiento
-                  </Label>
-                  <Textarea
-                    value={thankYou}
-                    onChange={e => setThankYou(e.target.value)}
-                    rows={3}
-                    className="rounded-2xl"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    El cierre declara el agradecimiento y admite {"{{nombre}}"}{
-                      " "
-                    }
-                    y {"{{plaza}}"}.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold text-primary">
-                    Palabras de la esencia del CV
-                  </Label>
-                  <Input
-                    type="number"
-                    min={200}
-                    max={900}
-                    value={essenceWordLimit}
-                    onChange={e => setEssenceWordLimit(Number(e.target.value))}
-                    className="rounded-2xl"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Entre 200 y 900 palabras. El servidor aplica el límite al
-                    análisis.
-                  </p>
-                </div>
-              </div>
               <div className="space-y-2">
                 <Label className="text-sm font-semibold text-primary">
-                  Aviso de contacto
+                  Palabras de la esencia del CV
                 </Label>
-                <Textarea
-                  value={contactNotice}
-                  onChange={e => setContactNotice(e.target.value)}
-                  rows={2}
+                <Input
+                  type="number"
+                  min={200}
+                  max={900}
+                  value={essenceWordLimit}
+                  onChange={e => setEssenceWordLimit(Number(e.target.value))}
                   className="rounded-2xl"
                 />
                 <p className="text-xs text-muted-foreground">
-                  El aviso declara que el contacto de las etapas siguientes
-                  ocurre por este mismo medio.
+                  Entre 200 y 900 palabras. El servidor aplica el límite al
+                  análisis.
                 </p>
               </div>
               <Button

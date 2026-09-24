@@ -20,7 +20,6 @@ type ApplicationContact = {
   phone_international: string;
   position_title: string | null;
   whatsapp_message?: string | null;
-  global_whatsapp_message?: string | null;
 };
 
 type MessageRecord = {
@@ -134,19 +133,20 @@ export async function dispatchWelcomeMessage(
 
 async function ensureCvRequestMessageInternal(
   client: PoolClient,
-  application: ApplicationContact
+  application: ApplicationContact,
+  fallbackTemplate: string
 ) {
   const requestMessage = renderCvRequestMessage(
     application.full_name,
     application.position_title,
     application.whatsapp_message,
-    application.global_whatsapp_message
+    fallbackTemplate
   );
   // La guardia salarial se evalúa antes de tocar la base: una plantilla que
-  // ofrezca remuneración se rechaza sin efectos laterales. El mensaje base
-  // solicita el CV sin cierre: el agradecimiento y el aviso de contacto se
-  // emiten al cierre del proceso de evaluación (descarte o conclusión), no al
-  // recibir el formulario.
+  // ofrezca remuneración se rechaza sin efectos laterales. La solicitud del
+  // currículum es un hecho del paso «Solicitud del currículum»: se emite solo
+  // desde esa etapa y desde el ciclo de evaluación automática, cada uno con su
+  // propia plantilla.
   assertNoAutomatedSalaryOffer(requestMessage);
   // Serializa la creación por teléfono para que el receptor entrante pueda
   // volver a comprobar de forma unívoca la conversación dentro de su tx.
@@ -182,7 +182,8 @@ async function ensureCvRequestMessageInternal(
 
 export async function ensureCvRequestMessage(
   client: PoolClient,
-  application: ApplicationContact
+  application: ApplicationContact,
+  fallbackTemplate: string
 ) {
   return withLangfuseObservation(
     {
@@ -196,13 +197,15 @@ export async function ensureCvRequestMessage(
         positionTemplateConfigured: Boolean(
           application.whatsapp_message?.trim()
         ),
-        globalTemplateConfigured: Boolean(
-          application.global_whatsapp_message?.trim()
-        ),
+        fallbackTemplateConfigured: Boolean(fallbackTemplate?.trim()),
       },
     },
     async observation => {
-      const result = await ensureCvRequestMessageInternal(client, application);
+      const result = await ensureCvRequestMessageInternal(
+        client,
+        application,
+        fallbackTemplate
+      );
       observation.update({
         output: { status: "completed" },
         metadata: {
@@ -219,25 +222,33 @@ export async function ensureCvRequestMessage(
   );
 }
 
-const cvRequestContactSql = `SELECT a.id,a.status,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message,
-        (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message
+const cvRequestContactSql = `SELECT a.id,a.status,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message
    FROM applications a
    JOIN candidates c ON c.id=a.candidate_id
    JOIN job_positions p ON p.id=a.job_position_id
   WHERE a.id=$1`;
 
 /**
- * Prepara y despacha la solicitud de CV de una postulación recién registrada.
+ * Prepara y despacha la solicitud de CV de una postulación.
  *
- * Se ejecuta en su propia transacción, fuera de la postulación pública, para
- * que un fallo del proveedor o del texto nunca impida registrar al candidato.
- * La marca `cv_request:<id>` mantiene el envío idempotente ante cualquier
- * repetición del formulario o de una variante distinta de la misma plaza.
+ * La plantilla de respaldo es la del paso «Solicitud del currículum»
+ * (`solicitud_cv`), salvo que el llamador declare otra —el ciclo de evaluación
+ * automática usa la suya para los perfiles en cola—. La plaza sigue pudiendo
+ * personalizar su mensaje con `job_positions.whatsapp_message`, que precede al
+ * respaldo. Se ejecuta en su propia transacción, fuera de la postulación
+ * pública, para que un fallo del proveedor o del texto nunca impida registrar
+ * al candidato. La marca `cv_request:<id>` mantiene el envío idempotente ante
+ * cualquier repetición del formulario o de una variante distinta de la misma
+ * plaza.
  */
 export async function requestCvForApplication(
   pool: Pool,
-  applicationId: number
+  applicationId: number,
+  options?: { fallbackTemplate?: string }
 ): Promise<CvRequestDelivery | null> {
+  const stages = await loadAgentStageConfiguration(pool);
+  const fallbackTemplate =
+    options?.fallbackTemplate?.trim() || stages.messages.solicitud_cv;
   const client = await pool.connect();
   let messageId: number | null = null;
   try {
@@ -250,7 +261,11 @@ export async function requestCvForApplication(
       await client.query("ROLLBACK");
       return null;
     }
-    const message = await ensureCvRequestMessage(client, application);
+    const message = await ensureCvRequestMessage(
+      client,
+      application,
+      fallbackTemplate
+    );
     if (message) {
       messageId = message.id;
       await client.query(

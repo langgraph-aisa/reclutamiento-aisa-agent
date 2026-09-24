@@ -177,30 +177,6 @@ function CandidateDetail({
   const utils = trpc.useUtils();
   const latestEvaluation = data.evaluations?.[0];
   const agentPayload = latestEvaluation?.ai_payload;
-  const retryCvRequest = trpc.candidates.retryCvRequest.useMutation({
-    onSuccess: async result => {
-      await Promise.all([
-        utils.candidates.detail.invalidate({ id: data.application.id }),
-        utils.candidates.list.invalidate(),
-      ]);
-      if (result.whatsapp.status === "sent")
-        toast.success("Solicitud de CV enviada por WhatsApp");
-      else if (result.whatsapp.status === "already_sent")
-        toast.info("La solicitud de CV ya había sido enviada");
-      else if (result.whatsapp.status === "in_progress")
-        toast.info("El envío ya está siendo procesado");
-      else if (result.whatsapp.status === "unknown")
-        toast.warning(
-          "El resultado del envío debe verificarse en WhatsApp antes de intentarlo nuevamente"
-        );
-      else
-        toast.error(
-          "ApiChat no pudo enviar el mensaje. Revise la configuración e inténtelo nuevamente."
-        );
-    },
-    onError: error =>
-      toast.error(`No fue posible reintentar: ${error.message}`),
-  });
   const evaluateWithAgent = trpc.agent.evaluateApplication.useMutation({
     onSuccess: async result => {
       await Promise.all([
@@ -332,32 +308,11 @@ function CandidateDetail({
                       {data.application.last_whatsapp_error}
                     </p>
                   )}
-                  {data.application.whatsapp_status === "desconocido" ? (
-                    <p className="mt-2 font-semibold">
-                      Verifique la conversación de la persona postulante antes
-                      de realizar otro envío.
-                    </p>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        retryCvRequest.mutate({ id: data.application.id })
-                      }
-                      disabled={retryCvRequest.isPending}
-                      className="mt-3 w-full rounded-xl"
-                    >
-                      <RefreshCw
-                        className={`mr-2 h-3.5 w-3.5 ${retryCvRequest.isPending ? "animate-spin" : ""}`}
-                      />
-                      {retryCvRequest.isPending
-                        ? "Enviando…"
-                        : data.application.whatsapp_status === "error"
-                          ? "Reintentar solicitud de CV"
-                          : "Enviar solicitud de CV"}
-                    </Button>
-                  )}
+                  <p className="mt-2 leading-5">
+                    La solicitud del currículum es exclusiva de la etapa
+                    «Solicitud del currículum» del ciclo del agente: no se
+                    despacha desde la revisión humana.
+                  </p>
                 </div>
               )}
           </CollapsibleSection>

@@ -59,10 +59,6 @@ import {
   loadAgentLogSignals,
   recordAgentLogVerdicts,
 } from "./agentActivityLog";
-import {
-  composeCvClosingFromSettings,
-  loadCvAnalysisConfiguration,
-} from "./cvAnalysis";
 import { requestCvForApplication } from "./cvRequest";
 
 /**
@@ -493,40 +489,32 @@ async function emitDeterministicMessage(
 }
 
 /**
- * Cierre del proceso (etapa 5): emite el agradecimiento y el aviso de contacto
- * y dispara la solicitud del currículum, que es la etapa siguiente. No cierra
- * la automatización: el expediente aún espera el currículum y la expectativa.
+ * Aviso de contacto (etapa 9): declara que el contacto de las etapas siguientes
+ * ocurre por este mismo medio y concluye la automatización. Es el último
+ * mensaje determinista del ciclo.
  */
-async function emitCierreTurn(
+async function emitContactNoticeTurn(
   pool: Pool,
   state: ConversationState,
-  source: ConversationContextSource,
   context: BuiltConversationContext,
-  cvConfig: Awaited<ReturnType<typeof loadCvAnalysisConfiguration>>
+  stages: AgentStageConfiguration
 ): Promise<ConversationTurnOutcome> {
-  const text = composeCvClosingFromSettings({
+  const text = renderStageTemplate(stages.messages.aviso_contacto, {
     name: state.full_name,
-    position: source.position.title,
-    thankYouMessage: cvConfig.thankYouMessage,
-    contactNotice: cvConfig.contactNotice,
   });
   const { messageId, turnId } = await emitDeterministicMessage(
     pool,
     state,
     context,
     text,
-    "cierre"
+    "aviso_contacto"
   );
-  // La solicitud del currículum sigue al cierre: se despacha en su propia
-  // transacción y su marca idempotente evita duplicados.
-  void requestCvForApplication(pool, Number(state.application_id)).catch(
-    error => {
-      console.warn(
-        `[cvRequest] Application ${state.application_id}: ${
-          error instanceof Error ? error.name : "unknown"
-        }`
-      );
-    }
+  await pool.query(
+    `UPDATE conversations
+        SET automation_state='completed',automation_completed_at=now(),
+            updated_at=now()
+      WHERE id=$1`,
+    [state.id]
   );
   return { status: "sent", messageId, turnId, reply: text };
 }
@@ -578,15 +566,9 @@ async function emitSalaryTurn(
       state,
       context,
       text,
-      "cierre"
+      "expectativa_salarial"
     );
-    await pool.query(
-      `UPDATE conversations
-          SET automation_state='completed',automation_completed_at=now(),
-              updated_at=now()
-        WHERE id=$1`,
-      [state.id]
-    );
+    // La automatización concluye en la etapa siguiente, el aviso de contacto.
     return { status: "sent", messageId, turnId, reply: text };
   }
   const text = renderStageTemplate(stages.messages.pregunta_salario, {
@@ -811,19 +793,20 @@ async function runConversationTurnInternal(
                 "El currículum solicitado aún no llega; el turno espera su recepción.",
             };
           case "cierre": {
-            const cvConfig = await loadCvAnalysisConfiguration(pool);
-            const outcome = await emitCierreTurn(
-              pool,
-              state,
-              source,
-              context,
-              cvConfig
-            );
+            // El cierre ya no emite el agradecimiento ni el aviso de contacto:
+            // cada uno pertenece a su propia etapa. Aquí la conversación del
+            // perfil concluye y la solicitud del currículum queda despachada
+            // con su plantilla del paso 6.
+            await requestCvForApplication(pool, Number(state.application_id));
             observation.update({
-              output: { status: outcome.status },
-              metadata: { outcome: "deterministic-stage", stage: "cierre" },
+              output: { status: "skipped" },
+              metadata: { outcome: "cv-request-dispatched", stage: "cierre" },
             });
-            return outcome;
+            return {
+              status: "skipped",
+              reason:
+                "El cierre concluyó la conversación del perfil y despachó la solicitud del currículum.",
+            };
           }
           case "expectativa_salarial": {
             const outcome = await emitSalaryTurn(
@@ -838,6 +821,22 @@ async function runConversationTurnInternal(
               metadata: {
                 outcome: "deterministic-stage",
                 stage: "expectativa_salarial",
+              },
+            });
+            return outcome;
+          }
+          case "aviso_contacto": {
+            const outcome = await emitContactNoticeTurn(
+              pool,
+              state,
+              context,
+              stagesConfig
+            );
+            observation.update({
+              output: { status: outcome.status },
+              metadata: {
+                outcome: "deterministic-stage",
+                stage: "aviso_contacto",
               },
             });
             return outcome;

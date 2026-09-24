@@ -38,11 +38,8 @@ import {
   router,
 } from "./_core/trpc";
 import {
-  deliverCvRequestMessage,
   dispatchWelcomeMessage,
-  ensureCvRequestMessage,
   requestCvForApplication,
-  type CvRequestDelivery,
 } from "./cvRequest";
 import {
   AGENT_MODELS,
@@ -69,7 +66,9 @@ import {
   AGENT_STAGE_KEYS,
   buildAgentStagesView,
   loadAgentStageConfiguration,
+  loadAutomaticEvaluationCvMessage,
   saveAgentStageConfiguration,
+  saveAutomaticEvaluationCvMessage,
 } from "./agentStages";
 import { agentLogTrace } from "./agentActivityLog";
 import {
@@ -4479,14 +4478,10 @@ export const appRouter = router({
         const client = await pool.connect();
         let application: Record<string, any>;
         let audit: Record<string, any>;
-        let messageId: number | null = null;
         try {
           await client.query("BEGIN");
           const beforeResult = await client.query(
-            `SELECT a.*,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message,
-                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message,
-                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_thank_you_message' LIMIT 1) AS cv_thank_you_message,
-                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_contact_notice' LIMIT 1) AS cv_contact_notice
+            `SELECT a.*,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message
              FROM applications a
              JOIN candidates c ON c.id=a.candidate_id
              JOIN job_positions p ON p.id=a.job_position_id
@@ -4504,23 +4499,14 @@ export const appRouter = router({
             [input.status, input.id]
           );
           application = afterResult.rows[0];
-          if (before.status !== "calificado" && input.status === "calificado") {
-            const message = await ensureCvRequestMessage(client, before);
-            if (message?.created) {
-              messageId = message.id;
-              const pending = await client.query(
-                `UPDATE applications SET whatsapp_status='pendiente',last_whatsapp_error=NULL,updated_at=now() WHERE id=$1 RETURNING *`,
-                [input.id]
-              );
-              application = pending.rows[0];
-            }
-          }
+          // La solicitud del CV pertenece a la etapa «Solicitud del currículum»
+          // del ciclo del agente: cambiar el estado de una postulación no la
+          // despacha. El único proceso autorizado es el del ciclo administrado.
           const beforeApplication = { ...before };
           delete beforeApplication.full_name;
           delete beforeApplication.phone_international;
           delete beforeApplication.position_title;
           delete beforeApplication.whatsapp_message;
-          delete beforeApplication.global_whatsapp_message;
           const action =
             before.status === input.status ? "comment_added" : "status_changed";
           const auditResult = await client.query(
@@ -4542,90 +4528,7 @@ export const appRouter = router({
         } finally {
           client.release();
         }
-        const whatsapp: CvRequestDelivery | null = messageId
-          ? await deliverCvRequestMessage(pool, messageId)
-          : null;
-        if (whatsapp) {
-          const current = await pool.query(
-            `SELECT * FROM applications WHERE id=$1`,
-            [input.id]
-          );
-          application = current.rows[0] ?? application;
-        }
-        return { success: true as const, application, audit, whatsapp };
-      }),
-    retryCvRequest: roleProcedure
-      .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
-        const pool = await requirePool();
-        const client = await pool.connect();
-        let messageId: number;
-        try {
-          await client.query("BEGIN");
-          const applicationResult = await client.query(
-            `SELECT a.*,c.full_name,c.phone_international,p.title AS position_title,p.whatsapp_message,
-                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='whatsapp_message' LIMIT 1) AS global_whatsapp_message,
-                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_thank_you_message' LIMIT 1) AS cv_thank_you_message,
-                  (SELECT setting_value FROM integration_settings WHERE provider='recruitment' AND setting_key='cv_contact_notice' LIMIT 1) AS cv_contact_notice
-             FROM applications a
-             JOIN candidates c ON c.id=a.candidate_id
-             JOIN job_positions p ON p.id=a.job_position_id
-            WHERE a.id=$1 FOR UPDATE OF a`,
-            [input.id]
-          );
-          const application = applicationResult.rows[0];
-          if (!application)
-            throw new TRPCError({
-              code: "NOT_FOUND",
-              message: "Candidato no encontrado.",
-            });
-          if (application.status !== "calificado") {
-            throw new TRPCError({
-              code: "PRECONDITION_FAILED",
-              message:
-                "La solicitud de CV solo puede enviarse a postulaciones calificadas.",
-            });
-          }
-          const message = await ensureCvRequestMessage(client, application);
-          if (!message)
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message: "No fue posible preparar la solicitud de CV.",
-            });
-          messageId = message.id;
-          if (message.delivery_status === "sent") {
-            await client.query(
-              `UPDATE applications SET whatsapp_status='enviado',last_whatsapp_error=NULL,updated_at=now() WHERE id=$1`,
-              [input.id]
-            );
-          } else if (message.delivery_status === "unknown") {
-            await client.query(
-              `UPDATE applications SET whatsapp_status='desconocido',updated_at=now() WHERE id=$1`,
-              [input.id]
-            );
-          } else if (message.delivery_status !== "sending") {
-            await client.query(
-              `UPDATE applications SET whatsapp_status='pendiente',last_whatsapp_error=NULL,updated_at=now() WHERE id=$1`,
-              [input.id]
-            );
-          }
-          await client.query("COMMIT");
-        } catch (error) {
-          await client.query("ROLLBACK");
-          throw error;
-        } finally {
-          client.release();
-        }
-        const whatsapp = await deliverCvRequestMessage(pool, messageId!);
-        const current = await pool.query(
-          `SELECT * FROM applications WHERE id=$1`,
-          [input.id]
-        );
-        return {
-          success: true as const,
-          application: current.rows[0],
-          whatsapp,
-        };
+        return { success: true as const, application, audit };
       }),
   }),
 
@@ -6626,9 +6529,11 @@ export const appRouter = router({
           order: z.array(z.enum(AGENT_STAGE_KEYS)).length(AGENT_STAGE_KEYS.length),
           messages: z.object({
             bienvenida_formulario: z.string().trim().max(1_000),
+            solicitud_cv: z.string().trim().max(1_000),
             confirmacion_cv: z.string().trim().max(1_000),
             pregunta_salario: z.string().trim().max(1_000),
             confirmacion_salario: z.string().trim().max(1_000),
+            aviso_contacto: z.string().trim().max(1_000),
           }),
         })
       )
@@ -6645,6 +6550,35 @@ export const appRouter = router({
             message: safeIntegrationMessage(
               error,
               "No fue posible guardar las etapas del agente."
+            ),
+          });
+        }
+      }),
+    /**
+     * Plantilla de solicitud de CV del ciclo de evaluación automática, para
+     * las postulaciones en cola. Vive junto a las etapas porque es parte del
+     * mismo módulo administrativo, pero no es un mensaje de etapa.
+     */
+    automaticCvMessage: adminProcedure.query(async () => ({
+      message: await loadAutomaticEvaluationCvMessage(await getPool()),
+    })),
+    saveAutomaticCvMessage: adminProcedure
+      .input(z.object({ message: z.string().trim().max(1_000) }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return {
+            message: await saveAutomaticEvaluationCvMessage(
+              await requirePool(),
+              input.message,
+              ctx.user.id
+            ),
+          };
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar la plantilla de CV de la cola."
             ),
           });
         }

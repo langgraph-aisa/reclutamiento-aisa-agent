@@ -12,8 +12,10 @@ const application = {
   full_name: "Persona de prueba",
   phone_international: "+50255555555",
   position_title: "Ejecutivo comercial",
-  global_whatsapp_message: null,
 };
+
+const stepTemplate =
+  "{{nombre}}, gracias por participar en el proceso de {{plaza}}, ¿puede enviarnos por esta vía su CV?";
 
 describe("política salarial en mensajería automática", () => {
   it("rechaza una plantilla de solicitud de CV que ofrezca remuneración", async () => {
@@ -26,7 +28,8 @@ describe("política salarial en mensajería automática", () => {
           ...application,
           whatsapp_message:
             "Hola {{nombre}}. Para {{plaza}} le ofrecemos un salario de Q 9,000. Envíe su currículum.",
-        }
+        },
+        stepTemplate
       )
     ).rejects.toThrow(/oferta o propuesta económica/);
 
@@ -48,7 +51,8 @@ describe("política salarial en mensajería automática", () => {
         ...application,
         whatsapp_message:
           "Hola {{nombre}}. Gracias por su interés en {{plaza}}. Envíe su currículum para continuar.",
-      }
+      },
+      stepTemplate
     );
 
     expect(result).toMatchObject({ id: 31, created: true });

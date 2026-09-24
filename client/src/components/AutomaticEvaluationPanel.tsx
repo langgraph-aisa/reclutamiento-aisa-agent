@@ -9,13 +9,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { Bot, Clock3, ListChecks, Timer } from "lucide-react";
-import { useState } from "react";
+import { Bot, Clock3, ListChecks, Save, Timer } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 /**
- * Panel del ciclo de evaluación automática.
+ * Panel del ciclo de evaluación automática, publicado en la hoja «Etapas de la
+ * IA» junto al ciclo del agente.
  *
  * Muestra el estado declarado del interruptor, el instante de la última
  * evaluación completada y los dos contadores del ciclo. Los contadores son
@@ -23,6 +27,10 @@ import { useState } from "react";
  * revisión humana o el propio ciclo—, de modo que el número visible no puede
  * discrepar del estado real. No son un informe del trabajador sobre sí mismo:
  * son una manifestación de la postulación.
+ *
+ * La plantilla de solicitud de CV es propia del ciclo: las postulaciones en
+ * cola reciben este mensaje, distinto del paso «Solicitud del currículum» del
+ * flujo conversacional.
  *
  * Encender y apagar exigen un código que viaja por correo: es un acto de
  * consecuencia institucional y no debe depender de un clic accidental.
@@ -59,6 +67,26 @@ export function AutomaticEvaluationPanel() {
   } | null>(null);
   const [code, setCode] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Plantilla de solicitud de CV de la cola: cada perfil pendiente la recibe
+  // cuando el ciclo lo atiende. Es editable aquí y vive aparte del paso
+  // «Solicitud del currículum».
+  const automaticCvMessage = trpc.agentStages.automaticCvMessage.useQuery();
+  const [cvMessage, setCvMessage] = useState("");
+  const [cvMessageLoaded, setCvMessageLoaded] = useState(false);
+  useEffect(() => {
+    if (cvMessageLoaded || !automaticCvMessage.data) return;
+    setCvMessage(automaticCvMessage.data.message);
+    setCvMessageLoaded(true);
+  }, [automaticCvMessage.data, cvMessageLoaded]);
+  const saveCvMessage = trpc.agentStages.saveAutomaticCvMessage.useMutation({
+    onSuccess: async result => {
+      setCvMessage(result.message);
+      await automaticCvMessage.refetch();
+      toast.success("Mensaje de solicitud de CV de la cola guardado.");
+    },
+    onError: error => toast.error(error.message),
+  });
 
   const requestCode = trpc.evaluationAutomation.requestCode.useMutation({
     onSuccess: (result, variables) => {
@@ -107,17 +135,17 @@ export function AutomaticEvaluationPanel() {
   return (
     <section
       aria-label="Ciclo de evaluación automática"
-      className="mt-2 space-y-2 rounded-xl border border-sidebar-border/80 bg-sidebar-accent/35 p-2.5"
+      className="space-y-3 rounded-2xl border border-border/70 bg-card p-4"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-sidebar-foreground/85">
-          <Bot className="size-3.5 shrink-0" aria-hidden="true" />
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-sm font-semibold text-primary">
+          <Bot className="size-4 shrink-0" aria-hidden="true" />
           <span className="truncate">Evaluación Automática (IA)</span>
         </span>
         <span className="inline-flex shrink-0 items-center gap-2">
           <Badge
             variant="outline"
-            className={`rounded-full text-[10px] ${STATE_CLASSES[state] ?? STATE_CLASSES.apagado}`}
+            className={`rounded-full text-xs ${STATE_CLASSES[state] ?? STATE_CLASSES.apagado}`}
           >
             {STATE_LABELS[state] ?? state}
           </Badge>
@@ -134,30 +162,53 @@ export function AutomaticEvaluationPanel() {
         </span>
       </div>
 
-      <p className="inline-flex items-center gap-1.5 text-[10px] text-sidebar-foreground/70">
-        <Clock3 className="size-3 shrink-0" aria-hidden="true" />
+      <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Clock3 className="size-3.5 shrink-0" aria-hidden="true" />
         Última realizada: {formatMoment(counters?.lastEvaluationAt)}
       </p>
-      <p className="inline-flex items-center gap-1.5 text-[10px] text-sidebar-foreground/70">
-        <ListChecks className="size-3 shrink-0" aria-hidden="true" />
+      <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <ListChecks className="size-3.5 shrink-0" aria-hidden="true" />
         {Number(counters?.processed ?? 0)} procesadas desde el inicio
       </p>
-      <p className="inline-flex items-center gap-1.5 text-[10px] text-sidebar-foreground/70">
-        <Timer className="size-3 shrink-0" aria-hidden="true" />
+      <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Timer className="size-3.5 shrink-0" aria-hidden="true" />
         {pending} pendientes en cola
         {blocked > 0 ? ` · ${blocked} no evaluable(s)` : ""}
       </p>
       {state === "deteniendose" ? (
-        <p className="text-[10px] leading-4 text-amber-900">
+        <p className="text-xs leading-4 text-amber-900">
           Apagado autorizado. El ciclo termina la evaluación en curso y se
           detiene: no se corta ningún proceso a la mitad.
         </p>
       ) : null}
       {notice ? (
-        <p className="text-[10px] leading-4 text-sidebar-foreground/80">
-          {notice}
-        </p>
+        <p className="text-xs leading-4 text-muted-foreground">{notice}</p>
       ) : null}
+
+      <div className="space-y-1.5 border-t border-border/60 pt-3">
+        <Label className="text-sm font-semibold text-primary">
+          Mensaje de solicitud de CV de la cola
+        </Label>
+        <Textarea
+          value={cvMessage}
+          onChange={event => setCvMessage(event.target.value)}
+          rows={3}
+          className="rounded-xl"
+        />
+        <p className="text-xs text-muted-foreground">
+          Lo recibe cada perfil en cola cuando el ciclo lo atiende. Admite las
+          variables {"{{nombre}}"} y {"{{plaza}}"}.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          className="rounded-full"
+          disabled={saveCvMessage.isPending}
+          onClick={() => saveCvMessage.mutate({ message: cvMessage })}
+        >
+          <Save className="mr-2 h-3.5 w-3.5" /> Guardar mensaje de cola
+        </Button>
+      </div>
 
       <Dialog
         open={Boolean(challenge)}

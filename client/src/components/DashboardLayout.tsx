@@ -1,7 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AppBrand } from "@/components/AppBrand";
 import { ActivityAuditBar } from "@/components/ActivityAuditBar";
-import { AutomaticEvaluationPanel } from "@/components/AutomaticEvaluationPanel";
 import { ReleaseSummary } from "@/components/ReleaseSummary";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -427,7 +426,6 @@ function DashboardLayoutContent({
               <ReleaseSummary compact />
             ) : (
               <>
-                <AutomaticEvaluationPanel />
                 {repositoryOpen ? <ReleaseSummary /> : null}
               </>
             )}

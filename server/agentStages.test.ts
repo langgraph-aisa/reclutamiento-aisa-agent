@@ -17,7 +17,7 @@ import {
 describe("etapas administrables del agente", () => {
   it("declara el ciclo completo en el orden institucional", () => {
     expect(AGENT_STAGES.map(stage => stage.order)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8,
+      1, 2, 3, 4, 5, 6, 7, 8, 9,
     ]);
     expect(AGENT_STAGES.map(stage => stage.key)).toEqual(
       DEFAULT_AGENT_STAGE_ORDER
@@ -27,6 +27,7 @@ describe("etapas administrables del agente", () => {
     ).toBeGreaterThan(DEFAULT_AGENT_STAGE_ORDER.indexOf("cierre"));
     expect(AGENT_STAGES[0].key).toBe("recepcion_formulario");
     expect(AGENT_STAGES[7].key).toBe("expectativa_salarial");
+    expect(AGENT_STAGES[8].key).toBe("aviso_contacto");
     expect(AGENT_STAGES.every(stage => stage.name.trim().length > 0)).toBe(
       true
     );
@@ -65,7 +66,7 @@ describe("etapas administrables del agente", () => {
       order: [...DEFAULT_AGENT_STAGE_ORDER],
       messages: { ...DEFAULT_AGENT_STAGE_MESSAGES },
     });
-    expect(view.stages).toHaveLength(8);
+    expect(view.stages).toHaveLength(9);
     const cierre = view.stages.find(stage => stage.key === "cierre");
     expect(cierre?.enabled).toBe(false);
     expect(view.defaults.enabled.cierre).toBe(true);
@@ -81,6 +82,20 @@ describe("etapas administrables del agente", () => {
     );
     expect(DEFAULT_AGENT_STAGE_MESSAGES.bienvenida_formulario).toContain(
       "{{plaza}}"
+    );
+  });
+
+  it("asocia la solicitud de CV al paso 6 y el aviso de contacto al paso 9", () => {
+    const solicitud = AGENT_STAGES.find(
+      stage => stage.key === "solicitud_cv"
+    );
+    expect(solicitud?.messageKeys).toEqual(["solicitud_cv"]);
+    const aviso = AGENT_STAGES.find(stage => stage.key === "aviso_contacto");
+    expect(aviso?.order).toBe(9);
+    expect(aviso?.messageKeys).toEqual(["aviso_contacto"]);
+    expect(DEFAULT_AGENT_STAGE_MESSAGES.solicitud_cv).toContain("{{nombre}}");
+    expect(DEFAULT_AGENT_STAGE_MESSAGES.aviso_contacto).toContain(
+      "este mismo medio"
     );
   });
 
@@ -113,14 +128,14 @@ describe("etapas administrables del agente", () => {
     });
     expect(view.stages.map(stage => stage.key)).toEqual(reordered);
     expect(view.stages[0].order).toBe(1);
-    expect(view.stages[7].order).toBe(8);
+    expect(view.stages[8].order).toBe(9);
   });
 
-  it("conserva el orden fijo de la gerencia: currículum tras el cierre y expectativa al final", () => {
+  it("conserva el orden fijo de la gerencia: currículum tras el cierre y aviso de contacto al final", () => {
     const keys = DEFAULT_AGENT_STAGE_ORDER;
     expect(keys.indexOf("solicitud_cv")).toBeGreaterThan(keys.indexOf("cierre"));
     expect(keys.indexOf("espera_cv")).toBeGreaterThan(keys.indexOf("solicitud_cv"));
-    expect(keys[keys.length - 1]).toBe("expectativa_salarial");
+    expect(keys[keys.length - 1]).toBe("aviso_contacto");
   });
 
   it("sustituye las variables de la plantilla", () => {

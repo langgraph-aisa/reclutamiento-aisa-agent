@@ -50,6 +50,7 @@ export const AGENT_STAGE_CATEGORY: Record<AgentStageKey, AgentAiCategoryKey> = {
   solicitud_cv: "nlp",
   espera_cv: "vision",
   expectativa_salarial: "data",
+  aviso_contacto: "nlp",
 };
 
 /** Palabras máximas de una línea del log, para lectura de un vistazo. */
@@ -73,6 +74,8 @@ export type AgentLogSignals = {
   screeningDisqualified: boolean;
   /** El cierre institucional ya fue emitido en la conversación. */
   cierreEmitido: boolean;
+  /** El aviso de contacto del paso 9 ya fue emitido en la conversación. */
+  avisoContactoEmitido: boolean;
 };
 
 export type AgentStageVerdictInput = {
@@ -232,11 +235,15 @@ export function buildAgentStageVerdicts(
     cierre: () => {
       if (!config.enabled.cierre)
         return skipped("cierre", "Cierre del proceso", DISABLED_REASON);
-      if (signals.cierreEmitido)
+      if (
+        signals.cierreEmitido ||
+        signals.cvState === "pendiente" ||
+        signals.cvState === "recibido"
+      )
         return executed(
           "cierre",
           "Cierre del proceso",
-          "Se emitió el agradecimiento, el aviso de contacto y se reejecutó la evaluación."
+          "La conversación del perfil concluyó y el expediente pasó a la solicitud del currículum."
         );
       return pending("cierre", "Cierre del proceso");
     },
@@ -302,6 +309,21 @@ export function buildAgentStageVerdicts(
           "La pregunta quedó abierta y se espera la respuesta de la persona."
         );
       return pending("expectativa_salarial", "Expectativa salarial");
+    },
+    aviso_contacto: () => {
+      if (!config.enabled.aviso_contacto)
+        return skipped(
+          "aviso_contacto",
+          "Aviso de contacto",
+          DISABLED_REASON
+        );
+      if (signals.avisoContactoEmitido)
+        return executed(
+          "aviso_contacto",
+          "Aviso de contacto",
+          "Se declaró que el contacto de las etapas siguientes ocurre por este mismo medio."
+        );
+      return pending("aviso_contacto", "Aviso de contacto");
     },
   };
 
@@ -392,6 +414,8 @@ export async function loadAgentLogSignals(
     cierreEmitido:
       conversationState?.automationState === "completed" ||
       conversationState?.conversationStage === "cierre",
+    avisoContactoEmitido:
+      conversationState?.conversationStage === "aviso_contacto",
   };
 }
 

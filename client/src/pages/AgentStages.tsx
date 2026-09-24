@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { AutomaticEvaluationPanel } from "@/components/AutomaticEvaluationPanel";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -27,9 +28,11 @@ type StageView = {
 
 const MESSAGE_LABELS: Record<string, string> = {
   bienvenida_formulario: "Mensaje de bienvenida",
+  solicitud_cv: "Mensaje de solicitud de CV",
   confirmacion_cv: "Mensaje de confirmación de recepción",
   pregunta_salario: "Pregunta de expectativa salarial",
   confirmacion_salario: "Confirmación del registro",
+  aviso_contacto: "Aviso de contacto",
 };
 
 export default function AgentStages() {
@@ -46,9 +49,11 @@ export default function AgentStages() {
   const [order, setOrder] = useState<AgentStageKey[]>([]);
   const [messages, setMessages] = useState<Record<string, string>>({
     bienvenida_formulario: "",
+    solicitud_cv: "",
     confirmacion_cv: "",
     pregunta_salario: "",
     confirmacion_salario: "",
+    aviso_contacto: "",
   });
   const [loaded, setLoaded] = useState(false);
   const [draggingKey, setDraggingKey] = useState<AgentStageKey | null>(null);
@@ -64,9 +69,11 @@ export default function AgentStages() {
     setMessages({
       bienvenida_formulario:
         configuration.data.messages.bienvenida_formulario,
+      solicitud_cv: configuration.data.messages.solicitud_cv,
       confirmacion_cv: configuration.data.messages.confirmacion_cv,
       pregunta_salario: configuration.data.messages.pregunta_salario,
       confirmacion_salario: configuration.data.messages.confirmacion_salario,
+      aviso_contacto: configuration.data.messages.aviso_contacto,
     });
     setLoaded(true);
   }, [configuration.data, loaded]);
@@ -108,9 +115,11 @@ export default function AgentStages() {
       order,
       messages: {
         bienvenida_formulario: messages.bienvenida_formulario,
+        solicitud_cv: messages.solicitud_cv,
         confirmacion_cv: messages.confirmacion_cv,
         pregunta_salario: messages.pregunta_salario,
         confirmacion_salario: messages.confirmacion_salario,
+        aviso_contacto: messages.aviso_contacto,
       },
     });
   };
@@ -134,22 +143,23 @@ export default function AgentStages() {
     : stages;
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
-          Comportamiento del agente
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-          Etapas de la IA
-        </h1>
-        <p className="mt-2 max-w-2xl text-muted-foreground">
-          El ciclo completo del agente conversacional, en su orden de ejecución.
-          Arrastre una etapa para reordenarla, active o apague cada etapa y
-          ajuste los mensajes que emite de forma directa.
-        </p>
-      </div>
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="space-y-6">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">
+            Comportamiento del agente
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+            Etapas de la IA
+          </h1>
+          <p className="mt-2 max-w-2xl text-muted-foreground">
+            El ciclo completo del agente conversacional, en su orden de
+            ejecución. Arrastre una etapa para reordenarla, active o apague cada
+            etapa y ajuste los mensajes que emite de forma directa.
+          </p>
+        </div>
 
-      <Card className="rounded-3xl border-0 shadow-soft">
+        <Card className="rounded-3xl border-0 shadow-soft">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -282,6 +292,10 @@ export default function AgentStages() {
         <p className="text-sm text-muted-foreground">
           Las etapas guardadas se aplican al siguiente turno del agente.
         </p>
+      </div>
+      </div>
+      <div className="space-y-4 lg:sticky lg:top-20">
+        <AutomaticEvaluationPanel />
       </div>
     </div>
   );

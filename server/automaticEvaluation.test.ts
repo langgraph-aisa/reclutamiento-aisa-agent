@@ -4,7 +4,12 @@ vi.mock("./agentEvaluator", () => ({
   evaluateApplicationWithAgent: vi.fn(),
 }));
 
+vi.mock("./cvRequest", () => ({
+  requestCvForApplication: vi.fn(),
+}));
+
 import { evaluateApplicationWithAgent } from "./agentEvaluator";
+import { requestCvForApplication } from "./cvRequest";
 import {
   EVALUATION_AUTOMATION_COMPLETED,
   EVALUATION_AUTOMATION_FAILED,
@@ -101,6 +106,11 @@ function auditedAction(calls: Array<{ sql: string; values: unknown[] }>) {
 describe("cadena de la evaluación automática", () => {
   beforeEach(() => {
     vi.mocked(evaluateApplicationWithAgent).mockReset();
+    vi.mocked(requestCvForApplication).mockReset();
+    vi.mocked(requestCvForApplication).mockResolvedValue({
+      status: "sent",
+      providerMessageId: null,
+    });
   });
 
   it("evalúa: la nota persistida es el criterio de éxito", async () => {

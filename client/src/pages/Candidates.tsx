@@ -131,17 +131,7 @@ export default function Candidates() {
         utils.dashboard.summary.invalidate(),
         utils.reports.overview.invalidate(),
       ]);
-      if (result.whatsapp?.status === "sent") {
-        toast.success("Cambio guardado y solicitud de CV enviada por WhatsApp");
-      } else if (result.whatsapp?.status === "failed") {
-        toast.error("Estado guardado; el envío de WhatsApp requiere revisión");
-      } else if (result.whatsapp?.status === "unknown") {
-        toast.warning(
-          "Estado guardado; confirma el envío antes de reintentarlo"
-        );
-      } else {
-        toast.success("Revisión humana guardada con auditoría");
-      }
+      toast.success("Cambio guardado");
     },
     onError: error => toast.error(`No fue posible guardar: ${error.message}`),
   });

@@ -98,15 +98,18 @@ describe("observabilidad operacional sin contenido privado", () => {
         rows: [{ id: 31, delivery_status: "pending" }],
       });
 
-    await ensureCvRequestMessage({ query } as never, {
-      id: 17,
-      status: "calificado",
-      full_name: privateName,
-      phone_international: privatePhone,
-      position_title: "Ejecutivo comercial",
-      whatsapp_message: null,
-      global_whatsapp_message: null,
-    });
+    await ensureCvRequestMessage(
+      { query } as never,
+      {
+        id: 17,
+        status: "calificado",
+        full_name: privateName,
+        phone_international: privatePhone,
+        position_title: "Ejecutivo comercial",
+        whatsapp_message: null,
+      },
+      "{{nombre}}, gracias por participar en el proceso de {{plaza}}."
+    );
 
     const record = observation("cv_request.message.ensure");
     expect(record.updates.at(-1)).toMatchObject({

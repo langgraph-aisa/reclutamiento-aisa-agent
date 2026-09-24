@@ -12,9 +12,12 @@ import type { Pool } from "pg";
  * Bajo el proveedor `agent_stages` en `integration_settings` viven:
  *  - `enabled`: documento JSON con el interruptor de cada etapa.
  *  - `order`: documento JSON con la secuencia administrada de las etapas.
- *  - `bienvenida_formulario`, `confirmacion_cv`, `pregunta_salario`,
- *    `confirmacion_salario`: plantillas de los mensajes deterministas que
- *    emite el motor fuera de la conversación libre.
+ *  - `bienvenida_formulario`, `solicitud_cv`, `confirmacion_cv`,
+ *    `pregunta_salario`, `confirmacion_salario`, `aviso_contacto`: plantillas
+ *    de los mensajes deterministas que emite el motor fuera de la conversación
+ *    libre.
+ *  - `solicitud_cv_cola`: plantilla de solicitud de CV que usa el ciclo de
+ *    evaluación automática para las postulaciones en cola.
  */
 
 export const AGENT_STAGES_PROVIDER = "agent_stages";
@@ -28,15 +31,18 @@ export const AGENT_STAGE_KEYS = [
   "cierre",
   "espera_cv",
   "expectativa_salarial",
+  "aviso_contacto",
 ] as const;
 
 export type AgentStageKey = (typeof AGENT_STAGE_KEYS)[number];
 
 export const AGENT_STAGE_MESSAGE_KEYS = [
   "bienvenida_formulario",
+  "solicitud_cv",
   "confirmacion_cv",
   "pregunta_salario",
   "confirmacion_salario",
+  "aviso_contacto",
 ] as const;
 
 export type AgentStageMessageKey = (typeof AGENT_STAGE_MESSAGE_KEYS)[number];
@@ -96,7 +102,7 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     order: 5,
     name: "Cierre del proceso",
     description:
-      "Se emite el agradecimiento y el aviso de contacto, y se vuelve a ejecutar la evaluación con la conversación.",
+      "La conversación del perfil concluye y el expediente pasa a la solicitud del currículum; la evaluación se vuelve a ejecutar con la conversación.",
     messageKeys: [],
   },
   {
@@ -104,8 +110,8 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
     order: 6,
     name: "Solicitud del currículum",
     description:
-      "Tras el cierre se solicita el currículum y el expediente queda en espera de la respuesta por el mismo medio.",
-    messageKeys: [],
+      "Tras el cierre se emite el agradecimiento y la solicitud del currículum por el mismo medio, y el expediente queda en espera de la respuesta.",
+    messageKeys: ["solicitud_cv"],
   },
   {
     key: "espera_cv",
@@ -123,6 +129,14 @@ export const AGENT_STAGES: AgentStageDefinition[] = [
       "Se pregunta la expectativa, se normaliza en quetzales y se avisa de forma breve que quedó registrada; no se hace nada más.",
     messageKeys: ["pregunta_salario", "confirmacion_salario"],
   },
+  {
+    key: "aviso_contacto",
+    order: 9,
+    name: "Aviso de contacto",
+    description:
+      "Se declara que el contacto de las etapas siguientes ocurre por este mismo medio y el ciclo queda concluido.",
+    messageKeys: ["aviso_contacto"],
+  },
 ];
 
 /** Interruptores de fábrica: el ciclo completo queda activo. */
@@ -135,11 +149,13 @@ export const DEFAULT_AGENT_STAGE_ENABLED: Record<AgentStageKey, boolean> = {
   cierre: true,
   espera_cv: true,
   expectativa_salarial: true,
+  aviso_contacto: true,
 };
 
 /**
  * Secuencia de fábrica del ciclo, fijada por la gerencia. El currículum se
- * solicita tras el cierre y la expectativa salarial cierra el expediente.
+ * solicita tras el cierre, la expectativa salarial cierra el expediente y el
+ * aviso de contacto concluye el ciclo.
  */
 export const DEFAULT_AGENT_STAGE_ORDER: AgentStageKey[] = [
   "recepcion_formulario",
@@ -150,6 +166,7 @@ export const DEFAULT_AGENT_STAGE_ORDER: AgentStageKey[] = [
   "solicitud_cv",
   "espera_cv",
   "expectativa_salarial",
+  "aviso_contacto",
 ];
 
 /** Plantillas de fábrica de los mensajes deterministas. */
@@ -159,13 +176,28 @@ export const DEFAULT_AGENT_STAGE_MESSAGES: Record<
 > = {
   bienvenida_formulario:
     "¡Hola {{nombre}}, soy el asistente de evaluación de AISA! Le daré seguimiento a su solicitud para la plaza “{{plaza}}” con algunas preguntas. Responda con sus propias palabras; le tomará menos de 5 minutos. ¡Empecemos!",
+  solicitud_cv:
+    "{{nombre}}, gracias por participar en el proceso de {{plaza}}, ¿puede enviarnos por esta vía su CV?",
   confirmacion_cv:
     "{{nombre}}, confirmamos la recepción de su documento; queda registrado en su expediente y pendiente de verificación.",
   pregunta_salario:
     "Para completar su expediente, ¿podría indicar su expectativa de remuneración mensual en quetzales?",
   confirmacion_salario:
     "{{nombre}}, registramos su expectativa de remuneración de {{monto}}. Gracias.",
+  aviso_contacto:
+    "Si su perfil avanza después de analizar su CV, nos comunicaremos con usted por este mismo medio.",
 };
+
+/**
+ * Plantilla de solicitud de CV del ciclo de evaluación automática, para las
+ * postulaciones en cola. Vive bajo el proveedor `agent_stages` con su propia
+ * clave —no es un mensaje de etapa—, de modo que la cola conserva su texto
+ * editable sin mezclarse con el paso «Solicitud del currículum».
+ */
+export const AUTOMATIC_EVALUATION_CV_MESSAGE_KEY = "solicitud_cv_cola";
+
+export const DEFAULT_AUTOMATIC_EVALUATION_CV_MESSAGE =
+  "{{nombre}}, su postulación para {{plaza}} quedó registrada; ¿puede enviarnos por esta vía su CV para continuar con su evaluación?";
 
 export type AgentStageConfiguration = {
   enabled: Record<AgentStageKey, boolean>;
@@ -352,6 +384,9 @@ export async function saveAgentStageConfiguration(
       bienvenida_formulario: input.messages.bienvenida_formulario.trim()
         ? input.messages.bienvenida_formulario.trim()
         : DEFAULT_AGENT_STAGE_MESSAGES.bienvenida_formulario,
+      solicitud_cv: input.messages.solicitud_cv.trim()
+        ? input.messages.solicitud_cv.trim()
+        : DEFAULT_AGENT_STAGE_MESSAGES.solicitud_cv,
       confirmacion_cv: input.messages.confirmacion_cv.trim()
         ? input.messages.confirmacion_cv.trim()
         : DEFAULT_AGENT_STAGE_MESSAGES.confirmacion_cv,
@@ -361,6 +396,9 @@ export async function saveAgentStageConfiguration(
       confirmacion_salario: input.messages.confirmacion_salario.trim()
         ? input.messages.confirmacion_salario.trim()
         : DEFAULT_AGENT_STAGE_MESSAGES.confirmacion_salario,
+      aviso_contacto: input.messages.aviso_contacto.trim()
+        ? input.messages.aviso_contacto.trim()
+        : DEFAULT_AGENT_STAGE_MESSAGES.aviso_contacto,
     },
   };
   await pool.query("BEGIN");
@@ -402,6 +440,47 @@ export async function saveAgentStageConfiguration(
     throw error;
   }
   return buildAgentStagesView(configuration);
+}
+
+/**
+ * Lee la plantilla de solicitud de CV del ciclo de evaluación automática. La
+ * ausencia conserva el texto institucional por omisión.
+ */
+export async function loadAutomaticEvaluationCvMessage(
+  pool: Queryable | null
+): Promise<string> {
+  if (!pool) return DEFAULT_AUTOMATIC_EVALUATION_CV_MESSAGE;
+  const result = await pool.query<{ setting_value: string | null }>(
+    `SELECT setting_value FROM integration_settings
+      WHERE provider=$1 AND setting_key=$2 LIMIT 1`,
+    [AGENT_STAGES_PROVIDER, AUTOMATIC_EVALUATION_CV_MESSAGE_KEY]
+  );
+  const value = String(result.rows[0]?.setting_value ?? "").trim();
+  return value || DEFAULT_AUTOMATIC_EVALUATION_CV_MESSAGE;
+}
+
+/** Persiste la plantilla de CV de la cola y asienta el acto en la auditoría. */
+export async function saveAutomaticEvaluationCvMessage(
+  pool: Pool,
+  value: string,
+  actorUserId: number
+): Promise<string> {
+  const normalized = value.trim() || DEFAULT_AUTOMATIC_EVALUATION_CV_MESSAGE;
+  await pool.query(
+    `INSERT INTO integration_settings (provider,setting_key,setting_value,is_secret,updated_at)
+     VALUES ($1,$2,$3,false,now())
+     ON CONFLICT (provider,setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=now()`,
+    [AGENT_STAGES_PROVIDER, AUTOMATIC_EVALUATION_CV_MESSAGE_KEY, normalized]
+  );
+  await pool.query(
+    `INSERT INTO audit_log (actor_user_id,entity_type,entity_id,action,after_json)
+     VALUES ($1,'agent_stages',0,'agent_stages_saved',$2::jsonb)`,
+    [
+      actorUserId,
+      JSON.stringify({ [AUTOMATIC_EVALUATION_CV_MESSAGE_KEY]: true }),
+    ]
+  );
+  return normalized;
 }
 
 /** Sustituye las variables declaradas en una plantilla de etapa. */

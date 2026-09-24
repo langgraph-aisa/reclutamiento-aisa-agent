@@ -74,6 +74,7 @@ function makeSignals(
     entrevistaActive: false,
     screeningDisqualified: false,
     cierreEmitido: false,
+    avisoContactoEmitido: false,
     ...overrides,
   };
 }
@@ -123,9 +124,9 @@ describe("buildAgentStageVerdicts", () => {
     expect(cierre?.skipReason).toBeNull();
   });
 
-  it("deja pendiente el cierre mientras no fue emitido", () => {
+  it("deja pendiente el cierre mientras el CV no fue solicitado", () => {
     const verdicts = build({
-      signals: makeSignals({ cvState: "recibido", cierreEmitido: false }),
+      signals: makeSignals({ cvState: "sin_solicitud", cierreEmitido: false }),
     });
     const cierre = verdicts.find(v => v.stageKey === "cierre");
     expect(cierre?.completed).toBe(false);
@@ -141,6 +142,7 @@ describe("buildAgentStageVerdicts", () => {
       "entrevista",
       "precalificacion",
       "recepcion_formulario",
+      "aviso_contacto",
     ];
     const verdicts = build({
       config: makeConfig({ order: reordered }),
@@ -219,6 +221,7 @@ describe("firstPendingStage", () => {
       signals: makeSignals({
         cvState: "recibido",
         cierreEmitido: true,
+        avisoContactoEmitido: true,
         screeningPhase: "concluido",
         screeningStatus: "concluido",
       }),
