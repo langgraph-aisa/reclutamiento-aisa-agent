@@ -6,6 +6,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import Account from "./pages/Account";
 import ActivityAudit from "./pages/ActivityAudit";
 import Assessments from "./pages/Assessments";
@@ -35,10 +36,29 @@ function AdminShell({ children }: { children: React.ReactNode }) {
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
+/**
+ * Portada `/`: pública cuando no hay sesión y dentro del panel administrativo
+ * —con menú lateral y márgenes— cuando la persona ya ingresó. La portada
+ * pública no debe cargar la navegación lateral del panel.
+ */
+function HomeRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <Home />;
+  return user ? (
+    <AdminShell>
+      <Home />
+    </AdminShell>
+  ) : (
+    <Home />
+  );
+}
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
+      <Route path="/">
+        <HomeRoute />
+      </Route>
       <Route path="/login" component={Login} />
       <Route path="/apply/f/:token" component={Apply} />
       <Route path="/apply/:token" component={Apply} />

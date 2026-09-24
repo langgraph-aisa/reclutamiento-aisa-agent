@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.222");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.222");
+    expect(APP_VERSION).toBe("2.0.223");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.223");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -512,6 +512,11 @@ describe("black-box release contract", () => {
     expect(apply).toContain('target="_blank"');
     expect(apply).toContain('rel="noopener noreferrer"');
     expect(app).toContain('<Route path="/privacidad-terminos">');
+    // La portada autenticada conserva el panel: la ruta raíz envuelve el Home
+    // en el DashboardLayout cuando hay sesión, para que no pierda el menú
+    // lateral ni los márgenes del panel.
+    expect(app).toContain("function HomeRoute");
+    expect(app).toContain("<HomeRoute />");
     expect(privacyTerms).toContain(
       "PRIVACIDAD, TÉRMINOS Y CONDICIONES DE USO DE LA PLATAFORMA"
     );
@@ -568,7 +573,7 @@ describe("black-box release contract", () => {
     // 2.0.209: +1 por el motor de precalificación y entrevista (server/screeningEngine.ts).
     // 2.0.213: +2 por las etapas administrables del agente (server/agentStages.ts y
     // client/src/pages/AgentStages.tsx).
-    // 2.0.222: +2 por la bitácora de la IA del agente (server/agentActivityLog.ts y
+    // 2.0.223: +2 por la bitácora de la IA del agente (server/agentActivityLog.ts y
     // client/src/components/review/AgentAiLogPanel.tsx).
     expect(audit.files).toHaveLength(160);
     expect(audit.findings).toEqual([]);
@@ -1272,7 +1277,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.222");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.223");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1281,18 +1286,18 @@ describe("black-box release contract", () => {
     // La prosa académica se conserva acotada; el registro histórico mantiene su
     // lugar y un techo propio.
     //
-    // El techo del registro se elevó de 2600 a 3500 y después a 3600 y 3700:
-    // la entrega acumulada de resúmenes de commit ya no cabía y comprimir las
-    // entradas antiguas estaba borrando la trazabilidad que el registro existe
-    // para conservar. Un techo que obliga a destruir el registro no protege
-    // nada.
+    // El techo del registro se elevó de 2600 a 3500 y después a 3600, 3700 y
+    // 3800: la entrega acumulada de resúmenes de commit ya no cabía y comprimir
+    // las entradas antiguas estaba borrando la trazabilidad que el registro
+    // existe para conservar. Un techo que obliga a destruir el registro no
+    // protege nada.
     expect(proseWordCount).toBeGreaterThanOrEqual(2_400);
     expect(proseWordCount).toBeLessThanOrEqual(2_900);
-    expect(historyWordCount).toBeLessThanOrEqual(3_700);
+    expect(historyWordCount).toBeLessThanOrEqual(3_800);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
-    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.222");
+    expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.223");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.157");
     expect(readme).toContain("### 17SEP2026 · JARVI RH 2.0.155");
     expect(readme).toContain("### 16SEP2026 · JARVI RH 2.0.154");
@@ -1730,7 +1735,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.222");
+    expect(governance).toContain("Alcance candidato 2.0.223");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2012,7 +2017,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.222");
+    expect(governance).toContain("Alcance candidato 2.0.223");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

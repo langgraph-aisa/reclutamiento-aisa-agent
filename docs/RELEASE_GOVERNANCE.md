@@ -1,8 +1,17 @@
-# Gobierno de release JARVI RH 2.0.222
+# Gobierno de release JARVI RH 2.0.223
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.222**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.223**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.223
+El release **devuelve el panel administrativo a la portada autenticada**. Sin migración.
+
+**El defecto.** La ruta raíz `/` montaba `Home` directamente, de modo que con sesión iniciada el resumen se dibujaba sin el `DashboardLayout`: sin menú lateral, sin márgenes laterales ni superiores.
+
+**La corrección.** `HomeRoute` decide por sesión: sin usuario conserva la portada pública; con usuario envuelve el Home en el `DashboardLayout`, igual que `/admin`, con el menú y los márgenes del panel.
+
+**Sin migración.** Es un cambio de enrutado del cliente.
 
 ### Alcance candidato 2.0.222
 El release **da al comportamiento del agente un interruptor maestro y lo hace excluyente con la evaluación automática**. Sin migración.
@@ -963,4 +972,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.222.md](PRUEBAS_CAJA_NEGRA_2.0.222.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.223.md](PRUEBAS_CAJA_NEGRA_2.0.223.md).
