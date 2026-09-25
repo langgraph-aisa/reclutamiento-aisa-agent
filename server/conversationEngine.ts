@@ -494,14 +494,20 @@ async function executeDeterministicStage(
       return { stop: false, persist: true };
     }
     case "expectativa_salarial": {
-      const outcome = await emitSalaryTurn(
+      const salary = await emitSalaryTurn(
         pool,
         state,
         source,
         context,
         stages
       );
-      return { stop: true, persist: false, outcome };
+      // Si solo se formuló la pregunta, el turno termina en espera de la
+      // respuesta; si el monto quedó registrado, el ciclo sigue de inmediato.
+      return {
+        stop: !salary.resolved,
+        persist: salary.resolved,
+        outcome: salary.outcome,
+      };
     }
     case "aviso_contacto": {
       const outcome = await emitContactNoticeTurn(
@@ -640,7 +646,7 @@ async function emitSalaryTurn(
   source: ConversationContextSource,
   context: BuiltConversationContext,
   stages: AgentStageConfiguration
-): Promise<ConversationTurnOutcome> {
+): Promise<{ outcome: ConversationTurnOutcome; resolved: boolean }> {
   // La respuesta de la persona cerró el ciclo abierto con el identificador de
   // su mensaje: el monto se captura y se confirma en este mismo turno.
   const answered = source.cycles.some(
@@ -690,8 +696,12 @@ async function emitSalaryTurn(
         text,
         "expectativa_salarial"
       );
-      // La automatización concluye en la etapa siguiente, el aviso de contacto.
-      return { status: "sent", messageId, turnId, reply: text };
+      // La expectativa quedó registrada: la etapa se consuma y el ciclo
+      // continúa en la misma pasada hasta el aviso de contacto.
+      return {
+        outcome: { status: "sent", messageId, turnId, reply: text },
+        resolved: true,
+      };
     }
   }
   const text = renderStageTemplate(stages.messages.pregunta_salario, {
@@ -710,7 +720,10 @@ async function emitSalaryTurn(
      VALUES ($1,'remuneracion',$2,'abierto',now())`,
     [state.id, text]
   );
-  return { status: "sent", messageId, turnId, reply: text };
+  return {
+    outcome: { status: "sent", messageId, turnId, reply: text },
+    resolved: false,
+  };
 }
 
 /**

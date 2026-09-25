@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.233
+# Gobierno de release JARVI RH 2.0.234
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.233**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.234**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.234
+El release **corrige la captura de la expectativa salarial para que el ciclo no se detenga**. Sin migración.
+
+**El defecto observado.** En la prueba de QA la persona respondió «8 mil», «8,000», «Ocho mil», «Q8,000.00» y «Ocho mil quetzales»; el agente volvió a formular la pregunta seis veces y la ficha permaneció en «Expectativa salarial: no declarada». El extractor solo reconocía cifras en minúsculas y limpias: la comprobación de la forma independiente distinguía mayúsculas, la puntuación de miles se destruía al separar por comas y puntos, y ni la moneda pegada al número ni el multiplicador coloquial «k» se reconocían.
+
+**La lectura.** `extractExplicitSalaryExpectation` tokeniza separando letras y dígitos —«8mil» y «ochomil» se resuelven—, conserva los agrupadores de miles, distingue el decimal por la cantidad de dígitos tras el último separador, consume la moneda en sus variantes y escala con «mil», «millón» y «k». Tolera las palabras de relleno del lenguaje natural y sigue anulándose cuando no hay monto o la persona declara que no está definida.
+
+**El avance.** Al registrar el monto la etapa se consume y el ciclo continúa en la misma pasada hasta el aviso de contacto; la pregunta solo detiene el turno mientras no haya respuesta. Un monto que no se reconoce conserva la espera declarada, sin abrir ciclos duplicados.
+
+**Sin migración.** Reutiliza `conversation_cycles`, `applications.salary_expectation_gtq` y el catálogo de etapas.
 
 ### Alcance candidato 2.0.233
 El release **hace verificable y corregible la dirección de retorno del vínculo con Dropbox**. Sin migración.
@@ -1088,4 +1099,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.233.md](PRUEBAS_CAJA_NEGRA_2.0.233.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.234.md](PRUEBAS_CAJA_NEGRA_2.0.234.md).

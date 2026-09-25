@@ -141,6 +141,46 @@ describe("gobierno cognitivo de caja negra", () => {
     ).toEqual({ amountGtq: 7500, source: "message" });
   });
 
+  it("comprende el monto en letras, sin formato y con la moneda pegada", () => {
+    // Reproducción de la conversación de QA: el candidato respondió seis veces
+    // con formas válidas y el agente volvía a preguntar porque solo aceptaba
+    // cifras minúsculas y limpias. Todas deben resolverse al mismo monto.
+    for (const answer of [
+      "8 mil",
+      "8,000",
+      "Ocho mil",
+      "Q8,000.00",
+      "Ocho mil quetzales",
+      "8mil",
+      "8 k",
+      "8K",
+      "8.000",
+      "ochomil",
+      "8 mil quetzales",
+      "Q ocho mil",
+      "Ocho Mil quetzales",
+      "quisiera ganar ocho mil quetzales",
+      "8 mil mensuales",
+      "son 8 mil",
+    ]) {
+      expect(
+        extractExplicitSalaryExpectation(answer, "message"),
+        `«${answer}»`
+      ).toEqual({ amountGtq: 8000, source: "message" });
+    }
+    expect(extractExplicitSalaryExpectation("8.5 mil", "message")).toEqual({
+      amountGtq: 8500,
+      source: "message",
+    });
+    expect(
+      extractExplicitSalaryExpectation("ocho mil quinientos", "message")
+    ).toEqual({ amountGtq: 8500, source: "message" });
+    // Sin intención ni monto no se inventa evidencia.
+    expect(
+      extractExplicitSalaryExpectation("no sé, depende", "message")
+    ).toBeNull();
+  });
+
   it("bloquea ofertas económicas automáticas con una política inalterable", () => {
     expect(SALARY_GOVERNANCE_POLICY).toContain(
       "el agente de IA no debe ofrecer"
