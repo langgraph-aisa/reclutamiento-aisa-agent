@@ -15,6 +15,16 @@ El release **hace verificable y corregible la dirección de retorno del vínculo
 
 **Sin migración.** No toca el esquema ni los asientos: es resolución en memoria y texto de la hoja.
 
+**El ejecutor del ciclo.** `runConversationTurnInternal` deja de ejecutar una sola etapa por turno: recorre el orden administrado en «Etapas de la IA», omite las etapas apagadas —sin detenerse— y ejecuta todas las etapas encendidas que estén listas en la misma pasada, hasta el aviso de contacto. Solo se detiene donde hay una pregunta al candidato: la precalificación, la entrevista y la expectativa salarial; y se reanuda por sí solo en el turno siguiente. Se retiró la compuerta que exigía un protocolo de evaluación activo para conversar, porque detenía el ciclo entero en las plazas sin banco de preguntas ni prueba psicométrica automática.
+
+**La memoria del paso.** El avance vive en la bitácora durable `agent_ai_log` y en los artefactos de la conversación —mensajes, banco de preguntas y expediente—: reordenar el panel, reiniciar el servicio o retomar la conversación no pierde ni repite la etapa alcanzada. Cada etapa se resuelve como ejecutada, omitida, lista o en espera; una etapa omitida conserva su motivo y el ciclo continúa con la siguiente encendida.
+
+**La espera y el descarte.** La espera del currículum es un monitor que no detiene el ciclo: confirma la recepción cuando el documento llega y los pasos siguientes ya no dependen de él. El descarte en la precalificación cierra con la plantilla administrada `aviso_contacto`, sin texto legado propio.
+
+**La prueba psicométrica.** Apagada, no se ejecuta. Encendida, se programa al concluir el paso 9 —`completeAgentCycle` invoca `scheduleAssessmentCycle`— y nunca antes. La evaluación automática conserva su exclusividad: encendida, apaga y bloquea las nueve etapas.
+
+**Sin migración.** Reutiliza `agent_ai_log` y las tablas conversacionales vigentes; no agrega archivos ni asientos.
+
 ### Alcance candidato 2.0.232
 El release **traslada las credenciales de ApiChat de Configuración a «Mi cuenta» y las hace por persona**. Sin migración.
 
