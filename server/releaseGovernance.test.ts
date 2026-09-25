@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.232");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.232");
+    expect(APP_VERSION).toBe("2.0.233");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.233");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -608,6 +608,8 @@ describe("black-box release contract", () => {
     // «Configuración» (client/src/components/CredentialField.tsx).
     // 2.0.232: sin archivos nuevos: la credencial de ApiChat por persona vive
     // en el módulo vigente y en las hojas de «Mi cuenta» y «Configuración».
+    // 2.0.233: sin archivos nuevos: la dirección de retorno copiable vive en la
+    // hoja de Configuración y la resolución en `server/dropboxConnection.ts`.
     expect(audit.files).toHaveLength(161);
     expect(audit.findings).toEqual([]);
     expect(publicCopyAudit.files).toHaveLength(161);
@@ -1316,7 +1318,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.232");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.233");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1326,16 +1328,17 @@ describe("black-box release contract", () => {
     // lugar y un techo propio.
     //
     // El techo del registro se elevó de 2600 a 3500 y después a 3600, 3700,
-    // 3800, 3900, 4000, 4100, 4200, 4300, 4400 y 4500: la entrega acumulada de
-    // resúmenes de commit ya no cabía y comprimir las entradas antiguas estaba
-    // borrando la trazabilidad que el registro existe para conservar. Un techo
-    // que obliga a destruir el registro no protege nada.
+    // 3800, 3900, 4000, 4100, 4200, 4300, 4400, 4500 y 4700: la entrega
+    // acumulada de resúmenes de commit ya no cabía y comprimir las entradas
+    // antiguas estaba borrando la trazabilidad que el registro existe para
+    // conservar. Un techo que obliga a destruir el registro no protege nada.
     expect(proseWordCount).toBeGreaterThanOrEqual(2_400);
     expect(proseWordCount).toBeLessThanOrEqual(2_900);
-    expect(historyWordCount).toBeLessThanOrEqual(4_500);
+    expect(historyWordCount).toBeLessThanOrEqual(4_700);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.233");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.232");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.231");
     expect(readme).toContain("### 24SEP2026 · JARVI RH 2.0.230");
@@ -1888,7 +1891,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.232");
+    expect(governance).toContain("Alcance candidato 2.0.233");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2170,7 +2173,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.232");
+    expect(governance).toContain("Alcance candidato 2.0.233");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

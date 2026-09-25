@@ -181,7 +181,10 @@ export default function Account() {
           <p className="rounded-xl bg-accent/40 p-4 text-sm leading-6 text-muted-foreground">
             La credencial se cifra en el servidor y nunca se devuelve al
             navegador. Al desconectar, la aplicación revoca el acceso sin tocar
-            los archivos de su Dropbox.
+            los archivos de su Dropbox. Si Dropbox responde «Invalid
+            redirect_uri» al autorizar, la dirección de retorno registrada no
+            coincide con la de esta instalación: el administrador la corrige en
+            Configuración.
           </p>
         </CardContent>
       </Card>

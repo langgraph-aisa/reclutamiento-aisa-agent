@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.232
+# Gobierno de release JARVI RH 2.0.233
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.232**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.233**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.233
+El release **hace verificable y corregible la dirección de retorno del vínculo con Dropbox**. Sin migración.
+
+**El defecto observado.** Autorizar un Dropbox devolvía `invalid_redirect_uri`: Dropbox exige que la dirección de retorno coincida **carácter por carácter** con una de las registradas en la consola de la aplicación, y la hoja solo declaraba la ruta relativa `/api/dropbox/oauth/callback`. El operador no disponía de la dirección absoluta de su instalación para pegarla, y el error aparecía como una página del proveedor sin salida en el artefacto.
+
+**La hoja.** Configuración publica los tres pasos del registro —acceso «App folder», permisos `files.content.read`, `files.content.write` y `files.metadata.read`, y URI de redireccionamiento— y muestra la **dirección absoluta de esta instalación**, compuesta del origen real del despliegue y copiable con un botón. Declara además que el puerto, el subdominio y la ruta cuentan y que no se admiten comodines, y nombra el síntoma correspondiente a cada omisión: `invalid_redirect_uri` y `invalid_scope`. «Mi cuenta» remite a Configuración cuando el proveedor responde con ese rechazo.
+
+**La resolución.** `resolveDropboxRedirectUri` deduce la dirección del proxy inverso —esquema reenviado y anfitrión— y acepta la declaración `DROPBOX_OAUTH_REDIRECT_URI` con precedencia, para el despliegue cuyo encabezado de anfitrión no coincida con el dominio público. La declaración solo se admite si es HTTPS, con la ruta exacta del retorno, sin parámetros, sin fragmento y sin barra final; una declaración inválida no reemplaza a la deducida, porque sustituirla rompería el vínculo que intenta arreglar.
+
+**Sin migración.** No toca el esquema ni los asientos: es resolución en memoria y texto de la hoja.
 
 ### Alcance candidato 2.0.232
 El release **traslada las credenciales de ApiChat de Configuración a «Mi cuenta» y las hace por persona**. Sin migración.
@@ -1059,4 +1070,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.232.md](PRUEBAS_CAJA_NEGRA_2.0.232.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.233.md](PRUEBAS_CAJA_NEGRA_2.0.233.md).

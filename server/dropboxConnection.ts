@@ -575,11 +575,49 @@ export async function dropboxAccountInfo(
   return { email: String(email), accountId: data.account_id ?? "" };
 }
 
-function dropboxRedirectUri(req: Request) {
-  const forwarded = req.headers["x-forwarded-proto"];
+/**
+ * Dirección de retorno que Dropbox exige **idéntica** a la registrada.
+ *
+ * Se deduce del proxy inverso —esquema reenviado y anfitrión— y, cuando la
+ * operación declara `DROPBOX_OAUTH_REDIRECT_URI`, esa declaración tiene
+ * precedencia: un despliegue cuyo encabezado de anfitrión no coincida con el
+ * dominio público necesita poder fijarla. La declaración solo se acepta si es
+ * una dirección HTTPS con la ruta exacta del retorno y sin parámetros ni barra
+ * final, porque Dropbox compara carácter por carácter y una dirección inválida
+ * no debe reemplazar a la deducida.
+ */
+export function resolveDropboxRedirectUri(
+  request: { headers: Record<string, unknown>; host?: string },
+  environment: Record<string, string | undefined> = process.env
+) {
+  const declared = (environment.DROPBOX_OAUTH_REDIRECT_URI ?? "").trim();
+  if (declared) {
+    try {
+      const url = new URL(declared);
+      if (
+        url.protocol === "https:" &&
+        url.pathname === DROPBOX_OAUTH_REDIRECT_PATH &&
+        !url.search &&
+        !url.hash
+      ) {
+        return declared;
+      }
+    } catch {
+      // La declaración no es una dirección: se deduce del proxy inverso.
+    }
+  }
+  const forwarded = request.headers["x-forwarded-proto"];
   const scheme = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   const proto = scheme === "http" || scheme === "https" ? scheme : "https";
-  return `${proto}://${req.headers.host}${DROPBOX_OAUTH_REDIRECT_PATH}`;
+  const host = typeof request.host === "string" ? request.host : "";
+  return `${proto}://${host}${DROPBOX_OAUTH_REDIRECT_PATH}`;
+}
+
+function dropboxRedirectUri(req: Request) {
+  return resolveDropboxRedirectUri({
+    headers: req.headers as unknown as Record<string, unknown>,
+    host: req.headers.host,
+  });
 }
 
 async function sessionUserId(req: Request): Promise<number | null> {

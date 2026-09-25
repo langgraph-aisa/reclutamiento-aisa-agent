@@ -53,6 +53,19 @@ const ENDPOINT_CONSUMER_LABELS: Record<string, string> = {
 export default function Config() {
   const recipients = trpc.config.recipients.useQuery();
   const apiChatConfiguration = trpc.config.apiChatConfiguration.useQuery();
+  /**
+   * Dirección de retorno que Dropbox compara carácter por carácter con la
+   * registrada. Se compone del origen real de este despliegue —no de una
+   * plantilla—, porque un puerto, un subdominio o una barra final distintos
+   * producen el rechazo «Invalid redirect_uri» al autorizar.
+   */
+  const dropboxRedirectUri = `${window.location.origin}/api/dropbox/oauth/callback`;
+  const [copiedDropboxRedirect, setCopiedDropboxRedirect] = useState(false);
+  const copyDropboxRedirectUri = async () => {
+    await navigator.clipboard?.writeText(dropboxRedirectUri);
+    setCopiedDropboxRedirect(true);
+    window.setTimeout(() => setCopiedDropboxRedirect(false), 1_400);
+  };
   const saveRecipient = trpc.config.saveRecipient.useMutation({
     onSuccess: () => recipients.refetch(),
   });
@@ -1312,12 +1325,57 @@ export default function Config() {
                 </div>
               ) : null}
               <div className="rounded-2xl border border-emerald-400/20 bg-secondary p-4 text-sm leading-6 text-secondary-foreground">
-                Registre la aplicación con acceso <span className="font-mono text-xs">App folder</span> y
-                la URI de redireccionamiento
-                <span className="font-mono text-xs"> /api/dropbox/oauth/callback</span>.
-                Los permisos son <span className="font-mono text-xs">files.content.read</span>,{" "}
-                <span className="font-mono text-xs">files.content.write</span> y{" "}
-                <span className="font-mono text-xs">files.metadata.read</span>.
+                <p className="font-semibold text-primary">
+                  Registro de la aplicación en Dropbox
+                </p>
+                <ol className="mt-2 list-decimal space-y-2 pl-5">
+                  <li>
+                    En Dropbox Developers cree la aplicación con{" "}
+                    <span className="font-mono text-xs">Scoped access</span> y
+                    acceso <span className="font-mono text-xs">App folder</span>.
+                    Ese alcance concede únicamente la carpeta{" "}
+                    <span className="font-mono text-xs">Aplicaciones/JARVI RH</span>{" "}
+                    de cada cuenta.
+                  </li>
+                  <li>
+                    En <span className="font-mono text-xs">Permissions</span>{" "}
+                    active{" "}
+                    <span className="font-mono text-xs">files.content.read</span>,{" "}
+                    <span className="font-mono text-xs">files.content.write</span>{" "}
+                    y{" "}
+                    <span className="font-mono text-xs">files.metadata.read</span>,
+                    y pulse <span className="font-mono text-xs">Submit</span>: sin
+                    ellos la autorización responde{" "}
+                    <span className="font-mono text-xs">invalid_scope</span>.
+                  </li>
+                  <li>
+                    En{" "}
+                    <span className="font-mono text-xs">OAuth 2 · Redirect URIs</span>{" "}
+                    agregue <strong>exactamente</strong> la dirección de esta
+                    instalación y guarde antes de reintentar el vínculo. Sin
+                    parámetros, sin barra final y sin comodines:
+                    <span className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="rounded-lg bg-background px-3 py-1.5 font-mono text-xs">
+                        {dropboxRedirectUri}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={copyDropboxRedirectUri}
+                      >
+                        {copiedDropboxRedirect ? "Copiada" : "Copiar"}
+                      </Button>
+                    </span>
+                  </li>
+                </ol>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Dropbox compara la dirección carácter por carácter. El puerto,
+                  el subdominio y la ruta cuentan: un dominio distinto —una
+                  dirección interna o de previsualización— reproduce el rechazo
+                  «Invalid redirect_uri» al autorizar.
+                </p>
               </div>
             </CardContent>
           </Card>

@@ -10,6 +10,7 @@ import {
   getDropboxConnection,
   getDropboxOAuthConfiguration,
   linkDropboxConnection,
+  resolveDropboxRedirectUri,
   saveDropboxOAuthSecret,
   unlinkDropboxConnection,
   verifyDropboxState,
@@ -141,6 +142,50 @@ describe("flujo OAuth de Dropbox", () => {
       email: "propietario@aisa.com.gt",
       accountId: "dbid:propietario",
     });
+  });
+});
+
+describe("dirección de retorno registrada en Dropbox", () => {
+  const host = "hiring-testing-reclutamiento-aisa-agent.4ugrim.easypanel.host";
+  const callback = `https://${host}${DROPBOX_OAUTH_REDIRECT_PATH}`;
+
+  it("se deduce del proxy inverso cuando no hay declaración", () => {
+    expect(
+      resolveDropboxRedirectUri({
+        headers: { "x-forwarded-proto": "https" },
+        host,
+      })
+    ).toBe(callback);
+  });
+
+  it("presupone HTTPS cuando el proxy no declara el esquema", () => {
+    expect(resolveDropboxRedirectUri({ headers: {}, host })).toBe(callback);
+  });
+
+  it("respeta la declaración de la operación cuando es válida", () => {
+    expect(
+      resolveDropboxRedirectUri(
+        { headers: { "x-forwarded-proto": "https" }, host: "interno:3000" },
+        { DROPBOX_OAUTH_REDIRECT_URI: callback }
+      )
+    ).toBe(callback);
+  });
+
+  it("ignora una declaración que Dropbox rechazaría y conserva la deducida", () => {
+    for (const declared of [
+      `http://${host}${DROPBOX_OAUTH_REDIRECT_PATH}`,
+      `${callback}/`,
+      `${callback}?key=1`,
+      `https://${host}/api/dropbox/oauth/otra`,
+      "no-es-una-direccion",
+    ]) {
+      expect(
+        resolveDropboxRedirectUri(
+          { headers: { "x-forwarded-proto": "https" }, host },
+          { DROPBOX_OAUTH_REDIRECT_URI: declared }
+        )
+      ).toBe(callback);
+    }
   });
 });
 
