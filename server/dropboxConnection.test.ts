@@ -1,26 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  DRIVE_OAUTH_REDIRECT_PATH,
-  driveAccountEmail,
-  driveAuthorizationUrl,
-  driveOAuthRuntime,
-  driveStateToken,
-  exchangeDriveCode,
-  getDriveConnection,
-  getDriveOAuthConfiguration,
-  GOOGLE_DRIVE_SCOPE,
-  linkDriveConnection,
-  saveDriveOAuthSecret,
-  unlinkDriveConnection,
-  verifyDriveState,
-} from "./driveConnection";
+  DROPBOX_OAUTH_REDIRECT_PATH,
+  DROPBOX_SCOPE,
+  dropboxAccountInfo,
+  dropboxAuthorizationUrl,
+  dropboxOAuthRuntime,
+  dropboxStateToken,
+  exchangeDropboxCode,
+  getDropboxConnection,
+  getDropboxOAuthConfiguration,
+  linkDropboxConnection,
+  saveDropboxOAuthSecret,
+  unlinkDropboxConnection,
+  verifyDropboxState,
+} from "./dropboxConnection";
 
 beforeEach(() => {
   vi.stubEnv(
     "AGENT_SETTINGS_ENCRYPTION_KEY",
     "test-key-material-with-more-than-thirty-two-characters"
   );
-  vi.stubEnv("JWT_SECRET", "test-jwt-material-for-drive-state");
+  vi.stubEnv("JWT_SECRET", "test-jwt-material-for-dropbox-state");
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -48,7 +48,7 @@ function fakePool() {
       stored.delete(String(params[1]));
     }
     if (text.includes("INSERT INTO audit_log")) {
-      audit.push({ action: "drive", after_json: params[2] });
+      audit.push({ action: "dropbox", after_json: params[2] });
     }
     return { rows: [] };
   });
@@ -68,54 +68,57 @@ function jsonResponse(payload: unknown, ok = true, status = 200) {
   } as unknown as Response;
 }
 
-describe("flujo OAuth de Google Drive", () => {
-  it("compone la dirección de autorización con scope mínimo y acceso sin conexión", () => {
-    const url = driveAuthorizationUrl(
-      "client-123.apps.googleusercontent.com",
-      "https://instancia/api/drive/oauth/callback",
+describe("flujo OAuth de Dropbox", () => {
+  it("compone la dirección de autorización con permisos mínimos y acceso sin conexión", () => {
+    const url = dropboxAuthorizationUrl(
+      "app-key-123",
+      "https://instancia/api/dropbox/oauth/callback",
       "estado"
     );
-    expect(url).toContain("https://accounts.google.com/o/oauth2/v2/auth");
-    expect(url).toContain(`scope=${encodeURIComponent(GOOGLE_DRIVE_SCOPE)}`);
-    expect(url).toContain("access_type=offline");
-    expect(url).toContain("prompt=consent");
-    expect(url).toContain(`redirect_uri=${encodeURIComponent("https://instancia/api/drive/oauth/callback")}`);
+    expect(url).toContain("https://www.dropbox.com/oauth2/authorize");
+    expect(new URL(url).searchParams.get("scope")).toBe(DROPBOX_SCOPE);
+    expect(url).toContain("token_access_type=offline");
+    expect(url).toContain(
+      `redirect_uri=${encodeURIComponent("https://instancia/api/dropbox/oauth/callback")}`
+    );
   });
 
   it("acuña y verifica el estado firmado con caducidad", () => {
-    const state = driveStateToken(600);
-    expect(verifyDriveState(state)).toBe(true);
-    expect(verifyDriveState(`${state}alterado`)).toBe(false);
-    expect(verifyDriveState("cadena-sin-firma")).toBe(false);
-    expect(verifyDriveState(driveStateToken(-1))).toBe(false);
+    const state = dropboxStateToken(600);
+    expect(verifyDropboxState(state)).toBe(true);
+    expect(verifyDropboxState(`${state}alterado`)).toBe(false);
+    expect(verifyDropboxState("cadena-sin-firma")).toBe(false);
+    expect(verifyDropboxState(dropboxStateToken(-1))).toBe(false);
   });
 
   it("canjea el código y exige el token de renovación", async () => {
-    const tokens = await exchangeDriveCode(
+    const tokens = await exchangeDropboxCode(
       {
-        clientId: "client",
-        clientSecret: "secret",
-        redirectUri: `https://instancia${DRIVE_OAUTH_REDIRECT_PATH}`,
+        clientId: "app-key",
+        clientSecret: "app-secret",
+        redirectUri: `https://instancia${DROPBOX_OAUTH_REDIRECT_PATH}`,
         code: "codigo",
       },
       (async () =>
         jsonResponse({
           access_token: "access",
           refresh_token: "refresh",
-          expires_in: 3600,
+          expires_in: 14400,
+          account_id: "dbid:propietario",
         })) as unknown as typeof fetch
     );
     expect(tokens).toEqual({
       accessToken: "access",
       refreshToken: "refresh",
-      expiresIn: 3600,
+      expiresIn: 14400,
+      accountId: "dbid:propietario",
     });
     await expect(
-      exchangeDriveCode(
+      exchangeDropboxCode(
         {
-          clientId: "client",
-          clientSecret: "secret",
-          redirectUri: "https://instancia/callback",
+          clientId: "app-key",
+          clientSecret: "app-secret",
+          redirectUri: "https://instancia/api/dropbox/oauth/callback",
           code: "codigo",
         },
         (async () =>
@@ -125,85 +128,81 @@ describe("flujo OAuth de Google Drive", () => {
   });
 
   it("lee la cuenta asociada al token", async () => {
-    const account = await driveAccountEmail(
+    const account = await dropboxAccountInfo(
       "access",
       (async () =>
-        jsonResponse({ email: "propietario@aisa.com.gt" })) as unknown as typeof fetch
+        jsonResponse({
+          account_id: "dbid:propietario",
+          email: "propietario@aisa.com.gt",
+          name: { display_name: "Propietario" },
+        })) as unknown as typeof fetch
     );
-    expect(account.email).toBe("propietario@aisa.com.gt");
+    expect(account).toEqual({
+      email: "propietario@aisa.com.gt",
+      accountId: "dbid:propietario",
+    });
   });
 });
 
 describe("credencial de plataforma y conexión por usuario", () => {
   it("guarda y descifra la credencial de plataforma", async () => {
     const { pool, stored } = fakePool();
-    await saveDriveOAuthSecret(
-      pool,
-      "oauth_client_id",
-      "client-id.apps.googleusercontent.com",
-      7
-    );
-    await saveDriveOAuthSecret(pool, "oauth_client_secret", "secret-value", 7);
+    await saveDropboxOAuthSecret(pool, "oauth_client_id", "app-key-123", 7);
+    await saveDropboxOAuthSecret(pool, "oauth_client_secret", "secret-value", 7);
     expect(stored.get("oauth_client_id")?.is_secret).toBe(false);
     expect(stored.get("oauth_client_secret")?.is_secret).toBe(true);
 
-    const configuration = await getDriveOAuthConfiguration(pool);
+    const configuration = await getDropboxOAuthConfiguration(pool);
     expect(configuration.clientId.configured).toBe(true);
-    expect(configuration.clientId.masked).toBe(
-      "client-id.apps.googleusercontent.com"
-    );
+    expect(configuration.clientId.masked).toBe("app-key-123");
     expect(configuration.secret.configured).toBe(true);
 
-    const runtime = await driveOAuthRuntime(pool);
+    const runtime = await dropboxOAuthRuntime(pool);
     expect(runtime).toEqual({
-      clientId: "client-id.apps.googleusercontent.com",
+      clientId: "app-key-123",
       clientSecret: "secret-value",
     });
   });
 
   it("expone la máscara del secreto descifrado para confirmar la rotación", async () => {
     const { pool } = fakePool();
-    await saveDriveOAuthSecret(pool, "oauth_client_secret", "secret-value", 7);
-    const configuration = await getDriveOAuthConfiguration(pool);
+    await saveDropboxOAuthSecret(pool, "oauth_client_secret", "secret-value", 7);
+    const configuration = await getDropboxOAuthConfiguration(pool);
     expect(configuration.secret.configured).toBe(true);
     expect(configuration.secret.masked).toBe("••••••••alue");
   });
 
   it("declara indescifrable el secreto cuando rota la clave de cifrado", async () => {
     const { pool } = fakePool();
-    await saveDriveOAuthSecret(
-      pool,
-      "oauth_client_id",
-      "client-id.apps.googleusercontent.com",
-      7
-    );
-    await saveDriveOAuthSecret(pool, "oauth_client_secret", "secret-value", 7);
+    await saveDropboxOAuthSecret(pool, "oauth_client_id", "app-key-123", 7);
+    await saveDropboxOAuthSecret(pool, "oauth_client_secret", "secret-value", 7);
 
     vi.stubEnv(
       "AGENT_SETTINGS_ENCRYPTION_KEY",
       "otra-clave-rotada-con-mas-de-treinta-y-dos-caracteres"
     );
 
-    const configuration = await getDriveOAuthConfiguration(pool);
+    const configuration = await getDropboxOAuthConfiguration(pool);
     expect(configuration.secret.configured).toBe(false);
     expect(configuration.secret.state).toBe("indescifrable");
     expect(configuration.secret.reason).toBeTruthy();
-    await expect(driveOAuthRuntime(pool)).resolves.toBeNull();
+    await expect(dropboxOAuthRuntime(pool)).resolves.toBeNull();
   });
 
-  it("vincula, lee y desconecta la cuenta de Drive del usuario", async () => {
+  it("vincula, lee y desconecta la cuenta de Dropbox del usuario", async () => {
     const { pool, stored } = fakePool();
-    const linked = await linkDriveConnection(pool, {
+    const linked = await linkDropboxConnection(pool, {
       userId: 41,
       refreshToken: "refresh-del-usuario",
       email: "propietario@aisa.com.gt",
+      accountId: "dbid:propietario",
       actorUserId: 41,
     });
     expect(linked).toEqual({
       configured: true,
       email: "propietario@aisa.com.gt",
     });
-    await expect(getDriveConnection(pool, 41)).resolves.toEqual({
+    await expect(getDropboxConnection(pool, 41)).resolves.toEqual({
       configured: true,
       email: "propietario@aisa.com.gt",
     });
@@ -212,9 +211,11 @@ describe("credencial de plataforma y conexión por usuario", () => {
       "refresh-del-usuario"
     );
 
-    await unlinkDriveConnection(pool, 41, 41, (async () => jsonResponse({})) as unknown as typeof fetch);
+    const revokeFetch = (async () =>
+      jsonResponse({ access_token: "access" })) as unknown as typeof fetch;
+    await unlinkDropboxConnection(pool, 41, 41, revokeFetch);
     expect(stored.get("refresh:41")).toBeUndefined();
-    await expect(getDriveConnection(pool, 41)).resolves.toEqual({
+    await expect(getDropboxConnection(pool, 41)).resolves.toEqual({
       configured: false,
       email: null,
     });
@@ -222,7 +223,7 @@ describe("credencial de plataforma y conexión por usuario", () => {
 
   it("sin conexión declara pendiente sin exponer la credencial", async () => {
     const { pool } = fakePool();
-    await expect(getDriveConnection(pool, 9)).resolves.toEqual({
+    await expect(getDropboxConnection(pool, 9)).resolves.toEqual({
       configured: false,
       email: null,
     });

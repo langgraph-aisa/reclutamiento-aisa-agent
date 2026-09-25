@@ -23,22 +23,25 @@ const PDF_BYTES = Buffer.concat([
 ]);
 
 let queryResult: { rows: unknown[] } = { rows: [] };
-let driveMode = false;
-let driveSettingsRows: unknown[] = [];
+let dropboxMode = false;
+let dropboxSettingsRows: unknown[] = [];
 
 const queryMock = vi.fn(async (sql: string) => {
-  if (!driveMode) return queryResult;
+  if (!dropboxMode) return queryResult;
   const text = String(sql);
   if (text.includes("FROM integration_settings")) {
-    return { rows: driveSettingsRows };
+    return { rows: dropboxSettingsRows };
+  }
+  if (text.includes("SELECT name FROM knowledge_projects")) {
+    return { rows: [{ name: "MST EIR" }] };
   }
   if (text.includes("FROM knowledge_projects")) {
     return {
       rows: [
         {
           created_by_user_id: 9,
-          drive_connection_user_id: 9,
-          storage_mode: "drive",
+          dropbox_connection_user_id: 9,
+          storage_mode: "dropbox",
         },
       ],
     };
@@ -59,7 +62,7 @@ vi.mock("./localAuth", () => ({
 const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "rag-viewer-e2e-"));
 process.env.KNOWLEDGE_STORAGE_DIR = storageRoot;
 // El cliente de la prueba pide por HTTP real; el `fetch` global se reserva para
-// el backend de Drive, que se sustituye en la rama de custodia por proyecto.
+// el backend de Dropbox, que se sustituye en la rama de custodia por proyecto.
 const realFetch = globalThis.fetch;
 
 const { registerKnowledgeRoutes } = await import("./knowledgeRoutes");
@@ -107,109 +110,98 @@ function writeStoredPdf(storageKey: string) {
 }
 
 /**
- * Drive en memoria para la rama de entrega por backend. Se siembra la jerarquía
- * `JARVI RH/3` con el documento, de modo que la lectura con o sin rango no
- * toque la red real.
+ * Dropbox en memoria para la rama de entrega por backend. Se siembra la ruta
+ * `/JARVI RH/MST EIR/<archivo>` —la que compone el resolutor de proyecto—, de
+ * modo que la lectura con o sin rango no toque la red real.
  */
-function fakeDriveFetch(fileName: string, content: Buffer) {
-  const apiBase = "https://www.googleapis.com/drive/v3";
-  const files = new Map<
-    string,
-    { id: string; name: string; mimeType: string; parents: string[]; content?: Buffer }
-  >();
-  let counter = 0;
-  const id = () => `drive-${++counter}`;
-  const rootId = id();
-  files.set(rootId, {
-    id: rootId,
-    name: "JARVI RH",
-    mimeType: "application/vnd.google-apps.folder",
-    parents: ["root"],
-  });
-  const projectId = id();
-  files.set(projectId, {
-    id: projectId,
-    name: "3",
-    mimeType: "application/vnd.google-apps.folder",
-    parents: [rootId],
-  });
-  const fileId = "drive-file";
-  files.set(fileId, {
-    id: fileId,
-    name: fileName,
-    mimeType: "application/pdf",
-    parents: [projectId],
-    content,
-  });
-
-  const find = (name: string, parent: string, mimeType?: string) =>
-    [...files.values()].filter(
-      file =>
-        file.name === name &&
-        file.parents.includes(parent) &&
-        (!mimeType || file.mimeType === mimeType)
-    );
-
+function fakeDropboxFetch(dropboxPath: string, content: Buffer) {
+  const stored = new Map<string, Buffer>([[dropboxPath, content]]);
+  const folders = new Set<string>(
+    dropboxPath.split("/").slice(1, -1).map((_, index, segments) =>
+      `/${segments.slice(0, index + 1).join("/")}`
+    )
+  );
+  const metadata = (path: string) => {
+    const body = stored.get(path);
+    if (!body) return null;
+    return {
+      ".tag": "file",
+      id: `id:${path}`,
+      name: path.split("/").pop(),
+      size: body.length,
+      server_modified: "2026-09-25T00:00:00Z",
+    };
+  };
   const fetchImpl = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url === "https://oauth2.googleapis.com/token") {
+    const headers = (init?.headers as Record<string, string> | undefined) ?? {};
+    const args = () =>
+      JSON.parse(String(headers["Dropbox-API-Arg"] ?? "{}")) as { path?: string };
+    if (url === "https://api.dropboxapi.com/oauth2/token") {
       return {
         ok: true,
         status: 200,
-        json: async () => ({ access_token: "access-token", expires_in: 3600 }),
+        json: async () => ({ access_token: "access-token", expires_in: 14400 }),
       } as unknown as Response;
     }
-    if (url.startsWith(`${apiBase}/files?`)) {
-      const q = decodeURIComponent(url.split("q=")[1].split("&")[0]);
-      const name = /name='([^']+)'/.exec(q)?.[1] ?? "";
-      const parent = /'([^']+)' in parents/.exec(q)?.[1] ?? "";
-      const mimeType = /mimeType='([^']+)'/.exec(q)?.[1];
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          files: find(name, parent, mimeType).map(file => ({
-            id: file.id,
-            name: file.name,
-            mimeType: file.mimeType,
-            size: String(file.content?.length ?? 0),
-            modifiedTime: "2026-09-22T00:00:00.000Z",
-          })),
-        }),
-      } as unknown as Response;
-    }
-    if (url.includes("alt=media")) {
-      const targetId = url.split("/files/")[1].split("?")[0];
-      const file = files.get(targetId);
-      if (!file) {
-        return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
+    if (url.startsWith("https://api.dropboxapi.com/2/files/get_metadata")) {
+      const { path } = JSON.parse(String(init?.body ?? "{}")) as {
+        path?: string;
+      };
+      if (folders.has(String(path))) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ".tag": "folder", name: "carpeta" }),
+        } as unknown as Response;
       }
-      const body = file.content ?? Buffer.from("");
-      const range = String(
-        ((init?.headers as Record<string, string> | undefined) ?? {})[
-          "Range"
-        ] ?? ""
-      );
-      const match = /^bytes=(\d+)-(\d+)$/.exec(range);
-      if (match) {
-        const start = Number(match[1]);
-        const end = Number(match[2]);
-        if (start > end || start >= body.length) {
-          return { ok: false, status: 416, json: async () => ({}) } as unknown as Response;
+      const found = metadata(String(path));
+      if (!found) {
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({ error_summary: "path/not_found/.." }),
+        } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => found } as unknown as Response;
+    }
+    if (url.startsWith("https://content.dropboxapi.com/2/files/download")) {
+      const { path } = args();
+      const file = stored.get(String(path));
+      if (!file) {
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({ error_summary: "path/not_found/.." }),
+        } as unknown as Response;
+      }
+      const range = /^bytes=(\d+)-(\d+)$/.exec(String(headers.Range ?? ""));
+      if (range) {
+        const start = Number(range[1]);
+        const end = Number(range[2]);
+        if (start > end || start >= file.length) {
+          return {
+            ok: false,
+            status: 416,
+            json: async () => ({ error_summary: "range/.." }),
+          } as unknown as Response;
         }
-        const sliced = body.subarray(start, Math.min(end + 1, body.length));
+        const sliced = file.subarray(start, Math.min(end + 1, file.length));
         return {
           ok: true,
           status: 206,
           arrayBuffer: async () =>
-            sliced.buffer.slice(sliced.byteOffset, sliced.byteOffset + sliced.byteLength),
+            sliced.buffer.slice(
+              sliced.byteOffset,
+              sliced.byteOffset + sliced.byteLength
+            ),
         } as unknown as Response;
       }
       return {
         ok: true,
         status: 200,
         arrayBuffer: async () =>
-          body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+          file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength),
       } as unknown as Response;
     }
     return { ok: false, status: 404, json: async () => ({}) } as unknown as Response;
@@ -393,21 +385,21 @@ describe("diagnóstico del volumen de conocimiento", () => {
   });
 });
 
-describe("entrega del visor desde Google Drive", () => {
+describe("entrega del visor desde Dropbox", () => {
   beforeEach(() => {
     vi.stubEnv(
       "AGENT_SETTINGS_ENCRYPTION_KEY",
       "test-key-material-with-more-than-thirty-two-characters"
     );
     const secretContext = integrationSecretContext(
-      "google_drive",
+      "dropbox",
       "oauth_client_secret"
     );
-    const refreshContext = integrationSecretContext("google_drive", "refresh:9");
-    driveSettingsRows = [
+    const refreshContext = integrationSecretContext("dropbox", "refresh:9");
+    dropboxSettingsRows = [
       {
         setting_key: "oauth_client_id",
-        setting_value: "client-id.apps.googleusercontent.com",
+        setting_value: "dropbox-app-key",
         is_secret: false,
       },
       {
@@ -418,26 +410,36 @@ describe("entrega del visor desde Google Drive", () => {
       {
         setting_key: "refresh:9",
         setting_value: encryptAgentSecret(
-          JSON.stringify({ refreshToken: "refresh", email: "propietario@aisa.com.gt" }),
+          JSON.stringify({
+            refreshToken: "refresh",
+            email: "propietario@aisa.com.gt",
+            accountId: "dbid:propietario",
+          }),
           refreshContext
         ),
         is_secret: true,
       },
     ];
-    driveMode = true;
+    dropboxMode = true;
   });
 
   afterEach(() => {
-    driveMode = false;
-    driveSettingsRows = [];
+    dropboxMode = false;
+    dropboxSettingsRows = [];
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });
 
-  it("sirve el binario completo desde Drive con cabeceras de seguridad", async () => {
-    const storageKey = "3/drive-uuid.pdf";
+  it("sirve el binario completo desde Dropbox con cabeceras de seguridad", async () => {
+    const storageKey = "3/11111111-2222-3333-4444-555555555555.pdf";
     registerPdfRow(31, storageKey);
-    vi.stubGlobal("fetch", fakeDriveFetch("drive-uuid.pdf", PDF_BYTES));
+    vi.stubGlobal(
+      "fetch",
+      fakeDropboxFetch(
+        "/JARVI RH/MST EIR/11111111-2222-3333-4444-555555555555.pdf",
+        PDF_BYTES
+      )
+    );
 
     const token = createViewerToken("knowledge", 31);
     const response = await realFetch(
@@ -454,10 +456,16 @@ describe("entrega del visor desde Google Drive", () => {
     );
   });
 
-  it("sirve un rango de bytes desde Drive para el paginado", async () => {
-    const storageKey = "3/drive-uuid.pdf";
+  it("sirve un rango de bytes desde Dropbox para el paginado", async () => {
+    const storageKey = "3/11111111-2222-3333-4444-555555555555.pdf";
     registerPdfRow(32, storageKey);
-    vi.stubGlobal("fetch", fakeDriveFetch("drive-uuid.pdf", PDF_BYTES));
+    vi.stubGlobal(
+      "fetch",
+      fakeDropboxFetch(
+        "/JARVI RH/MST EIR/11111111-2222-3333-4444-555555555555.pdf",
+        PDF_BYTES
+      )
+    );
 
     const token = createViewerToken("knowledge", 32);
     const response = await realFetch(

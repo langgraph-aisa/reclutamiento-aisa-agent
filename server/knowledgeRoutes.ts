@@ -9,7 +9,7 @@ import {
   renderPlainTextPreview,
   renderSpreadsheetHtml,
 } from "./knowledge";
-import { storageBackendForKey } from "./driveProject";
+import { storageBackendForKey } from "./dropboxProject";
 import type { StorageBackend } from "./storageBackend";
 import { readLocalSession } from "./localAuth";
 import { VIEWER_SECURITY_HEADERS, verifyViewerToken } from "./viewerAccess";
@@ -119,8 +119,9 @@ function sendRange(
 
 /**
  * Entrega el binario según el backend que custodia la clave: el backend local
- * conserva el flujo con rangos; el backend de Drive sirve también rangos cuando
- * el visor los pide, de modo que PDF, audio y video conserven el paginado.
+ * conserva el flujo con rangos; el backend de Dropbox sirve también rangos
+ * cuando el visor los pide, de modo que PDF, audio y video conserven el
+ * paginado.
  */
 async function deliverBinary(
   req: Request,
@@ -128,13 +129,13 @@ async function deliverBinary(
   row: { storage_key: string; original_name: string; mime_type: string }
 ) {
   const pool = await getPool();
-  const drive = pool
+  const custodia = pool
     ? await storageBackendForKey(pool, row.storage_key)
     : null;
   const disposition = `inline; filename="${row.original_name.replace(/[^\w.\- ]/g, "_")}"`;
   res.set("Content-Disposition", disposition);
-  if (drive) {
-    await sendDriveBinary(req, res, drive, row);
+  if (custodia) {
+    await sendBackendBinary(req, res, custodia, row);
     return;
   }
   const filePath = knowledgeFilePath(row.storage_key);
@@ -142,11 +143,11 @@ async function deliverBinary(
   sendRange(res, filePath, stats.size, row.mime_type, req.headers.range);
 }
 
-/** Entrega desde Drive: con rango si el visor lo pide y el backend lo soporta. */
-async function sendDriveBinary(
+/** Entrega desde Dropbox: con rango si el visor lo pide y el backend lo soporta. */
+async function sendBackendBinary(
   req: Request,
   res: Response,
-  drive: StorageBackend,
+  backend: StorageBackend,
   row: { storage_key: string; mime_type: string }
 ) {
   const common = {
@@ -157,8 +158,8 @@ async function sendDriveBinary(
   const range = /^bytes=(\d*)-(\d*)$/.exec(
     (req.headers.range ?? "").trim()
   );
-  if (range && drive.readRange) {
-    const stats = await drive.stat(row.storage_key);
+  if (range && backend.readRange) {
+    const stats = await backend.stat(row.storage_key);
     const size = stats.size;
     const start = range[1] ? Number(range[1]) : 0;
     const end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
@@ -166,7 +167,7 @@ async function sendDriveBinary(
       res.status(416).set("Content-Range", `bytes */${size}`).end();
       return;
     }
-    const data = await drive.readRange(row.storage_key, start, end);
+    const data = await backend.readRange(row.storage_key, start, end);
     res.writeHead(206, {
       ...common,
       "Content-Length": data.length,
@@ -176,7 +177,7 @@ async function sendDriveBinary(
     res.end(data);
     return;
   }
-  const data = await drive.read(row.storage_key);
+  const data = await backend.read(row.storage_key);
   res.writeHead(200, {
     ...common,
     "Content-Length": data.length,
@@ -305,36 +306,36 @@ function classifyDeliveryFailure(error: unknown): DeliveryFailure {
         "La ruta configurada apunta a un directorio y no al documento almacenado.",
     };
   }
-  if (code === "drive_unauthenticated") {
+  if (code === "dropbox_unauthenticated") {
     return {
       status: 502,
-      reason: "drive-sin-acceso",
+      reason: "dropbox-sin-acceso",
       message:
-        "La cuenta de Google Drive perdió el acceso; vuelva a conectarla en «Mi cuenta».",
+        "La cuenta de Dropbox perdió el acceso; vuelva a conectarla en «Mi cuenta».",
     };
   }
-  if (code === "drive_forbidden") {
+  if (code === "dropbox_forbidden") {
     return {
       status: 403,
-      reason: "drive-sin-permiso",
+      reason: "dropbox-sin-permiso",
       message:
-        "La cuenta de Google Drive no tiene permiso sobre el documento.",
+        "La cuenta de Dropbox no tiene permiso sobre el documento.",
     };
   }
-  if (code === "drive_rate_limited") {
+  if (code === "dropbox_rate_limited") {
     return {
       status: 503,
-      reason: "drive-limite",
+      reason: "dropbox-limite",
       message:
-        "Google Drive rechazó la entrega por límite de peticiones; inténtelo de nuevo en unos minutos.",
+        "Dropbox rechazó la entrega por límite de peticiones; inténtelo de nuevo en unos minutos.",
     };
   }
-  if (code === "drive_unavailable") {
+  if (code === "dropbox_unavailable") {
     return {
       status: 502,
-      reason: "drive-no-disponible",
+      reason: "dropbox-no-disponible",
       message:
-        "Google Drive no respondió; el documento sigue custodiado en la cuenta del proyecto.",
+        "Dropbox no respondió; el documento sigue custodiado en la cuenta del proyecto.",
     };
   }
   if (error instanceof Error && /no es válida/i.test(error.message)) {

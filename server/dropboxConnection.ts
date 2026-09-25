@@ -13,37 +13,42 @@ import {
 } from "./agentSettings";
 
 /**
- * Conexión de Google Drive como capa de custodia del RAG.
+ * Conexión de Dropbox como capa de custodia del RAG.
  *
  * Separa dos credenciales de naturaleza distinta:
  *
  * 1. **Credencial de plataforma** —`oauth_client_id` y `oauth_client_secret`—,
  *    una sola para todo el artefacto y propiedad de la institución. Se
  *    administra en Configuración y el secreto se cifra en `integration_settings`.
- * 2. **Conexión por usuario** —el `refresh_token` que Google devuelve cuando la
- *    persona autoriza su Drive—, cifrada por usuario en `integration_settings`
+ * 2. **Conexión por usuario** —el `refresh_token` que Dropbox devuelve cuando la
+ *    persona autoriza su cuenta—, cifrada por usuario en `integration_settings`
  *    bajo la clave `refresh:<usuario>`.
  *
- * El flujo OAuth usa el scope mínimo `drive.file`: la aplicación solo ve los
- * archivos que crea o que la persona comparte explícitamente, y la revocación
- * desde la cuenta de Google invalida el token en el acto sin tocar el Drive.
+ * La aplicación se registra con acceso **«App folder»**: Dropbox sólo expone la
+ * carpeta `Aplicaciones/<Aplicación>` de la cuenta, de modo que la institución
+ * nunca ve el resto del contenido personal. La revocación desde la cuenta de
+ * Dropbox invalida el token en el acto sin tocar los archivos del usuario.
  */
 
-export const GOOGLE_DRIVE_PROVIDER = "google_drive";
-export const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-export const GOOGLE_DRIVE_AUTH_URL =
-  "https://accounts.google.com/o/oauth2/v2/auth";
-export const GOOGLE_DRIVE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-export const GOOGLE_DRIVE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
-export const GOOGLE_DRIVE_TOKENINFO_URL =
-  "https://www.googleapis.com/oauth2/v3/tokeninfo";
-export const DRIVE_OAUTH_REDIRECT_PATH = "/api/drive/oauth/callback";
+export const DROPBOX_PROVIDER = "dropbox";
+/**
+ * Permisos mínimos del acceso con alcance: leer y escribir contenido y leer
+ * metadatos dentro de la carpeta de la aplicación.
+ */
+export const DROPBOX_SCOPE =
+  "files.content.read files.content.write files.metadata.read";
+export const DROPBOX_AUTH_URL = "https://www.dropbox.com/oauth2/authorize";
+export const DROPBOX_TOKEN_URL = "https://api.dropboxapi.com/oauth2/token";
+export const DROPBOX_REVOKE_URL = "https://api.dropboxapi.com/2/auth/token/revoke";
+export const DROPBOX_ACCOUNT_URL =
+  "https://api.dropboxapi.com/2/users/get_current_account";
+export const DROPBOX_OAUTH_REDIRECT_PATH = "/api/dropbox/oauth/callback";
 
-export const DRIVE_OAUTH_KEYS = [
+export const DROPBOX_OAUTH_KEYS = [
   "oauth_client_id",
   "oauth_client_secret",
 ] as const;
-export type DriveOAuthKey = (typeof DRIVE_OAUTH_KEYS)[number];
+export type DropboxOAuthKey = (typeof DROPBOX_OAUTH_KEYS)[number];
 
 type SettingRow = {
   setting_key: string;
@@ -62,7 +67,7 @@ async function settingRows(db: Queryable): Promise<SettingRow[]> {
        FROM integration_settings
       WHERE provider=$1
       ORDER BY setting_key`,
-    [GOOGLE_DRIVE_PROVIDER]
+    [DROPBOX_PROVIDER]
   );
   return result.rows;
 }
@@ -81,24 +86,23 @@ async function upsertSetting(
        SET setting_value=EXCLUDED.setting_value,
            is_secret=EXCLUDED.is_secret,
            updated_at=now()`,
-    [GOOGLE_DRIVE_PROVIDER, key, value, secret]
+    [DROPBOX_PROVIDER, key, value, secret]
   );
 }
 
 /** Estado verificable de la credencial de plataforma. */
-export type DriveSecretState = "usable" | "indescifrable" | "ausente";
+export type DropboxSecretState = "usable" | "indescifrable" | "ausente";
 
 /**
  * Configuración de plataforma visible para el operador.
  *
- * El estado del secreto se decide **descifrándolo** con la clave vigente, no
- * por el formato del texto cifrado: una rotación de
- * `AGENT_SETTINGS_ENCRYPTION_KEY` deja un valor `enc:v2:` ilegible y el panel
- * debe declararlo «indescifrable», nunca «Configurada». La máscara se compone
- * del valor descifrado, de modo que el operador confirme qué quedó guardado
- * al rotar la credencial.
+ * El estado del secreto se decide **descifrándolo** con la clave vigente, no por
+ * el formato del texto cifrado: una rotación de `AGENT_SETTINGS_ENCRYPTION_KEY`
+ * deja un valor `enc:v2:` ilegible y el panel debe declararlo «indescifrable»,
+ * nunca «Configurada». La máscara se compone del valor descifrado, de modo que el
+ * operador confirme qué quedó guardado al rotar la credencial.
  */
-export async function getDriveOAuthConfiguration(pool: Pool | null) {
+export async function getDropboxOAuthConfiguration(pool: Pool | null) {
   const rows = pool ? await settingRows(pool) : [];
   const clientId = (
     rows.find(
@@ -108,7 +112,7 @@ export async function getDriveOAuthConfiguration(pool: Pool | null) {
   const secretRow = rows.find(
     row => row.setting_key === "oauth_client_secret"
   );
-  let secretState: DriveSecretState = "ausente";
+  let secretState: DropboxSecretState = "ausente";
   let secretMasked: string | null = null;
   let secretReason: string | null = null;
   if (secretRow?.setting_value) {
@@ -120,7 +124,7 @@ export async function getDriveOAuthConfiguration(pool: Pool | null) {
       try {
         const plain = decryptAgentSecret(
           secretRow.setting_value,
-          integrationSecretContext(GOOGLE_DRIVE_PROVIDER, "oauth_client_secret")
+          integrationSecretContext(DROPBOX_PROVIDER, "oauth_client_secret")
         );
         secretState = "usable";
         secretMasked = maskAgentSecret(plain);
@@ -157,10 +161,10 @@ export async function getDriveOAuthConfiguration(pool: Pool | null) {
  * Credenciales de plataforma descifradas para el flujo OAuth.
  *
  * Devuelve `null` —nunca lanza— cuando la credencial falta o no se puede
- * descifrar: el camino de autorización degrada a una redirección explicativa
- * en lugar de un error HTTP sin contexto.
+ * descifrar: el camino de autorización degrada a una redirección explicativa en
+ * lugar de un error HTTP sin contexto.
  */
-export async function driveOAuthRuntime(
+export async function dropboxOAuthRuntime(
   pool: Pool
 ): Promise<{ clientId: string; clientSecret: string } | null> {
   const rows = await settingRows(pool);
@@ -179,7 +183,7 @@ export async function driveOAuthRuntime(
   try {
     const clientSecret = decryptAgentSecret(
       secretRow.setting_value,
-      integrationSecretContext(GOOGLE_DRIVE_PROVIDER, "oauth_client_secret")
+      integrationSecretContext(DROPBOX_PROVIDER, "oauth_client_secret")
     );
     return { clientId, clientSecret };
   } catch {
@@ -188,8 +192,8 @@ export async function driveOAuthRuntime(
 }
 
 /** Diagnóstico accionable de la credencial de plataforma para el operador. */
-export async function driveOAuthDiagnostics(pool: Pool | null) {
-  const configuration = await getDriveOAuthConfiguration(pool);
+export async function dropboxOAuthDiagnostics(pool: Pool | null) {
+  const configuration = await getDropboxOAuthConfiguration(pool);
   const encryptionKey = agentEncryptionKeyState();
   const ready =
     configuration.clientId.configured &&
@@ -204,9 +208,9 @@ export async function driveOAuthDiagnostics(pool: Pool | null) {
   };
 }
 
-export async function saveDriveOAuthSecret(
+export async function saveDropboxOAuthSecret(
   pool: Pool,
-  key: DriveOAuthKey,
+  key: DropboxOAuthKey,
   value: string | null,
   actorUserId: number
 ) {
@@ -222,7 +226,7 @@ export async function saveDriveOAuthSecret(
           key,
           encryptAgentSecret(
             value.trim(),
-            integrationSecretContext(GOOGLE_DRIVE_PROVIDER, key)
+            integrationSecretContext(DROPBOX_PROVIDER, key)
           ),
           true
         );
@@ -230,13 +234,13 @@ export async function saveDriveOAuthSecret(
     } else {
       await client.query(
         `DELETE FROM integration_settings WHERE provider=$1 AND setting_key=$2`,
-        [GOOGLE_DRIVE_PROVIDER, key]
+        [DROPBOX_PROVIDER, key]
       );
     }
     await client.query(
       `INSERT INTO audit_log
          (actor_user_id,entity_type,entity_id,action,after_json)
-       VALUES ($1,'google_drive_configuration',0,$2,$3::jsonb)`,
+       VALUES ($1,'dropbox_configuration',0,$2,$3::jsonb)`,
       [
         actorUserId,
         value ? "credential_rotated" : "credential_removed",
@@ -261,11 +265,17 @@ export async function saveDriveOAuthSecret(
   }
 }
 
+export type DropboxConnectionSecret = {
+  refreshToken: string;
+  email: string;
+  accountId: string;
+};
+
 /** Conexión por usuario, descifrada para el servidor (nunca sale al navegador). */
-export async function getDriveConnectionSecret(
+export async function getDropboxConnectionSecret(
   pool: Pool,
   userId: number
-): Promise<{ refreshToken: string; email: string } | null> {
+): Promise<DropboxConnectionSecret | null> {
   const rows = await settingRows(pool);
   const key = connectionKey(userId);
   const row = rows.find(candidate => candidate.setting_key === key);
@@ -273,28 +283,39 @@ export async function getDriveConnectionSecret(
   if (!row.is_secret || !isEncryptedAgentSecret(row.setting_value)) return null;
   const payload = decryptAgentSecret(
     row.setting_value,
-    integrationSecretContext(GOOGLE_DRIVE_PROVIDER, key)
+    integrationSecretContext(DROPBOX_PROVIDER, key)
   );
   const parsed = JSON.parse(payload) as {
     refreshToken?: string;
     email?: string;
+    accountId?: string;
   };
   if (!parsed.refreshToken) return null;
-  return { refreshToken: parsed.refreshToken, email: parsed.email ?? "" };
+  return {
+    refreshToken: parsed.refreshToken,
+    email: parsed.email ?? "",
+    accountId: parsed.accountId ?? "",
+  };
 }
 
-/** Estado visible de la conexión de Drive de un usuario. */
-export async function getDriveConnection(pool: Pool | null, userId: number) {
+/** Estado visible de la conexión de Dropbox de un usuario. */
+export async function getDropboxConnection(pool: Pool | null, userId: number) {
   if (!pool) return { configured: false, email: null as string | null };
-  const stored = await getDriveConnectionSecret(pool, userId);
+  const stored = await getDropboxConnectionSecret(pool, userId);
   if (!stored) return { configured: false, email: null as string | null };
   return { configured: true, email: stored.email || null };
 }
 
-/** Vincula el Drive del usuario: guarda el `refresh_token` cifrado y asienta la procedencia. */
-export async function linkDriveConnection(
+/** Vincula la cuenta: guarda el `refresh_token` cifrado y asienta la procedencia. */
+export async function linkDropboxConnection(
   pool: Pool,
-  input: { userId: number; refreshToken: string; email: string; actorUserId: number }
+  input: {
+    userId: number;
+    refreshToken: string;
+    email: string;
+    accountId: string;
+    actorUserId: number;
+  }
 ) {
   const client = await pool.connect();
   try {
@@ -306,9 +327,10 @@ export async function linkDriveConnection(
         JSON.stringify({
           refreshToken: input.refreshToken,
           email: input.email,
+          accountId: input.accountId,
         }),
         integrationSecretContext(
-          GOOGLE_DRIVE_PROVIDER,
+          DROPBOX_PROVIDER,
           connectionKey(input.userId)
         )
       ),
@@ -317,7 +339,7 @@ export async function linkDriveConnection(
     await client.query(
       `INSERT INTO audit_log
          (actor_user_id,entity_type,entity_id,action,after_json)
-       VALUES ($1,'user',$2,'drive_connected',$3::jsonb)`,
+       VALUES ($1,'user',$2,'dropbox_connected',$3::jsonb)`,
       [
         input.actorUserId,
         input.userId,
@@ -334,20 +356,31 @@ export async function linkDriveConnection(
   }
 }
 
-/** Desvincula el Drive: revoca el token en Google y retira la credencial local. */
-export async function unlinkDriveConnection(
+/** Desvincula la cuenta: revoca el token en Dropbox y retira la credencial local. */
+export async function unlinkDropboxConnection(
   pool: Pool,
   userId: number,
   actorUserId: number,
-  revokeImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch
 ) {
-  const stored = await getDriveConnectionSecret(pool, userId);
+  const stored = await getDropboxConnectionSecret(pool, userId);
   if (stored) {
     try {
-      await revokeImpl(GOOGLE_DRIVE_REVOKE_URL, {
+      const refreshed = await refreshDropboxAccessToken(
+        {
+          clientId: (await platformCredentials(pool))?.clientId ?? "",
+          clientSecret: (await platformCredentials(pool))?.clientSecret ?? "",
+          refreshToken: stored.refreshToken,
+        },
+        fetchImpl
+      );
+      await fetchImpl(DROPBOX_REVOKE_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ token: stored.refreshToken }).toString(),
+        headers: {
+          Authorization: `Bearer ${refreshed.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: "null",
       });
     } catch {
       // La revocación remota es un mejor esfuerzo: la credencial local se retira
@@ -359,12 +392,12 @@ export async function unlinkDriveConnection(
     await client.query("BEGIN");
     await client.query(
       `DELETE FROM integration_settings WHERE provider=$1 AND setting_key=$2`,
-      [GOOGLE_DRIVE_PROVIDER, connectionKey(userId)]
+      [DROPBOX_PROVIDER, connectionKey(userId)]
     );
     await client.query(
       `INSERT INTO audit_log
          (actor_user_id,entity_type,entity_id,action,after_json)
-       VALUES ($1,'user',$2,'drive_disconnected',$3::jsonb)`,
+       VALUES ($1,'user',$2,'dropbox_disconnected',$3::jsonb)`,
       [actorUserId, userId, JSON.stringify({ revoked: Boolean(stored) })]
     );
     await client.query("COMMIT");
@@ -377,42 +410,46 @@ export async function unlinkDriveConnection(
   }
 }
 
+async function platformCredentials(pool: Pool) {
+  return dropboxOAuthRuntime(pool);
+}
+
 /** Estado del flujo OAuth firmado para impedir falsificación entre inicio y retorno. */
-function driveSecret() {
+function dropboxSecret() {
   const secret = process.env.JWT_SECRET?.trim();
   if (secret) return secret;
   if (process.env.NODE_ENV === "production") {
     throw new Error(
-      "JWT_SECRET es obligatorio para acuñar el estado del flujo de Drive en producción."
+      "JWT_SECRET es obligatorio para acuñar el estado del flujo de Dropbox en producción."
     );
   }
-  return "talento-aisa-drive-development";
+  return "talento-aisa-dropbox-development";
 }
 
-function signDriveState(payload: string) {
-  return createHmac("sha256", driveSecret()).update(payload).digest("base64url");
+function signDropboxState(payload: string) {
+  return createHmac("sha256", dropboxSecret()).update(payload).digest("base64url");
 }
 
-export function driveStateToken(ttlSeconds = 600) {
+export function dropboxStateToken(ttlSeconds = 600) {
   const expiresAt = Math.floor(Date.now() / 1_000) + ttlSeconds;
-  return `${expiresAt}.${signDriveState(`drive:${expiresAt}`)}`;
+  return `${expiresAt}.${signDropboxState(`dropbox:${expiresAt}`)}`;
 }
 
-export function verifyDriveState(token: unknown) {
+export function verifyDropboxState(token: unknown) {
   if (typeof token !== "string" || !token) return false;
   const separator = token.indexOf(".");
   if (separator <= 0) return false;
   const expiresAt = Number(token.slice(0, separator));
   if (!Number.isInteger(expiresAt)) return false;
   if (expiresAt < Math.floor(Date.now() / 1_000)) return false;
-  const expected = signDriveState(`drive:${expiresAt}`);
+  const expected = signDropboxState(`dropbox:${expiresAt}`);
   const received = Buffer.from(token.slice(separator + 1));
   const computed = Buffer.from(expected);
   if (received.length !== computed.length) return false;
   return timingSafeEqual(received, computed);
 }
 
-export function driveAuthorizationUrl(
+export function dropboxAuthorizationUrl(
   clientId: string,
   redirectUri: string,
   state: string
@@ -421,16 +458,15 @@ export function driveAuthorizationUrl(
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: GOOGLE_DRIVE_SCOPE,
-    access_type: "offline",
-    prompt: "consent",
-    include_granted_scopes: "true",
+    // Sin `offline` Dropbox devuelve sólo un token de acceso de vida corta.
+    token_access_type: "offline",
+    scope: DROPBOX_SCOPE,
     state,
   });
-  return `${GOOGLE_DRIVE_AUTH_URL}?${query.toString()}`;
+  return `${DROPBOX_AUTH_URL}?${query.toString()}`;
 }
 
-export async function exchangeDriveCode(
+export async function exchangeDropboxCode(
   input: {
     clientId: string;
     clientSecret: string;
@@ -439,7 +475,7 @@ export async function exchangeDriveCode(
   },
   fetchImpl: typeof fetch = fetch
 ) {
-  const response = await fetchImpl(GOOGLE_DRIVE_TOKEN_URL, {
+  const response = await fetchImpl(DROPBOX_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -452,28 +488,30 @@ export async function exchangeDriveCode(
   });
   if (!response.ok) {
     throw new Error(
-      `Google rechazó el canje del código con estado HTTP ${response.status}.`
+      `Dropbox rechazó el canje del código con estado HTTP ${response.status}.`
     );
   }
   const data = (await response.json()) as {
     access_token?: string;
     refresh_token?: string;
     expires_in?: number;
+    account_id?: string;
   };
   if (!data.refresh_token || !data.access_token) {
     throw new Error(
-      "Google no devolvió el token de renovación; el consentimiento exige acceso sin conexión."
+      "Dropbox no devolvió el token de renovación; el consentimiento exige acceso sin conexión."
     );
   }
   return {
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
-    expiresIn: data.expires_in ?? 3600,
+    expiresIn: data.expires_in ?? 14_400,
+    accountId: data.account_id ?? "",
   };
 }
 
 /** Renueva el token de acceso a partir del `refresh_token` de una conexión. */
-export async function refreshDriveAccessToken(
+export async function refreshDropboxAccessToken(
   input: {
     clientId: string;
     clientSecret: string;
@@ -481,7 +519,7 @@ export async function refreshDriveAccessToken(
   },
   fetchImpl: typeof fetch = fetch
 ) {
-  const response = await fetchImpl(GOOGLE_DRIVE_TOKEN_URL, {
+  const response = await fetchImpl(DROPBOX_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -493,7 +531,7 @@ export async function refreshDriveAccessToken(
   });
   if (!response.ok) {
     throw new Error(
-      `Google rechazó la renovación del token con estado HTTP ${response.status}.`
+      `Dropbox rechazó la renovación del token con estado HTTP ${response.status}.`
     );
   }
   const data = (await response.json()) as {
@@ -501,36 +539,47 @@ export async function refreshDriveAccessToken(
     expires_in?: number;
   };
   if (!data.access_token) {
-    throw new Error("Google no devolvió el token de acceso renovado.");
+    throw new Error("Dropbox no devolvió el token de acceso renovado.");
   }
-  return { accessToken: data.access_token, expiresIn: data.expires_in ?? 3600 };
+  return { accessToken: data.access_token, expiresIn: data.expires_in ?? 14_400 };
 }
 
-/** Cuenta asociada al token, leída de Google para asentar la procedencia. */
-export async function driveAccountEmail(
+/** Cuenta asociada al token, leída de Dropbox para asentar la procedencia. */
+export async function dropboxAccountInfo(
   accessToken: string,
   fetchImpl: typeof fetch = fetch
 ) {
-  const response = await fetchImpl(
-    `${GOOGLE_DRIVE_TOKENINFO_URL}?access_token=${encodeURIComponent(accessToken)}`
-  );
+  const response = await fetchImpl(DROPBOX_ACCOUNT_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: "null",
+  });
   if (!response.ok) {
     throw new Error(
-      `Google no expuso la cuenta asociada (estado HTTP ${response.status}).`
+      `Dropbox no expuso la cuenta asociada (estado HTTP ${response.status}).`
     );
   }
-  const data = (await response.json()) as { email?: string };
-  if (!data.email) {
-    throw new Error("Google no expuso la cuenta asociada al token.");
+  const data = (await response.json()) as {
+    account_id?: string;
+    email?: string;
+    email_verified?: boolean;
+    name?: { display_name?: string };
+  };
+  const email = data.email || data.name?.display_name || "";
+  if (!email) {
+    throw new Error("Dropbox no expuso la cuenta asociada al token.");
   }
-  return { email: String(data.email) };
+  return { email: String(email), accountId: data.account_id ?? "" };
 }
 
-function driveRedirectUri(req: Request) {
+function dropboxRedirectUri(req: Request) {
   const forwarded = req.headers["x-forwarded-proto"];
   const scheme = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   const proto = scheme === "http" || scheme === "https" ? scheme : "https";
-  return `${proto}://${req.headers.host}${DRIVE_OAUTH_REDIRECT_PATH}`;
+  return `${proto}://${req.headers.host}${DROPBOX_OAUTH_REDIRECT_PATH}`;
 }
 
 async function sessionUserId(req: Request): Promise<number | null> {
@@ -541,11 +590,11 @@ async function sessionUserId(req: Request): Promise<number | null> {
 }
 
 function accountRedirect(reason: string) {
-  return `/admin/account?drive=${reason}`;
+  return `/admin/account?dropbox=${reason}`;
 }
 
-export function registerDriveOAuthRoutes(app: Express) {
-  app.get("/api/drive/oauth/start", async (req: Request, res: Response) => {
+export function registerDropboxOAuthRoutes(app: Express) {
+  app.get("/api/dropbox/oauth/start", async (req: Request, res: Response) => {
     const userId = await sessionUserId(req);
     if (!userId) {
       res.redirect(accountRedirect("denied"));
@@ -556,23 +605,23 @@ export function registerDriveOAuthRoutes(app: Express) {
       res.redirect(accountRedirect("error"));
       return;
     }
-    const runtime = await driveOAuthRuntime(pool);
+    const runtime = await dropboxOAuthRuntime(pool);
     if (!runtime) {
       res.redirect(accountRedirect("unconfigured"));
       return;
     }
-    const state = driveStateToken();
-    const url = driveAuthorizationUrl(
+    const state = dropboxStateToken();
+    const url = dropboxAuthorizationUrl(
       runtime.clientId,
-      driveRedirectUri(req),
+      dropboxRedirectUri(req),
       state
     );
     res.redirect(url);
   });
 
-  app.get(DRIVE_OAUTH_REDIRECT_PATH, async (req: Request, res: Response) => {
+  app.get(DROPBOX_OAUTH_REDIRECT_PATH, async (req: Request, res: Response) => {
     const state = String(req.query.state ?? "");
-    if (!verifyDriveState(state)) {
+    if (!verifyDropboxState(state)) {
       res.redirect(accountRedirect("state"));
       return;
     }
@@ -591,29 +640,30 @@ export function registerDriveOAuthRoutes(app: Express) {
       res.redirect(accountRedirect("error"));
       return;
     }
-    const runtime = await driveOAuthRuntime(pool);
+    const runtime = await dropboxOAuthRuntime(pool);
     if (!runtime) {
       res.redirect(accountRedirect("unconfigured"));
       return;
     }
     try {
-      const tokens = await exchangeDriveCode({
+      const tokens = await exchangeDropboxCode({
         clientId: runtime.clientId,
         clientSecret: runtime.clientSecret,
-        redirectUri: driveRedirectUri(req),
+        redirectUri: dropboxRedirectUri(req),
         code,
       });
-      const account = await driveAccountEmail(tokens.accessToken);
-      await linkDriveConnection(pool, {
+      const account = await dropboxAccountInfo(tokens.accessToken);
+      await linkDropboxConnection(pool, {
         userId,
         refreshToken: tokens.refreshToken,
         email: account.email,
+        accountId: account.accountId || tokens.accountId,
         actorUserId: userId,
       });
       res.redirect(accountRedirect("linked"));
     } catch (error) {
       console.warn(
-        `[Drive] No fue posible vincular el Drive (${error instanceof Error ? error.name : "unknown"}).`
+        `[Dropbox] No fue posible vincular la cuenta (${error instanceof Error ? error.name : "unknown"}).`
       );
       res.redirect(accountRedirect("error"));
     }

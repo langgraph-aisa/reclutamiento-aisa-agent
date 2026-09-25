@@ -124,19 +124,19 @@ import {
 } from "./agentSettings";
 import { initializeLangfuseFromDatabase } from "./observability/langfuse";
 import {
-  DRIVE_OAUTH_KEYS,
-  driveOAuthDiagnostics,
-  getDriveConnection,
-  getDriveOAuthConfiguration,
-  saveDriveOAuthSecret,
-  unlinkDriveConnection,
-} from "./driveConnection";
+  DROPBOX_OAUTH_KEYS,
+  dropboxOAuthDiagnostics,
+  getDropboxConnection,
+  getDropboxOAuthConfiguration,
+  saveDropboxOAuthSecret,
+  unlinkDropboxConnection,
+} from "./dropboxConnection";
 import {
-  assignProjectDriveConnection,
+  assignProjectDropboxConnection,
   migrateProjectStorage,
   projectStorageProfile,
   setProjectStorageMode,
-} from "./driveProject";
+} from "./dropboxProject";
 import {
   APICHAT_SECRET_KEYS,
   getApiChatConfiguration,
@@ -6692,20 +6692,20 @@ export const appRouter = router({
       }),
   }),
 
-  drive: router({
+  storage: router({
     connection: roleProcedure.query(async ({ ctx }) => {
-      return getDriveConnection(await getPool(), ctx.user.id);
+      return getDropboxConnection(await getPool(), ctx.user.id);
     }),
     unlink: roleProcedure.mutation(async ({ ctx }) => {
       const pool = await requirePool();
       try {
-        return await unlinkDriveConnection(pool, ctx.user.id, ctx.user.id);
+        return await unlinkDropboxConnection(pool, ctx.user.id, ctx.user.id);
       } catch (error) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: safeIntegrationMessage(
             error,
-            "No fue posible desconectar el Google Drive."
+            "No fue posible desconectar el Dropbox."
           ),
         });
       }
@@ -6714,9 +6714,9 @@ export const appRouter = router({
       const pool = await requirePool();
       const result = await pool.query(
         `SELECT p.id,p.name,p.storage_mode,
-                p.drive_connection_user_id,p.created_by_user_id,
+                p.dropbox_connection_user_id,p.created_by_user_id,
                 owner.name AS owner_name,
-                drive.name AS drive_name,
+                dropbox.name AS dropbox_name,
                 (SELECT count(*)::int FROM knowledge_files f WHERE f.project_id=p.id) AS file_count,
                 (SELECT count(*)::int
                    FROM candidate_knowledge_files c
@@ -6725,7 +6725,7 @@ export const appRouter = router({
                   WHERE link.project_id=p.id) AS candidate_file_count
            FROM knowledge_projects p
            LEFT JOIN users owner ON owner.id=p.created_by_user_id
-           LEFT JOIN users drive ON drive.id=p.drive_connection_user_id
+           LEFT JOIN users dropbox ON dropbox.id=p.dropbox_connection_user_id
           ORDER BY lower(p.name)`
       );
       return result.rows;
@@ -6737,7 +6737,7 @@ export const appRouter = router({
            FROM users u
           WHERE EXISTS (
                   SELECT 1 FROM integration_settings s
-                   WHERE s.provider='google_drive'
+                   WHERE s.provider='dropbox'
                      AND s.setting_key='refresh:' || u.id
                      AND s.is_secret
                      AND COALESCE(s.setting_value,'') <> ''
@@ -6756,7 +6756,7 @@ export const appRouter = router({
       .input(
         z.object({
           projectId: z.number().int().positive(),
-          mode: z.enum(["local", "drive"]),
+          mode: z.enum(["local", "dropbox"]),
         })
       )
       .mutation(async ({ input }) => {
@@ -6784,7 +6784,7 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const pool = await requirePool();
         try {
-          await assignProjectDriveConnection(
+          await assignProjectDropboxConnection(
             pool,
             input.projectId,
             input.userId
@@ -6795,7 +6795,7 @@ export const appRouter = router({
             code: "PRECONDITION_FAILED",
             message: safeIntegrationMessage(
               error,
-              "No fue posible asignar la cuenta de Drive del proyecto."
+              "No fue posible asignar la cuenta de Dropbox del proyecto."
             ),
           });
         }
@@ -6804,7 +6804,7 @@ export const appRouter = router({
       .input(
         z.object({
           projectId: z.number().int().positive(),
-          direction: z.enum(["to_drive", "to_local"]),
+          direction: z.enum(["to_dropbox", "to_local"]),
         })
       )
       .mutation(async ({ input }) => {
@@ -6864,11 +6864,11 @@ export const appRouter = router({
     apiChatConfiguration: adminProcedure.query(async () => {
       return getApiChatConfiguration(await getPool());
     }),
-    driveOAuthConfiguration: adminProcedure.query(async () => {
-      return getDriveOAuthConfiguration(await getPool());
+    dropboxOAuthConfiguration: adminProcedure.query(async () => {
+      return getDropboxOAuthConfiguration(await getPool());
     }),
-    driveOAuthDiagnostics: adminProcedure.query(async () => {
-      return driveOAuthDiagnostics(await getPool());
+    dropboxOAuthDiagnostics: adminProcedure.query(async () => {
+      return dropboxOAuthDiagnostics(await getPool());
     }),
     apiChatReception: adminProcedure.query(async () => {
       return getApiChatReceptionReadiness(await getPool());
@@ -7119,16 +7119,16 @@ export const appRouter = router({
           });
         }
       }),
-    saveDriveOAuthSecret: adminProcedure
+    saveDropboxOAuthSecret: adminProcedure
       .input(
         z.object({
-          key: z.enum(DRIVE_OAUTH_KEYS),
+          key: z.enum(DROPBOX_OAUTH_KEYS),
           value: z.string().trim().min(3).max(2_000).nullable(),
         })
       )
       .mutation(async ({ input, ctx }) => {
         try {
-          return await saveDriveOAuthSecret(
+          return await saveDropboxOAuthSecret(
             await requirePool(),
             input.key,
             input.value,
@@ -7139,7 +7139,7 @@ export const appRouter = router({
             code: "PRECONDITION_FAILED",
             message: safeIntegrationMessage(
               error,
-              "No fue posible guardar la credencial de Google Drive."
+              "No fue posible guardar la credencial de Dropbox."
             ),
           });
         }

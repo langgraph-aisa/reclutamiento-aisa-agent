@@ -15,7 +15,7 @@ import { observeOpenAIClient } from "./observability/langfuse";
 import { extractDocumentText } from "./documentExtraction";
 import { currentStorageBackend, type StorageStat } from "./storageBackend";
 import { currentPool } from "./db";
-import { storageBackendForKey } from "./driveProject";
+import { storageBackendForKey } from "./dropboxProject";
 
 export const KNOWLEDGE_PROVIDER = "knowledge";
 export const KNOWLEDGE_SUMMARY_WORD_LIMIT = 66;
@@ -276,14 +276,14 @@ function resolveStoredPath(storageKey: string) {
   return knowledgeFilePath(storageKey);
 }
 
-/** Backend para una clave: Drive si el proyecto tiene conexión; local en caso contrario. */
+/** Backend para una clave: Dropbox si el proyecto tiene conexión; local en caso contrario. */
 async function resolvedStorageBackend(
   storageKey: string
 ): Promise<ReturnType<typeof currentStorageBackend>> {
-  const pool = currentPool();
+  const pool = await currentPool();
   if (!pool) return currentStorageBackend();
-  const drive = await storageBackendForKey(pool, storageKey);
-  return drive ?? currentStorageBackend();
+  const custodia = await storageBackendForKey(pool, storageKey);
+  return custodia ?? currentStorageBackend();
 }
 
 export async function writeKnowledgeFile(storageKey: string, data: Buffer) {

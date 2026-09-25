@@ -99,13 +99,13 @@ export default function Config() {
   });
   const apiChatReception = trpc.config.apiChatReception.useQuery();
   const reception = apiChatReception.data;
-  const driveOAuthConfiguration = trpc.config.driveOAuthConfiguration.useQuery();
-  const driveOAuthDiagnostics = trpc.config.driveOAuthDiagnostics.useQuery();
-  const saveDriveOAuthSecret = trpc.config.saveDriveOAuthSecret.useMutation({
+  const dropboxOAuthConfiguration = trpc.config.dropboxOAuthConfiguration.useQuery();
+  const dropboxOAuthDiagnostics = trpc.config.dropboxOAuthDiagnostics.useQuery();
+  const saveDropboxOAuthSecret = trpc.config.saveDropboxOAuthSecret.useMutation({
     onSuccess: async () => {
       await Promise.all([
-        driveOAuthConfiguration.refetch(),
-        driveOAuthDiagnostics.refetch(),
+        dropboxOAuthConfiguration.refetch(),
+        dropboxOAuthDiagnostics.refetch(),
       ]);
     },
     onError: error => toast.error(error.message),
@@ -305,14 +305,14 @@ export default function Config() {
     }
   };
 
-  const persistDriveOAuthSecret = async (
+  const persistDropboxOAuthSecret = async (
     key: "oauth_client_id" | "oauth_client_secret",
     value: string | null
   ) => {
     try {
-      await saveDriveOAuthSecret.mutateAsync({ key, value });
+      await saveDropboxOAuthSecret.mutateAsync({ key, value });
       toast.success(
-        value ? "Credencial de Google Drive guardada" : "Credencial eliminada"
+        value ? "Credencial de Dropbox guardada" : "Credencial eliminada"
       );
       return true;
     } catch {
@@ -1322,12 +1322,12 @@ export default function Config() {
                 </div>
                 <div>
                   <CardTitle className="text-xl text-primary">
-                    Google Drive · plataforma OAuth
+                    Dropbox · plataforma OAuth
                   </CardTitle>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
                     Credencial de la aplicación para que los propietarios de
-                    proyecto vinculen su Drive desde «Mi cuenta». El secreto se
-                    cifra y el navegador solo recibe máscaras.
+                    proyecto vinculen su Dropbox desde «Mi cuenta». El secreto
+                    se cifra y el navegador solo recibe máscaras.
                   </p>
                 </div>
               </div>
@@ -1335,67 +1335,70 @@ export default function Config() {
             <CardContent className="space-y-4">
               <div className="grid gap-4 lg:grid-cols-2">
                 <CredentialField
-                  label="Client ID de OAuth"
-                  description="Identificador público de la aplicación en Google Cloud"
-                  placeholder="…apps.googleusercontent.com"
+                  label="App key de Dropbox"
+                  description="Identificador público de la aplicación en Dropbox Developers"
+                  placeholder="Ingrese la app key"
                   secret={false}
-                  state={driveOAuthConfiguration.data?.clientId}
-                  pending={saveDriveOAuthSecret.isPending}
+                  state={dropboxOAuthConfiguration.data?.clientId}
+                  pending={saveDropboxOAuthSecret.isPending}
                   onSave={value =>
-                    persistDriveOAuthSecret("oauth_client_id", value)
+                    persistDropboxOAuthSecret("oauth_client_id", value)
                   }
                   onRemove={() =>
-                    persistDriveOAuthSecret("oauth_client_id", null)
+                    persistDropboxOAuthSecret("oauth_client_id", null)
                   }
                 />
                 <CredentialField
-                  label="Client Secret de OAuth"
+                  label="App secret de Dropbox"
                   description="Secreto de la aplicación; se cifra antes de guardarse"
-                  placeholder="Ingrese el client secret"
-                  state={driveOAuthConfiguration.data?.secret}
-                  pending={saveDriveOAuthSecret.isPending}
+                  placeholder="Ingrese el app secret"
+                  state={dropboxOAuthConfiguration.data?.secret}
+                  pending={saveDropboxOAuthSecret.isPending}
                   onSave={value =>
-                    persistDriveOAuthSecret("oauth_client_secret", value)
+                    persistDropboxOAuthSecret("oauth_client_secret", value)
                   }
                   onRemove={() =>
-                    persistDriveOAuthSecret("oauth_client_secret", null)
+                    persistDropboxOAuthSecret("oauth_client_secret", null)
                   }
                 />
               </div>
-              {driveOAuthDiagnostics.data ? (
+              {dropboxOAuthDiagnostics.data ? (
                 <div className="rounded-2xl border border-border/70 bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
-                  {driveOAuthDiagnostics.data.ready ? (
+                  {dropboxOAuthDiagnostics.data.ready ? (
                     <p>
                       La credencial de plataforma está completa y descifrable:
                       el vínculo desde «Mi cuenta» puede iniciarse.
                     </p>
                   ) : (
                     <ul className="space-y-1">
-                      {!driveOAuthDiagnostics.data.clientId.configured && (
-                        <li>Falta el Client ID de OAuth.</li>
+                      {!dropboxOAuthDiagnostics.data.clientId.configured && (
+                        <li>Falta la App key de Dropbox.</li>
                       )}
-                      {driveOAuthDiagnostics.data.secret.state === "ausente" && (
-                        <li>Falta el Client Secret de OAuth.</li>
+                      {dropboxOAuthDiagnostics.data.secret.state === "ausente" && (
+                        <li>Falta el App secret de Dropbox.</li>
                       )}
-                      {driveOAuthDiagnostics.data.secret.state ===
+                      {dropboxOAuthDiagnostics.data.secret.state ===
                         "indescifrable" && (
                         <li>
-                          El Client Secret guardado no se descifra con la clave
-                          vigente: {driveOAuthDiagnostics.data.secret.reason}
+                          El App secret guardado no se descifra con la clave
+                          vigente: {dropboxOAuthDiagnostics.data.secret.reason}
                         </li>
                       )}
-                      {driveOAuthDiagnostics.data.encryptionKey.state !==
+                      {dropboxOAuthDiagnostics.data.encryptionKey.state !==
                         "lista" && (
-                        <li>{driveOAuthDiagnostics.data.encryptionKey.message}</li>
+                        <li>{dropboxOAuthDiagnostics.data.encryptionKey.message}</li>
                       )}
                     </ul>
                   )}
                 </div>
               ) : null}
               <div className="rounded-2xl border border-emerald-400/20 bg-secondary p-4 text-sm leading-6 text-secondary-foreground">
-                La URI de redireccionamiento debe coincidir en Google Cloud:
-                <span className="font-mono text-xs"> /api/drive/oauth/callback</span>.
-                El scope es <span className="font-mono text-xs">drive.file</span>.
+                Registre la aplicación con acceso <span className="font-mono text-xs">App folder</span> y
+                la URI de redireccionamiento
+                <span className="font-mono text-xs"> /api/dropbox/oauth/callback</span>.
+                Los permisos son <span className="font-mono text-xs">files.content.read</span>,{" "}
+                <span className="font-mono text-xs">files.content.write</span> y{" "}
+                <span className="font-mono text-xs">files.metadata.read</span>.
               </div>
             </CardContent>
           </Card>

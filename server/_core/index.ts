@@ -14,7 +14,7 @@ import { startApiChatReceiptWorker } from "../apiChatReceipts";
 import { startCandidateDocumentWorker } from "../candidateDocumentWorker";
 import { registerInboxFileRoutes } from "../inboxFiles";
 import { registerKnowledgeRoutes } from "../knowledgeRoutes";
-import { registerDriveOAuthRoutes } from "../driveConnection";
+import { registerDropboxOAuthRoutes } from "../dropboxConnection";
 import { getPool } from "../db";
 import { APP_VERSION } from "../../shared/release";
 import {
@@ -77,7 +77,7 @@ async function startServer() {
   registerApiChatWebhook(app, () => getPool());
   registerInboxFileRoutes(app);
   registerKnowledgeRoutes(app);
-  registerDriveOAuthRoutes(app);
+  registerDropboxOAuthRoutes(app);
 
   // tRPC API
   app.use(

@@ -1340,7 +1340,7 @@ export const knowledgeProjects = pgTable(
     createdByUserId: integer("created_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    driveConnectionUserId: integer("drive_connection_user_id").references(
+    dropboxConnectionUserId: integer("dropbox_connection_user_id").references(
       () => users.id,
       { onDelete: "set null" }
     ),

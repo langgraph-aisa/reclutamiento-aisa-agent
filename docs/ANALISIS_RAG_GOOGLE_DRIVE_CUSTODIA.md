@@ -1,5 +1,10 @@
 # Análisis de viabilidad técnica: Google Drive como capa de custodia del RAG de proyectos y del RAG del candidato
 
+> **Nota de vigencia (2026-09-25).** Este documento se conserva como registro
+> histórico: describió la custodia en Google Drive y quedó sustituido por
+> [ANALISIS_CUSTODIA_DROPBOX.md](ANALISIS_CUSTODIA_DROPBOX.md). El proveedor
+> vigente es Dropbox; ningún módulo de Google Drive permanece en el artefacto.
+
 Fecha de control: 2026-09-22. Alcance: `server/knowledge.ts`, `server/candidateKnowledge.ts`, `server/inboxFiles.ts`, `server/base64Transport.ts`, `server/viewerAccess.ts`, `server/knowledgeRoutes.ts`, `server/candidateConservedRecovery.ts` y la hoja «Mi cuenta». Este documento analiza la viabilidad de sustituir el volumen local `KNOWLEDGE_STORAGE_DIR` por el Google Drive del propietario del proyecto; no constituye certificación ISO/DORA ni validez jurídica.
 
 ## 1. Objeto

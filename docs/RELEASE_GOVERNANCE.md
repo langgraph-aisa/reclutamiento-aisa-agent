@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.230
+# Gobierno de release JARVI RH 2.0.231
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.230**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.231**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.231
+El release **sustituye Google Drive por Dropbox como única fuente de custodia del RAG de proyectos y del RAG personal de cada candidato**. Migración `0044`.
+
+**La credencial.** `server/dropboxConnection.ts` releva a la conexión anterior y conserva la separación de naturalezas: la **credencial de plataforma** —`oauth_client_id` y `oauth_client_secret`, administrada en Configuración y cifrada en `integration_settings` bajo el proveedor `dropbox`— y la **conexión por usuario** —el `refresh_token` que Dropbox devuelve al autorizar, cifrado bajo `refresh:<usuario>`—. La aplicación se registra con acceso «App folder» y permisos mínimos `files.content.read`, `files.content.write` y `files.metadata.read`, de modo que la institución solo alcanza la carpeta `Aplicaciones/JARVI RH` de cada cuenta y nunca el resto del contenido personal. El estado del flujo sigue firmado con `JWT_SECRET` y caducidad, el canje usa `token_access_type=offline` y la revocación desde «Mi cuenta» retira el vínculo sin tocar los archivos de la persona.
+
+**El backend.** `server/dropboxStorage.ts` implementa la costura `StorageBackend` sobre la API v2: escritura con creación de la jerarquía, lectura completa, lectura con rango para el visor de PDF, audio y video, borrado idempotente y metadatos. Los fallos del proveedor se declaran con causa nombrada —`dropbox_unauthenticated`, `dropbox_forbidden`, `dropbox_rate_limited`, `dropbox_unavailable`— y el visor los traduce a un mensaje accionable en lugar de una frase genérica.
+
+**La jerarquía visible.** `server/dropboxProject.ts` resuelve el proyecto de cada clave, la cuenta que lo respalda —asignada por un administrador de proyectos o, por omisión, la del creador— y la activación explícita `storage_mode='dropbox'`. El resolutor compone `Proyecto/Plaza/Candidato`: el RAG institucional vive en la carpeta del proyecto, el RAG personal de cada persona en su carpeta bajo la plaza y la bandeja conversacional en `Bandeja/` dentro de la carpeta del candidato. El webhook de ApiChat, al incorporar un PDF, Word, MP3 o MP4 al expediente, deposita el documento en la carpeta del candidato y dispara el análisis del currículum sin pasos adicionales; la migración entre el volumen local y la cuenta conserva los documentos ya cargados.
+
+**Sin vestigios.** Los módulos de Google Drive se retiran del artefacto y la migración `0044` elimina sus credenciales de `integration_settings`, renombra la cuenta que respalda cada proyecto a `dropbox_connection_user_id` y conmuta a `dropbox` los proyectos que custodiaban en Drive. El artefacto `database/005_servicio_conversacional_listo.sql` incorpora la migración y la verificación autocertificada. El diseño y sus decisiones están en [ANALISIS_CUSTODIA_DROPBOX.md](ANALISIS_CUSTODIA_DROPBOX.md).
 
 ### Alcance candidato 2.0.230
 El release **aplica el consenso del consejo al ciclo conversacional**. Sin migración.
@@ -1035,4 +1046,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.230.md](PRUEBAS_CAJA_NEGRA_2.0.230.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.231.md](PRUEBAS_CAJA_NEGRA_2.0.231.md).

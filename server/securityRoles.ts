@@ -104,7 +104,7 @@ export const SECURITY_RESOURCES: ReadonlyArray<{
   {
     key: "proyectos",
     label: "Proyectos",
-    note: "Base de conocimiento por proyecto y su cuenta de Drive.",
+    note: "Base de conocimiento por proyecto y su cuenta de Dropbox.",
   },
   {
     key: "formularios",

@@ -8,7 +8,8 @@ import { randomUUID } from "node:crypto";
  * El catálogo vive en PostgreSQL y los binarios en un backend de
  * almacenamiento identificados por una **clave relativa** —la misma referencia
  * que conserva la base—, no por una ruta absoluta. El backend resuelve la
- * clave contra su propio medio: el sistema de archivos local o Google Drive.
+ * clave contra su propio medio: el sistema de archivos local o el Dropbox del
+ * propietario del proyecto.
  *
  * Formas de clave admitidas:
  *   · `<proyecto>/<uuid>.<extensión>`            — RAG de proyectos
