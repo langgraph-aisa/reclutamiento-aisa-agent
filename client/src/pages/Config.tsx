@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { GuatemalaPhoneInput } from "@/components/GuatemalaPhoneInput";
+import { CredentialField } from "@/components/CredentialField";
 import {
   Check,
   CheckCircle2,
@@ -34,12 +35,6 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-
-type ApiChatSecretKey =
-  | "client_id"
-  | "token"
-  | "account_id"
-  | "webhook_secret";
 
 /** Etiquetas operativas del catálogo de endpoints conversacionales. */
 const ENDPOINT_CAPABILITY_LABELS: Record<string, string> = {
@@ -73,12 +68,6 @@ export default function Config() {
       onError: error => toast.error(error.message),
     }
   );
-  const saveApiChatSecret = trpc.config.saveApiChatSecret.useMutation({
-    onSuccess: async () => {
-      await apiChatConfiguration.refetch();
-    },
-    onError: error => toast.error(error.message),
-  });
   const saveApiChatPublicBaseUrl =
     trpc.config.savePublicBaseUrl.useMutation({
       onSuccess: async () => {
@@ -86,17 +75,6 @@ export default function Config() {
       },
       onError: error => toast.error(error.message),
     });
-  const verifyApiChat = trpc.config.verifyApiChat.useMutation({
-    onSuccess: result => {
-      if (result.isConnected)
-        toast.success("ApiChat está conectado y disponible");
-      else
-        toast.info(
-          "Las credenciales son válidas; la instancia todavía no está conectada"
-        );
-    },
-    onError: error => toast.error(error.message),
-  });
   const apiChatReception = trpc.config.apiChatReception.useQuery();
   const reception = apiChatReception.data;
   const dropboxOAuthConfiguration = trpc.config.dropboxOAuthConfiguration.useQuery();
@@ -289,21 +267,6 @@ export default function Config() {
       connectTo: apiChatConfiguration.data.connectTo,
     });
   }, [apiChatConfiguration.data]);
-
-  const persistApiChatSecret = async (
-    key: ApiChatSecretKey,
-    value: string | null
-  ) => {
-    try {
-      await saveApiChatSecret.mutateAsync({ key, value });
-      toast.success(
-        value ? "Credencial cifrada y guardada" : "Credencial eliminada"
-      );
-      return true;
-    } catch {
-      return false;
-    }
-  };
 
   const persistDropboxOAuthSecret = async (
     key: "oauth_client_id" | "oauth_client_secret",
@@ -1241,43 +1204,6 @@ export default function Config() {
               </div>
               <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
                 <CredentialField
-                  label="Client ID"
-                  description="Identificador de la API nativa"
-                  placeholder="Ingrese el Client ID"
-                  state={apiChatConfiguration.data?.secrets.client_id}
-                  pending={
-                    saveApiChatSecret.isPending || verifyApiChat.isPending
-                  }
-                  onSave={value => persistApiChatSecret("client_id", value)}
-                  onRemove={() => persistApiChatSecret("client_id", null)}
-                  onVerify={() => verifyApiChat.mutate()}
-                />
-                <CredentialField
-                  label="Token"
-                  description="Credencial obligatoria de ApiChat"
-                  placeholder="Ingrese el token"
-                  state={apiChatConfiguration.data?.secrets.token}
-                  pending={
-                    saveApiChatSecret.isPending || verifyApiChat.isPending
-                  }
-                  onSave={value => persistApiChatSecret("token", value)}
-                  onRemove={() => persistApiChatSecret("token", null)}
-                  onVerify={() => verifyApiChat.mutate()}
-                />
-                <CredentialField
-                  label="Secreto del webhook"
-                  description="Credencial que el artefacto exige en la ruta de recepción; debe coincidir con el ?key= de la dirección registrada en ApiChat"
-                  placeholder="Ingrese el secreto entrante"
-                  state={apiChatConfiguration.data?.secrets.webhook_secret}
-                  pending={saveApiChatSecret.isPending}
-                  onSave={value =>
-                    persistApiChatSecret("webhook_secret", value)
-                  }
-                  onRemove={() =>
-                    persistApiChatSecret("webhook_secret", null)
-                  }
-                />
-                <CredentialField
                   label="Dirección pública"
                   description="Base con la que el proveedor descarga los archivos salientes; vacía, se deduce del proxy inverso"
                   placeholder="https://su-dominio"
@@ -1292,19 +1218,12 @@ export default function Config() {
                   onSave={persistApiChatPublicBaseUrl}
                   onRemove={() => persistApiChatPublicBaseUrl("")}
                 />
-                {apiChat.mode === "legacy" ? (
-                  <CredentialField
-                    label="ID de cuenta"
-                    description="Solo se utiliza en el modo heredado"
-                    placeholder="Ingrese el ID de cuenta"
-                    state={apiChatConfiguration.data?.secrets.account_id}
-                    pending={
-                      saveApiChatSecret.isPending || verifyApiChat.isPending
-                    }
-                    onSave={value => persistApiChatSecret("account_id", value)}
-                    onRemove={() => persistApiChatSecret("account_id", null)}
-                  />
-                ) : null}
+              </div>
+              <div className="rounded-2xl border border-border/70 bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
+                Las credenciales de ApiChat se administran en «Mi cuenta»: cada
+                persona guarda la suya y la de plataforma —respaldo y
+                recepción— la conserva el administrador. El secreto del webhook
+                sigue gobernando esta ruta de recepción y también vive allí.
               </div>
               <div className="rounded-2xl border border-emerald-400/20 bg-secondary p-4 text-sm leading-6 text-secondary-foreground">
                 <strong className="text-primary">Seguridad:</strong> el servidor
@@ -1758,124 +1677,6 @@ export default function Config() {
   );
 }
 
-function CredentialField({
-  label,
-  description,
-  placeholder,
-  state,
-  pending,
-  onSave,
-  onRemove,
-  onVerify,
-  secret = true,
-}: {
-  label: string;
-  description: string;
-  placeholder: string;
-  state?: { configured: boolean; masked: string | null };
-  pending: boolean;
-  /**
-   * Cuando el valor no es un secreto —una dirección pública, por ejemplo— el
-   * campo se muestra legible: enmascararlo impediría al operador comprobar cuál
-   * está vigente sin retirarlo y volverlo a escribir.
-   */
-  secret?: boolean;
-  onSave: (value: string) => Promise<boolean>;
-  onRemove: () => Promise<boolean>;
-  onVerify?: () => void;
-}) {
-  const [value, setValue] = useState("");
-  const [visible, setVisible] = useState(false);
-  return (
-    <div className="space-y-3 rounded-2xl border border-border/70 bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <Label className="font-semibold text-primary">{label}</Label>
-          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-        </div>
-        <Badge
-          variant="outline"
-          className={
-            state?.configured
-              ? "rounded-full border-emerald-300 text-emerald-700"
-              : "rounded-full"
-          }
-        >
-          {state?.configured ? "Configurada" : "Pendiente"}
-        </Badge>
-      </div>
-      {state?.configured && (
-        <p className="rounded-xl bg-muted/60 px-3 py-2 font-mono text-xs text-muted-foreground">
-          {state.masked}
-        </p>
-      )}
-      <div className="relative">
-        <Input
-          type={secret && !visible ? "password" : "text"}
-          value={value}
-          onChange={event => setValue(event.target.value)}
-          className="rounded-xl pr-10 font-mono text-xs"
-          autoComplete={secret ? "new-password" : "off"}
-          placeholder={
-            state?.configured ? "Ingrese una nueva para rotar" : placeholder
-          }
-        />
-        {secret && (
-          <button
-            type="button"
-            className="absolute right-3 top-2.5 text-muted-foreground hover:text-primary"
-            onClick={() => setVisible(current => !current)}
-            aria-label={visible ? `Ocultar ${label}` : `Mostrar ${label}`}
-          >
-            {visible ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
-          </button>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          className="rounded-full"
-          disabled={pending || value.trim().length < 3}
-          onClick={async () => {
-            if (await onSave(value.trim())) {
-              setValue("");
-              setVisible(false);
-            }
-          }}
-        >
-          <Save className="mr-2 h-3.5 w-3.5" /> Guardar
-        </Button>
-        {onVerify && state?.configured && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="rounded-full"
-            disabled={pending}
-            onClick={onVerify}
-          >
-            <CheckCircle2 className="mr-2 h-3.5 w-3.5" /> Verificar
-          </Button>
-        )}
-        {state?.configured && (
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8 rounded-full text-destructive hover:text-destructive"
-            disabled={pending}
-            onClick={() => void onRemove()}
-            aria-label={`Eliminar ${label}`}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
 function CatalogStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl bg-muted/60 p-4">

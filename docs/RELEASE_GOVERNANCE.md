@@ -1,8 +1,21 @@
-# Gobierno de release JARVI RH 2.0.231
+# Gobierno de release JARVI RH 2.0.232
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.231**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.232**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.232
+El release **traslada las credenciales de ApiChat de Configuración a «Mi cuenta» y las hace por persona**. Sin migración.
+
+**La credencial propia.** Cada persona guarda la suya en `integration_settings` bajo `<clave>:<usuario>` —`client_id`, `token` y, en el modo heredado, `account_id`—, cifrada con el mismo AES-256-GCM y enmascarada en la hoja. La credencial propia solo se usa cuando está **completa** para el modo vigente: un token propio sin su identificador no se combina con el de plataforma, porque la operación viajaría con una identidad mixta que nadie configuró.
+
+**Quién la usa.** Las operaciones atribuibles —el envío manual desde la bandeja, el borrado del mensaje en el proveedor y la verificación de conexión— se resuelven con la credencial de quien las firma. Las automáticas —la respuesta del agente y la solicitud del currículum— se atribuyen al **creador del proyecto** de la plaza, porque no tienen sesión de usuario; sin proyecto, rigen con la de plataforma.
+
+**Quién no la usa.** La recepción sigue rigiéndose por la credencial de plataforma: el webhook es una sola dirección sin sesión, y la conciliación del historial, la sonda de medios y la proyección de la cuenta del proveedor leen con ella. Esa credencial, que además respalda a quien no configuró la suya, solo la administra el administrador desde «Mi cuenta», y su verificación se rechaza a cualquier otro rol con el motivo declarado.
+
+**La hoja.** «Configuración» conserva el modo, el endpoint, la dirección pública, el catálogo de endpoints y la verificación de recepción; los campos de Client ID, Token, ID de cuenta y secreto del webhook viven ahora en «Mi cuenta». El campo de credencial es una pieza compartida (`client/src/components/CredentialField.tsx`) para que el enmascarado y la confirmación no divergan entre las dos hojas.
+
+**Sin migración.** Reutiliza `integration_settings` con la clave del titular; ningún asiento previo cambia de forma.
 
 ### Alcance candidato 2.0.231
 El release **sustituye Google Drive por Dropbox como única fuente de custodia del RAG de proyectos y del RAG personal de cada candidato**. Migración `0044`.
@@ -1046,4 +1059,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.231.md](PRUEBAS_CAJA_NEGRA_2.0.231.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.232.md](PRUEBAS_CAJA_NEGRA_2.0.232.md).

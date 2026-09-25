@@ -29,6 +29,8 @@ vi.mock("./apichat", async () => {
 });
 vi.mock("./apiChatSettings", () => ({
   getApiChatRuntimeSettings: async () => ({}),
+  // Sin proyecto no hay titular: la entrega rige por la credencial de plataforma.
+  apiChatCredentialOwnerForApplication: async () => null,
 }));
 vi.mock("./observability/langfuse", () => ({
   withLangfuseObservation: async (

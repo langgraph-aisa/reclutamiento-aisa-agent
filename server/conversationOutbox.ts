@@ -1,6 +1,9 @@
 import type { Pool } from "pg";
 import { ApiChatDeliveryUnknownError, sendApiChatText } from "./apichat";
-import { getApiChatRuntimeSettings } from "./apiChatSettings";
+import {
+  apiChatCredentialOwnerForApplication,
+  getApiChatRuntimeSettings,
+} from "./apiChatSettings";
 import { assertCapability } from "./conversationRuntime";
 import { getConversationActivation } from "./conversationActivation";
 import { isUndefinedTableError } from "./governanceObservability";
@@ -90,7 +93,7 @@ async function claimDispatchRows(pool: Pool, limit: number) {
   try {
     const claimed = await pool.query(
       `SELECT o.id AS outbox_id,m.id,m.conversation_id,m.body,m.attempt_count,
-              c.phone_international
+              a.id AS application_id,c.phone_international
          FROM conversation_outbox o
          JOIN conversation_messages m ON m.id=o.message_id
          JOIN conversations conv ON conv.id=o.conversation_id
@@ -109,7 +112,7 @@ async function claimDispatchRows(pool: Pool, limit: number) {
     if (!isUndefinedTableError(error)) throw error;
     const legacy = await pool.query(
       `SELECT NULL::int AS outbox_id,m.id,m.conversation_id,m.body,m.attempt_count,
-              c.phone_international
+              a.id AS application_id,c.phone_international
          FROM conversation_messages m
          JOIN conversations conv ON conv.id=m.conversation_id
          JOIN applications a ON a.id=conv.application_id
@@ -207,8 +210,15 @@ export async function dispatchQueuedReplies(
       },
       async observation => {
         try {
+          // La respuesta del agente no tiene sesión: se atribuye a la persona
+          // que respalda el proyecto de la postulación y, sin proyecto, a la
+          // credencial de plataforma.
+          const owner = await apiChatCredentialOwnerForApplication(
+            pool,
+            Number(row.application_id)
+          );
           const settings = await (dependencies.settings ??
-            getApiChatRuntimeSettings)(pool);
+            getApiChatRuntimeSettings)(pool, owner);
           const sent = await (dependencies.sendText ?? sendApiChatText)(
             {
               phoneInternational: String(row.phone_international),

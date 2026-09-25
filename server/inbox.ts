@@ -618,8 +618,12 @@ async function sendInboxMessageInternal(
   }
   let result: Awaited<ReturnType<typeof sendApiChatText>>;
   try {
-    const settings = await (dependencies.settings ??
-      getApiChatRuntimeSettings)(pool);
+    // El envío manual se atribuye a quien lo firma: cada persona usable de la
+    // plataforma opera con su propia credencial y la institucional respalda.
+    const settings = await (dependencies.settings ?? getApiChatRuntimeSettings)(
+      pool,
+      input.actorUserId
+    );
     const phone = {
       phoneInternational: String(conversation.phone_international),
     };
@@ -1609,7 +1613,10 @@ export async function deleteInboxMessage(
           phoneInternational: providerTarget.phoneInternational,
           messageId: providerTarget.providerMessageId,
         },
-        await (dependencies.settings ?? getApiChatRuntimeSettings)(pool)
+        await (dependencies.settings ?? getApiChatRuntimeSettings)(
+          pool,
+          input.actorUserId
+        )
       );
     } catch (error) {
       const safeError = (

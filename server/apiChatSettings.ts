@@ -32,6 +32,31 @@ export const APICHAT_SECRET_KEYS = [
 export type ApiChatSecretKey = (typeof APICHAT_SECRET_KEYS)[number];
 
 /**
+ * Credenciales que cada persona puede aportar para sí misma desde «Mi cuenta».
+ *
+ * La credencial de plataforma sigue siendo la fuente de la **recepción** —el
+ * webhook es una sola dirección sin sesión de usuario— y el respaldo de toda
+ * operación cuya persona no haya configurado la suya. La credencial propia se
+ * guarda bajo `<clave>:<usuario>` y solo se usa cuando está **completa**: un
+ * token propio sin su identificador no se mezcla con el de plataforma.
+ */
+export const APICHAT_PER_USER_SECRET_KEYS = [
+  "client_id",
+  "token",
+  "account_id",
+] as const;
+export type ApiChatPerUserSecretKey =
+  (typeof APICHAT_PER_USER_SECRET_KEYS)[number];
+
+/** Clave de una credencial propia dentro de `integration_settings`. */
+export function apiChatUserSettingKey(
+  key: ApiChatPerUserSecretKey,
+  userId: number
+) {
+  return `${key}:${userId}`;
+}
+
+/**
  * Dirección pública con la que la bandeja anuncia al proveedor los archivos
  * salientes. Vive en la configuración y no en el entorno: es un valor de
  * operación que la institución cambia sin reconstruir la imagen.
@@ -100,7 +125,7 @@ function preferencesFromRows(rows: SettingRow[]): ApiChatPreferences {
   };
 }
 
-function encryptedSecret(rows: SettingRow[], key: ApiChatSecretKey) {
+function encryptedSecret(rows: SettingRow[], key: string) {
   const row = rows.find(candidate => candidate.setting_key === key);
   if (!row?.setting_value) return null;
   if (!row.is_secret || !isEncryptedAgentSecret(row.setting_value)) {
@@ -114,7 +139,16 @@ function encryptedSecret(rows: SettingRow[], key: ApiChatSecretKey) {
   );
 }
 
-function secretState(rows: SettingRow[], key: ApiChatSecretKey) {
+/** Lectura tolerante: la credencial propia ausente o ilegible no interrumpe la operación. */
+function optionalSecret(rows: SettingRow[], key: string) {
+  try {
+    return encryptedSecret(rows, key);
+  } catch {
+    return null;
+  }
+}
+
+function secretState(rows: SettingRow[], key: string) {
   try {
     const value = encryptedSecret(rows, key);
     return {
@@ -124,6 +158,45 @@ function secretState(rows: SettingRow[], key: ApiChatSecretKey) {
   } catch {
     return { configured: false, masked: null as string | null };
   }
+}
+
+/**
+ * Credencial propia de una persona, o `null` cuando no está **completa** para
+ * el modo vigente. Sin esa exigencia, un token propio se combinaría con el
+ * identificador de plataforma y la operación viajaría con una identidad mixta
+ * que nadie configuró.
+ */
+function perUserCredential(
+  rows: SettingRow[],
+  userId: number,
+  mode: ApiChatMode
+): { token: string; clientId?: string; accountId?: string } | null {
+  const token = optionalSecret(rows, apiChatUserSettingKey("token", userId));
+  if (!token) return null;
+  if (mode === "native") {
+    const clientId = optionalSecret(
+      rows,
+      apiChatUserSettingKey("client_id", userId)
+    );
+    return clientId ? { token, clientId } : null;
+  }
+  const accountId = optionalSecret(
+    rows,
+    apiChatUserSettingKey("account_id", userId)
+  );
+  return accountId ? { token, accountId } : null;
+}
+
+/** Credencial de plataforma completa, o `null` si falta alguna pieza del modo vigente. */
+function platformCredential(rows: SettingRow[], mode: ApiChatMode) {
+  const token = optionalSecret(rows, "token");
+  if (!token) return null;
+  if (mode === "native") {
+    const clientId = optionalSecret(rows, "client_id");
+    return clientId ? { token, clientId } : null;
+  }
+  const accountId = optionalSecret(rows, "account_id");
+  return accountId ? { token, accountId } : null;
 }
 
 export async function getApiChatConfiguration(pool: Pool | null) {
@@ -228,27 +301,154 @@ export async function resolveApiChatPublicBaseUrl(pool: Pool | null) {
   }
 }
 
+/**
+ * Configuración efectiva para una operación.
+ *
+ * Cuando se nombra a la persona, su credencial propia **completa** tiene
+ * precedencia y la de plataforma queda como respaldo; sin nombre —la recepción,
+ * la conciliación y los barridos sin sesión—, rige la de plataforma.
+ */
 export async function getApiChatRuntimeSettings(
-  pool: Pool
+  pool: Pool,
+  userId?: number | null
 ): Promise<ApiChatConfig> {
   const rows = await settingRows(pool);
   const preferences = preferencesFromRows(rows);
   const disabledEndpoints = endpointStatesFromRows(rows)
     .filter(state => !state.enabled)
     .map(state => state.path);
+  const own =
+    userId == null ? null : perUserCredential(rows, userId, preferences.mode);
   const validated = validateApiChatConfig({
     ...preferences,
-    token: encryptedSecret(rows, "token") ?? "",
+    token: own ? own.token : (encryptedSecret(rows, "token") ?? ""),
     clientId:
       preferences.mode === "native"
-        ? (encryptedSecret(rows, "client_id") ?? undefined)
+        ? (own?.clientId ?? encryptedSecret(rows, "client_id") ?? undefined)
         : undefined,
     accountId:
       preferences.mode === "legacy"
-        ? (encryptedSecret(rows, "account_id") ?? undefined)
+        ? (own?.accountId ?? encryptedSecret(rows, "account_id") ?? undefined)
         : undefined,
   });
   return { ...validated, disabledEndpoints };
+}
+
+/**
+ * Proyección de la credencial propia para «Mi cuenta»: qué hay guardado, si es
+ * suficiente para operar y si la credencial de plataforma existe como respaldo.
+ * Nunca lanza por un valor ilegible: la hoja declara el estado, no lo esconde.
+ */
+export async function getApiChatUserConfiguration(
+  pool: Pool | null,
+  userId: number
+) {
+  const rows = pool ? await settingRows(pool) : [];
+  const preferences = preferencesFromRows(rows);
+  const own = perUserCredential(rows, userId, preferences.mode);
+  return {
+    mode: preferences.mode,
+    endpoint: preferences.endpoint,
+    connectTo: preferences.connectTo,
+    secrets: Object.fromEntries(
+      APICHAT_PER_USER_SECRET_KEYS.map(key => [
+        key,
+        secretState(rows, apiChatUserSettingKey(key, userId)),
+      ])
+    ) as Record<
+      ApiChatPerUserSecretKey,
+      { configured: boolean; masked: string | null }
+    >,
+    configured: own !== null,
+    /** La credencial de plataforma está completa: toda operación tiene respaldo. */
+    platformAvailable: platformCredential(rows, preferences.mode) !== null,
+    /** La operación de esta persona viajaría con su identidad, no con la institucional. */
+    credentialSource: own
+      ? ("usuario" as const)
+      : platformCredential(rows, preferences.mode)
+        ? ("plataforma" as const)
+        : ("ausente" as const),
+  };
+}
+
+/**
+ * Guarda la credencial propia de una persona. El asiento de auditoría nombra al
+ * autor y al titular: en una credencial compartida ambos coinciden, aquí no.
+ */
+export async function saveApiChatUserSecret(
+  pool: Pool,
+  userId: number,
+  key: ApiChatPerUserSecretKey,
+  value: string | null,
+  actorUserId: number
+) {
+  const settingKey = apiChatUserSettingKey(key, userId);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    if (value) {
+      await upsertSetting(
+        client,
+        settingKey,
+        encryptAgentSecret(
+          value.trim(),
+          integrationSecretContext(APICHAT_PROVIDER, settingKey)
+        ),
+        true
+      );
+    } else {
+      await client.query(
+        `DELETE FROM integration_settings WHERE provider=$1 AND setting_key=$2`,
+        [APICHAT_PROVIDER, settingKey]
+      );
+    }
+    await client.query(
+      `INSERT INTO audit_log
+         (actor_user_id,entity_type,entity_id,action,after_json)
+       VALUES ($1,'apichat_user_credential',$2,$3,$4::jsonb)`,
+      [
+        actorUserId,
+        userId,
+        value ? "user_credential_rotated" : "user_credential_removed",
+        JSON.stringify({ key, holderUserId: userId, configured: Boolean(value) }),
+      ]
+    );
+    await client.query("COMMIT");
+    return {
+      configured: Boolean(value),
+      masked: value ? maskAgentSecret(value.trim()) : null,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Persona que respalda una postulación: el creador del proyecto de conocimiento
+ * de su plaza. Es la identidad que usan las operaciones automáticas —la
+ * respuesta del agente y la solicitud del currículum—, porque no tienen sesión
+ * de usuario a la cual atribuirse. Sin proyecto no hay titular y rige la
+ * credencial de plataforma.
+ */
+export async function apiChatCredentialOwnerForApplication(
+  pool: Pool,
+  applicationId: number
+): Promise<number | null> {
+  const result = await pool.query<{ created_by_user_id: number | null }>(
+    `SELECT p.created_by_user_id
+       FROM applications a
+       JOIN knowledge_project_positions link ON link.position_id=a.job_position_id
+       JOIN knowledge_projects p ON p.id=link.project_id
+      WHERE a.id=$1
+      ORDER BY p.id
+      LIMIT 1`,
+    [applicationId]
+  );
+  const owner = result.rows[0]?.created_by_user_id;
+  return owner == null ? null : Number(owner);
 }
 
 export const APICHAT_ENDPOINT_CAPABILITIES = [
@@ -1191,9 +1391,10 @@ export async function saveApiChatPublicBaseUrl(
 
 export async function verifyApiChatConnection(
   pool: Pool,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  userId?: number | null
 ) {
-  const config = await getApiChatRuntimeSettings(pool);
+  const config = await getApiChatRuntimeSettings(pool, userId);
   if (config.mode !== "native") {
     throw new Error(
       "La verificación integrada de ApiChat requiere el modo de API nativa."

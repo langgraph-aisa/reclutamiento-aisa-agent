@@ -182,7 +182,8 @@ export async function verifyApiChatAccount(
   pool: Pool,
   actorUserId: number,
   options: { fetchImpl?: typeof fetch; timeoutMs?: number } = {}
-) {
+) {  // La cuenta del proveedor es la de recepción: su proyección es institucional
+  // y se lee con la credencial de plataforma, no con la del administrador.
   const settings = await getApiChatRuntimeSettings(pool);
   requireNative(settings);
   const account = await requestAccount(

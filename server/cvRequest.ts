@@ -4,7 +4,10 @@ import {
   renderCvRequestMessage,
   sendApiChatText,
 } from "./apichat";
-import { getApiChatRuntimeSettings } from "./apiChatSettings";
+import {
+  apiChatCredentialOwnerForApplication,
+  getApiChatRuntimeSettings,
+} from "./apiChatSettings";
 import {
   loadAgentStageConfiguration,
   renderStageTemplate,
@@ -439,7 +442,10 @@ async function deliverCvRequestMessageInternal(
   let result: Awaited<ReturnType<typeof sendApiChatText>>;
   try {
     assertNoAutomatedSalaryOffer(message.body);
-    const apiChat = await getApiChatRuntimeSettings(pool);
+    const apiChat = await getApiChatRuntimeSettings(
+      pool,
+      await apiChatCredentialOwnerForApplication(pool, message.application_id)
+    );
     result = await sendApiChatText(
       {
         phoneInternational: message.phone_international,

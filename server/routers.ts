@@ -138,14 +138,17 @@ import {
   setProjectStorageMode,
 } from "./dropboxProject";
 import {
+  APICHAT_PER_USER_SECRET_KEYS,
   APICHAT_SECRET_KEYS,
   getApiChatConfiguration,
   getApiChatEndpoints,
   getApiChatReceptionReadiness,
+  getApiChatUserConfiguration,
   saveApiChatEndpointStates,
   saveApiChatPreferences,
   saveApiChatPublicBaseUrl,
   saveApiChatSecret,
+  saveApiChatUserSecret,
   resolveApiChatPublicBaseUrl,
   verifyApiChatConnection,
   verifyApiChatReception,
@@ -7144,19 +7147,77 @@ export const appRouter = router({
           });
         }
       }),
-    verifyApiChat: adminProcedure.mutation(async () => {
-      try {
-        return await verifyApiChatConnection(await requirePool());
-      } catch (error) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: safeIntegrationMessage(
-            error,
-            "No fue posible verificar la conexión con ApiChat."
-          ),
-        });
-      }
+    /**
+     * Credencial propia de ApiChat para la persona que consulta.
+     *
+     * La recepción sigue rigiéndose por la credencial de plataforma —el webhook
+     * es una sola dirección sin sesión—, y la propia la usan las operaciones
+     * atribuibles: el envío manual de la bandeja, el borrado en el proveedor y
+     * la verificación de la cuenta. Donde no hay persona identificable rige la
+     * de plataforma como respaldo.
+     */
+    apiChatUserConfiguration: roleProcedure.query(async ({ ctx }) => {
+      return getApiChatUserConfiguration(await getPool(), ctx.user.id);
     }),
+    saveApiChatUserSecret: roleProcedure
+      .input(
+        z.object({
+          key: z.enum(APICHAT_PER_USER_SECRET_KEYS),
+          value: z.string().trim().min(3).max(1_000).nullable(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await saveApiChatUserSecret(
+            await requirePool(),
+            ctx.user.id,
+            input.key,
+            input.value,
+            ctx.user.id
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible guardar la credencial de ApiChat."
+            ),
+          });
+        }
+      }),
+    /**
+     * Comprueba la conexión con la credencial que se elija.
+     *
+     * «usuario» verifica la credencial propia —o el respaldo vigente— de quien
+     * pulsa; «plataforma» verifica la institucional y exige administración,
+     * porque es la que gobierna la recepción.
+     */
+    verifyApiChat: roleProcedure
+      .input(z.object({ scope: z.enum(["usuario", "plataforma"]) }))
+      .mutation(async ({ input, ctx }) => {
+        if (input.scope === "plataforma" && ctx.user.role !== "admin") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message:
+              "La verificación de la credencial de plataforma está reservada a la administración.",
+          });
+        }
+        try {
+          return await verifyApiChatConnection(
+            await requirePool(),
+            fetch,
+            input.scope === "usuario" ? ctx.user.id : null
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible verificar la conexión con ApiChat."
+            ),
+          });
+        }
+      }),
     verifyApiChatReception: adminProcedure.mutation(async () => {
       try {
         return await verifyApiChatReception(await requirePool());
