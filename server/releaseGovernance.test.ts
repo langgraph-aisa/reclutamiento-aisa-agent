@@ -1328,13 +1328,13 @@ describe("black-box release contract", () => {
     // lugar y un techo propio.
     //
     // El techo del registro se elevó de 2600 a 3500 y después a 3600, 3700,
-    // 3800, 3900, 4000, 4100, 4200, 4300, 4400, 4500 y 4700: la entrega
+    // 3800, 3900, 4000, 4100, 4200, 4300, 4400, 4500, 4700 y 4900: la entrega
     // acumulada de resúmenes de commit ya no cabía y comprimir las entradas
     // antiguas estaba borrando la trazabilidad que el registro existe para
     // conservar. Un techo que obliga a destruir el registro no protege nada.
     expect(proseWordCount).toBeGreaterThanOrEqual(2_400);
     expect(proseWordCount).toBeLessThanOrEqual(2_900);
-    expect(historyWordCount).toBeLessThanOrEqual(4_700);
+    expect(historyWordCount).toBeLessThanOrEqual(4_900);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");

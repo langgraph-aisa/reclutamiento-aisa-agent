@@ -15,6 +15,14 @@ El release **hace verificable y corregible la dirección de retorno del vínculo
 
 **Sin migración.** No toca el esquema ni los asientos: es resolución en memoria y texto de la hoja.
 
+**El vínculo.** Autorizar devolvía el código y el canje fallaba: el retorno intentaba leer la cuenta con `users/get_current_account`, que exige el permiso `account_info.read` ausente del alcance mínimo declarado —`files.content.read`, `files.content.write` y `files.metadata.read`—, de modo que el vínculo abortaba con «No fue posible vincular Dropbox» sin causa visible. La lectura de la cuenta pasa a ser **accesoria**: el vínculo se completa con el `refresh_token` y el identificador que devolvió el canje, y el correo queda sin declarar cuando el permiso no existe.
+
+**La dirección fijada.** La dirección de retorno viaja firmada dentro del estado del flujo y el canje repite exactamente la que se autorizó; así un proxy que presente otro anfitrión o esquema en el retorno no altera el valor que Dropbox compara carácter por carácter. El parámetro `scope` se codifica con espacio (`%20`) como lo documenta el proveedor.
+
+**La causa nombrada.** El retorno distingue el rechazo del canje (`?dropbox=exchange`) del fallo al guardar el vínculo (`?dropbox=storage`) y el registro del servicio conserva el mensaje del proveedor, de modo que la operación no queda sin salida ante un segundo intento.
+
+**Sin migración.** Reutiliza `integration_settings` y las tablas conversacionales vigentes.
+
 **El ejecutor del ciclo.** `runConversationTurnInternal` deja de ejecutar una sola etapa por turno: recorre el orden administrado en «Etapas de la IA», omite las etapas apagadas —sin detenerse— y ejecuta todas las etapas encendidas que estén listas en la misma pasada, hasta el aviso de contacto. Solo se detiene donde hay una pregunta al candidato: la precalificación, la entrevista y la expectativa salarial; y se reanuda por sí solo en el turno siguiente. Se retiró la compuerta que exigía un protocolo de evaluación activo para conversar, porque detenía el ciclo entero en las plazas sin banco de preguntas ni prueba psicométrica automática.
 
 **La memoria del paso.** El avance vive en la bitácora durable `agent_ai_log` y en los artefactos de la conversación —mensajes, banco de preguntas y expediente—: reordenar el panel, reiniciar el servicio o retomar la conversación no pierde ni repite la etapa alcanzada. Cada etapa se resuelve como ejecutada, omitida, lista o en espera; una etapa omitida conserva su motivo y el ciclo continúa con la siguiente encendida.

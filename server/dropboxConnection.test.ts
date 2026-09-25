@@ -10,6 +10,8 @@ import {
   getDropboxConnection,
   getDropboxOAuthConfiguration,
   linkDropboxConnection,
+  linkDropboxFromAuthorizationCode,
+  readDropboxState,
   resolveDropboxRedirectUri,
   saveDropboxOAuthSecret,
   unlinkDropboxConnection,
@@ -82,14 +84,36 @@ describe("flujo OAuth de Dropbox", () => {
     expect(url).toContain(
       `redirect_uri=${encodeURIComponent("https://instancia/api/dropbox/oauth/callback")}`
     );
+    // Los permisos viajan separados por espacio codificado, como los documenta
+    // Dropbox: el `+` del formulario no se usa.
+    expect(url).not.toContain("+");
+    expect(url).toContain(`scope=${DROPBOX_SCOPE.replaceAll(" ", "%20")}`);
   });
 
-  it("acuña y verifica el estado firmado con caducidad", () => {
-    const state = dropboxStateToken(600);
+  it("acuña y verifica el estado firmado con la dirección de retorno y caducidad", () => {
+    const redirectUri = "https://instancia/api/dropbox/oauth/callback";
+    const state = dropboxStateToken(redirectUri, 600);
     expect(verifyDropboxState(state)).toBe(true);
+    expect(readDropboxState(state)).toEqual({ redirectUri });
     expect(verifyDropboxState(`${state}alterado`)).toBe(false);
     expect(verifyDropboxState("cadena-sin-firma")).toBe(false);
-    expect(verifyDropboxState(dropboxStateToken(-1))).toBe(false);
+    expect(verifyDropboxState(dropboxStateToken(redirectUri, -1))).toBe(false);
+  });
+
+  it("rechaza un estado cuya dirección de retorno fue alterada", () => {
+    const state = dropboxStateToken(
+      "https://instancia/api/dropbox/oauth/callback",
+      600
+    );
+    const [expiresAt, , signature] = state.split(".");
+    const forged = Buffer.from(
+      "https://otro-anfitrion/api/dropbox/oauth/callback",
+      "utf8"
+    ).toString("base64url");
+    expect(verifyDropboxState(`${expiresAt}.${forged}.${signature}`)).toBe(
+      false
+    );
+    expect(readDropboxState(`${expiresAt}.${forged}.${signature}`)).toBeNull();
   });
 
   it("canjea el código y exige el token de renovación", async () => {
@@ -142,6 +166,37 @@ describe("flujo OAuth de Dropbox", () => {
       email: "propietario@aisa.com.gt",
       accountId: "dbid:propietario",
     });
+  });
+
+  it("vincula la cuenta aunque la lectura de la cuenta no esté permitida", async () => {
+    const { pool, stored } = fakePool();
+    const fetchMock = (async (input: unknown) => {
+      if (String(input).includes("/oauth2/token")) {
+        return jsonResponse({
+          access_token: "access",
+          refresh_token: "refresh",
+          expires_in: 14400,
+          account_id: "dbid:propietario",
+        });
+      }
+      // `users/get_current_account` exige `account_info.read`, que no forma
+      // parte del alcance mínimo: Dropbox responde sin permiso.
+      return jsonResponse({ error_summary: "missing_scope" }, false, 401);
+    }) as unknown as typeof fetch;
+
+    const linked = await linkDropboxFromAuthorizationCode(
+      pool,
+      {
+        userId: 41,
+        clientId: "app-key",
+        clientSecret: "app-secret",
+        redirectUri: "https://instancia/api/dropbox/oauth/callback",
+        code: "codigo",
+      },
+      fetchMock
+    );
+    expect(linked).toEqual({ email: null, accountId: "dbid:propietario" });
+    expect(stored.has("refresh:41")).toBe(true);
   });
 });
 

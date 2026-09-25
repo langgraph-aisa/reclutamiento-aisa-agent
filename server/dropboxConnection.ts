@@ -414,7 +414,12 @@ async function platformCredentials(pool: Pool) {
   return dropboxOAuthRuntime(pool);
 }
 
-/** Estado del flujo OAuth firmado para impedir falsificación entre inicio y retorno. */
+/**
+ * Estado del flujo OAuth firmado para impedir falsificación entre inicio y
+ * retorno. Lleva la dirección de retorno que se usó al autorizar: el canje la
+ * repite y Dropbox la compara carácter por carácter, de modo que un proxy que
+ * presente otro anfitrión o esquema en el retorno no rompa el vínculo.
+ */
 function dropboxSecret() {
   const secret = process.env.JWT_SECRET?.trim();
   if (secret) return secret;
@@ -430,23 +435,41 @@ function signDropboxState(payload: string) {
   return createHmac("sha256", dropboxSecret()).update(payload).digest("base64url");
 }
 
-export function dropboxStateToken(ttlSeconds = 600) {
+function dropboxStateSignature(expiresAt: number, encodedRedirect: string) {
+  return signDropboxState(`dropbox:${expiresAt}:${encodedRedirect}`);
+}
+
+export function dropboxStateToken(redirectUri: string, ttlSeconds = 600) {
   const expiresAt = Math.floor(Date.now() / 1_000) + ttlSeconds;
-  return `${expiresAt}.${signDropboxState(`dropbox:${expiresAt}`)}`;
+  const encoded = Buffer.from(redirectUri, "utf8").toString("base64url");
+  return `${expiresAt}.${encoded}.${dropboxStateSignature(expiresAt, encoded)}`;
+}
+
+/** Lee el estado firmado y devuelve la dirección de retorno que lo acompañó. */
+export function readDropboxState(
+  token: unknown
+): { redirectUri: string } | null {
+  if (typeof token !== "string" || !token) return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  const expiresRaw = parts[0]!;
+  const encoded = parts[1]!;
+  const signature = parts[2]!;
+  const expiresAt = Number(expiresRaw);
+  if (!Number.isInteger(expiresAt)) return null;
+  if (expiresAt < Math.floor(Date.now() / 1_000)) return null;
+  if (!encoded || !signature) return null;
+  const expected = dropboxStateSignature(expiresAt, encoded);
+  const received = Buffer.from(signature);
+  const computed = Buffer.from(expected);
+  if (received.length !== computed.length) return null;
+  if (!timingSafeEqual(received, computed)) return null;
+  const redirectUri = Buffer.from(encoded, "base64url").toString("utf8");
+  return redirectUri ? { redirectUri } : null;
 }
 
 export function verifyDropboxState(token: unknown) {
-  if (typeof token !== "string" || !token) return false;
-  const separator = token.indexOf(".");
-  if (separator <= 0) return false;
-  const expiresAt = Number(token.slice(0, separator));
-  if (!Number.isInteger(expiresAt)) return false;
-  if (expiresAt < Math.floor(Date.now() / 1_000)) return false;
-  const expected = signDropboxState(`dropbox:${expiresAt}`);
-  const received = Buffer.from(token.slice(separator + 1));
-  const computed = Buffer.from(expected);
-  if (received.length !== computed.length) return false;
-  return timingSafeEqual(received, computed);
+  return readDropboxState(token) !== null;
 }
 
 export function dropboxAuthorizationUrl(
@@ -463,7 +486,10 @@ export function dropboxAuthorizationUrl(
     scope: DROPBOX_SCOPE,
     state,
   });
-  return `${DROPBOX_AUTH_URL}?${query.toString()}`;
+  // Dropbox documenta los permisos separados por espacio codificado; `+`
+  // queda como separador de formulario y se reemplaza por `%20` para que el
+  // parámetro sea idéntico al documentado.
+  return `${DROPBOX_AUTH_URL}?${query.toString().replaceAll("+", "%20")}`;
 }
 
 export async function exchangeDropboxCode(
@@ -576,6 +602,52 @@ export async function dropboxAccountInfo(
 }
 
 /**
+ * Vincula la cuenta desde el código autorizado. La lectura de la cuenta es
+ * **accesoria**: `users/get_current_account` exige el permiso
+ * `account_info.read`, que no forma parte del alcance mínimo declarado, de modo
+ * que su fallo no puede impedir el vínculo; el correo queda sin declarar y la
+ * conexión conserva el identificador que devolvió el canje.
+ */
+export async function linkDropboxFromAuthorizationCode(
+  pool: Pool,
+  input: {
+    userId: number;
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    code: string;
+  },
+  fetchImpl: typeof fetch = fetch
+) {
+  const tokens = await exchangeDropboxCode(
+    {
+      clientId: input.clientId,
+      clientSecret: input.clientSecret,
+      redirectUri: input.redirectUri,
+      code: input.code,
+    },
+    fetchImpl
+  );
+  let email = "";
+  let accountId = tokens.accountId;
+  try {
+    const account = await dropboxAccountInfo(tokens.accessToken, fetchImpl);
+    email = account.email;
+    accountId = account.accountId || accountId;
+  } catch {
+    // Accesorio por diseño: el vínculo no depende del permiso de la cuenta.
+  }
+  await linkDropboxConnection(pool, {
+    userId: input.userId,
+    refreshToken: tokens.refreshToken,
+    email,
+    accountId,
+    actorUserId: input.userId,
+  });
+  return { email: email || null, accountId };
+}
+
+/**
  * Dirección de retorno que Dropbox exige **idéntica** a la registrada.
  *
  * Se deduce del proxy inverso —esquema reenviado y anfitrión— y, cuando la
@@ -648,18 +720,15 @@ export function registerDropboxOAuthRoutes(app: Express) {
       res.redirect(accountRedirect("unconfigured"));
       return;
     }
-    const state = dropboxStateToken();
-    const url = dropboxAuthorizationUrl(
-      runtime.clientId,
-      dropboxRedirectUri(req),
-      state
-    );
+    const redirectUri = dropboxRedirectUri(req);
+    const state = dropboxStateToken(redirectUri);
+    const url = dropboxAuthorizationUrl(runtime.clientId, redirectUri, state);
     res.redirect(url);
   });
 
   app.get(DROPBOX_OAUTH_REDIRECT_PATH, async (req: Request, res: Response) => {
-    const state = String(req.query.state ?? "");
-    if (!verifyDropboxState(state)) {
+    const state = readDropboxState(String(req.query.state ?? ""));
+    if (!state) {
       res.redirect(accountRedirect("state"));
       return;
     }
@@ -684,26 +753,26 @@ export function registerDropboxOAuthRoutes(app: Express) {
       return;
     }
     try {
-      const tokens = await exchangeDropboxCode({
+      await linkDropboxFromAuthorizationCode(pool, {
+        userId,
         clientId: runtime.clientId,
         clientSecret: runtime.clientSecret,
-        redirectUri: dropboxRedirectUri(req),
+        // La dirección viaja en el estado firmado: el canje repite exactamente
+        // la que se registró y autorizó, aunque el proxy presente otro
+        // anfitrión o esquema en el retorno.
+        redirectUri: state.redirectUri,
         code,
-      });
-      const account = await dropboxAccountInfo(tokens.accessToken);
-      await linkDropboxConnection(pool, {
-        userId,
-        refreshToken: tokens.refreshToken,
-        email: account.email,
-        accountId: account.accountId || tokens.accountId,
-        actorUserId: userId,
       });
       res.redirect(accountRedirect("linked"));
     } catch (error) {
-      console.warn(
-        `[Dropbox] No fue posible vincular la cuenta (${error instanceof Error ? error.name : "unknown"}).`
+      const message =
+        error instanceof Error ? error.message : "causa desconocida";
+      console.warn(`[Dropbox] No fue posible vincular la cuenta: ${message}`);
+      // El canje falla con el mensaje del proveedor; el guardado, con el de la
+      // base. La causa se nombra para que la operación no quede sin salida.
+      res.redirect(
+        accountRedirect(message.includes("Dropbox") ? "exchange" : "storage")
       );
-      res.redirect(accountRedirect("error"));
     }
   });
 }

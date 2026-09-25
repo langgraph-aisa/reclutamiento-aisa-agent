@@ -38,8 +38,9 @@ ACTUALIZACIÓN DE LA VERSIÓN
 ### 25SEP2026 · JARVI RH 2.0.233
 
 - La hoja de Configuración entrega los pasos del registro de Dropbox y la **dirección de retorno exacta de esta instalación**, compuesta del origen real y copiable: el rechazo «Invalid redirect_uri» al autorizar deja de ser un mensaje sin salida. La dirección se deduce del proxy inverso y la operación puede fijarla con `DROPBOX_OAUTH_REDIRECT_URI` —solo se acepta una dirección HTTPS con la ruta exacta del retorno—, de modo que un encabezado de anfitrión distinto del dominio público deja de romper el vínculo. Sin migración.
+- El vínculo con Dropbox deja de depender de un permiso que el registro no declara: la lectura de la cuenta era accesoria y su ausencia ya no impide vincular, y la dirección de retorno viaja firmada en el estado para que el canje repita exactamente la autorizada, aunque el proxy presente otro anfitrión. El aviso nombra la causa —canje del código o guardado— cuando el vínculo falla. Sin migración.
 - El ciclo de las nueve etapas se vuelve determinista y con memoria: el motor recorre el orden guardado en «Etapas de la IA», **omite las etapas apagadas sin detenerse** y ejecuta las encendidas hasta el aviso de contacto; solo espera la respuesta en la precalificación, la entrevista y la salarial. La memoria del paso alcanzado vive en `agent_ai_log`. La espera del currículum deja de bloquear y la prueba psicométrica se programa solo tras el paso 9. Sin migración.
-- El techo del registro histórico del README se eleva de 4500 a 4700 palabras.
+- El techo del registro histórico del README se eleva de 4700 a 4900 palabras.
 
 ### 25SEP2026 · JARVI RH 2.0.232
 

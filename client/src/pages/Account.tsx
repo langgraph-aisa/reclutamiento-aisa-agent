@@ -101,6 +101,14 @@ export default function Account() {
       toast.info("No autorizó el acceso a Dropbox.");
     else if (outcome === "state")
       toast.error("El estado de la autorización no es válido.");
+    else if (outcome === "exchange")
+      toast.error(
+        "Dropbox autorizó el acceso pero rechazó el canje del código; vuelva a intentar el vínculo."
+      );
+    else if (outcome === "storage")
+      toast.error(
+        "Dropbox autorizó el acceso pero no fue posible guardar el vínculo; reintente o revise la configuración."
+      );
     else if (outcome === "error")
       toast.error("No fue posible vincular Dropbox.");
     const url = new URL(window.location.href);
