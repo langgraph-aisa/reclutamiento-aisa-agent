@@ -15,6 +15,7 @@ import {
 import { isUndefinedTableError } from "./governanceObservability";
 import { withLangfuseObservation } from "./observability/langfuse";
 import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
+import { ensureApplicationDropboxFolder } from "./dropboxProject";
 
 type ApplicationContact = {
   id: number;
@@ -182,6 +183,19 @@ export async function dispatchWelcomeMessage(
   pool: Pool,
   applicationId: number
 ): Promise<CvRequestDelivery | null> {
+  // La recepción materializa la carpeta del expediente en el Dropbox del
+  // propietario: el RAG personal —y la carpeta de su plaza y su proyecto—
+  // existe desde el alta, no en la primera carga de un documento. Es de mejor
+  // esfuerzo: un fallo de Dropbox no impide la bienvenida.
+  try {
+    await ensureApplicationDropboxFolder(pool, applicationId);
+  } catch (error) {
+    console.warn(
+      `[cvRequest] Application ${applicationId}: la carpeta de Dropbox no pudo prepararse (${
+        error instanceof Error ? error.message : "causa desconocida"
+      }).`
+    );
+  }
   const stages = await loadAgentStageConfiguration(pool);
   if (!stages.flowEnabled) return null;
   const conversationId = await ensureConversationForApplication(

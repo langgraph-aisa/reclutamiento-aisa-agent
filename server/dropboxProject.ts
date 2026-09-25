@@ -265,6 +265,47 @@ export function projectDropboxPathResolver(
   };
 }
 
+/** Ruta visible del expediente de una postulación dentro de la carpeta del proyecto. */
+export async function applicationDropboxFolderPath(
+  pool: Pool,
+  applicationId: number
+): Promise<string | null> {
+  const names = await folderNamesForApplication(pool, applicationId);
+  return names ? `${names.project}/${names.position}/${names.candidate}` : null;
+}
+
+/**
+ * Materializa la carpeta del expediente al recibir el formulario.
+ *
+ * Valida y crea, de forma idempotente, la carpeta del proyecto, la de la plaza,
+ * la del candidato y su `Bandeja/`, de modo que el RAG personal exista en el
+ * Dropbox del propietario desde el alta y no en la primera carga de un
+ * documento. Es de mejor esfuerzo: sin proyecto vinculado, sin modo Dropbox o
+ * sin conexión no ejecuta acción y declara el motivo.
+ */
+export async function ensureApplicationDropboxFolder(
+  pool: Pool,
+  applicationId: number
+): Promise<{ created: boolean; path: string | null; reason: string }> {
+  const projectId = await projectIdForApplication(pool, applicationId);
+  if (projectId == null)
+    return { created: false, path: null, reason: "sin_proyecto" };
+  const backend = await dropboxBackendForProject(pool, projectId);
+  if (!(backend instanceof DropboxStorageBackend))
+    return { created: false, path: null, reason: "sin_dropbox" };
+  const names = await folderNamesForApplication(pool, applicationId);
+  if (!names) return { created: false, path: null, reason: "sin_expediente" };
+  const path = `${names.project}/${names.position}/${names.candidate}`;
+  await backend.ensureFolderPath(path);
+  await backend.ensureFolderPath(`${path}/Bandeja`);
+  await pool.query(
+    `INSERT INTO audit_log(entity_type,entity_id,action,after_json)
+     VALUES('application',$1,'candidate_dropbox_folder_ensured',$2::jsonb)`,
+    [applicationId, JSON.stringify({ projectId, path })]
+  );
+  return { created: true, path, reason: "creada" };
+}
+
 /**
  * Fabrica el backend de Dropbox sin mirar el modo de activación. Sirve a la
  * migración, que debe poder leer o escribir antes de conmutar el modo.

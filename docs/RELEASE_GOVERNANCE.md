@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.234
+# Gobierno de release JARVI RH 2.0.235
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.234**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.235**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.235
+El release **materializa la carpeta del expediente en Dropbox al recibir el formulario y reevalúa el perfil cuando el currículum queda analizado**. Sin migración.
+
+**La carpeta del expediente.** `ensureApplicationDropboxFolder` resuelve el proyecto de la postulación, compone la jerarquía visible `Proyecto/Plaza/Candidato` y la crea por niveles —incluida `Bandeja/`— con `files/create_folder_v2` sobre la cuenta que respalda el proyecto. La creación es idempotente y de mejor esfuerzo: sin proyecto vinculado, sin modo `dropbox` o sin conexión declara el motivo y no interrumpe la bienvenida. El RAG personal deja de nacer en la primera carga y existe desde el alta.
+
+**La reevaluación.** Al concluir el análisis de un documento clasificado como currículum, el trabajador de documentos ejecuta el agente evaluador sobre la postulación —el mismo acto del botón «Evaluar con agente IA»— para que la ficha incorpore el resumen y el análisis profundo. Una sola reevaluación por documento, con asiento `candidate_cv_reevaluated`; un fallo se asienta con su causa y no pierde el trabajo.
+
+**El avance del ciclo.** El paso «Espera del currículum» confirma la recepción por el mismo medio en cuanto el documento está clasificado, y el ciclo continúa hasta el aviso de contacto. La confirmación no bloquea los pasos siguientes.
+
+**Sin migración.** Reutiliza `knowledge_projects`, `candidate_knowledge_files`, `conversation_cycles` y el catálogo de etapas.
 
 ### Alcance candidato 2.0.234
 El release **corrige la captura de la expectativa salarial para que el ciclo no se detenga**. Sin migración.
@@ -1099,4 +1110,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.234.md](PRUEBAS_CAJA_NEGRA_2.0.234.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.235.md](PRUEBAS_CAJA_NEGRA_2.0.235.md).

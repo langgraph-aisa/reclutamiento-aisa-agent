@@ -269,6 +269,8 @@ export type CandidateProcessingDependencies = {
   extract?: typeof extractDocumentText;
   transcribe?: typeof transcribeAudio;
   analyze?: typeof analyzeKnowledgeDocument;
+  /** Reevalúa el perfil con la evidencia nueva; se usa al procesar un CV. */
+  evaluate?: (pool: Pool, applicationId: number) => Promise<unknown>;
   skipCompleted?: boolean;
 };
 
@@ -295,9 +297,11 @@ export async function analyzeCandidateDocument(
         analysisStatus: "pendiente",
         errorCode: "processing_busy",
         message: "El documento ya se está procesando.",
+        applicationId: null as number | null,
+        documentClass: null as string | null,
       };
     const result = await lock.query(
-      `SELECT id,application_id,storage_key,extension,original_name,mime_type,analysis_status,extracted_text,extraction_method,extraction_truncated FROM candidate_knowledge_files WHERE id=$1 LIMIT 1`,
+      `SELECT id,application_id,storage_key,extension,original_name,mime_type,analysis_status,extracted_text,extraction_method,extraction_truncated,document_class FROM candidate_knowledge_files WHERE id=$1 LIMIT 1`,
       [fileId]
     );
     const file = result.rows[0];
@@ -307,6 +311,8 @@ export async function analyzeCandidateDocument(
         analysisStatus: "analizado",
         errorCode: null,
         message: "El documento ya está analizado.",
+        applicationId: Number(file.application_id),
+        documentClass: String(file.document_class ?? "unclassified"),
       };
     const extension = String(file.extension);
     let text = "";
@@ -397,6 +403,8 @@ export async function analyzeCandidateDocument(
         message: truncated
           ? "Análisis generado; el texto excedió el límite y requiere revisión del original."
           : "Análisis de IA generado correctamente.",
+        applicationId: Number(file.application_id),
+        documentClass: analysis.documentClass ?? "unclassified",
       };
     } catch (error) {
       const errorCode =
@@ -426,6 +434,7 @@ export async function analyzeCandidateDocument(
           error instanceof AudioInputError
             ? error.message
             : "El archivo está registrado, pero su procesamiento falló. Se conserva para reintento y revisión.",
+        applicationId: Number(file.application_id),
       };
     }
   } finally {

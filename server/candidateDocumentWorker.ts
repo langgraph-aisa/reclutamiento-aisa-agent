@@ -3,6 +3,75 @@ import {
   analyzeCandidateDocument,
   type CandidateProcessingDependencies,
 } from "./candidateKnowledge";
+import { evaluateApplicationWithAgent } from "./agentEvaluator";
+
+/**
+ * Reevalúa el perfil del candidato cuando el currículum quedó analizado.
+ *
+ * El resumen y el análisis profundo ya viven en el expediente: el agente
+ * evaluador vuelve a ejecutarse para que la ficha incorpore la evidencia nueva,
+ * tal como el botón «Evaluar con agente IA». La operación es idempotente por
+ * documento —una sola reevaluación por currículum recibido—, de modo que un
+ * reintento del barrido no multiplique llamadas ni asientos.
+ */
+async function reevaluateProfileAfterCv(
+  pool: Pool,
+  input: {
+    applicationId: number;
+    fileId: number;
+    evaluate?: (pool: Pool, applicationId: number) => Promise<unknown>;
+  }
+) {
+  const already = await pool
+    .query(
+      `SELECT 1 FROM audit_log
+        WHERE entity_type='candidate_knowledge_file' AND entity_id=$1
+          AND action IN ('candidate_cv_reevaluated','candidate_cv_reevaluation_failed')
+        LIMIT 1`,
+      [input.fileId]
+    )
+    .catch(() => null);
+  if (already?.rows[0]) return;
+  const run =
+    input.evaluate ??
+    ((scoped: Pool, applicationId: number) =>
+      evaluateApplicationWithAgent(scoped, applicationId));
+  try {
+    const evaluation = (await run(pool, input.applicationId)) as {
+      classification?: unknown;
+      score?: unknown;
+    } | null;
+    await pool.query(
+      `INSERT INTO audit_log(entity_type,entity_id,action,after_json)
+       VALUES('candidate_knowledge_file',$1,'candidate_cv_reevaluated',$2::jsonb)`,
+      [
+        input.fileId,
+        JSON.stringify({
+          applicationId: input.applicationId,
+          classification: evaluation?.classification ?? null,
+          score: typeof evaluation?.score === "number" ? evaluation.score : null,
+        }),
+      ]
+    );
+  } catch (error) {
+    await pool
+      .query(
+        `INSERT INTO audit_log(entity_type,entity_id,action,after_json)
+         VALUES('candidate_knowledge_file',$1,'candidate_cv_reevaluation_failed',$2::jsonb)`,
+        [
+          input.fileId,
+          JSON.stringify({
+            applicationId: input.applicationId,
+            reason:
+              error instanceof Error
+                ? error.message.slice(0, 300)
+                : "causa desconocida",
+          }),
+        ]
+      )
+      .catch(() => undefined);
+  }
+}
 
 export async function candidateDocumentsProcessing(
   pool: Pick<Pool, "query">,
@@ -47,6 +116,19 @@ export async function runCandidateDocumentSweep(
       });
       status = result.analysisStatus;
       errorCode = result.errorCode;
+      // El currículum recibido ya tiene resumen y análisis: se reevalúa el
+      // perfil con esa evidencia nueva antes de dar el trabajo por concluido.
+      if (
+        status === "analizado" &&
+        result.documentClass === "cv" &&
+        result.applicationId
+      ) {
+        await reevaluateProfileAfterCv(pool, {
+          applicationId: result.applicationId,
+          fileId,
+          evaluate: options.dependencies?.evaluate,
+        });
+      }
     } catch {
       /* El intento permanece recuperable aun si falla el registro del error. */
     }

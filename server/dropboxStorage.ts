@@ -238,6 +238,30 @@ export class DropboxStorageBackend implements StorageBackend {
     return `${current}/${name}`;
   }
 
+  /**
+   * Garantiza una carpeta visible y sus niveles dentro de la carpeta de la
+   * aplicación. Es el punto que el alta del expediente usa para materializar la
+   * jerarquía `Proyecto/Plaza/Candidato` en el Dropbox del propietario desde la
+   * recepción del formulario, y no en la primera carga de un documento.
+   */
+  async ensureFolderPath(relativePath: string): Promise<void> {
+    const raw = String(relativePath ?? "").trim();
+    if (!raw || raw.includes(".."))
+      throw new Error("La referencia de almacenamiento no es válida.");
+    const segments = raw
+      .split("/")
+      .filter(segment => segment.length > 0)
+      .map(normalizeSegment);
+    if (!segments.length)
+      throw new Error("La referencia de almacenamiento no es válida.");
+    let current = `/${this.rootName()}`;
+    await this.ensureFolder(current);
+    for (const segment of segments) {
+      current = `${current}/${segment}`;
+      await this.ensureFolder(current);
+    }
+  }
+
   private async upload(absolutePath: string, data: Buffer): Promise<void> {
     const response = await this.fetchImpl()(
       `${DROPBOX_CONTENT_BASE}/files/upload`,

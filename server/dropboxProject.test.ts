@@ -5,6 +5,7 @@ import { DropboxStorageBackend, DROPBOX_API_BASE, DROPBOX_CONTENT_BASE } from ".
 import {
   assignProjectDropboxConnection,
   dropboxBackendForProject,
+  ensureApplicationDropboxFolder,
   migrateProjectStorage,
   projectDropboxConnectionUserId,
   projectDropboxPathResolver,
@@ -179,6 +180,61 @@ afterEach(() => {
 });
 
 describe("resolución del proyecto y del backend de Dropbox", () => {
+  it("materializa la carpeta del expediente en Dropbox al recibir el formulario", async () => {
+    const { pool } = fakePool({ mode: "dropbox", candidateName: "José Ardón" });
+    const created: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/oauth2/token"))
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ access_token: "access" }),
+          } as unknown as Response;
+        if (url.endsWith("/create_folder_v2")) {
+          const body = JSON.parse(String(init?.body ?? "{}")) as {
+            path: string;
+          };
+          created.push(body.path);
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+          } as unknown as Response;
+        }
+        return {
+          ok: false,
+          status: 404,
+          json: async () => ({}),
+        } as unknown as Response;
+      }) as unknown as typeof fetch
+    );
+
+    const result = await ensureApplicationDropboxFolder(pool, 11);
+
+    expect(result.created).toBe(true);
+    expect(result.path).toBe("Solar Guatemala/Ingeniero Solar/José Ardón");
+    // La jerarquía se valida y se crea por niveles: proyecto, plaza, candidato y su bandeja.
+    expect(created).toContain("/JARVI RH");
+    expect(created).toContain("/JARVI RH/Solar Guatemala");
+    expect(created).toContain("/JARVI RH/Solar Guatemala/Ingeniero Solar");
+    expect(created).toContain(
+      "/JARVI RH/Solar Guatemala/Ingeniero Solar/José Ardón"
+    );
+    expect(created).toContain(
+      "/JARVI RH/Solar Guatemala/Ingeniero Solar/José Ardón/Bandeja"
+    );
+  });
+
+  it("no ejecuta acción cuando el proyecto no está activado en Dropbox", async () => {
+    const { pool } = fakePool({ mode: "local" });
+    await expect(
+      ensureApplicationDropboxFolder(pool, 11)
+    ).resolves.toEqual({ created: false, path: null, reason: "sin_dropbox" });
+  });
+
   it("resuelve el proyecto de una clave de proyecto y de una postulación", async () => {
     const { pool } = fakePool();
     await expect(

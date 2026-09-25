@@ -133,6 +133,86 @@ describe("archivo conservado → procesamiento → evidencia", () => {
     ).toBe(true);
   });
 
+  it("reevalúa el perfil cuando el documento analizado es un currículum", async () => {
+    const f = await fixture("pdf");
+    const evaluate = vi.fn(async () => ({ classification: "apto", score: 81 }));
+    const analyze = vi.fn(async () => ({
+      summary: "Currículum de ejemplo.",
+      deepAnalysis: "Perfil con experiencia comercial.",
+      model: "gpt-4.1-mini-2025-04-14" as const,
+      keySlot: "primary" as const,
+      documentClass: "cv" as const,
+    }));
+    const base = f.pool.query;
+    const query = vi.fn(async (sql: string, values: unknown[] = []) => {
+      if (
+        sql.includes("UPDATE candidate_document_jobs j") &&
+        sql.includes("RETURNING file_id,attempts")
+      )
+        return { rows: [{ file_id: 7, attempts: 1 }] };
+      if (sql.includes("SELECT 1 FROM audit_log")) return { rows: [] };
+      return base(sql, values);
+    });
+    f.pool.query = query;
+
+    const outcomes = await runCandidateDocumentSweep(f.pool as never, {
+      limit: 1,
+      dependencies: {
+        extract: async () => ({
+          text: "Currículum con experiencia comercial.",
+          method: "test",
+          truncated: false,
+        }),
+        analyze,
+        evaluate,
+      },
+    });
+
+    expect(outcomes[0]?.status).toBe("analizado");
+    expect(evaluate).toHaveBeenCalledOnce();
+    expect(evaluate.mock.calls[0]?.[1]).toBe(5);
+    expect(
+      query.mock.calls.some(call =>
+        String(call[0]).includes("candidate_cv_reevaluated")
+      )
+    ).toBe(true);
+  });
+
+  it("no reevalúa el perfil cuando el documento analizado no es un currículum", async () => {
+    const f = await fixture("pdf");
+    const evaluate = vi.fn();
+    const analyze = vi.fn(async () => ({
+      summary: "Acta administrativa.",
+      deepAnalysis: "Documento sin perfil laboral.",
+      model: "gpt-4.1-mini-2025-04-14" as const,
+      keySlot: "primary" as const,
+      documentClass: "other" as const,
+    }));
+    const base = f.pool.query;
+    f.pool.query = vi.fn(async (sql: string, values: unknown[] = []) =>
+      sql.includes("UPDATE candidate_document_jobs j") &&
+      sql.includes("RETURNING file_id,attempts")
+        ? { rows: [{ file_id: 7, attempts: 1 }] }
+        : base(sql, values)
+    );
+
+    const outcomes = await runCandidateDocumentSweep(f.pool as never, {
+      limit: 1,
+      dependencies: {
+        extract: async () => ({
+          text: "Acta administrativa sin perfil.",
+          method: "test",
+          truncated: false,
+        }),
+        analyze,
+        evaluate,
+      },
+    });
+
+    expect(outcomes[0]?.status).toBe("analizado");
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+
   it("termina después del tercer intento fallido para no bloquear indefinidamente el turno", async () => {
     const f = await fixture();
     const base = f.pool.query;
