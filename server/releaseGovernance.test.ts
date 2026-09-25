@@ -1436,7 +1436,9 @@ describe("black-box release contract", () => {
     expect(persona).toContain("una sola pregunta abierta");
     expect(engine).toContain("store: false");
     expect(engine).toContain("enqueueAgentReply");
-    expect(engine).toContain("applicationHasActiveEvaluationAutomation");
+    expect(engine).toContain("buildAgentStageVerdicts");
+    expect(engine).toContain("executeDeterministicStage");
+    expect(engine).toContain("completeAgentCycle");
     expect(outbox).toContain("dispatchQueuedReplies");
     expect(routing).toContain("conversationPanelState");
     expect(routing).toContain("runConversationTurn");
@@ -1589,16 +1591,16 @@ describe("black-box release contract", () => {
     // hoja «Etapas de la IA» como mensajes del paso «Solicitud del currículum»
     // y del paso «Aviso de contacto»—. El cierre ordinario del screening ya no
     // emite mensaje institucional alguno: cierra la máquina de estados y deja
-    // que el motor administre los pasos 5 a 9; solo el descarte conserva el
-    // aviso de cierre, sin solicitud de currículum.
+    // que el motor administre los pasos 5 a 9; el descarte también toma su
+    // aviso de la hoja de etapas, sin texto legado propio.
     expect(cvRequest).not.toContain("composeCvClosingFromSettings");
     expect(cvRequest).not.toContain("AS cv_thank_you_message");
     expect(cvRequest).toContain("stages.messages.solicitud_cv");
     expect(cvRequest).toContain("fallbackTemplate");
-    expect(screeningEngine).toContain("composeCvClosingFromSettings");
+    expect(screeningEngine).not.toContain("composeCvClosingFromSettings");
     expect(screeningEngine).toContain("screeningCloseMessageKey");
     expect(screeningEngine).not.toContain("cv_thank_you_message");
-    expect(screeningEngine).toContain("thankYouMessage: null");
+    expect(screeningEngine).toContain("stages.messages.aviso_contacto");
     expect(screeningEngine).toContain("solo cierra la máquina de estados");
     expect(screeningEngine).toContain("stages.flowEnabled");
     expect(screeningEngine).toContain("conv.human_takeover=false");

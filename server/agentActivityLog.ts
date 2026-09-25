@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 import {
   AGENT_STAGES,
+  AGENT_STAGE_KEYS,
   type AgentStageConfiguration,
   type AgentStageKey,
 } from "./agentStages";
@@ -61,27 +62,51 @@ export type AgentLogVerdict = {
   category: AgentAiCategoryKey;
   action: string;
   justification: string;
+  /** Estado determinista de la etapa dentro del ciclo administrado. */
+  state: AgentStageState;
   completed: boolean;
   skipReason: string | null;
 };
+
+/**
+ * Estado determinista de una etapa del ciclo administrado.
+ *
+ * - `executed`: la etapa ya cumplió su acto y la bitácora lo conserva.
+ * - `omitted`: la etapa no aplica (desactivada por la operación, sin preguntas
+ *   vigentes o sin protocolo); el ciclo continúa con la siguiente.
+ * - `ready`: la etapa puede ejecutarse en este turno.
+ * - `waiting`: la etapa espera la respuesta de la persona o un hecho externo
+ *   (por ejemplo, la llegada del currículum); el ciclo se reanuda solo.
+ */
+export type AgentStageState = "executed" | "omitted" | "ready" | "waiting";
 
 export type AgentLogSignals = {
   cvState: CvAwaitingState;
   screeningPhase: string | null;
   screeningStatus: string | null;
+  /** La plaza mantiene habilitada la precalificación. */
+  precalificacionEnabled: boolean;
+  /** La plaza declara preguntas vigentes de precalificación. */
   precalificacionActive: boolean;
-  entrevistaActive: boolean;
+  /** La máquina de estados está administrando la precalificación. */
+  precalificacionRunActive: boolean;
   /** La plaza mantiene habilitada la entrevista guiada. */
   entrevistaEnabled: boolean;
+  /** La plaza declara preguntas vigentes de entrevista. */
+  entrevistaActive: boolean;
+  /** La máquina de estados está administrando la entrevista. */
+  entrevistaRunActive: boolean;
   /** Al menos una pregunta de entrevista fue administrada al candidato. */
   entrevistaAdministered: boolean;
   /** Hubo al menos un turno de conversación libre con el motor de IA. */
   freeConversationHeld: boolean;
   screeningDisqualified: boolean;
-  /** El cierre institucional ya fue emitido en la conversación. */
-  cierreEmitido: boolean;
+  /** El mensaje de bienvenida del paso 1 ya fue emitido. */
+  welcomeEmitido: boolean;
   /** El aviso de contacto del paso 9 ya fue emitido en la conversación. */
   avisoContactoEmitido: boolean;
+  /** Etapas ya resueltas (ejecutadas u omitidas) según la bitácora durable. */
+  executedStages: AgentStageKey[];
 };
 
 export type AgentStageVerdictInput = {
@@ -102,12 +127,13 @@ function executed(
     category: AGENT_STAGE_CATEGORY[stageKey],
     action,
     justification,
+    state: "executed",
     completed: true,
     skipReason: null,
   };
 }
 
-function skipped(
+function omitted(
   stageKey: AgentStageKey,
   action: string,
   skipReason: string
@@ -117,20 +143,44 @@ function skipped(
     category: AGENT_STAGE_CATEGORY[stageKey],
     action,
     justification: skipReason,
+    state: "omitted",
     completed: true,
     skipReason,
   };
 }
 
-function pending(stageKey: AgentStageKey, action: string): AgentLogVerdict {
+/** Etapa lista para ejecutarse: el ejecutor la atiende en este turno. */
+function ready(stageKey: AgentStageKey, action: string): AgentLogVerdict {
   return {
     stageKey,
     category: AGENT_STAGE_CATEGORY[stageKey],
     action,
     justification: "",
+    state: "ready",
     completed: false,
     skipReason: null,
   };
+}
+
+/** Etapa que espera la respuesta de la persona o un hecho externo. */
+function waiting(
+  stageKey: AgentStageKey,
+  action: string,
+  reason: string
+): AgentLogVerdict {
+  return {
+    stageKey,
+    category: AGENT_STAGE_CATEGORY[stageKey],
+    action,
+    justification: reason,
+    state: "waiting",
+    completed: false,
+    skipReason: null,
+  };
+}
+
+function isAgentStageKey(value: string): value is AgentStageKey {
+  return (AGENT_STAGE_KEYS as readonly string[]).includes(value);
 }
 
 /** Palabras de una línea completa (acción + justificación). */
@@ -147,198 +197,208 @@ export function buildAgentStageVerdicts(
   input: AgentStageVerdictInput
 ): AgentLogVerdict[] {
   const { config, source, signals } = input;
+  const resolved = new Set(signals.executedStages);
   const salaryQuestionOpen = source.cycles.some(
     cycle =>
       cycle.status === "abierto" && cycle.dimension === "remuneracion"
   );
-  const phase = signals.screeningPhase;
-  const screeningConcluded = phase === "concluido";
-  const screeningPassedPrecalificacion =
-    phase === "entrevista" || screeningConcluded;
+  const screeningConcluded = signals.screeningPhase === "concluido";
 
   const verdictFor: Record<AgentStageKey, () => AgentLogVerdict> = {
     recepcion_formulario: () => {
       if (!config.enabled.recepcion_formulario)
-        return skipped(
+        return omitted(
           "recepcion_formulario",
           "Recepción del formulario",
           DISABLED_REASON
         );
-      return executed(
-        "recepcion_formulario",
-        "Recepción del formulario",
-        "El envío fue localizado y la evaluación automática actualizó la ficha."
-      );
+      if (signals.welcomeEmitido || resolved.has("recepcion_formulario"))
+        return executed(
+          "recepcion_formulario",
+          "Recepción del formulario",
+          "El envío fue localizado y la conversación quedó abierta con la bienvenida."
+        );
+      return ready("recepcion_formulario", "Recepción del formulario");
     },
     precalificacion: () => {
       if (!config.enabled.precalificacion)
-        return skipped("precalificacion", "Precalificación", DISABLED_REASON);
+        return omitted("precalificacion", "Precalificación", DISABLED_REASON);
       if (signals.screeningDisqualified)
         return executed(
           "precalificacion",
           "Precalificación",
           "Se administró y el candidato fue descartado por una respuesta no aprobada."
         );
+      if (!signals.precalificacionEnabled)
+        return omitted(
+          "precalificacion",
+          "Precalificación",
+          "La plaza no tiene habilitada la precalificación; se omite sin preguntar."
+        );
       if (!signals.precalificacionActive)
-        return skipped(
+        return omitted(
           "precalificacion",
           "Precalificación",
           "La plaza no tiene preguntas vigentes de precalificación; se omite sin preguntar."
         );
-      if (phase === "precalificacion")
-        return pending("precalificacion", "Precalificación");
-      if (screeningPassedPrecalificacion)
+      if (signals.precalificacionRunActive)
+        return waiting(
+          "precalificacion",
+          "Precalificación",
+          "La precalificación espera la respuesta de la persona."
+        );
+      if (screeningConcluded || signals.screeningPhase === "entrevista")
         return executed(
           "precalificacion",
           "Precalificación",
-          "Concluyó y el candidato avanzó a la siguiente etapa."
+          "Concluyó y el expediente avanzó a la siguiente etapa."
         );
-      return pending("precalificacion", "Precalificación");
+      return waiting(
+        "precalificacion",
+        "Precalificación",
+        "La precalificación aún no se administra."
+      );
     },
     entrevista: () => {
       if (!config.enabled.entrevista)
-        return skipped("entrevista", "Entrevista guiada", DISABLED_REASON);
+        return omitted("entrevista", "Entrevista guiada", DISABLED_REASON);
       if (signals.screeningDisqualified)
-        return skipped(
+        return omitted(
           "entrevista",
           "Entrevista guiada",
           "No se administró: el candidato fue descartado en la precalificación."
         );
       if (!signals.entrevistaEnabled)
-        return skipped(
+        return omitted(
           "entrevista",
           "Entrevista guiada",
           "La plaza no tiene habilitada la entrevista; se omite sin preguntar."
         );
       if (!signals.entrevistaActive)
-        return skipped(
+        return omitted(
           "entrevista",
           "Entrevista guiada",
           "La plaza no tiene preguntas vigentes de entrevista; se omite sin preguntar."
         );
-      if (phase === "entrevista")
-        return pending("entrevista", "Entrevista guiada");
+      if (signals.entrevistaRunActive)
+        return waiting(
+          "entrevista",
+          "Entrevista guiada",
+          "La entrevista espera la respuesta de la persona."
+        );
       if (screeningConcluded)
-        return signals.entrevistaAdministered
-          ? executed(
-              "entrevista",
-              "Entrevista guiada",
-              "Concluyó y el expediente pasó a la conversación del perfil."
-            )
-          : skipped(
-              "entrevista",
-              "Entrevista guiada",
-              "No se administró: el ciclo cerró en la precalificación sin formular preguntas de entrevista."
-            );
-      return pending("entrevista", "Entrevista guiada");
+        return executed(
+          "entrevista",
+          "Entrevista guiada",
+          "Concluyó y el expediente pasó a la conversación del perfil."
+        );
+      return waiting(
+        "entrevista",
+        "Entrevista guiada",
+        "La entrevista aún no se administra."
+      );
     },
     retroalimentacion: () => {
       if (!config.enabled.retroalimentacion)
-        return skipped(
+        return omitted(
           "retroalimentacion",
           "Conversación del perfil",
           DISABLED_REASON
         );
-      if (signals.freeConversationHeld)
+      if (signals.freeConversationHeld || resolved.has("retroalimentacion"))
         return executed(
           "retroalimentacion",
           "Conversación del perfil",
           "El motor conversó sobre la información del perfil laboral."
         );
-      return pending("retroalimentacion", "Conversación del perfil");
+      return ready("retroalimentacion", "Conversación del perfil");
     },
     cierre: () => {
       if (!config.enabled.cierre)
-        return skipped("cierre", "Cierre del proceso", DISABLED_REASON);
-      if (
-        signals.cierreEmitido ||
-        signals.cvState === "pendiente" ||
-        signals.cvState === "recibido"
-      )
+        return omitted("cierre", "Cierre del proceso", DISABLED_REASON);
+      if (resolved.has("cierre"))
         return executed(
           "cierre",
           "Cierre del proceso",
-          "La conversación del perfil concluyó y el expediente pasó a la solicitud del currículum."
+          "La conversación del perfil concluyó, la evaluación se ejecutó y el expediente pasó a la solicitud del currículum."
         );
-      return pending("cierre", "Cierre del proceso");
+      return ready("cierre", "Cierre del proceso");
     },
     solicitud_cv: () => {
       if (!config.enabled.solicitud_cv)
-        return skipped(
+        return omitted(
           "solicitud_cv",
           "Solicitud del currículum",
           DISABLED_REASON
         );
-      if (signals.cvState === "recibido")
-        return executed(
-          "solicitud_cv",
-          "Solicitud del currículum",
-          "El currículum ya fue recibido y registrado en el expediente."
-        );
-      if (signals.cvState === "pendiente")
+      if (signals.cvState !== "sin_solicitud" || resolved.has("solicitud_cv"))
         return executed(
           "solicitud_cv",
           "Solicitud del currículum",
           "La solicitud fue despachada y el expediente espera la respuesta."
         );
-      return pending("solicitud_cv", "Solicitud del currículum");
+      return ready("solicitud_cv", "Solicitud del currículum");
     },
     espera_cv: () => {
       if (!config.enabled.espera_cv)
-        return skipped(
+        return omitted(
           "espera_cv",
           "Espera del currículum",
           DISABLED_REASON
         );
-      if (signals.cvState === "recibido")
+      // Monitor declarado: la espera del currículum no detiene el ciclo. Cuando
+      // el documento llega, confirma su recepción; mientras no llega, el ciclo
+      // sigue con la etapa siguiente. No se asienta como ejecutada —solo se
+      // supervisa—, de modo que la confirmación alcance a emitirse al llegar.
+      if (signals.cvState === "recibido" && !resolved.has("espera_cv"))
+        return ready("espera_cv", "Espera del currículum");
+      if (resolved.has("espera_cv"))
         return executed(
           "espera_cv",
           "Espera del currículum",
-          "Se confirmó la recepción del documento y se entregó el aviso de contacto."
+          "Se confirmó la recepción del documento en el expediente."
         );
-      if (signals.cvState === "pendiente")
-        return executed(
-          "espera_cv",
-          "Espera del currículum",
-          "Se supervisa el correo del solicitante para confirmar la recepción."
-        );
-      return pending("espera_cv", "Espera del currículum");
+      return omitted(
+        "espera_cv",
+        "Espera del currículum",
+        "Se supervisa la recepción del currículum sin detener el ciclo."
+      );
     },
     expectativa_salarial: () => {
       if (!config.enabled.expectativa_salarial)
-        return skipped(
+        return omitted(
           "expectativa_salarial",
           "Expectativa salarial",
           DISABLED_REASON
         );
-      if (source.salary.declared)
-        return skipped(
+      if (source.salary.declared || resolved.has("expectativa_salarial"))
+        return executed(
           "expectativa_salarial",
           "Expectativa salarial",
-          "Ya fue declarada en el expediente; no se pregunta de nuevo."
+          "La expectativa quedó registrada en el expediente."
         );
       if (salaryQuestionOpen)
-        return executed(
+        return waiting(
           "expectativa_salarial",
           "Expectativa salarial",
           "La pregunta quedó abierta y se espera la respuesta de la persona."
         );
-      return pending("expectativa_salarial", "Expectativa salarial");
+      return ready("expectativa_salarial", "Expectativa salarial");
     },
     aviso_contacto: () => {
       if (!config.enabled.aviso_contacto)
-        return skipped(
+        return omitted(
           "aviso_contacto",
           "Aviso de contacto",
           DISABLED_REASON
         );
-      if (signals.avisoContactoEmitido)
+      if (signals.avisoContactoEmitido || resolved.has("aviso_contacto"))
         return executed(
           "aviso_contacto",
           "Aviso de contacto",
           "Se declaró que el contacto de las etapas siguientes ocurre por este mismo medio."
         );
-      return pending("aviso_contacto", "Aviso de contacto");
+      return ready("aviso_contacto", "Aviso de contacto");
     },
   };
 
@@ -390,6 +450,7 @@ export async function loadAgentLogSignals(
     status: string | null;
     precalificacion_count: number;
     entrevista_count: number;
+    precalificacion_enabled: boolean;
     entrevista_enabled: boolean;
     entrevista_attempts: number;
   } | null = null;
@@ -399,6 +460,7 @@ export async function loadAgentLogSignals(
       status: string | null;
       precalificacion_count: number;
       entrevista_count: number;
+      precalificacion_enabled: boolean;
       entrevista_enabled: boolean;
       entrevista_attempts: number;
     }>(
@@ -411,6 +473,7 @@ export async function loadAgentLogSignals(
                          WHERE q.job_position_id = p.id
                            AND q.phase = 'entrevista' AND q.active), 0)::int
                 AS entrevista_count,
+              COALESCE(p.screening_precalificacion_enabled, true) AS precalificacion_enabled,
               COALESCE(p.screening_entrevista_enabled, true) AS entrevista_enabled,
               COALESCE((SELECT count(*) FROM screening_attempts sa
                          WHERE sa.run_id = s.id
@@ -446,24 +509,65 @@ export async function loadAgentLogSignals(
     if (!isUndefinedTableError(error) && !isUndefinedColumnError(error))
       throw error;
   }
+  // Memoria del ciclo: la bitácora durable conserva las etapas ya resueltas,
+  // de modo que el avance no depende de rehacer cada compuerta en cada turno.
+  const executedStages = await loadExecutedStageKeys(pool, applicationId);
+  let welcomeEmitido = false;
+  try {
+    const welcome = await pool.query<{ emitted: string }>(
+      `SELECT count(*)::text AS emitted FROM conversation_messages
+        WHERE message_key=$1`,
+      [`welcome:${applicationId}`]
+    );
+    welcomeEmitido = Number(welcome.rows[0]?.emitted ?? 0) > 0;
+  } catch (error) {
+    if (!isUndefinedTableError(error)) throw error;
+  }
   const screeningPhase = row?.phase ? String(row.phase) : null;
   const screeningStatus = row?.status ? String(row.status) : null;
+  const runActive = screeningStatus === "en_curso";
   return {
     cvState,
     screeningPhase,
     screeningStatus,
+    precalificacionEnabled: Boolean(row?.precalificacion_enabled ?? true),
     precalificacionActive: Number(row?.precalificacion_count ?? 0) > 0,
-    entrevistaActive: Number(row?.entrevista_count ?? 0) > 0,
+    precalificacionRunActive: runActive && screeningPhase === "precalificacion",
     entrevistaEnabled: Boolean(row?.entrevista_enabled ?? true),
+    entrevistaActive: Number(row?.entrevista_count ?? 0) > 0,
+    entrevistaRunActive: runActive && screeningPhase === "entrevista",
     entrevistaAdministered: Number(row?.entrevista_attempts ?? 0) > 0,
     freeConversationHeld,
     screeningDisqualified: screeningStatus === "descalificado",
-    cierreEmitido:
-      conversationState?.automationState === "completed" ||
-      conversationState?.conversationStage === "cierre",
+    welcomeEmitido,
     avisoContactoEmitido:
       conversationState?.conversationStage === "aviso_contacto",
+    executedStages,
   };
+}
+
+/**
+ * Etapas ya resueltas según la bitácora durable `agent_ai_log`. Es la memoria
+ * del ciclo: sobrevive a los turnos, a los reinicios y al reordenamiento del
+ * panel, de modo que el avance nunca se pierde ni se repite.
+ */
+export async function loadExecutedStageKeys(
+  pool: Pool,
+  applicationId: number
+): Promise<AgentStageKey[]> {
+  try {
+    const result = await pool.query<{ stage_key: string }>(
+      `SELECT DISTINCT stage_key FROM agent_ai_log
+        WHERE application_id=$1 AND completed=true AND skip_reason IS NULL`,
+      [applicationId]
+    );
+    return result.rows
+      .map(row => String(row.stage_key))
+      .filter(isAgentStageKey);
+  } catch (error) {
+    if (!isUndefinedTableError(error)) throw error;
+    return [];
+  }
 }
 
 /**
@@ -487,6 +591,7 @@ export async function recordAgentStageEntry(
     category: AGENT_STAGE_CATEGORY[input.stageKey],
     action: input.action,
     justification: input.justification,
+    state: "executed",
     completed: true,
     skipReason: input.skipReason ?? null,
   };

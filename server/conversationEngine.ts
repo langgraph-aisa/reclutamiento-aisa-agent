@@ -36,10 +36,6 @@ import { enqueueAgentReply } from "./conversationOutbox";
 import { assertCapability } from "./conversationRuntime";
 import { getConversationActivation } from "./conversationActivation";
 import {
-  isUndefinedColumnError,
-  isUndefinedTableError,
-} from "./governanceObservability";
-import {
   observeOpenAIClient,
   withLangfuseObservation,
 } from "./observability/langfuse";
@@ -53,15 +49,17 @@ import {
   loadAgentStageConfiguration,
   renderStageTemplate,
   type AgentStageConfiguration,
+  type AgentStageKey,
 } from "./agentStages";
 import {
   buildAgentStageVerdicts,
-  firstPendingStage,
   loadAgentLogSignals,
   recordAgentLogVerdicts,
+  recordAgentStageEntry,
 } from "./agentActivityLog";
 import { requestCvForApplication } from "./cvRequest";
 import { evaluateApplicationWithAgent } from "./agentEvaluator";
+import { scheduleAssessmentCycle } from "./assessmentAutomation";
 
 /**
  * Motor de razonamiento conversacional JARVI RH.
@@ -397,47 +395,154 @@ async function escalateConversation(
 }
 
 /**
- * ¿La postulación tiene algún protocolo de evaluación activo que autorice al
- * agente a conversar? Con la prueba psicométrica apagada y las dos fases del
- * banco de preguntas apagadas, el agente no conversa: solo solicita el CV una
- * vez y deja el resto en silencio. La lectura es defensiva: si las columnas de
- * los interruptores todavía no existen (migración pendiente), se conserva el
- * comportamiento anterior para no silenciar instalaciones sin la migración.
+ * Justificación estable con la que la bitácora asienta cada etapa determinista
+ * ya ejecutada. La huella de contenido es estable, de modo que un reintento del
+ * mismo acto no duplica la línea y la memoria del ciclo no se corrompe.
  */
-async function applicationHasActiveEvaluationAutomation(
+const DETERMINISTIC_STAGE_JUSTIFICATION: Record<AgentStageKey, string> = {
+  recepcion_formulario:
+    "El envío fue localizado y la conversación quedó abierta con la bienvenida.",
+  precalificacion:
+    "Concluyó y el expediente avanzó a la siguiente etapa.",
+  entrevista:
+    "Concluyó y el expediente pasó a la conversación del perfil.",
+  retroalimentacion:
+    "El motor conversó sobre la información del perfil laboral.",
+  cierre:
+    "La conversación del perfil concluyó, la evaluación se ejecutó y el expediente pasó a la solicitud del currículum.",
+  solicitud_cv:
+    "La solicitud fue despachada y el expediente espera la respuesta.",
+  espera_cv:
+    "Se confirmó la recepción del documento en el expediente.",
+  expectativa_salarial:
+    "La expectativa quedó registrada en el expediente.",
+  aviso_contacto:
+    "Se declaró que el contacto de las etapas siguientes ocurre por este mismo medio.",
+};
+
+type DeterministicStageInput = {
+  pool: Pool;
+  state: ConversationState;
+  source: ConversationContextSource;
+  context: BuiltConversationContext;
+  stages: AgentStageConfiguration;
+  applicationId: number;
+  stageKey: AgentStageKey;
+  evaluate?: (applicationId: number) => Promise<unknown>;
+};
+
+/**
+ * Ejecuta el acto determinista de una etapa lista del ciclo administrado.
+ * Devuelve `stop: true` cuando la etapa es interactiva —formula una pregunta y
+ * espera la respuesta de la persona— y el turno debe terminar ahí; en las demás
+ * el ejecutor continúa con la etapa siguiente del orden guardado.
+ *
+ * `persist` indica si el acto consuma la etapa para la memoria durable. La
+ * expectativa salarial no se persiste al formular la pregunta: su ejecución se
+ * deriva del monto declarado, de modo que solo queda concluida al capturarlo.
+ */
+async function executeDeterministicStage(
+  input: DeterministicStageInput
+): Promise<{
+  stop: boolean;
+  persist: boolean;
+  outcome?: ConversationTurnOutcome;
+}> {
+  const { pool, state, source, context, stages, applicationId, stageKey } =
+    input;
+  switch (stageKey) {
+    case "recepcion_formulario": {
+      const text = renderStageTemplate(stages.messages.bienvenida_formulario, {
+        name: state.full_name,
+        position: source.position.title,
+      });
+      await emitDeterministicMessage(
+        pool,
+        state,
+        context,
+        text,
+        "recepcion_formulario"
+      );
+      return { stop: false, persist: true };
+    }
+    case "cierre":
+      await requestCvForApplication(pool, applicationId);
+      await runProfileEvaluation(pool, applicationId, input.evaluate);
+      return { stop: false, persist: true };
+    case "solicitud_cv":
+      await requestCvForApplication(pool, applicationId);
+      return { stop: false, persist: true };
+    case "espera_cv": {
+      const text = renderStageTemplate(stages.messages.confirmacion_cv, {
+        name: state.full_name,
+      });
+      await emitDeterministicMessage(pool, state, context, text, "espera_cv");
+      // Si el aviso de contacto está apagado como etapa propia, la confirmación
+      // lo entrega de nuevo, como declara la descripción del paso.
+      if (!stages.enabled.aviso_contacto) {
+        const aviso = renderStageTemplate(stages.messages.aviso_contacto, {
+          name: state.full_name,
+        });
+        await emitDeterministicMessage(
+          pool,
+          state,
+          context,
+          aviso,
+          "aviso_contacto"
+        );
+      }
+      return { stop: false, persist: true };
+    }
+    case "expectativa_salarial": {
+      const outcome = await emitSalaryTurn(
+        pool,
+        state,
+        source,
+        context,
+        stages
+      );
+      return { stop: true, persist: false, outcome };
+    }
+    case "aviso_contacto": {
+      const outcome = await emitContactNoticeTurn(
+        pool,
+        state,
+        context,
+        stages
+      );
+      return { stop: false, persist: true, outcome };
+    }
+    default:
+      return { stop: false, persist: true };
+  }
+}
+
+/**
+ * Concluye el ciclo cuando todas las etapas encendidas quedaron resueltas y
+ * encadena la prueba psicométrica solo si la operación la tiene encendida: la
+ * prueba se programa después del paso 9, nunca antes.
+ */
+async function completeAgentCycle(
   pool: Pool,
-  applicationId: number
+  applicationId: number,
+  conversationId: number
 ) {
+  await pool.query(
+    `UPDATE conversations
+        SET automation_state='completed',
+            automation_completed_at=COALESCE(automation_completed_at, now()),
+            updated_at=now()
+      WHERE id=$1 AND automation_state IN ('agent','handoff_pending')`,
+    [conversationId]
+  );
   try {
-    const result = await pool.query<{
-      precalificacion: boolean;
-      entrevista: boolean;
-      psicometrico: boolean;
-    }>(
-      `SELECT p.screening_precalificacion_enabled AS precalificacion,
-              p.screening_entrevista_enabled AS entrevista,
-              EXISTS (
-                SELECT 1 FROM integration_settings s
-                 WHERE s.provider='assessments'
-                   AND s.setting_key='psychometric_autostart'
-                   AND s.setting_value='true'
-              ) AS psicometrico
-         FROM applications a
-         JOIN job_positions p ON p.id = a.job_position_id
-        WHERE a.id = $1`,
-      [applicationId]
-    );
-    const row = result.rows[0];
-    if (!row) return false;
-    return (
-      Boolean(row.precalificacion) ||
-      Boolean(row.entrevista) ||
-      Boolean(row.psicometrico)
-    );
+    await scheduleAssessmentCycle(pool, applicationId);
   } catch (error) {
-    if (isUndefinedColumnError(error) || isUndefinedTableError(error))
-      return true;
-    throw error;
+    console.warn(
+      `[ConversationEngine] La prueba psicométrica no pudo programarse para la postulación ${applicationId} (${
+        error instanceof Error ? error.name : "unknown"
+      }).`
+    );
   }
 }
 
@@ -520,28 +625,6 @@ async function emitContactNoticeTurn(
             updated_at=now()
       WHERE id=$1`,
     [state.id]
-  );
-  return { status: "sent", messageId, turnId, reply: text };
-}
-
-/**
- * Espera del currículum (etapa 7): confirma la recepción del documento.
- */
-async function emitCvReceiptTurn(
-  pool: Pool,
-  state: ConversationState,
-  context: BuiltConversationContext,
-  stages: AgentStageConfiguration
-): Promise<ConversationTurnOutcome> {
-  const text = renderStageTemplate(stages.messages.confirmacion_cv, {
-    name: state.full_name,
-  });
-  const { messageId, turnId } = await emitDeterministicMessage(
-    pool,
-    state,
-    context,
-    text,
-    "espera_cv"
   );
   return { status: "sent", messageId, turnId, reply: text };
 }
@@ -705,18 +788,6 @@ async function runConversationTurnInternal(
       reason: "La conversación no registra un mensaje entrante pendiente.",
     };
 
-  if (
-    !(await applicationHasActiveEvaluationAutomation(
-      pool,
-      Number(state.application_id)
-    ))
-  )
-    return {
-      status: "skipped",
-      reason:
-        "La postulación no tiene ningún protocolo de evaluación activo; el agente no conversa fuera de la precalificación, la entrevista o la prueba psicométrica.",
-    };
-
   if (await candidateDocumentsProcessing(pool, Number(state.application_id))) {
     return {
       status: "skipped",
@@ -802,10 +873,14 @@ async function runConversationTurnInternal(
             "El comportamiento del agente está apagado: el ciclo determinista no ejecuta ninguna acción.",
         };
 
-      // La bitácora de la IA asienta el estado de cada etapa del ciclo fijo, en
-      // su orden: la acción ejecutada y su justificación, o el motivo de la
-      // omisión. Se escribe antes de emitir el turno para que el comité técnico
-      // pueda contrastar la decisión con su desenlace observado.
+      // Bitácora durable y estado determinista de cada etapa del ciclo. El
+      // ejecutor recorre el orden administrado en «Etapas de la IA», omite las
+      // etapas apagadas sin detenerse y avanza mientras haya una etapa lista.
+      // Solo se detiene cuando una etapa espera la respuesta de la persona o un
+      // hecho externo, y se reanuda por sí solo en el turno siguiente: la
+      // memoria del paso alcanzado vive en `agent_ai_log` y en los artefactos
+      // (mensajes, banco de preguntas y expediente), de modo que reordenar el
+      // panel no reinicia ni pierde el ciclo.
       const logSignals = await loadAgentLogSignals(
         pool,
         Number(state.application_id),
@@ -836,129 +911,70 @@ async function runConversationTurnInternal(
             "El candidato fue descartado en la precalificación; el ciclo no continúa.",
         };
 
-      // El motor ejecuta únicamente la primera etapa pendiente del ciclo fijo:
-      // ninguna etapa posterior se emite mientras una anterior siga pendiente.
-      const pendingStage = firstPendingStage(logVerdicts);
-
-      if (pendingStage) {
-        switch (pendingStage.stageKey) {
-          case "precalificacion":
-          case "entrevista":
-            return {
+      let freeConversationRequested = false;
+      for (const verdict of logVerdicts) {
+        if (verdict.state === "executed" || verdict.state === "omitted") {
+          continue;
+        }
+        if (verdict.state === "waiting")
+          return {
+            status: "skipped",
+            reason: `La etapa «${verdict.action}» del ciclo administrado espera su turno: ${verdict.justification}`,
+          };
+        // Etapa lista: la conversación del perfil se ejecuta con el motor de
+        // respuesta abierta al final del recorrido; las deterministas se
+        // ejecutan aquí y el recorrido continúa con la siguiente.
+        if (verdict.stageKey === "retroalimentacion") {
+          freeConversationRequested = true;
+          break;
+        }
+        const executed = await executeDeterministicStage({
+          pool,
+          state,
+          source,
+          context,
+          stages: stagesConfig,
+          applicationId: Number(state.application_id),
+          stageKey: verdict.stageKey,
+          evaluate: input.dependencies?.evaluate,
+        });
+        if (executed.persist) {
+          await recordAgentStageEntry(pool, {
+            applicationId: Number(state.application_id),
+            conversationId: state.id,
+            stageKey: verdict.stageKey,
+            action: verdict.action,
+            justification:
+              DETERMINISTIC_STAGE_JUSTIFICATION[verdict.stageKey] ??
+              verdict.action,
+          });
+        }
+        if (executed.stop) {
+          observation.update({
+            output: { status: executed.outcome?.status ?? "skipped" },
+            metadata: { outcome: "deterministic-stage", stage: verdict.stageKey },
+          });
+          return (
+            executed.outcome ?? {
               status: "skipped",
-              reason: `La etapa «${pendingStage.action}» del ciclo administrado aún no se completa.`,
-            };
-          case "solicitud_cv":
-            await requestCvForApplication(pool, Number(state.application_id));
-            observation.update({
-              output: { status: "skipped" },
-              metadata: { outcome: "cv-request-dispatched" },
-            });
-            return {
-              status: "skipped",
-              reason:
-                "La solicitud del currículum fue despachada y el expediente espera la respuesta.",
-            };
-          case "espera_cv":
-            if (logSignals.cvState === "recibido") {
-              const outcome = await emitCvReceiptTurn(
-                pool,
-                state,
-                context,
-                stagesConfig
-              );
-              observation.update({
-                output: { status: outcome.status },
-                metadata: {
-                  outcome: "deterministic-stage",
-                  stage: "espera_cv",
-                },
-              });
-              return outcome;
+              reason: `La etapa «${verdict.action}» quedó despachada.`,
             }
-            return {
-              status: "skipped",
-              reason:
-                "El currículum solicitado aún no llega; el turno espera su recepción.",
-            };
-          case "cierre": {
-            // El cierre ya no emite el agradecimiento ni el aviso de contacto:
-            // cada uno pertenece a su propia etapa. Aquí la conversación del
-            // perfil concluye, la evaluación automática del candidato se
-            // ejecuta una sola vez y la solicitud del currículum queda
-            // despachada con su plantilla del paso 6.
-            await requestCvForApplication(pool, Number(state.application_id));
-            await runProfileEvaluation(
-              pool,
-              Number(state.application_id),
-              input.dependencies?.evaluate
-            );
-            observation.update({
-              output: { status: "skipped" },
-              metadata: { outcome: "cv-request-dispatched", stage: "cierre" },
-            });
-            return {
-              status: "skipped",
-              reason:
-                "El cierre concluyó la conversación del perfil y despachó la solicitud del currículum.",
-            };
-          }
-          case "expectativa_salarial": {
-            const outcome = await emitSalaryTurn(
-              pool,
-              state,
-              source,
-              context,
-              stagesConfig
-            );
-            observation.update({
-              output: { status: outcome.status },
-              metadata: {
-                outcome: "deterministic-stage",
-                stage: "expectativa_salarial",
-              },
-            });
-            return outcome;
-          }
-          case "aviso_contacto": {
-            const outcome = await emitContactNoticeTurn(
-              pool,
-              state,
-              context,
-              stagesConfig
-            );
-            observation.update({
-              output: { status: outcome.status },
-              metadata: {
-                outcome: "deterministic-stage",
-                stage: "aviso_contacto",
-              },
-            });
-            return outcome;
-          }
-          case "retroalimentacion":
-            break; // la conversación libre se ejecuta a continuación
+          );
         }
       }
 
-      if (!stagesConfig.enabled.retroalimentacion) {
+      if (!freeConversationRequested) {
+        await completeAgentCycle(
+          pool,
+          Number(state.application_id),
+          state.id
+        );
         return {
           status: "skipped",
           reason:
-            "La conversación abierta del perfil está desactivada en las etapas del agente.",
+            "El ciclo de las nueve etapas quedó concluido; la conversación no tiene acciones pendientes.",
         };
       }
-      if (
-        !(await applicationHasActiveEvaluationAutomation(
-          pool,
-          Number(state.application_id)
-        ))
-      )
-        return {
-          status: "skipped",
-          reason:
-            "La postulación no tiene ningún protocolo de evaluación activo; el agente no conversa fuera de la precalificación, la entrevista o la prueba psicométrica.",
-        };
 
       const stage = conversationStageForTurn(
         Number(state.agent_turn_count ?? 0),

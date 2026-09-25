@@ -7,10 +7,10 @@ import {
   structuredOutput,
 } from "./agentProviders";
 import { assertNoAutomatedSalaryOffer } from "./salaryPolicy";
-import { composeCvClosingFromSettings } from "./cvAnalysis";
 import { recordAgentStageEntry } from "./agentActivityLog";
 import {
   loadAgentStageConfiguration,
+  renderStageTemplate,
   type AgentStageKey,
 } from "./agentStages";
 import {
@@ -21,12 +21,13 @@ import {
 /**
  * Motor de precalificación y entrevista guiada por plaza.
  *
- * El agente deja de improvisar las preguntas: una vez recibido el CV, conduce
- * la conversación con el banco de preguntas configurado en la plaza. Primero la
- * serie de precalificación; si una respuesta no supera el descarte directo, la
- * postulación se declara no calificada y la conversación cierra con el
- * agradecimiento y el aviso de contacto. Si supera la precalificación, continúa
- * la entrevista y, al terminarla, cierra de la misma forma.
+ * El agente deja de improvisar las preguntas: una vez abierta la conversación
+ * con la recepción del formulario, conduce la conversación con el banco de
+ * preguntas configurado en la plaza. Primero la serie de precalificación; si una
+ * respuesta no supera el descarte directo, la postulación se declara no
+ * calificada y la conversación cierra con el aviso de contacto administrado en
+ * «Etapas de la IA» (paso 9). Si supera la precalificación, continúa la
+ * entrevista y, al terminarla, cierra de la misma forma.
  *
  * El descarte es determinista y del servidor: respuestas aprobadas o rango
  * permitido. El criterio de razonamiento editable se conserva en cada pregunta
@@ -502,8 +503,11 @@ async function cvReceived(pool: Pool, applicationId: number) {
  * la plaza declara preguntas activas. La precalificación y la entrevista son
  * las etapas 2 y 3 del ciclo —antes de la conversación del perfil y del
  * cierre—, de modo que no esperan el currículum: se administran en cuanto la
- * recepción del formulario deja la conversación preparada. Sin preguntas
- * configuradas no se crea nada: el flujo conversacional ordinario se conserva.
+ * recepción del formulario deja la conversación preparada. Si la plaza apaga la
+ * precalificación pero conserva preguntas de entrevista, la serie arranca
+ * directamente en la entrevista para no dejar el ciclo en punto muerto. Sin
+ * preguntas configuradas no se crea nada: el flujo conversacional ordinario se
+ * conserva.
  */
 export async function ensureScreeningRunsForReceivedCv(
   pool: Pool
@@ -511,22 +515,45 @@ export async function ensureScreeningRunsForReceivedCv(
   try {
     const result = await pool.query(
       `INSERT INTO screening_runs (application_id, phase, status)
-       SELECT ids.id, 'precalificacion', 'en_curso'
+       SELECT ids.id, ids.phase, 'en_curso'
          FROM (
-           SELECT app.id
+           SELECT app.id,
+                  CASE
+                    WHEN p.screening_precalificacion_enabled = true
+                     AND EXISTS (
+                       SELECT 1 FROM screening_questions q
+                        WHERE q.job_position_id = app.job_position_id
+                          AND q.active = true
+                          AND q.phase = 'precalificacion')
+                    THEN 'precalificacion'
+                    ELSE 'entrevista'
+                  END AS phase
              FROM applications app
              JOIN job_positions p ON p.id = app.job_position_id
             WHERE EXISTS (
                     SELECT 1 FROM conversations c
                      WHERE c.application_id = app.id
                   )
-              AND p.screening_precalificacion_enabled = true
-              AND EXISTS (
-                    SELECT 1 FROM screening_questions q
-                     WHERE q.job_position_id = app.job_position_id AND q.active = true
-                  )
               AND NOT EXISTS (
                     SELECT 1 FROM screening_runs r WHERE r.application_id = app.id
+                  )
+              AND (
+                    (
+                      p.screening_precalificacion_enabled = true
+                      AND EXISTS (
+                        SELECT 1 FROM screening_questions q
+                         WHERE q.job_position_id = app.job_position_id
+                           AND q.active = true
+                           AND q.phase = 'precalificacion')
+                    )
+                    OR (
+                      COALESCE(p.screening_entrevista_enabled, true) = true
+                      AND EXISTS (
+                        SELECT 1 FROM screening_questions q
+                         WHERE q.job_position_id = app.job_position_id
+                           AND q.active = true
+                           AND q.phase = 'entrevista')
+                    )
                   )
             ORDER BY app.id
             LIMIT 50
@@ -551,34 +578,22 @@ async function closeScreening(
   // administrables del ciclo (pasos 5 a 9) y los emite el motor determinista;
   // el screening solo cierra la máquina de estados para que el ciclo avance.
   if (input.disqualify) {
-    // Descarte: la persona recibe el aviso institucional de cierre, compuesto
-    // con el agradecimiento institucional —sin solicitud de currículum, que
-    // está reservada al paso 6 del ciclo— y el aviso de contacto vigente.
-    const closing = await pool.query<{
-      name: string | null;
-      title: string;
-      contact_notice: string | null;
-    }>(
-      `SELECT c.full_name AS name, p.title,
-              settings.contact_notice
+    // Descarte: la persona recibe el aviso de contacto administrado en
+    // «Etapas de la IA» (paso 9). El screening no conserva texto institucional
+    // propio: la hoja de etapas es la única superficie del mensaje, sin
+    // solicitud de currículum, que está reservada al paso 6.
+    const closing = await pool.query<{ name: string | null }>(
+      `SELECT c.full_name AS name
          FROM applications a
          JOIN candidates c ON c.id = a.candidate_id
-         JOIN job_positions p ON p.id = a.job_position_id
-         LEFT JOIN LATERAL (
-           SELECT MAX(CASE WHEN s.setting_key='cv_contact_notice' THEN s.setting_value END) AS contact_notice
-             FROM integration_settings s
-            WHERE s.provider='recruitment'
-         ) settings ON true
         WHERE a.id=$1`,
       [run.application_id]
     );
     const row = closing.rows[0];
     if (row) {
-      const text = composeCvClosingFromSettings({
+      const stages = await loadAgentStageConfiguration(pool);
+      const text = renderStageTemplate(stages.messages.aviso_contacto, {
         name: row.name,
-        position: row.title,
-        thankYouMessage: null,
-        contactNotice: row.contact_notice,
       });
       await enqueueScreeningMessage(pool, {
         conversationId: run.conversation_id,

@@ -145,27 +145,6 @@ export async function loadCvAnalysisConfiguration(
 }
 
 /**
- * Cierre compuesto con los valores ya leídos de la base. La ausencia de cada
- * parte usa el texto institucional por omisión.
- */
-export function composeCvClosingFromSettings(values: {
-  name?: string | null;
-  position?: string | null;
-  thankYouMessage?: string | null;
-  contactNotice?: string | null;
-}) {
-  return composeCvClosing(
-    {
-      thankYouMessage:
-        values.thankYouMessage?.trim() || DEFAULT_CV_THANK_YOU_MESSAGE,
-      contactNotice: values.contactNotice?.trim() || DEFAULT_CV_CONTACT_NOTICE,
-      essenceWordLimit: CV_ESSENCE_DEFAULT_WORD_LIMIT,
-    },
-    values
-  );
-}
-
-/**
  * Estado del expediente de CV: si la solicitud se despachó y si el documento ya
  * llegó al RAG Personal. Un documento recibido por el webhook o el puente de
  * ApiChat es la evidencia de que la persona respondió.

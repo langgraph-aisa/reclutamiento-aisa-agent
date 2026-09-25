@@ -70,14 +70,18 @@ function makeSignals(
     cvState: "sin_solicitud",
     screeningPhase: null,
     screeningStatus: null,
+    precalificacionEnabled: true,
     precalificacionActive: false,
-    entrevistaActive: false,
+    precalificacionRunActive: false,
     entrevistaEnabled: true,
+    entrevistaActive: false,
+    entrevistaRunActive: false,
     entrevistaAdministered: false,
     freeConversationHeld: false,
     screeningDisqualified: false,
-    cierreEmitido: false,
+    welcomeEmitido: true,
     avisoContactoEmitido: false,
+    executedStages: [],
     ...overrides,
   };
 }
@@ -94,45 +98,81 @@ function build(input: Omit<AgentStageVerdictInput, "config" | "source"> & {
 }
 
 describe("buildAgentStageVerdicts", () => {
-  it("marca completada y omite la expectativa salarial ya declarada en el expediente", () => {
+  it("marca ejecutada la expectativa salarial ya declarada en el expediente", () => {
     const verdicts = build({
       source: makeSource({
-        salary: { expectationGtq: 5000, source: "expectativa_salarial", declared: true },
+        salary: {
+          expectationGtq: 5000,
+          source: "expectativa_salarial",
+          declared: true,
+        },
       }),
       signals: makeSignals({ cvState: "recibido" }),
     });
-    const expectativa = verdicts.find(v => v.stageKey === "expectativa_salarial");
+    const expectativa = verdicts.find(
+      v => v.stageKey === "expectativa_salarial"
+    );
     expect(expectativa?.completed).toBe(true);
-    expect(expectativa?.skipReason).toContain("expediente");
+    expect(expectativa?.state).toBe("executed");
+    expect(expectativa?.justification).toContain("registrada");
   });
 
   it("omite la precalificación sin preguntas vigentes y la marca completada", () => {
     const verdicts = build({
-      signals: makeSignals({ precalificacionActive: false, cvState: "recibido" }),
+      signals: makeSignals({ precalificacionActive: false }),
     });
     const pre = verdicts.find(v => v.stageKey === "precalificacion");
     expect(pre?.completed).toBe(true);
+    expect(pre?.state).toBe("omitted");
     expect(pre?.skipReason).toContain("no tiene preguntas");
   });
 
-  it("registra el cierre ejecutado cuando ya fue emitido", () => {
+  it("omite la precalificación cuando la plaza la tiene deshabilitada", () => {
     const verdicts = build({
-      source: makeSource({
-        salary: { expectationGtq: 5000, source: "chat", declared: true },
+      signals: makeSignals({
+        precalificacionEnabled: false,
+        precalificacionActive: true,
       }),
-      signals: makeSignals({ cvState: "recibido", cierreEmitido: true }),
+    });
+    const pre = verdicts.find(v => v.stageKey === "precalificacion");
+    expect(pre?.state).toBe("omitted");
+    expect(pre?.skipReason).toContain("no tiene habilitada");
+  });
+
+  it("deja en espera la precalificación mientras el banco la administra", () => {
+    const verdicts = build({
+      signals: makeSignals({
+        precalificacionActive: true,
+        precalificacionRunActive: true,
+        screeningStatus: "en_curso",
+        screeningPhase: "precalificacion",
+      }),
+    });
+    const pre = verdicts.find(v => v.stageKey === "precalificacion");
+    expect(pre?.completed).toBe(false);
+    expect(pre?.state).toBe("waiting");
+  });
+
+  it("registra el cierre ejecutado cuando la bitácora lo conserva", () => {
+    const verdicts = build({
+      signals: makeSignals({
+        cvState: "recibido",
+        executedStages: ["cierre"],
+      }),
     });
     const cierre = verdicts.find(v => v.stageKey === "cierre");
     expect(cierre?.completed).toBe(true);
+    expect(cierre?.state).toBe("executed");
     expect(cierre?.skipReason).toBeNull();
   });
 
-  it("deja pendiente el cierre mientras el CV no fue solicitado", () => {
+  it("deja listo el cierre mientras no se haya ejecutado", () => {
     const verdicts = build({
-      signals: makeSignals({ cvState: "sin_solicitud", cierreEmitido: false }),
+      signals: makeSignals({ cvState: "sin_solicitud" }),
     });
     const cierre = verdicts.find(v => v.stageKey === "cierre");
     expect(cierre?.completed).toBe(false);
+    expect(cierre?.state).toBe("ready");
   });
 
   it("conserva el orden administrado de las etapas", () => {
@@ -161,15 +201,39 @@ describe("buildAgentStageVerdicts", () => {
     });
     const cierre = verdicts.find(v => v.stageKey === "cierre");
     expect(cierre?.completed).toBe(true);
+    expect(cierre?.state).toBe("omitted");
     expect(cierre?.skipReason).toContain("desactivada");
   });
 
-  it("deja pendiente la expectativa salarial no declarada y sin pregunta abierta", () => {
+  it("deja lista la expectativa salarial no declarada y sin pregunta abierta", () => {
     const verdicts = build({
       signals: makeSignals({ cvState: "sin_solicitud" }),
     });
-    const expectativa = verdicts.find(v => v.stageKey === "expectativa_salarial");
+    const expectativa = verdicts.find(
+      v => v.stageKey === "expectativa_salarial"
+    );
     expect(expectativa?.completed).toBe(false);
+    expect(expectativa?.state).toBe("ready");
+  });
+
+  it("deja en espera la expectativa salarial cuando la pregunta está abierta", () => {
+    const verdicts = build({
+      source: makeSource({
+        cycles: [
+          {
+            dimension: "remuneracion",
+            question: "¿Cuál es su expectativa?",
+            status: "abierto",
+            evidenceMessageId: null,
+          },
+        ] as unknown as ConversationContextSource["cycles"],
+      }),
+      signals: makeSignals(),
+    });
+    const expectativa = verdicts.find(
+      v => v.stageKey === "expectativa_salarial"
+    );
+    expect(expectativa?.state).toBe("waiting");
   });
 
   it("marca ejecutada la conversación del perfil solo cuando hubo un turno de conversación libre", () => {
@@ -190,7 +254,11 @@ describe("buildAgentStageVerdicts", () => {
     const verdicts = build({
       source: makeSource({
         turns: [
-          { direction: "outbound", body: "¿Reside usted dentro del departamento?", createdAt: null },
+          {
+            direction: "outbound",
+            body: "¿Reside usted dentro del departamento?",
+            createdAt: null,
+          },
           { direction: "inbound", body: "Sí", createdAt: null },
         ],
       }),
@@ -198,15 +266,7 @@ describe("buildAgentStageVerdicts", () => {
     });
     const retro = verdicts.find(v => v.stageKey === "retroalimentacion");
     expect(retro?.completed).toBe(false);
-  });
-
-  it("deja pendiente la conversación del perfil antes del primer turno de conversación libre", () => {
-    const verdicts = build({
-      source: makeSource({ turns: [] }),
-      signals: makeSignals(),
-    });
-    const retro = verdicts.find(v => v.stageKey === "retroalimentacion");
-    expect(retro?.completed).toBe(false);
+    expect(retro?.state).toBe("ready");
   });
 
   it("omite la entrevista cuando la plaza la tiene deshabilitada aunque el ciclo esté concluido", () => {
@@ -221,10 +281,11 @@ describe("buildAgentStageVerdicts", () => {
     });
     const entrevista = verdicts.find(v => v.stageKey === "entrevista");
     expect(entrevista?.completed).toBe(true);
+    expect(entrevista?.state).toBe("omitted");
     expect(entrevista?.skipReason).toContain("no tiene habilitada");
   });
 
-  it("asienta la entrevista ejecutada solo cuando una pregunta fue administrada", () => {
+  it("asienta la entrevista ejecutada cuando el ciclo concluyó", () => {
     const verdicts = build({
       signals: makeSignals({
         screeningPhase: "concluido",
@@ -236,27 +297,64 @@ describe("buildAgentStageVerdicts", () => {
     });
     const entrevista = verdicts.find(v => v.stageKey === "entrevista");
     expect(entrevista?.completed).toBe(true);
+    expect(entrevista?.state).toBe("executed");
     expect(entrevista?.skipReason).toBeNull();
   });
 
-  it("omite la entrevista no administrada cuando el ciclo cerró en la precalificación", () => {
+  it("deja en espera la entrevista mientras el banco la administra", () => {
     const verdicts = build({
       signals: makeSignals({
-        screeningPhase: "concluido",
-        screeningStatus: "concluido",
+        screeningPhase: "entrevista",
+        screeningStatus: "en_curso",
         precalificacionActive: true,
         entrevistaActive: true,
-        entrevistaAdministered: false,
+        entrevistaRunActive: true,
       }),
     });
     const entrevista = verdicts.find(v => v.stageKey === "entrevista");
-    expect(entrevista?.completed).toBe(true);
-    expect(entrevista?.skipReason).toContain("No se administró");
+    expect(entrevista?.state).toBe("waiting");
+  });
+
+  it("no detiene el ciclo por la espera del currículum: la etapa es un monitor", () => {
+    const verdicts = build({
+      signals: makeSignals({ cvState: "pendiente" }),
+    });
+    const espera = verdicts.find(v => v.stageKey === "espera_cv");
+    expect(espera?.completed).toBe(true);
+    expect(espera?.justification).toContain("sin detener el ciclo");
+    // El monitor no se asienta como ejecutado: la confirmación debe alcanzar a
+    // emitirse cuando el documento llegue.
+    const resolved = new Set(
+      verdicts
+        .filter(v => v.state === "executed" && v.skipReason === null)
+        .map(v => v.stageKey)
+    );
+    expect(resolved.has("espera_cv")).toBe(false);
+  });
+
+  it("deja lista la espera del currículum para confirmar cuando el documento llega", () => {
+    const verdicts = build({
+      signals: makeSignals({ cvState: "recibido", executedStages: [] }),
+    });
+    const espera = verdicts.find(v => v.stageKey === "espera_cv");
+    expect(espera?.state).toBe("ready");
+  });
+
+  it("marca ejecutada la espera del currículum cuando la confirmación ya se emitió", () => {
+    const verdicts = build({
+      signals: makeSignals({
+        cvState: "recibido",
+        executedStages: ["espera_cv"],
+      }),
+    });
+    const espera = verdicts.find(v => v.stageKey === "espera_cv");
+    expect(espera?.state).toBe("executed");
+    expect(espera?.completed).toBe(true);
   });
 });
 
 describe("firstPendingStage", () => {
-  it("señala la primera etapa sin completar en el orden administrado", () => {
+  it("señala la conversación del perfil cuando las etapas previas no aplican", () => {
     const verdicts = build({
       source: makeSource({ turns: [] }),
       signals: makeSignals({ cvState: "sin_solicitud" }),
@@ -264,7 +362,7 @@ describe("firstPendingStage", () => {
     expect(firstPendingStage(verdicts)?.stageKey).toBe("retroalimentacion");
   });
 
-  it("señala la precalificación pendiente cuando la plaza declara preguntas y el CV no llegó", () => {
+  it("señala la precalificación pendiente cuando la plaza declara preguntas", () => {
     const verdicts = build({
       source: makeSource({ turns: [] }),
       signals: makeSignals({
@@ -284,11 +382,11 @@ describe("firstPendingStage", () => {
       }),
       signals: makeSignals({
         cvState: "recibido",
-        cierreEmitido: true,
         avisoContactoEmitido: true,
         screeningPhase: "concluido",
         screeningStatus: "concluido",
         freeConversationHeld: true,
+        executedStages: ["cierre", "espera_cv", "aviso_contacto"],
       }),
     });
     expect(firstPendingStage(verdicts)).toBeNull();
