@@ -167,11 +167,17 @@ export default function MstEir() {
     { enabled: Boolean(selectedProjectId) }
   );
   const methodology = trpc.mstEir.documents.useQuery();
-  // Diagnóstico del volumen: distingue un fallo de la aplicación de un volumen
-  // no persistente, que es la causa habitual de que el visor no abra un archivo.
-  const storageHealth = trpc.knowledge.storageHealth.useQuery(undefined, {
-    refetchOnWindowFocus: true,
-  });
+  // Diagnóstico del almacenamiento del proyecto elegido: comprueba cada
+  // documento contra el medio que lo custodia —el volumen del servidor o el
+  // Dropbox del proyecto—, de modo que el aviso nombre la causa verdadera y no
+  // declare ausentes los archivos que están en Dropbox.
+  const storageHealth = trpc.knowledge.storageHealth.useQuery(
+    { projectId: selectedProjectId ?? undefined },
+    {
+      enabled: Boolean(selectedProjectId),
+      refetchOnWindowFocus: true,
+    }
+  );
 
   const saveProject = trpc.knowledge.saveProject.useMutation({
     onSuccess: result => {
@@ -213,11 +219,19 @@ export default function MstEir() {
   });
   const uploadFile = trpc.knowledge.upload.useMutation({
     onSuccess: result => {
-      toast.success("Archivo cargado correctamente.");
+      // El destino se declara: la carga que aterriza en el volumen del servidor
+      // no está sincronizada con Dropbox y la operación debe saberlo al cargar,
+      // no al descubrir el archivo ausente días después.
+      toast.success(
+        result.destination.backend === "dropbox"
+          ? `Archivo custodiado en Dropbox · ${result.destination.path}`
+          : `Archivo guardado en el volumen del servidor · ${result.destination.path}`
+      );
       if (result.analysisMessage) toast.info(result.analysisMessage);
       setSelectedFileId(result.id);
       files.refetch();
       folders.refetch();
+      storageHealth.refetch();
     },
     onError: error =>
       toast.error(`No fue posible cargar el archivo: ${error.message}`),
@@ -756,24 +770,54 @@ export default function MstEir() {
           </div>
         </CardHeader>
         <CardContent className="p-4 sm:p-5">
+          {storageHealth.data ? (
+            <p className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-border/70 bg-muted/30 px-4 py-3 text-xs leading-5 text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+              <span className="font-semibold text-primary">
+                Custodia de los documentos:
+              </span>
+              {storageHealth.data.storageMode === "dropbox"
+                ? `Dropbox del proyecto · ${storageHealth.data.registered} documento(s) en la carpeta del proyecto`
+                : `volumen del servidor · ${storageHealth.data.directory} (sin custodia de Dropbox)`}
+              {storageHealth.data.custody === "mixta"
+                ? " · parte del catálogo sigue en el volumen: la migración del proyecto la completa"
+                : null}
+              {storageHealth.data.unverified
+                ? ` · ${storageHealth.data.unverified} documento(s) sin verificar en este alcance`
+                : null}
+            </p>
+          ) : null}
           {storageHealth.data && storageHealth.data.missing > 0 ? (
             <div className="mb-4 flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/40 dark:bg-amber-500/10">
               <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-300" />
               <div className="min-w-0 space-y-1">
                 <p className="text-sm font-semibold text-primary">
-                  {storageHealth.data.missing} de {storageHealth.data.registered}{" "}
-                  documentos no están en el volumen de almacenamiento
+                  {storageHealth.data.missing} de{" "}
+                  {storageHealth.data.verified} documentos verificados no están
+                  en su medio de custodia
                 </p>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  El registro existe en la base de datos, pero el archivo binario
-                  no se encuentra en{" "}
-                  <span className="font-mono">
-                    {storageHealth.data.directory}
-                  </span>
-                  , de modo que el visor no puede abrirlos. Verifique que
-                  KNOWLEDGE_STORAGE_DIR apunte a un volumen persistente en
-                  EasyPanel y vuelva a cargar los documentos afectados.
-                </p>
+                {storageHealth.data.missingInVolume > 0 ? (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {storageHealth.data.missingInVolume} no está(n) en el volumen
+                    del servidor ({" "}
+                    <span className="font-mono">
+                      {storageHealth.data.directory}
+                    </span>
+                    ). El registro existe en la base de datos, pero el archivo
+                    binario no se encuentra en la ruta configurada. Verifique que
+                    KNOWLEDGE_STORAGE_DIR apunte a un volumen persistente en
+                    EasyPanel y vuelva a cargar los documentos afectados.
+                  </p>
+                ) : null}
+                {storageHealth.data.missingInDropbox > 0 ? (
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    {storageHealth.data.missingInDropbox} no está(n) en la
+                    carpeta del proyecto en Dropbox. Verifique que la cuenta que
+                    respalda el proyecto siga conectada en «Mi cuenta» y que la
+                    carpeta del proyecto no se haya movido ni depurado; después
+                    vuelva a cargar los documentos afectados.
+                  </p>
+                ) : null}
                 {storageHealth.data.missingSample.length ? (
                   <p className="pt-1 text-xs text-muted-foreground">
                     Afectados, entre otros:{" "}
@@ -785,6 +829,20 @@ export default function MstEir() {
                   </p>
                 ) : null}
               </div>
+            </div>
+          ) : null}
+          {storageHealth.data &&
+          storageHealth.data.missing === 0 &&
+          storageHealth.data.custody === "volumen" ? (
+            <div className="mb-4 flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/40 dark:bg-amber-500/10">
+              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-300" />
+              <p className="text-xs leading-5 text-muted-foreground">
+                El proyecto custodia sus documentos en el volumen del servidor,
+                no en Dropbox: lo que se cargue aquí no se sincroniza con la
+                carpeta del proyecto. Active la custodia en Dropbox y ejecute la
+                migración desde «Custodia de proyectos» para que el RAG y la
+                carpeta del proyecto sean el mismo conjunto de archivos.
+              </p>
             </div>
           ) : null}
           {storageHealth.data && !storageHealth.data.directoryExists ? (

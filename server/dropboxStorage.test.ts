@@ -247,6 +247,47 @@ describe("backend de almacenamiento en Dropbox", () => {
     });
   });
 
+  it("lee el documento en su ruta anterior cuando el nombre visible cambió", async () => {
+    // La mejora del nombre no puede dejar ilegible lo ya custodiado: el
+    // documento escrito con el identificador interno se abre igual.
+    const { files, fetchImpl } = fakeDropbox();
+    const key = "3/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf";
+    const legacy = `/${DROPBOX_ROOT_FOLDER}/3/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf`;
+    files.set(legacy, {
+      id: "id-legacy",
+      content: Buffer.from("informe"),
+      modified: "2026-09-26T10:00:00Z",
+    });
+    const backend = new DropboxStorageBackend(async () => "access-token", {
+      fetchImpl,
+      pathResolver: async () => "Solar Guatemala/Informe anual.pdf",
+      legacyPathResolver: async () => "3/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf",
+    });
+
+    await expect(backend.read(key)).resolves.toEqual(Buffer.from("informe"));
+    await expect(backend.stat(key)).resolves.toMatchObject({ size: 7 });
+    await backend.remove(key);
+    expect(files.has(legacy)).toBe(false);
+  });
+
+  it("prefiere la ruta vigente y solo recurre a la anterior si falta", async () => {
+    const { files, calls, fetchImpl } = fakeDropbox();
+    const key = "3/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf";
+    const backend = new DropboxStorageBackend(async () => "access-token", {
+      fetchImpl,
+      pathResolver: async () => "Solar Guatemala/Informe anual.pdf",
+      legacyPathResolver: async () => "3/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf",
+    });
+    await backend.write(key, Buffer.from("vigente"));
+
+    await expect(backend.read(key)).resolves.toEqual(Buffer.from("vigente"));
+    expect(
+      files.has(`/${DROPBOX_ROOT_FOLDER}/Solar Guatemala/Informe anual.pdf`)
+    ).toBe(true);
+    const downloads = calls.filter(call => call.includes("files/download"));
+    expect(downloads).toHaveLength(1);
+  });
+
   it("borra sin fallar cuando el archivo no existe", async () => {
     const { fetchImpl } = fakeDropbox();
     const backend = new DropboxStorageBackend(async () => "access-token", {

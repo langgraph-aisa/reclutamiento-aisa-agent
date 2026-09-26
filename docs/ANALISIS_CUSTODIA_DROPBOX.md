@@ -64,11 +64,16 @@ Aplicaciones/JARVI RH/
 - **Los nombres visibles se sanean** —se retira la barra, los caracteres de
   control y los puntos suspensivos— pero **se conservan los acentos y los
   espacios**, porque el criterio es la navegación de la persona.
-- **El nombre del archivo conserva la clave de almacenamiento** (`<uuid>.<ext>`) y
-  no el nombre original. Dos documentos distintos pueden compartir nombre
-  original y sobrescribirse en silencio bajo `mode: overwrite`; la clave es
-  única por construcción y el nombre original permanece visible en la
-  aplicación. Es una decisión deliberada de integridad sobre estética.
+- **El nombre del archivo es el del catálogo** —el que la persona escribió al
+  cargarlo— con un ordinal determinista para los homónimos (`Informe (2).pdf`,
+  en el orden de carga). Hasta 2.0.240 el archivo llevaba la clave de
+  almacenamiento (`<uuid>.<ext>`) y el nombre original solo vivía en la
+  aplicación; el argumento era que dos documentos distintos pueden compartir
+  nombre original y sobrescribirse en silencio bajo `mode: overwrite`. El
+  ordinal resuelve ese riesgo sin renunciar a la correspondencia —lo que se ve
+  en Dropbox es lo que se ve en el RAG— y la ruta anterior se conserva como
+  respaldo de lectura (`legacyPathResolver`), de modo que los documentos ya
+  custodiados siguen abriéndose.
 - **La bandeja conversacional conserva además su copia local**, porque la ruta
   `/api/inbox/files/:key` entrega por lectura posicional del volumen; la custodia
   visible para la persona es el documento del RAG personal, que sí se escribe en

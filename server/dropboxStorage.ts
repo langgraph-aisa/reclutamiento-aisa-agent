@@ -84,6 +84,16 @@ function missingFileError() {
   );
 }
 
+/** La ausencia se reconoce por su código, no por el texto del mensaje. */
+function isMissingFile(error: unknown) {
+  return (
+    error != null &&
+    typeof error === "object" &&
+    "code" in error &&
+    String((error as { code?: unknown }).code) === "ENOENT"
+  );
+}
+
 /**
  * Error de la API de Dropbox con causa nombrada. Sin un código propio, un fallo
  * de autenticación, de cuota o de red se presentaría al operador con la misma
@@ -115,6 +125,13 @@ export class DropboxStorageBackend implements StorageBackend {
       fetchImpl?: FetchImpl;
       rootFolderName?: string;
       pathResolver?: DropboxPathResolver;
+      /**
+       * Ruta anterior de una clave —el nombre interno del archivo—, consultada
+       * solo cuando la ruta vigente no contiene el documento. Los archivos
+       * custodiados antes de que el nombre visible pasara a ser el del catálogo
+       * siguen abriéndose sin reescribir la carpeta del proyecto.
+       */
+      legacyPathResolver?: DropboxPathResolver;
     } = {}
   ) {}
 
@@ -126,10 +143,12 @@ export class DropboxStorageBackend implements StorageBackend {
     return this.options.rootFolderName ?? DROPBOX_ROOT_FOLDER;
   }
 
-  private async relativePath(key: string): Promise<string> {
-    const resolved = this.options.pathResolver
-      ? await this.options.pathResolver(key)
-      : key;
+  /** Ruta relativa normalizada que resuelve un resolutor para una clave. */
+  private async relativePathWith(
+    key: string,
+    resolver?: DropboxPathResolver
+  ): Promise<string> {
+    const resolved = resolver ? await resolver(key) : key;
     const raw = String(resolved ?? "").trim();
     if (!raw || raw.includes("..")) {
       throw new Error("La referencia de almacenamiento no es válida.");
@@ -142,6 +161,46 @@ export class DropboxStorageBackend implements StorageBackend {
       throw new Error("La referencia de almacenamiento no es válida.");
     }
     return segments.join("/");
+  }
+
+  private async relativePath(key: string): Promise<string> {
+    return this.relativePathWith(key, this.options.pathResolver);
+  }
+
+  /**
+   * Ruta absoluta anterior de una clave, o `null` si no hay resolutor
+   * histórico o la clave no se puede traducir. Un fallo aquí nunca decide el
+   * desenlace: la ruta vigente es la que manda.
+   */
+  private async legacyAbsolutePath(key: string): Promise<string | null> {
+    if (!this.options.legacyPathResolver) return null;
+    try {
+      return this.fullPath(
+        await this.relativePathWith(key, this.options.legacyPathResolver)
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Ejecuta una operación sobre la ruta vigente y, si el documento no está
+   * allí, sobre su ruta anterior. Sin esta compatibilidad, cambiar el nombre
+   * visible habría dejado ilegibles los documentos ya custodiados.
+   */
+  private async withLegacyFallback<T>(
+    key: string,
+    run: (absolutePath: string) => Promise<T>
+  ): Promise<T> {
+    const primary = this.fullPath(await this.relativePath(key));
+    try {
+      return await run(primary);
+    } catch (error) {
+      if (!isMissingFile(error)) throw error;
+      const legacy = await this.legacyAbsolutePath(key);
+      if (!legacy || legacy === primary) throw error;
+      return run(legacy);
+    }
   }
 
   private fullPath(...segments: string[]): string {
@@ -434,23 +493,24 @@ export class DropboxStorageBackend implements StorageBackend {
   }
 
   async read(key: string): Promise<Buffer> {
-    const absolute = this.fullPath(await this.relativePath(key));
-    const headers: Record<string, string> = {
-      ...(await this.authHeaders()),
-      "Dropbox-API-Arg": JSON.stringify({ path: absolute }),
-    };
-    const response = await this.fetchImpl()(
-      `${DROPBOX_CONTENT_BASE}/files/download`,
-      { method: "POST", headers }
-    );
-    if (!response.ok) {
-      throw dropboxApiError(
-        "la lectura",
-        response.status,
-        await DropboxStorageBackend.readError(response)
+    return this.withLegacyFallback(key, async absolute => {
+      const headers: Record<string, string> = {
+        ...(await this.authHeaders()),
+        "Dropbox-API-Arg": JSON.stringify({ path: absolute }),
+      };
+      const response = await this.fetchImpl()(
+        `${DROPBOX_CONTENT_BASE}/files/download`,
+        { method: "POST", headers }
       );
-    }
-    return Buffer.from(await response.arrayBuffer());
+      if (!response.ok) {
+        throw dropboxApiError(
+          "la lectura",
+          response.status,
+          await DropboxStorageBackend.readError(response)
+        );
+      }
+      return Buffer.from(await response.arrayBuffer());
+    });
   }
 
   /**
@@ -459,29 +519,30 @@ export class DropboxStorageBackend implements StorageBackend {
    * desplazamiento de audio y video sin descargar el binario completo.
    */
   async readRange(key: string, start: number, end: number): Promise<Buffer> {
-    const absolute = this.fullPath(await this.relativePath(key));
-    const headers: Record<string, string> = {
-      ...(await this.authHeaders()),
-      "Dropbox-API-Arg": JSON.stringify({ path: absolute }),
-      Range: `bytes=${start}-${end}`,
-    };
-    const response = await this.fetchImpl()(
-      `${DROPBOX_CONTENT_BASE}/files/download`,
-      { method: "POST", headers }
-    );
-    if (response.status === 416) return Buffer.alloc(0);
-    if (!response.ok) {
-      throw dropboxApiError(
-        "la lectura con rango",
-        response.status,
-        await DropboxStorageBackend.readError(response)
+    return this.withLegacyFallback(key, async absolute => {
+      const headers: Record<string, string> = {
+        ...(await this.authHeaders()),
+        "Dropbox-API-Arg": JSON.stringify({ path: absolute }),
+        Range: `bytes=${start}-${end}`,
+      };
+      const response = await this.fetchImpl()(
+        `${DROPBOX_CONTENT_BASE}/files/download`,
+        { method: "POST", headers }
       );
-    }
-    return Buffer.from(await response.arrayBuffer());
+      if (response.status === 416) return Buffer.alloc(0);
+      if (!response.ok) {
+        throw dropboxApiError(
+          "la lectura con rango",
+          response.status,
+          await DropboxStorageBackend.readError(response)
+        );
+      }
+      return Buffer.from(await response.arrayBuffer());
+    });
   }
 
-  async remove(key: string): Promise<void> {
-    const absolute = this.fullPath(await this.relativePath(key));
+  /** Borra una ruta visible sin fallar cuando ya no existe. */
+  private async deleteAbsolutePath(absolute: string): Promise<void> {
     const response = await this.fetchImpl()(
       `${DROPBOX_API_BASE}/files/delete_v2`,
       {
@@ -501,15 +562,28 @@ export class DropboxStorageBackend implements StorageBackend {
     );
   }
 
+  /**
+   * Borra el documento en su ruta vigente y en la anterior. Un borrado
+   * incompleto dejaría el archivo ocupando la carpeta del proyecto después de
+   * que la operación lo declarara eliminado.
+   */
+  async remove(key: string): Promise<void> {
+    const primary = this.fullPath(await this.relativePath(key));
+    const legacy = await this.legacyAbsolutePath(key);
+    await this.deleteAbsolutePath(primary);
+    if (legacy && legacy !== primary) await this.deleteAbsolutePath(legacy);
+  }
+
   async stat(key: string): Promise<StorageStat> {
-    const absolute = this.fullPath(await this.relativePath(key));
-    const metadata = await this.metadata(absolute);
-    if (!metadata || metadata[".tag"] === "folder") throw missingFileError();
-    return {
-      size: Number(metadata.size ?? 0),
-      mtime: metadata.server_modified
-        ? new Date(metadata.server_modified)
-        : new Date(0),
-    };
+    return this.withLegacyFallback(key, async absolute => {
+      const metadata = await this.metadata(absolute);
+      if (!metadata || metadata[".tag"] === "folder") throw missingFileError();
+      return {
+        size: Number(metadata.size ?? 0),
+        mtime: metadata.server_modified
+          ? new Date(metadata.server_modified)
+          : new Date(0),
+      };
+    });
   }
 }

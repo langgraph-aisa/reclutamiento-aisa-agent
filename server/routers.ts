@@ -160,6 +160,7 @@ import {
   analyzeKnowledgeDocument,
   buildStorageKey,
   countWords,
+  describeStorageDestination,
   extractKnowledgeText,
   getKnowledgeSettings,
   KNOWLEDGE_ANALYSIS_WORD_LIMIT,
@@ -2658,9 +2659,18 @@ export const appRouter = router({
       .query(async ({ input }) =>
         candidateKnowledgeTree(await requirePool(), input.applicationId)
       ),
-    storageHealth: roleProcedure.query(async () =>
-      candidateKnowledgeHealth(await getPool())
-    ),
+    storageHealth: roleProcedure
+      .input(
+        z
+          .object({ applicationId: z.number().int().positive().optional() })
+          .optional()
+      )
+      .query(async ({ input }) =>
+        candidateKnowledgeHealth(
+          await getPool(),
+          input?.applicationId ?? null
+        )
+      ),
     /** Vale del visor: las etiquetas `iframe`, `img`, `video` y `audio` las
      *  resuelve el navegador y no llevan cabeceras de sesión. */
     viewerToken: roleProcedure
@@ -4740,9 +4750,18 @@ export const appRouter = router({
      * con los binarios presentes en disco: un documento registrado cuyo archivo
      * no está en el volumen explica que el visor no pueda abrirlo.
      */
-    storageHealth: adminProcedure.query(async () => {
-      return knowledgeStorageHealth(await getPool());
-    }),
+    storageHealth: adminProcedure
+      .input(
+        z
+          .object({ projectId: z.number().int().positive().optional() })
+          .optional()
+      )
+      .query(async ({ input }) => {
+        return knowledgeStorageHealth(
+          await getPool(),
+          input?.projectId ?? null
+        );
+      }),
     /**
      * Acuña el vale del visor. El navegador solicita el archivo y el HTML de
      * vista previa fuera del ciclo de tRPC (etiquetas `iframe`, `img`, `video` y
@@ -4796,7 +4815,7 @@ export const appRouter = router({
     projects: adminProcedure.query(async () => {
       const pool = await requirePool();
       const result = await pool.query(
-        `SELECT p.id,p.name,p.summary,p.created_at,p.updated_at,
+        `SELECT p.id,p.name,p.summary,p.created_at,p.updated_at,p.storage_mode,
                 (SELECT count(*)::int FROM knowledge_project_positions link WHERE link.project_id=p.id) AS position_count,
                 (SELECT count(*)::int FROM knowledge_files f WHERE f.project_id=p.id) AS file_count,
                 (SELECT count(*)::int FROM knowledge_folders fo WHERE fo.project_id=p.id) AS folder_count
@@ -5225,6 +5244,11 @@ export const appRouter = router({
         }
         const storageKey = buildStorageKey(input.projectId, extension);
         await writeKnowledgeFile(storageKey, buffer);
+        // El destino se resuelve después de escribir —la fila del catálogo aún
+        // no existe— y se devuelve a la hoja: cargar un archivo en el volumen
+        // efímero del servidor no es lo mismo que custodiarlo en Dropbox, y la
+        // operación debe poder distinguirlo sin abrir el visor.
+        const destination = await describeStorageDestination(storageKey);
         // El nombre visible se reconstruye con la extensión final verificada.
         const finalFileName = reconstructTransportFileName(
           input.fileName,
@@ -5326,7 +5350,7 @@ export const appRouter = router({
           analysisMessage =
             "El análisis de IA aplica únicamente a documentos PDF y Word.";
         }
-        return { id: fileId, analysisMessage };
+        return { id: fileId, analysisMessage, destination };
       }),
     analyze: adminProcedure
       .input(z.object({ id: z.number().int().positive() }))

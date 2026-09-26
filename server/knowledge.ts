@@ -16,6 +16,13 @@ import { extractDocumentText } from "./documentExtraction";
 import { currentStorageBackend, type StorageStat } from "./storageBackend";
 import { currentPool } from "./db";
 import { storageBackendForKey } from "./dropboxProject";
+import {
+  dropboxBackendForProject,
+  projectDropboxPathResolver,
+  projectIdForKey,
+  projectStorageMode,
+  type ProjectStorageMode,
+} from "./dropboxProject";
 
 export const KNOWLEDGE_PROVIDER = "knowledge";
 export const KNOWLEDGE_SUMMARY_WORD_LIMIT = 66;
@@ -309,31 +316,59 @@ export async function knowledgeFileStats(
   return backend.stat(storageKey);
 }
 
+export type KnowledgeCustody = "dropbox" | "volumen" | "mixta";
+
 export type KnowledgeStorageHealth = {
   /** Directorio resuelto en este proceso, útil para comparar ambientes. */
   directory: string;
   directoryExists: boolean;
   writable: boolean;
+  /** Proyecto evaluado; `null` cuando el diagnóstico abarca todo el catálogo. */
+  projectId: number | null;
+  /** Modo declarado del proyecto evaluado. */
+  storageMode: ProjectStorageMode | null;
+  /** Medio que custodia los documentos del alcance. */
+  custody: KnowledgeCustody;
   registered: number;
+  /** Documentos comprobados contra el medio que los custodia. */
+  verified: number;
+  /** Documentos con custodia en Dropbox fuera de un alcance de proyecto. */
+  unverified: number;
   present: number;
   missing: number;
-  /** Muestra acotada de los documentos cuyo binario no está en el volumen. */
+  missingInDropbox: number;
+  missingInVolume: number;
+  /** Muestra acotada de los documentos cuyo binario no está en su medio. */
   missingSample: Array<{
     id: number;
     originalName: string;
     uploadedAt: string;
+    custody: "dropbox" | "volumen";
   }>;
 };
 
 /**
- * Comprueba si los documentos registrados en la base existen realmente en el
- * volumen. El catálogo y los binarios viven en dos sistemas distintos: una base
- * restaurada sin su volumen —o un volumen recreado en el despliegue— deja filas
- * válidas apuntando a archivos ausentes. Sin este diagnóstico, el operador solo
- * descubre el problema documento por documento al abrir el visor.
+ * Tope de comprobaciones contra Dropbox por consulta. Cada comprobación es una
+ * llamada a la API del proveedor: sin tope, un catálogo extenso convertiría un
+ * diagnóstico en una factura. El excedente se declara como no verificado.
+ */
+const DROPBOX_VERIFICATION_LIMIT = 200;
+
+/**
+ * Comprueba si los documentos registrados existen **en el medio que los
+ * custodia**.
+ *
+ * El catálogo y los binarios viven en dos sistemas distintos: el volumen del
+ * servidor o el Dropbox del proyecto. Verificar siempre el volumen —como se
+ * hacía hasta 2.0.240— declaraba ausentes todos los documentos de un proyecto
+ * custodiado en Dropbox y recomendaba revisar `KNOWLEDGE_STORAGE_DIR`, que en
+ * ese modo no participa. Ahora la custodia se resuelve por clave y la
+ * comprobación se hace contra el medio que corresponde, de modo que el informe
+ * nombre la causa y el remedio verdaderos.
  */
 export async function knowledgeStorageHealth(
-  pool: Pool | null
+  pool: Pool | null,
+  projectId: number | null = null
 ): Promise<KnowledgeStorageHealth> {
   const directory = knowledgeStorageDirectory();
   let directoryExists = false;
@@ -355,46 +390,128 @@ export async function knowledgeStorageHealth(
     directory,
     directoryExists,
     writable,
+    projectId,
+    storageMode: null,
+    custody: "volumen",
     registered: 0,
+    verified: 0,
+    unverified: 0,
     present: 0,
     missing: 0,
+    missingInDropbox: 0,
+    missingInVolume: 0,
     missingSample: [],
   };
   if (!pool) return health;
+
+  // Con un proyecto declarado, la custodia se resuelve una sola vez y se puede
+  // comprobar contra Dropbox; sin él, cada clave se clasifica pero no se
+  // verifica, porque el diagnóstico global no justifica una llamada por archivo.
+  const projectBackend =
+    projectId != null ? await dropboxBackendForProject(pool, projectId) : null;
+  health.storageMode =
+    projectId != null ? await projectStorageMode(pool, projectId) : null;
+
   const rows = await pool.query(
     `SELECT id,original_name,storage_key,uploaded_at
        FROM knowledge_files
+      ${projectId != null ? "WHERE project_id=$1" : ""}
       ORDER BY uploaded_at DESC
-      LIMIT 5000`
+      LIMIT 5000`,
+    projectId != null ? [projectId] : []
   );
-  health.registered = rows.rows.length;
-  for (const row of rows.rows as Array<{
+  const catalogue = rows.rows as Array<{
     id: number;
     original_name: string;
     storage_key: string;
     uploaded_at: Date | string;
-  }>) {
+  }>;
+  health.registered = catalogue.length;
+  health.custody = !catalogue.length
+    ? (projectBackend ? "dropbox" : "volumen")
+    : "volumen";
+  let dropboxRows = 0;
+  let volumeRows = 0;
+
+  for (const row of catalogue) {
+    const key = String(row.storage_key);
+    const custody: "dropbox" | "volumen" = projectBackend
+      ? "dropbox"
+      : "volumen";
+    if (custody === "dropbox") dropboxRows += 1;
+    else volumeRows += 1;
+
+    if (custody === "dropbox" && projectBackend == null) {
+      // Fuera de un alcance de proyecto no se verifica Dropbox.
+      health.unverified += 1;
+      continue;
+    }
+    if (health.verified >= 5000) continue;
+    if (custody === "dropbox" && health.verified >= DROPBOX_VERIFICATION_LIMIT) {
+      health.unverified += 1;
+      continue;
+    }
     let exists = false;
     try {
-      await fs.promises.access(knowledgeFilePath(String(row.storage_key)));
+      if (projectBackend) await projectBackend.stat(key);
+      else await fs.promises.access(knowledgeFilePath(key));
       exists = true;
     } catch {
       exists = false;
     }
+    health.verified += 1;
     if (exists) {
       health.present += 1;
       continue;
     }
     health.missing += 1;
+    if (custody === "dropbox") health.missingInDropbox += 1;
+    else health.missingInVolume += 1;
     if (health.missingSample.length < 10) {
       health.missingSample.push({
         id: Number(row.id),
         originalName: String(row.original_name),
         uploadedAt: new Date(row.uploaded_at).toISOString(),
+        custody,
       });
     }
   }
+
+  if (dropboxRows && volumeRows) health.custody = "mixta";
+  else if (dropboxRows) health.custody = "dropbox";
+  else health.custody = "volumen";
   return health;
+}
+
+export type StorageDestination = {
+  /** Medio que recibe el binario. */
+  backend: "dropbox" | "volumen";
+  /**
+   * Ruta que la persona puede comprobar: la carpeta del proyecto en Dropbox o
+   * la ruta del volumen del servidor.
+   */
+  path: string;
+};
+
+/**
+ * Destino efectivo de una clave. La carga lo declara para que la sincronización
+ * con Dropbox sea un hecho verificable y no una expectativa: sin esta lectura,
+ * un archivo que aterrizaba en el volumen efímero se presentaba como cargado
+ * sin decir dónde.
+ */
+export async function describeStorageDestination(
+  storageKey: string
+): Promise<StorageDestination> {
+  const pool = await currentPool();
+  if (pool) {
+    const backend = await storageBackendForKey(pool, storageKey);
+    const projectId = await projectIdForKey(pool, storageKey);
+    if (backend && projectId != null) {
+      const resolve = projectDropboxPathResolver(pool, projectId);
+      return { backend: "dropbox", path: await resolve(storageKey) };
+    }
+  }
+  return { backend: "volumen", path: knowledgeFilePath(storageKey) };
 }
 
 export function knowledgeFileSha256(buffer: Buffer) {

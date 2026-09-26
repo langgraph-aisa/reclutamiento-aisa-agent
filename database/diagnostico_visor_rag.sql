@@ -10,7 +10,52 @@
 -- o un volumen recreado o no montado en el despliegue, deja filas válidas
 -- apuntando a archivos que ya no existen en disco.
 --
+-- Desde 2.0.241 ese «segundo sistema» puede ser uno de dos: el volumen del
+-- servidor o el **Dropbox del proyecto**, y la comprobación se hace contra el
+-- medio que corresponde. El bloque D0 declara cuál rige para cada proyecto: sin
+-- él, un informe que solo mira el volumen declara ausentes los documentos que
+-- están en Dropbox.
+--
 -- Este archivo es de SOLO LECTURA: no crea, altera ni elimina nada.
+
+-- ---------------------------------------------------------------------------
+-- D0 · Custodia declarada por proyecto (ejecute este bloque primero)
+-- Esperado: `storage_mode` en `dropbox` para los proyectos de la nube y en
+-- `local` para los que siguen en el volumen. `documentos` es el catálogo; el
+-- censo de cada medio se confirma con el visor (bloque D1 con el modo a la
+-- vista) y con la carpeta del proyecto en Dropbox.
+-- ---------------------------------------------------------------------------
+SELECT p.id,
+       p.name                                   AS proyecto,
+       p.storage_mode,
+       (SELECT count(*)::int FROM knowledge_files f WHERE f.project_id = p.id)
+                                                AS documentos,
+       p.dropbox_connection_user_id,
+       u.email                                  AS cuenta_asignada,
+       owner.email                              AS cuenta_del_creador
+  FROM knowledge_projects p
+  LEFT JOIN users u     ON u.id = p.dropbox_connection_user_id
+  LEFT JOIN users owner ON owner.id = p.created_by_user_id
+ ORDER BY p.storage_mode DESC, lower(p.name);
+
+-- ---------------------------------------------------------------------------
+-- D0b · Documentos cuyo binario quedó en el otro medio
+-- Tras activar Dropbox, el catálogo puede mezclar documentos del volumen y de
+-- la nube hasta que se ejecute la migración del proyecto. `clave` empieza con
+-- el identificador del proyecto y el archivo se ubica en
+-- `<Nombre del proyecto>/<nombre del documento>` dentro de Dropbox.
+-- ---------------------------------------------------------------------------
+SELECT f.project_id,
+       p.storage_mode,
+       f.id,
+       f.original_name,
+       f.storage_key                            AS clave,
+       f.uploaded_at
+  FROM knowledge_files f
+  JOIN knowledge_projects p ON p.id = f.project_id
+ WHERE p.storage_mode = 'dropbox'
+   AND f.uploaded_at < p.updated_at
+ ORDER BY f.project_id, f.uploaded_at DESC;
 
 -- ---------------------------------------------------------------------------
 -- D1 · Inventario de documentos registrados

@@ -1,8 +1,21 @@
-# Gobierno de release JARVI RH 2.0.240
+# Gobierno de release JARVI RH 2.0.241
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.240**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.241**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.241
+El release **hace honesto el diagnóstico del almacenamiento y lleva el nombre del catálogo a Dropbox**. Sin migración.
+
+**El defecto observado.** El diagnóstico comprobaba siempre el volumen del servidor: en un proyecto custodiado en Dropbox, `knowledgeStorageHealth` no encontraba ningún binario —no están ahí— y declaraba ausentes todos sus documentos, recomendando revisar `KNOWLEDGE_STORAGE_DIR`, que en ese modo no participa. La hoja del RAG no declaraba la custodia vigente, de modo que el operador no podía distinguir una pérdida real de un informe que miraba el medio equivocado. El mismo error aparecía en el RAG personal del candidato.
+
+**La custodia.** `knowledgeStorageHealth` y `candidateKnowledgeHealth` resuelven el medio de cada documento por su clave —`storageBackendForKey` y `storageBackendForApplication`— y comprueban la existencia en ese medio: el volumen por sistema de archivos y Dropbox por sus metadatos. El informe declara `custody`, separa `missingInVolume` de `missingInDropbox`, distingue el alcance mixto —documentos que quedaron en el volumen tras activar Dropbox— y se acota al proyecto o al expediente abierto.
+
+**El nombre visible.** El resolutor de rutas deja de publicar el identificador interno como nombre de archivo: lo toma del catálogo (`projectVisibleNameForKey`, `candidateVisibleNameForKey`), con un ordinal determinista por orden de carga para los homónimos. La ruta anterior —el identificador— se consulta solo cuando la vigente no contiene el documento, de modo que la mejora no vuelve ilegible lo ya custodiado.
+
+**El destino declarado.** `describeStorageDestination` resuelve dónde quedó cada carga y `knowledge.upload` lo devuelve a la hoja: aterrizar en el volumen efímero del servidor no es custodiarlo en Dropbox, y la operación debe poder distinguirlo al cargar y no al descubrir el archivo ausente.
+
+**Sin migración.** Reutiliza la custodia, el catálogo y las tablas vigentes; el diagnóstico `database/diagnostico_visor_rag.sql` incorpora el censo de custodia por proyecto.
 
 ### Alcance candidato 2.0.240
 El release **acota el resumen de actividad y control ISO a las hojas de control**. Sin migración.
@@ -1169,4 +1182,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.240.md](PRUEBAS_CAJA_NEGRA_2.0.240.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.241.md](PRUEBAS_CAJA_NEGRA_2.0.241.md).

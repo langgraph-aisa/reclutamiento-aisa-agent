@@ -223,7 +223,9 @@ export function CandidateRagPanel({
     { applicationId },
     { refetchInterval: 15_000, refetchIntervalInBackground: false }
   );
-  const health = trpc.candidateKnowledge.storageHealth.useQuery();
+  const health = trpc.candidateKnowledge.storageHealth.useQuery({
+    applicationId,
+  });
 
   const openCycles = cycles.filter(cycle => cycle.status === "abierto");
   const files = useMemo<CandidateFile[]>(
@@ -580,10 +582,13 @@ export function CandidateRagPanel({
             <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
             <p className="text-[11px] leading-5 text-muted-foreground">
               {health.data.missing} de {health.data.registered} documento(s) no
-              están en el volumen de almacenamiento (
-              <span className="font-mono">{health.data.directory}</span>).
-              Verifique la persistencia del volumen en EasyPanel y vuelva a
-              cargarlos.
+              están en su medio de custodia.{" "}
+              {health.data.missingInVolume > 0
+                ? `El volumen del servidor (${health.data.directory}) no contiene el binario: verifique la persistencia del volumen en EasyPanel y vuelva a cargarlos.`
+                : null}{" "}
+              {health.data.missingInDropbox > 0
+                ? "La carpeta del expediente en Dropbox no contiene el archivo: verifique que la cuenta siga conectada y vuelva a cargarlo."
+                : null}
             </p>
           </div>
         ) : null}

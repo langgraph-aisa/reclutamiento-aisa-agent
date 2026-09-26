@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
   buildStorageKey,
   countWords,
@@ -10,12 +13,15 @@ import {
   KNOWLEDGE_MAX_SIZE_MB,
   KNOWLEDGE_SUMMARY_WORD_LIMIT,
   knowledgeFileKind,
+  knowledgeFilePath,
   knowledgeMimeType,
+  knowledgeStorageHealth,
   limitWords,
   renderCsvPreviewFromBuffer,
   renderPlainTextPreviewFromBuffer,
   renderSpreadsheetHtmlFromBuffer,
 } from "./knowledge";
+import { encryptAgentSecret, integrationSecretContext } from "./agentSettings";
 
 describe("project knowledge settings and limits", () => {
   it("compone la vista previa a partir de bytes para CSV y texto", () => {
@@ -114,5 +120,162 @@ describe("project knowledge settings and limits", () => {
     const settings = await getKnowledgeSettings(pool);
     expect(settings.allowedExtensions).toEqual(["pdf", "docx", "png"]);
     expect(settings.maxSizeMb).toBe(8);
+  });
+});
+
+/**
+ * Diagnóstico del almacenamiento.
+ *
+ * Hasta 2.0.240 el informe comprobaba siempre el volumen del servidor, de modo
+ * que un proyecto custodiado en Dropbox declaraba ausentes todos sus documentos
+ * y recomendaba revisar un directorio que no participaba en esa custodia.
+ */
+describe("knowledge storage health by custody", () => {
+  const storageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "jarvi-health-"));
+  const presentKey = "7/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf";
+  const missingKey = "7/bbbbbbbb-cccc-dddd-eeee-ffffffffffff.pdf";
+
+  beforeEach(() => {
+    vi.stubEnv(
+      "AGENT_SETTINGS_ENCRYPTION_KEY",
+      "test-key-material-with-more-than-thirty-two-characters"
+    );
+    vi.stubEnv("KNOWLEDGE_STORAGE_DIR", storageRoot);
+    fs.mkdirSync(path.dirname(knowledgeFilePath(presentKey)), {
+      recursive: true,
+    });
+    fs.writeFileSync(knowledgeFilePath(presentKey), "informe");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  const rows = () => [
+    {
+      id: 1,
+      original_name: "Informe presente.pdf",
+      storage_key: presentKey,
+      uploaded_at: new Date("2026-09-26T10:00:00Z"),
+    },
+    {
+      id: 2,
+      original_name: "Informe ausente.pdf",
+      storage_key: missingKey,
+      uploaded_at: new Date("2026-09-26T11:00:00Z"),
+    },
+  ];
+
+  function poolFor(mode: "local" | "dropbox") {
+    const settings =
+      mode === "dropbox"
+        ? [
+            {
+              setting_key: "oauth_client_id",
+              setting_value: "dropbox-app-key",
+              is_secret: false,
+            },
+            {
+              setting_key: "oauth_client_secret",
+              setting_value: encryptAgentSecret(
+                "secret",
+                integrationSecretContext("dropbox", "oauth_client_secret")
+              ),
+              is_secret: true,
+            },
+            {
+              setting_key: "refresh:9",
+              setting_value: encryptAgentSecret(
+                JSON.stringify({
+                  refreshToken: "refresh",
+                  email: "e@aisa.com.gt",
+                }),
+                integrationSecretContext("dropbox", "refresh:9")
+              ),
+              is_secret: true,
+            },
+          ]
+        : [];
+    const query = vi.fn(async (sql: string) => {
+      const text = String(sql).replace(/\s+/g, " ");
+      if (text.includes("row_number() OVER")) return { rows: [] };
+      if (text.includes("FROM knowledge_files")) return { rows: rows() };
+      if (text.includes("SELECT storage_mode FROM knowledge_projects"))
+        return { rows: [{ storage_mode: mode }] };
+      if (text.includes("FROM integration_settings")) return { rows: settings };
+      if (text.includes("SELECT dropbox_connection_user_id, created_by_user_id"))
+        return {
+          rows: [{ dropbox_connection_user_id: null, created_by_user_id: 9 }],
+        };
+      if (text.includes("SELECT created_by_user_id FROM knowledge_projects"))
+        return { rows: [{ created_by_user_id: 9 }] };
+      if (text.includes("SELECT name FROM knowledge_projects"))
+        return { rows: [{ name: "Solar Guatemala" }] };
+      if (text.includes("FROM knowledge_projects")) return { rows: [{ id: 7 }] };
+      return { rows: [] };
+    });
+    return { query } as never;
+  }
+
+  it("declara ausente solo lo que falta en el volumen cuando la custodia es local", async () => {
+    const health = await knowledgeStorageHealth(poolFor("local"), 7);
+    expect(health.custody).toBe("volumen");
+    expect(health.storageMode).toBe("local");
+    expect(health.registered).toBe(2);
+    expect(health.verified).toBe(2);
+    expect(health.present).toBe(1);
+    expect(health.missing).toBe(1);
+    expect(health.missingInVolume).toBe(1);
+    expect(health.missingInDropbox).toBe(0);
+    expect(health.missingSample[0]?.custody).toBe("volumen");
+    expect(health.missingSample[0]?.originalName).toBe("Informe ausente.pdf");
+  });
+
+  it("no declara ausentes los documentos custodiados en Dropbox", async () => {
+    // El canje del token y los metadatos se responden en memoria: el informe
+    // debe comprobar Dropbox, no el volumen del servidor.
+    const metadataCalls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/oauth2/token"))
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ access_token: "access" }),
+          } as unknown as Response;
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          path?: string;
+        };
+        metadataCalls.push(String(body.path));
+        if (String(body.path).endsWith("bbbbbbbb-cccc-dddd-eeee-ffffffffffff.pdf"))
+          return {
+            ok: false,
+            status: 409,
+            json: async () => ({ error_summary: "path/not_found/.." }),
+          } as unknown as Response;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ".tag": "file",
+            size: 123,
+            server_modified: "2026-09-26T10:00:00Z",
+          }),
+        } as unknown as Response;
+      }) as unknown as typeof fetch
+    );
+
+    const health = await knowledgeStorageHealth(poolFor("dropbox"), 7);
+    expect(health.custody).toBe("dropbox");
+    expect(health.storageMode).toBe("dropbox");
+    expect(health.missingInVolume).toBe(0);
+    expect(health.missingInDropbox).toBe(1);
+    expect(health.missing).toBe(1);
+    expect(health.present).toBe(1);
+    expect(health.missingSample[0]?.custody).toBe("dropbox");
+    expect(metadataCalls.some(call => call.includes("JARVI RH"))).toBe(true);
   });
 });

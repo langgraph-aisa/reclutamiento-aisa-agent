@@ -10,6 +10,7 @@ import {
   listProjectDropboxTree,
   migrateProjectStorage,
   projectDropboxConnectionUserId,
+  projectDropboxLegacyPathResolver,
   projectDropboxPathResolver,
   projectIdForApplication,
   projectIdForKey,
@@ -33,6 +34,9 @@ type Seed = {
   projectName?: string;
   positionTitle?: string;
   candidateName?: string | null;
+  /** Filas del catálogo que resuelven el nombre visible del archivo. */
+  projectCatalogue?: Array<{ original_name: string; ordinal: number }>;
+  candidateCatalogue?: Array<{ original_name: string; ordinal: number }>;
 };
 
 /**
@@ -122,6 +126,17 @@ function fakePool(seed: Seed = {}) {
           },
         ],
       };
+    // El nombre visible se resuelve por el ordinal del catálogo.
+    if (
+      text.includes("row_number() OVER") &&
+      text.includes("FROM knowledge_files")
+    )
+      return { rows: seed.projectCatalogue ?? [] };
+    if (
+      text.includes("row_number() OVER") &&
+      text.includes("FROM candidate_knowledge_files")
+    )
+      return { rows: seed.candidateCatalogue ?? [] };
     if (text.includes("FROM conversations")) return { rows: [{ application_id: 11 }] };
     if (text.includes("SELECT storage_key FROM knowledge_files"))
       return {
@@ -478,6 +493,52 @@ describe("jerarquía visible en Dropbox", () => {
     const resolver = projectDropboxPathResolver(pool, 7);
     await expect(
       resolver("7/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf")
+    ).resolves.toBe("Solar Guatemala/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf");
+  });
+
+  it("nombra el archivo del proyecto como el catálogo", async () => {
+    // Lo que la persona ve en Dropbox es lo que ve en el RAG: el nombre se toma
+    // del catálogo y no del identificador interno.
+    const { pool } = fakePool({
+      projectCatalogue: [{ original_name: "Informe anual.pdf", ordinal: 1 }],
+    });
+    const resolver = projectDropboxPathResolver(pool, 7);
+    await expect(
+      resolver("7/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf")
+    ).resolves.toBe("Solar Guatemala/Informe anual.pdf");
+  });
+
+  it("desambigua los homónimos con un ordinal determinista", async () => {
+    const { pool } = fakePool({
+      projectCatalogue: [{ original_name: "Informe anual.pdf", ordinal: 2 }],
+    });
+    const resolver = projectDropboxPathResolver(pool, 7);
+    await expect(
+      resolver("7/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf")
+    ).resolves.toBe("Solar Guatemala/Informe anual (2).pdf");
+  });
+
+  it("nombra el documento del candidato como su catálogo", async () => {
+    const { pool } = fakePool({
+      candidateCatalogue: [{ original_name: "CV José Ardón.pdf", ordinal: 1 }],
+    });
+    const resolver = projectDropboxPathResolver(pool, 7);
+    await expect(
+      resolver("applications/11/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf")
+    ).resolves.toBe(
+      "Solar Guatemala/Ingeniero Solar/José Ardón/CV José Ardón.pdf"
+    );
+  });
+
+  it("conserva la ruta anterior del identificador como respaldo", async () => {
+    // Los documentos custodiados antes de 2.0.241 siguen abriéndose por su ruta
+    // anterior: la mejora del nombre no vuelve ilegible lo ya guardado.
+    const { pool } = fakePool({
+      projectCatalogue: [{ original_name: "Informe anual.pdf", ordinal: 1 }],
+    });
+    const legacy = projectDropboxLegacyPathResolver(pool, 7);
+    await expect(
+      legacy("7/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf")
     ).resolves.toBe("Solar Guatemala/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.pdf");
   });
 

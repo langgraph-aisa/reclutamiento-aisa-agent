@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.240");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.240");
+    expect(APP_VERSION).toBe("2.0.241");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.241");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -627,6 +627,8 @@ describe("black-box release contract", () => {
     // (client/src/components/ApiChatPlatformCredentialCard.tsx).
     // 2.0.240: sin archivos nuevos: el alcance de la cajilla de actividad se
     // declara en `shared/activityAudit.ts` y se aplica en el componente vigente.
+    // 2.0.241: sin archivos nuevos: la custodia del diagnóstico se resuelve en
+    // los módulos de conocimiento y de Dropbox ya censados.
     expect(audit.files).toHaveLength(163);
     expect(audit.findings).toEqual([]);
     expect(publicCopyAudit.files).toHaveLength(163);
@@ -977,12 +979,64 @@ describe("black-box release contract", () => {
     expect(routes).toContain("permiso-denegado");
     expect(routes).toContain("prefersHtml");
     expect(routes).toContain("No fue posible abrir el documento");
-    // El diagnóstico compara el catálogo con el volumen y es de administración.
+    // El diagnóstico compara el catálogo con **el medio que custodia** cada
+    // documento: comprobar siempre el volumen declaraba ausentes los documentos
+    // custodiados en Dropbox, y es de administración.
     expect(knowledge).toContain("export async function knowledgeStorageHealth");
     expect(knowledge).toContain("missingSample");
-    expect(routers).toContain("storageHealth: adminProcedure.query");
+    expect(knowledge).toContain("missingInDropbox");
+    expect(knowledge).toContain("missingInVolume");
+    expect(routers).toContain("storageHealth: adminProcedure");
+    expect(routers).toContain("projectId: z.number().int().positive().optional()");
     expect(page).toContain("knowledge.storageHealth");
     expect(page).toContain("KNOWLEDGE_STORAGE_DIR");
+    expect(page).toContain("Custodia de los documentos");
+  });
+
+  it("nombra los documentos en Dropbox como el catálogo y declara el destino de cada carga", () => {
+    const project = fs.readFileSync(
+      path.resolve("server/dropboxProject.ts"),
+      "utf8"
+    );
+    const storage = fs.readFileSync(
+      path.resolve("server/dropboxStorage.ts"),
+      "utf8"
+    );
+    const knowledge = fs.readFileSync(
+      path.resolve("server/knowledge.ts"),
+      "utf8"
+    );
+    const routers = fs.readFileSync(path.resolve("server/routers.ts"), "utf8");
+    const candidate = fs.readFileSync(
+      path.resolve("server/candidateKnowledge.ts"),
+      "utf8"
+    );
+
+    // Lo que la persona ve en Dropbox es lo que ve en el RAG: el nombre visible
+    // se toma del catálogo, con ordinal determinista para los homónimos.
+    expect(project).toContain("projectVisibleNameForKey");
+    expect(project).toContain("candidateVisibleNameForKey");
+    expect(project).toContain("visibleDocumentName");
+    expect(project).toContain("row_number() OVER");
+
+    // La mejora del nombre no vuelve ilegible lo ya custodiado: la ruta anterior
+    // se consulta solo cuando la vigente no contiene el documento.
+    expect(project).toContain("projectDropboxLegacyPathResolver");
+    expect(storage).toContain("legacyPathResolver");
+    expect(storage).toContain("withLegacyFallback");
+
+    // La carga declara su destino: aterrizar en el volumen efímero no es
+    // custodiarlo en Dropbox, y la operación debe poder distinguirlo al cargar.
+    expect(knowledge).toContain(
+      "export async function describeStorageDestination"
+    );
+    expect(routers).toContain("describeStorageDestination(storageKey)");
+    expect(routers).toContain("return { id: fileId, analysisMessage, destination }");
+
+    // El RAG personal del candidato comparte la corrección: su diagnóstico
+    // también resuelve el medio que custodia cada documento.
+    expect(candidate).toContain("storageBackendForApplication");
+    expect(candidate).toContain("missingInDropbox");
   });
 
   it("operates multiple forms and announcements per position with spreadsheet import", () => {
@@ -1378,7 +1432,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.240");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.241");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1388,17 +1442,18 @@ describe("black-box release contract", () => {
     // lugar y un techo propio.
     //
     // El techo del registro se elevó de 2600 a 3500 y después a 3600, 3700,
-    // 3800, 3900, 4000, 4100, 4200, 4300, 4400, 4500, 4700, 4900, 5100, 5300
-    // y 5600:
+    // 3800, 3900, 4000, 4100, 4200, 4300, 4400, 4500, 4700, 4900, 5100, 5300,
+    // 5600 y 5800:
     // la entrega acumulada de resúmenes de commit ya no cabía y comprimir las
     // entradas antiguas estaba borrando la trazabilidad que el registro existe
     // para conservar. Un techo que obliga a destruir el registro no protege nada.
     expect(proseWordCount).toBeGreaterThanOrEqual(2_400);
     expect(proseWordCount).toBeLessThanOrEqual(2_900);
-    expect(historyWordCount).toBeLessThanOrEqual(5_600);
+    expect(historyWordCount).toBeLessThanOrEqual(5_800);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.241");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.240");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.239");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.238");
@@ -1961,7 +2016,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.240");
+    expect(governance).toContain("Alcance candidato 2.0.241");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2243,7 +2298,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.240");
+    expect(governance).toContain("Alcance candidato 2.0.241");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

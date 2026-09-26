@@ -25,6 +25,7 @@ import {
   reconstructTransportFileName,
   type DecodedTransport,
 } from "./base64Transport";
+import { storageBackendForApplication } from "./dropboxProject";
 
 /**
  * RAG personal del candidato.
@@ -846,18 +847,31 @@ export async function loadCandidateKnowledgeDocuments(
 export type CandidateKnowledgeHealth = {
   directory: string;
   directoryExists: boolean;
+  /** Medio que custodia los documentos del alcance. */
+  custody: "dropbox" | "volumen" | "mixta";
   registered: number;
   present: number;
   missing: number;
-  missingSample: Array<{ id: number; originalName: string }>;
+  missingInDropbox: number;
+  missingInVolume: number;
+  missingSample: Array<{
+    id: number;
+    originalName: string;
+    custody: "dropbox" | "volumen";
+  }>;
 };
 
 /**
- * Diagnóstico del volumen para los documentos del candidato. Comparte la causa
- * con el RAG de proyectos: el catálogo vive en la base y los binarios en disco.
+ * Diagnóstico del almacenamiento para los documentos del candidato.
+ *
+ * Comparte la causa con el RAG de proyectos —el catálogo vive en la base y los
+ * binarios en un medio—, y desde 2.0.241 comparte también la corrección: cada
+ * documento se comprueba contra el medio que lo custodia. Mirar siempre el
+ * volumen declaraba ausentes los expedientes custodiados en Dropbox.
  */
 export async function candidateKnowledgeHealth(
-  pool: Pool | null
+  pool: Pool | null,
+  applicationId: number | null = null
 ): Promise<CandidateKnowledgeHealth> {
   const { knowledgeFilePath, knowledgeStorageDirectory } = await import(
     "./knowledge"
@@ -873,25 +887,45 @@ export async function candidateKnowledgeHealth(
   const health: CandidateKnowledgeHealth = {
     directory,
     directoryExists,
+    custody: "volumen",
     registered: 0,
     present: 0,
     missing: 0,
+    missingInDropbox: 0,
+    missingInVolume: 0,
     missingSample: [],
   };
   if (!pool) return health;
   const rows = await pool.query(
-    `SELECT id,original_name,storage_key FROM candidate_knowledge_files
-      ORDER BY uploaded_at DESC LIMIT 5000`
+    `SELECT id,application_id,original_name,storage_key
+       FROM candidate_knowledge_files
+      ${applicationId != null ? "WHERE application_id=$1" : ""}
+      ORDER BY uploaded_at DESC LIMIT 5000`,
+    applicationId != null ? [applicationId] : []
   );
-  health.registered = rows.rows.length;
-  for (const row of rows.rows as Array<{
+  const catalogue = rows.rows as Array<{
     id: number;
+    application_id: number;
     original_name: string;
     storage_key: string;
-  }>) {
+  }>;
+  health.registered = catalogue.length;
+  let dropboxRows = 0;
+  let volumeRows = 0;
+
+  for (const row of catalogue) {
+    const key = String(row.storage_key);
+    const backend = await storageBackendForApplication(
+      pool,
+      Number(row.application_id)
+    );
+    const custody: "dropbox" | "volumen" = backend ? "dropbox" : "volumen";
+    if (custody === "dropbox") dropboxRows += 1;
+    else volumeRows += 1;
     let exists = false;
     try {
-      await fs.promises.access(knowledgeFilePath(String(row.storage_key)));
+      if (backend) await backend.stat(key);
+      else await fs.promises.access(knowledgeFilePath(key));
       exists = true;
     } catch {
       exists = false;
@@ -901,12 +935,17 @@ export async function candidateKnowledgeHealth(
       continue;
     }
     health.missing += 1;
+    if (custody === "dropbox") health.missingInDropbox += 1;
+    else health.missingInVolume += 1;
     if (health.missingSample.length < 10) {
       health.missingSample.push({
         id: Number(row.id),
         originalName: String(row.original_name),
+        custody,
       });
     }
   }
+  if (dropboxRows && volumeRows) health.custody = "mixta";
+  else if (dropboxRows) health.custody = "dropbox";
   return health;
 }

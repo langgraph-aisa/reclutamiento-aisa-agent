@@ -190,6 +190,71 @@ async function projectName(pool: Pool, projectId: number): Promise<string | null
   return result.rows[0] ? sanitizeDropboxSegment(String(result.rows[0].name)) : null;
 }
 
+/**
+ * Compone el nombre visible de un documento a partir del nombre del catálogo.
+ *
+ * El ordinal desambigua los homónimos del mismo expediente —`Informe (2).pdf`—
+ * en el orden de carga, de modo que el nombre sea determinista, reconocible y
+ * sin sobrescrituras, y que la correspondencia entre lo que la persona ve en
+ * Dropbox y lo que ve en el RAG siga siendo verificable.
+ */
+function visibleDocumentName(originalName: string, ordinal: number) {
+  const position = Number.isFinite(ordinal) && ordinal > 1 ? Math.trunc(ordinal) : 1;
+  if (position <= 1) return sanitizeDropboxSegment(originalName);
+  const dot = originalName.lastIndexOf(".");
+  const base = dot > 0 ? originalName.slice(0, dot) : originalName;
+  const extension = dot > 0 ? originalName.slice(dot) : "";
+  return sanitizeDropboxSegment(`${base} (${position})${extension}`);
+}
+
+/**
+ * Nombre visible de un documento del RAG de proyectos, tomado del catálogo.
+ * `null` cuando la clave no tiene fila —una carga en curso, por ejemplo—, en
+ * cuyo caso el llamador conserva el nombre interno.
+ */
+async function projectVisibleNameForKey(
+  pool: Pool,
+  projectId: number,
+  key: string
+): Promise<string | null> {
+  const result = await pool.query<{ original_name: string; ordinal: number }>(
+    `SELECT ranked.original_name, ranked.ordinal
+       FROM (SELECT original_name,
+                    storage_key,
+                    row_number() OVER (
+                      PARTITION BY lower(original_name) ORDER BY uploaded_at, id
+                    )::int AS ordinal
+               FROM knowledge_files
+              WHERE project_id=$1) ranked
+      WHERE ranked.storage_key=$2
+      LIMIT 1`,
+    [projectId, key]
+  );
+  const row = result.rows[0];
+  return row ? visibleDocumentName(String(row.original_name), Number(row.ordinal)) : null;
+}
+
+/** Nombre visible de un documento del RAG del candidato, tomado de su catálogo. */
+async function candidateVisibleNameForKey(
+  pool: Pool,
+  key: string
+): Promise<string | null> {
+  const result = await pool.query<{ original_name: string; ordinal: number }>(
+    `SELECT ranked.original_name, ranked.ordinal
+       FROM (SELECT original_name,
+                    storage_key,
+                    row_number() OVER (
+                      PARTITION BY lower(original_name) ORDER BY uploaded_at, id
+                    )::int AS ordinal
+               FROM candidate_knowledge_files) ranked
+      WHERE ranked.storage_key=$1
+      LIMIT 1`,
+    [key]
+  );
+  const row = result.rows[0];
+  return row ? visibleDocumentName(String(row.original_name), Number(row.ordinal)) : null;
+}
+
 async function applicationIdForConversation(
   pool: Pool,
   conversationId: number
@@ -246,8 +311,9 @@ export function projectDropboxPathResolver(
     const candidate = CANDIDATE_KEY.exec(key);
     if (candidate) {
       const folder = await candidateFolder(Number(candidate[1]));
+      const visible = await candidateVisibleNameForKey(pool, key);
       return folder
-        ? `${folder}/${candidate[2]}`
+        ? `${folder}/${visible ?? candidate[2]}`
         : `${await projectFolder()}/${key}`;
     }
     const inbox = INBOX_KEY.exec(key);
@@ -261,8 +327,39 @@ export function projectDropboxPathResolver(
       const base = folder ?? (await projectFolder());
       return `${base}/Bandeja/${inbox[1]}-${inbox[2]}/${inbox[3]}`;
     }
-    const relative = key.replace(/^\d+\//, "");
-    return `${await projectFolder()}/${relative}`;
+    const visible = await projectVisibleNameForKey(pool, projectId, key);
+    return `${await projectFolder()}/${visible ?? key.replace(/^\d+\//, "")}`;
+  };
+}
+
+/**
+ * Resolutor de la **ruta anterior**: el nombre interno del archivo —su
+ * identificador— en lugar del nombre del catálogo. Es la ruta con la que se
+ * custodiaron los documentos antes de 2.0.241 y se consulta solo cuando la ruta
+ * vigente no contiene el documento, de modo que la mejora del nombre no vuelva
+ * ilegible lo ya guardado.
+ */
+export function projectDropboxLegacyPathResolver(
+  pool: Pool,
+  projectId: number
+): DropboxPathResolver {
+  let project: string | null = null;
+  const projectFolder = async (): Promise<string> => {
+    if (project == null) {
+      project = (await projectName(pool, projectId)) ?? `Proyecto ${projectId}`;
+    }
+    return project;
+  };
+  return async (key: string) => {
+    const candidate = CANDIDATE_KEY.exec(key);
+    if (candidate) {
+      const applicationId = Number(candidate[1]);
+      const names = await folderNamesForApplication(pool, applicationId);
+      return names
+        ? `${names.project}/${names.position}/${names.candidate}/${candidate[2]}`
+        : `${await projectFolder()}/${key}`;
+    }
+    return `${await projectFolder()}/${key.replace(/^\d+\//, "")}`;
   };
 }
 
@@ -395,6 +492,7 @@ export async function buildProjectDropboxBackend(
   };
   return new DropboxStorageBackend(tokenSource, {
     pathResolver: projectDropboxPathResolver(pool, projectId),
+    legacyPathResolver: projectDropboxLegacyPathResolver(pool, projectId),
   });
 }
 
