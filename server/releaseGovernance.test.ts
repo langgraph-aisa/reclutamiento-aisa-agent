@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.239");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.239");
+    expect(APP_VERSION).toBe("2.0.240");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.240");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -625,6 +625,8 @@ describe("black-box release contract", () => {
     // 2.0.239: +1 por la tarjeta de la credencial de plataforma de ApiChat, que
     // se administra desde la hoja de auditoría del canal
     // (client/src/components/ApiChatPlatformCredentialCard.tsx).
+    // 2.0.240: sin archivos nuevos: el alcance de la cajilla de actividad se
+    // declara en `shared/activityAudit.ts` y se aplica en el componente vigente.
     expect(audit.files).toHaveLength(163);
     expect(audit.findings).toEqual([]);
     expect(publicCopyAudit.files).toHaveLength(163);
@@ -1281,7 +1283,7 @@ describe("black-box release contract", () => {
     expect(conversation).toContain("exclusiva de la persona en estudio");
   });
 
-  it("closes every administrative sheet with the activity summary", () => {
+  it("closes the declared administrative sheets with the activity summary", () => {
     const layout = fs.readFileSync(
       path.resolve("client/src/components/DashboardLayout.tsx"),
       "utf8"
@@ -1290,9 +1292,13 @@ describe("black-box release contract", () => {
       path.resolve("client/src/components/ActivityAuditBar.tsx"),
       "utf8"
     );
+    const scope = fs.readFileSync(
+      path.resolve("shared/activityAudit.ts"),
+      "utf8"
+    );
 
-    // El aviso se monta una sola vez en el layout, de modo que aparece en todas
-    // las hojas administrativas por construcción, no por repetición.
+    // El aviso se monta una sola vez en el layout, de modo que aparece en las
+    // hojas declaradas por construcción, no por repetición.
     expect(layout.match(/<ActivityAuditBar \/>/g)).toHaveLength(1);
 
     // Cierra la hoja: va después del contenido y separa por arriba.
@@ -1307,6 +1313,45 @@ describe("black-box release contract", () => {
     expect(bar).toContain("page_opened");
     expect(bar).toContain("activity.overview");
     expect(bar).toContain("Ver control ISO");
+
+    // El alcance se declara en un solo lugar y el registro de la apertura de la
+    // vista no se condiciona: retirar la cajilla no retira la bitácora.
+    const allowed = scope.slice(
+      scope.indexOf("export const ACTIVITY_SUMMARY_PATHS"),
+      scope.indexOf("export function showsActivitySummary")
+    );
+    for (const route of [
+      "/admin/security-roles",
+      "/admin/users",
+      "/admin/config",
+      "/admin/apichat-audit",
+      "/admin/agent-evaluator",
+      "/admin/governance",
+      "/admin/activity",
+      "/admin/project-storage",
+      "/admin/reports",
+    ]) {
+      expect(allowed).toContain(`"${route}"`);
+    }
+    for (const route of [
+      "/admin",
+      "/admin/inbox",
+      "/admin/jobs",
+      "/admin/profiles",
+      "/admin/assessments",
+      "/admin/candidates",
+      "/admin/human-review",
+      "/admin/mst-eir",
+      "/admin/agent-stages",
+      "/admin/account",
+    ]) {
+      expect(allowed).not.toContain(`"${route}"`);
+    }
+    expect(bar).toContain("showsActivitySummary(pagePath)");
+    expect(bar).toContain("enabled: visible");
+    expect(bar.indexOf('eventType: "page_opened"')).toBeLessThan(
+      bar.indexOf("if (!visible) return null;")
+    );
   });
 
   it("publishes the academic-commercial README with auditable proportions and references", () => {
@@ -1333,7 +1378,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.239");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.240");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1354,6 +1399,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.240");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.239");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.238");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.237");
@@ -1915,7 +1961,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.239");
+    expect(governance).toContain("Alcance candidato 2.0.240");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2197,7 +2243,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.239");
+    expect(governance).toContain("Alcance candidato 2.0.240");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

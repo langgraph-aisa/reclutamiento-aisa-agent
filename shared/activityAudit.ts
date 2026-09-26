@@ -48,6 +48,35 @@ export function adminPageLabel(path: string) {
   return ADMIN_PAGE_LABELS[normalized] ?? "Administración";
 }
 
+/**
+ * Hojas donde se dibuja el resumen de actividad y control ISO.
+ *
+ * La cajilla informa lo último registrado en la ruta y abre el control ISO: se
+ * conserva donde el registro se administra, se audita o se configura, y se
+ * retira de las hojas de operación —bandeja, plazas, perfiles, candidatos,
+ * revisión humana, pruebas y «Mi cuenta»—, donde competía con el trabajo y
+ * repetía en cada vista una lectura que no cambia la decisión. La apertura de la
+ * vista se sigue registrando en todas: la cajilla es la lectura, no la bitácora.
+ */
+export const ACTIVITY_SUMMARY_PATHS = [
+  "/admin/security-roles",
+  "/admin/users",
+  "/admin/config",
+  "/admin/apichat-audit",
+  "/admin/agent-evaluator",
+  "/admin/governance",
+  "/admin/activity",
+  "/admin/project-storage",
+  "/admin/reports",
+] as const;
+
+/** Resuelve si la ruta administrada dibuja el resumen de actividad. */
+export function showsActivitySummary(path: string) {
+  return (ACTIVITY_SUMMARY_PATHS as readonly string[]).includes(
+    normalizeAdminPath(path)
+  );
+}
+
 export function countWords(value: string) {
   return value.trim().split(/\s+/).filter(Boolean).length;
 }

@@ -458,8 +458,9 @@ function DashboardLayoutContent({
         )}
         <main className="min-w-0 flex-1 overflow-x-clip p-4">
           {children}
-          {/* El resumen de actividad y control ISO cierra cada hoja: informa lo
-              último registrado en la ruta sin desplazar el contenido de trabajo. */}
+          {/* El resumen de actividad y control ISO cierra las hojas declaradas
+              en `ACTIVITY_SUMMARY_PATHS`: informa lo último registrado en la
+              ruta sin desplazar el contenido de trabajo. */}
           <ActivityAuditBar />
         </main>
       </SidebarInset>

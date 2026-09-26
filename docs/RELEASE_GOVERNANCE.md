@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.239
+# Gobierno de release JARVI RH 2.0.240
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.239**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.240**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.240
+El release **acota el resumen de actividad y control ISO a las hojas de control**. Sin migración.
+
+**El defecto observado.** La cajilla se montaba una sola vez en el layout y por eso aparecía, por construcción, en **todas** las hojas administrativas. En las de operación —bandeja, plazas, perfiles, candidatos, revisión humana, pruebas psicométricas, etapas de la IA y «Mi cuenta»— repetía en cada vista una lectura que no cambia la decisión y competía con el trabajo, además de sostener un sondeo cada cinco segundos en cada ruta.
+
+**El alcance.** `ACTIVITY_SUMMARY_PATHS` declara, en `shared/activityAudit.ts`, las nueve hojas donde el registro se administra, se audita o se configura —Seguridad y roles, Usuarios, Configuración, Auditoría de ApiChat, Agente de IA LangGraph, Gobierno, Actividad y control ISO, Custodia de proyectos e Informes—, y `showsActivitySummary` lo resuelve sobre la ruta normalizada, de modo que una sola declaración gobierna las dos superficies.
+
+**La bitácora se conserva.** El componente sigue registrando la apertura de la vista —`page_opened` con su correlación por sesión— en **todas** las rutas: se retira la lectura, no el asiento. En las hojas fuera del alcance la consulta del resumen tampoco se ejecuta.
+
+**Sin migración.** Reutiliza la bitácora, el layout y las tablas vigentes.
 
 ### Alcance candidato 2.0.239
 El release **administra la credencial de plataforma de ApiChat en la hoja que diagnostica el canal y previsualiza Excel por ruta**. Sin migración.
@@ -1158,4 +1169,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.239.md](PRUEBAS_CAJA_NEGRA_2.0.239.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.240.md](PRUEBAS_CAJA_NEGRA_2.0.240.md).

@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import {
   ACTIVITY_OUTCOME_LABELS,
   normalizeAdminPath,
+  showsActivitySummary,
   type ActivityOutcome,
 } from "@shared/activityAudit";
 import { Activity, ArrowRight, Clock3, ShieldCheck } from "lucide-react";
@@ -33,9 +34,14 @@ export function activityOutcomeClass(outcome: ActivityOutcome) {
 export function ActivityAuditBar() {
   const [location] = useLocation();
   const pagePath = normalizeAdminPath(location);
+  // La cajilla se dibuja solo en las hojas declaradas, de modo que su consulta
+  // tampoco se repite en las hojas de operación. La apertura de la vista se
+  // registra siempre: la cajilla es la lectura, no la bitácora.
+  const visible = showsActivitySummary(pagePath);
   const overview = trpc.activity.overview.useQuery(
     { pagePath, limit: 1 },
     {
+      enabled: visible,
       refetchInterval: 5_000,
       refetchIntervalInBackground: false,
       retry: false,
@@ -58,6 +64,8 @@ export function ActivityAuditBar() {
       { onError: () => recorded.current.delete(correlationId) }
     );
   }, [correlationId, pagePath, record]);
+
+  if (!visible) return null;
 
   const event = overview.data?.events[0];
   if (!event) return null;
