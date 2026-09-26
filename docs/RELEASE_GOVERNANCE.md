@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.236
+# Gobierno de release JARVI RH 2.0.237
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.236**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.237**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.237
+El release **espeja la carpeta real del expediente en el RAG del candidato**. Sin migración.
+
+**El defecto observado.** El RAG personal resolvía por **clave de catálogo**: su árbol mostraba únicamente los documentos registrados en `candidate_knowledge_files`. Los archivos que están en la carpeta del candidato —el currículum con su nombre original, los anexos y lo que el equipo deposite directamente— no aparecían, de modo que la ficha no reflejaba la carpeta y el visor no podía abrirlos.
+
+**La lectura.** `listApplicationDropboxTree` resuelve la carpeta visible del expediente —`Proyecto/Plaza/Candidato`— con `storageBackendForApplication` y publica sus hijos inmediatos. El navegador del árbol se extrae a `client/src/components/DropboxTreeBrowser.tsx`, de modo que el RAG del proyecto y el del candidato compartan navegación, migas de pan y previsualización sin divergir.
+
+**El visor.** El vale por ruta se acuña en `candidateKnowledge.dropboxFileToken` y entrega el archivo con la ruta `/api/dropbox/view`, con las cabeceras del visor y lectura por rangos: PDF, imagen, audio y video se previsualizan en la ficha.
+
+**Sin migración.** Reutiliza el backend, el visor y las tablas vigentes.
 
 ### Alcance candidato 2.0.236
 El release **espeja el árbol real de Dropbox en el RAG del proyecto**. Sin migración.
@@ -1123,4 +1134,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.236.md](PRUEBAS_CAJA_NEGRA_2.0.236.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.237.md](PRUEBAS_CAJA_NEGRA_2.0.237.md).

@@ -6,6 +6,7 @@ import {
   assignProjectDropboxConnection,
   dropboxBackendForProject,
   ensureApplicationDropboxFolder,
+  listApplicationDropboxTree,
   listProjectDropboxTree,
   migrateProjectStorage,
   projectDropboxConnectionUserId,
@@ -293,6 +294,57 @@ describe("resolución del proyecto y del backend de Dropbox", () => {
       type: "file",
       name: "ESTUDIO DE VIABILIDAD.pdf",
       size: 271_000,
+    });
+  });
+
+  it("lista el árbol de la carpeta del expediente para el RAG del candidato", async () => {
+    const { pool } = fakePool({ mode: "dropbox", candidateName: "José Ardón" });
+    vi.stubGlobal(
+      "fetch",
+      (async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/oauth2/token"))
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ access_token: "access" }),
+          } as unknown as Response;
+        if (url.endsWith("/list_folder"))
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              entries: [
+                {
+                  ".tag": "file",
+                  name: "GUSTAVO MARTÍNEZ FUENTES.pdf",
+                  path_display:
+                    "/JARVI RH/Solar Guatemala/Ingeniero Solar/José Ardón/GUSTAVO MARTÍNEZ FUENTES.pdf",
+                  size: 122_000,
+                  server_modified: "2026-09-23T10:18:00Z",
+                },
+              ],
+            }),
+          } as unknown as Response;
+        return {
+          ok: false,
+          status: 404,
+          json: async () => ({}),
+        } as unknown as Response;
+      }) as unknown as typeof fetch
+    );
+
+    const tree = await listApplicationDropboxTree(pool, 11);
+
+    expect(tree.available).toBe(true);
+    expect(tree.projectId).toBe(7);
+    expect(tree.root).toBe("Solar Guatemala/Ingeniero Solar/José Ardón");
+    expect(tree.path).toBe("Solar Guatemala/Ingeniero Solar/José Ardón");
+    expect(tree.entries).toHaveLength(1);
+    expect(tree.entries[0]).toMatchObject({
+      name: "GUSTAVO MARTÍNEZ FUENTES.pdf",
+      type: "file",
+      size: 122_000,
     });
   });
 

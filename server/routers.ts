@@ -135,6 +135,8 @@ import {
   assignProjectDropboxConnection,
   migrateProjectStorage,
   listProjectDropboxTree,
+  listApplicationDropboxTree,
+  projectIdForApplication,
   projectStorageProfile,
   setProjectStorageMode,
 } from "./dropboxProject";
@@ -2676,6 +2678,59 @@ export const appRouter = router({
           });
         }
         return { token: createViewerToken("candidate", input.fileId) };
+      }),
+    /** Árbol real de la carpeta del expediente en Dropbox: muestra la misma
+     *  estructura que el usuario ve en su carpeta, con nombres originales. */
+    dropboxTree: roleProcedure
+      .input(
+        z.object({
+          applicationId: z.number().int().positive(),
+          path: z.string().max(400).optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        try {
+          return await listApplicationDropboxTree(
+            pool,
+            input.applicationId,
+            input.path ?? ""
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible leer la carpeta del candidato en Dropbox."
+            ),
+          });
+        }
+      }),
+    /** Vale del visor por ruta del expediente, con el alcance de Dropbox. */
+    dropboxFileToken: roleProcedure
+      .input(
+        z.object({
+          applicationId: z.number().int().positive(),
+          path: z.string().min(1).max(400),
+        })
+      )
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        const projectId = await projectIdForApplication(
+          pool,
+          input.applicationId
+        );
+        if (projectId == null) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "La postulación no tiene proyecto vinculado.",
+          });
+        }
+        return {
+          token: createViewerToken("dropbox", `${projectId}:${input.path}`),
+          projectId,
+          path: input.path,
+        };
       }),
     upload: roleProcedure
       .input(

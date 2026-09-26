@@ -266,6 +266,44 @@ export function projectDropboxPathResolver(
   };
 }
 
+/**
+ * Lista el árbol visible de la carpeta del expediente de una postulación tal
+ * como está en Dropbox, o una subcarpeta suya. Es la lectura que el RAG del
+ * candidato necesita para mostrar la misma estructura que su carpeta.
+ */
+export async function listApplicationDropboxTree(
+  pool: Pool,
+  applicationId: number,
+  relativePath = ""
+): Promise<{
+  available: boolean;
+  projectId: number | null;
+  root: string | null;
+  path: string;
+  entries: DropboxListEntry[];
+}> {
+  const projectId = await projectIdForApplication(pool, applicationId);
+  if (projectId == null)
+    return {
+      available: false,
+      projectId: null,
+      root: null,
+      path: "",
+      entries: [],
+    };
+  const backend = await storageBackendForApplication(pool, applicationId);
+  if (!(backend instanceof DropboxStorageBackend))
+    return { available: false, projectId, root: null, path: "", entries: [] };
+  const names = await folderNamesForApplication(pool, applicationId);
+  if (!names)
+    return { available: false, projectId, root: null, path: "", entries: [] };
+  const root = `${names.project}/${names.position}/${names.candidate}`;
+  const suffix = String(relativePath ?? "").trim();
+  const path = [root, suffix].filter(Boolean).join("/");
+  const entries = await backend.list(path);
+  return { available: true, projectId, root, path, entries };
+}
+
 /** Ruta visible del expediente de una postulación dentro de la carpeta del proyecto. */
 export async function applicationDropboxFolderPath(
   pool: Pool,

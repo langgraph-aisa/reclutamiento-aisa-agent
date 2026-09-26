@@ -1,5 +1,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropboxTreeBrowser,
+  type DropboxTreeEntry,
+} from "@/components/DropboxTreeBrowser";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -144,6 +148,46 @@ function kindOfExtension(extension: string) {
   if (["doc", "docx", "pdf"].includes(extension)) return "documento";
   if (["xls", "xlsx", "csv"].includes(extension)) return "hoja";
   return "otro";
+}
+
+/**
+ * Navegador de la carpeta real del expediente en Dropbox: muestra la misma
+ * estructura que la carpeta del candidato —plaza y candidato incluidos— y abre
+ * cada archivo por su ruta visible con el vale del visor.
+ */
+function CandidateDropboxBrowser({
+  applicationId,
+}: {
+  applicationId: number;
+}) {
+  const [path, setPath] = useState("");
+  const utils = trpc.useUtils();
+  const tree = trpc.candidateKnowledge.dropboxTree.useQuery({
+    applicationId,
+    path,
+  });
+  const data = tree.data;
+  return (
+    <DropboxTreeBrowser
+      title="Carpeta del expediente · árbol de Dropbox"
+      root={data?.root ?? null}
+      relativePath={path}
+      entries={(data?.entries ?? []) as DropboxTreeEntry[]}
+      available={Boolean(data?.available)}
+      loading={tree.isLoading}
+      unavailableLabel="El expediente no custodia su carpeta en Dropbox."
+      onNavigate={setPath}
+      openFile={async fullPath => {
+        const file = await utils.candidateKnowledge.dropboxFileToken.fetch({
+          applicationId,
+          path: fullPath,
+        });
+        return `/api/dropbox/view?projectId=${file.projectId}&path=${encodeURIComponent(
+          file.path
+        )}&t=${encodeURIComponent(file.token)}`;
+      }}
+    />
+  );
 }
 
 export function CandidateRagPanel({
@@ -525,6 +569,8 @@ export function CandidateRagPanel({
       </header>
 
       <div className="space-y-3 p-3">
+        <CandidateDropboxBrowser applicationId={applicationId} />
+
         {health.data && health.data.missing > 0 ? (
           <div className="flex gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-500/40 dark:bg-amber-500/10">
             <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
