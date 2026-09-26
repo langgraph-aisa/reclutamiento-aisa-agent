@@ -15,9 +15,9 @@ import { useState } from "react";
  * Campo de credencial con su estado verificado.
  *
  * Vive en un módulo compartido porque la misma pieza administra la credencial
- * propia en «Mi cuenta» y la de plataforma en «Configuración»: duplicarla haría
- * divergir el manejo del enmascarado y de la confirmación entre dos hojas que
- * deben comportarse igual.
+ * propia en «Mi cuenta» y la de plataforma en la hoja de Auditoría de ApiChat:
+ * duplicarla haría divergir el manejo del enmascarado y de la confirmación
+ * entre dos hojas que deben comportarse igual.
  */
 export function CredentialField({
   label,

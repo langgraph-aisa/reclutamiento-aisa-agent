@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.238");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.238");
+    expect(APP_VERSION).toBe("2.0.239");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.239");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -622,9 +622,12 @@ describe("black-box release contract", () => {
     // 2.0.238: sin archivos nuevos: la vista previa de Word, CSV y texto vive en
     // las conversiones por bytes de `server/knowledge.ts`, en la ruta del visor y
     // en el navegador compartido ya censados.
-    expect(audit.files).toHaveLength(162);
+    // 2.0.239: +1 por la tarjeta de la credencial de plataforma de ApiChat, que
+    // se administra desde la hoja de auditoría del canal
+    // (client/src/components/ApiChatPlatformCredentialCard.tsx).
+    expect(audit.files).toHaveLength(163);
     expect(audit.findings).toEqual([]);
-    expect(publicCopyAudit.files).toHaveLength(162);
+    expect(publicCopyAudit.files).toHaveLength(163);
     expect(publicCopyAudit.findings).toEqual([]);
     expect(apply).toContain("Escriba su nombre y teléfono");
     expect(apply).toContain("nos pondremos en contacto con usted");
@@ -1330,7 +1333,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.238");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.239");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1340,16 +1343,18 @@ describe("black-box release contract", () => {
     // lugar y un techo propio.
     //
     // El techo del registro se elevó de 2600 a 3500 y después a 3600, 3700,
-    // 3800, 3900, 4000, 4100, 4200, 4300, 4400, 4500, 4700, 4900, 5100 y 5300:
+    // 3800, 3900, 4000, 4100, 4200, 4300, 4400, 4500, 4700, 4900, 5100, 5300
+    // y 5600:
     // la entrega acumulada de resúmenes de commit ya no cabía y comprimir las
     // entradas antiguas estaba borrando la trazabilidad que el registro existe
     // para conservar. Un techo que obliga a destruir el registro no protege nada.
     expect(proseWordCount).toBeGreaterThanOrEqual(2_400);
     expect(proseWordCount).toBeLessThanOrEqual(2_900);
-    expect(historyWordCount).toBeLessThanOrEqual(5_300);
+    expect(historyWordCount).toBeLessThanOrEqual(5_600);
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.239");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.238");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.237");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.236");
@@ -1910,7 +1915,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.238");
+    expect(governance).toContain("Alcance candidato 2.0.239");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2192,7 +2197,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.238");
+    expect(governance).toContain("Alcance candidato 2.0.239");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });
@@ -2595,5 +2600,37 @@ describe("recuperación del adjunto conservado", () => {
     expect(pipeline).toContain("receiptsNotMessage");
     expect(pipeline).toContain("notificacion-sin-mensaje");
     expect(pipeline).toContain("processingOutcome'='rejected'");
+  });
+
+  it("administra la credencial de plataforma de ApiChat desde la auditoría del canal", () => {
+    const page = fs.readFileSync(
+      path.resolve("client/src/pages/ApiChatAudit.tsx"),
+      "utf8"
+    );
+    const account = fs.readFileSync(
+      path.resolve("client/src/pages/Account.tsx"),
+      "utf8"
+    );
+    const card = fs.readFileSync(
+      path.resolve("client/src/components/ApiChatPlatformCredentialCard.tsx"),
+      "utf8"
+    );
+    // La credencial se administra junto al síntoma que explica: un token
+    // retirado produce exactamente las pérdidas que esta hoja mide.
+    expect(page).toContain("<ApiChatPlatformCredentialCard />");
+    expect(page.indexOf("<ApiChatPlatformCredentialCard />")).toBeLessThan(
+      page.indexOf("{summary ? (")
+    );
+    // «Mi cuenta» conserva la credencial propia y deja de exponer la
+    // institucional: el reclutador no gobierna la identidad de la institución.
+    expect(account).not.toContain("ApiChat · credencial de plataforma");
+    expect(account).not.toContain("saveApiChatSecret");
+    expect(account).not.toContain("webhook_secret");
+    expect(account).toContain("Auditoría de ApiChat");
+    // La tarjeta es de administración y no pide la credencial sin ese rol.
+    expect(card).toContain("if (!isAdmin) return null;");
+    expect(card).toContain("enabled: isAdmin");
+    expect(card).toContain('verifyApiChat.mutate({ scope: "plataforma" })');
+    expect(card).toContain("Secreto del webhook");
   });
 });

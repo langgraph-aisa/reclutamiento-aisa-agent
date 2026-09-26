@@ -12,6 +12,7 @@ import {
   renderPlainTextPreview,
   renderPlainTextPreviewFromBuffer,
   renderSpreadsheetHtml,
+  renderSpreadsheetHtmlFromBuffer,
 } from "./knowledge";
 import { storageBackendForKey } from "./dropboxProject";
 import { dropboxBackendForProject } from "./dropboxProject";
@@ -208,7 +209,7 @@ async function renderKnowledgePreview(row: KnowledgeRow) {
     case "xls":
       return renderSpreadsheetHtml(row.storage_key, name);
     case "txt":
-      return renderPlainTextPreview(row.storage_key);
+      return renderPlainTextPreview(row.storage_key, name);
     default:
       return null;
   }
@@ -462,7 +463,7 @@ async function renderCandidatePreview(row: CandidateKnowledgeRow) {
     case "xls":
       return renderSpreadsheetHtml(row.storage_key, name);
     case "txt":
-      return renderPlainTextPreview(row.storage_key);
+      return renderPlainTextPreview(row.storage_key, name);
     default:
       return null;
   }
@@ -715,9 +716,11 @@ export function registerKnowledgeRoutes(app: Express) {
       const data = await backend.readVisible(filePath);
       let html: string | null = null;
       if (extension === "docx") html = await renderDocxHtmlFromBuffer(data, title);
+      else if (["xlsx", "xls"].includes(extension))
+        html = await renderSpreadsheetHtmlFromBuffer(data, title);
       else if (extension === "csv") html = renderCsvPreviewFromBuffer(data, title);
       else if (["txt", "md", "log"].includes(extension))
-        html = renderPlainTextPreviewFromBuffer(data);
+        html = renderPlainTextPreviewFromBuffer(data, title);
       if (!html) {
         const message =
           "Este tipo de archivo no dispone de vista previa integrada; descárguelo para revisarlo.";
@@ -729,7 +732,7 @@ export function registerKnowledgeRoutes(app: Express) {
               viewerErrorDocument(
                 "Sin vista previa para este formato",
                 message,
-                "Los formatos con vista previa integrada por ruta son PDF, imagen, audio, video, Word, CSV y texto."
+                "Los formatos con vista previa integrada por ruta son PDF, imagen, audio, video, Word, Excel, CSV y texto."
               )
             );
           return;

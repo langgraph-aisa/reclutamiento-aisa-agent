@@ -8,12 +8,10 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 
 type UserApiChatSecretKey = "client_id" | "token" | "account_id";
-type PlatformApiChatSecretKey = UserApiChatSecretKey | "webhook_secret";
 
 export default function Account() {
   const session = trpc.auth.me.useQuery();
   const user = session.data;
-  const isAdmin = user?.role === "admin";
   const dropbox = trpc.storage.connection.useQuery();
   const unlinkDropbox = trpc.storage.unlink.useMutation({
     onSuccess: async () => {
@@ -23,22 +21,9 @@ export default function Account() {
     onError: error => toast.error(error.message),
   });
   const apiChatUser = trpc.config.apiChatUserConfiguration.useQuery();
-  // La credencial de plataforma es de administración: el reclutador no la
-  // consulta para que su hoja no declare una capacidad que no gobierna.
-  const apiChatPlatform = trpc.config.apiChatConfiguration.useQuery(undefined, {
-    enabled: isAdmin,
-  });
   const saveUserApiChatSecret = trpc.config.saveApiChatUserSecret.useMutation({
     onSuccess: async () => {
       await apiChatUser.refetch();
-      if (isAdmin) await apiChatPlatform.refetch();
-    },
-    onError: error => toast.error(error.message),
-  });
-  const savePlatformApiChatSecret = trpc.config.saveApiChatSecret.useMutation({
-    onSuccess: async () => {
-      await apiChatUser.refetch();
-      await apiChatPlatform.refetch();
     },
     onError: error => toast.error(error.message),
   });
@@ -62,23 +47,6 @@ export default function Account() {
       await saveUserApiChatSecret.mutateAsync({ key, value });
       toast.success(
         value ? "Credencial de ApiChat guardada" : "Credencial eliminada"
-      );
-      return true;
-    } catch {
-      return false;
-    }
-  };
-
-  const persistPlatformApiChatSecret = async (
-    key: PlatformApiChatSecretKey,
-    value: string | null
-  ) => {
-    try {
-      await savePlatformApiChatSecret.mutateAsync({ key, value });
-      toast.success(
-        value
-          ? "Credencial de plataforma guardada"
-          : "Credencial de plataforma eliminada"
       );
       return true;
     } catch {
@@ -276,88 +244,11 @@ export default function Account() {
           <p className="rounded-xl bg-accent/40 p-4 text-sm leading-6 text-muted-foreground">
             La credencial se cifra en el servidor y nunca se devuelve al
             navegador. La recepción de mensajes y el webhook se rigen por la
-            credencial de plataforma.
+            credencial de plataforma, que la administración mantiene en
+            Auditoría de ApiChat.
           </p>
         </CardContent>
       </Card>
-      {isAdmin ? (
-        <Card>
-          <CardHeader>
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-            <CardTitle className="mt-3">
-              ApiChat · credencial de plataforma
-            </CardTitle>
-            <CardDescription>
-              Credencial de la institución: gobierna la recepción de mensajes y
-              el webhook, y respalda a quien no configuró la suya. El secreto
-              del webhook debe coincidir con el ?key= de la dirección
-              registrada en ApiChat.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            {apiChatLegacy ? (
-              <CredentialField
-                label="ID de cuenta"
-                description="Solo se utiliza en el modo heredado"
-                placeholder="Ingrese el ID de cuenta"
-                state={apiChatPlatform.data?.secrets.account_id}
-                pending={savePlatformApiChatSecret.isPending}
-                onSave={value =>
-                  persistPlatformApiChatSecret("account_id", value)
-                }
-                onRemove={() =>
-                  persistPlatformApiChatSecret("account_id", null)
-                }
-              />
-            ) : (
-              <CredentialField
-                label="Client ID"
-                description="Identificador de la API nativa"
-                placeholder="Ingrese el Client ID"
-                state={apiChatPlatform.data?.secrets.client_id}
-                pending={
-                  savePlatformApiChatSecret.isPending ||
-                  verifyApiChat.isPending
-                }
-                onSave={value =>
-                  persistPlatformApiChatSecret("client_id", value)
-                }
-                onRemove={() =>
-                  persistPlatformApiChatSecret("client_id", null)
-                }
-                onVerify={() => verifyApiChat.mutate({ scope: "plataforma" })}
-              />
-            )}
-            <CredentialField
-              label="Token"
-              description="Credencial obligatoria de ApiChat"
-              placeholder="Ingrese el token"
-              state={apiChatPlatform.data?.secrets.token}
-              pending={
-                savePlatformApiChatSecret.isPending || verifyApiChat.isPending
-              }
-              onSave={value => persistPlatformApiChatSecret("token", value)}
-              onRemove={() => persistPlatformApiChatSecret("token", null)}
-              onVerify={() => verifyApiChat.mutate({ scope: "plataforma" })}
-            />
-            <CredentialField
-              label="Secreto del webhook"
-              description="Credencial que el artefacto exige en la ruta de recepción; debe coincidir con el ?key= de la dirección registrada en ApiChat"
-              placeholder="Ingrese el secreto entrante"
-              state={apiChatPlatform.data?.secrets.webhook_secret}
-              pending={savePlatformApiChatSecret.isPending}
-              onSave={value =>
-                persistPlatformApiChatSecret("webhook_secret", value)
-              }
-              onRemove={() =>
-                persistPlatformApiChatSecret("webhook_secret", null)
-              }
-            />
-          </CardContent>
-        </Card>
-      ) : null}
       <p className="rounded-xl bg-accent/40 p-4 text-sm leading-6 text-muted-foreground">Los códigos expiran en 10 minutos, admiten un máximo de cinco intentos y se invalidan inmediatamente después de utilizarse.</p>
     </div>
   );

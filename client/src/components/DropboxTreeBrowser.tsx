@@ -42,7 +42,9 @@ const AUDIO_EXTENSIONS = [
   "amr",
 ];
 const VIDEO_EXTENSIONS = ["mp4", "webm", "mov", "3gp", "mpeg"];
-const RENDER_EXTENSIONS = ["docx", "csv", "txt", "md", "log"];
+// Extensiones que el backend compone a HTML y el visor incrusta: Word, hoja de
+// cálculo y texto. El resto se ofrece como apertura en una pestaña nueva.
+const RENDER_EXTENSIONS = ["docx", "xlsx", "xls", "csv", "txt", "md", "log"];
 
 function extensionOf(name: string) {
   const parts = name.toLowerCase().split(".");

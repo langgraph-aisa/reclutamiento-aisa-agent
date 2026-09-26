@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { ApiChatPlatformCredentialCard } from "@/components/ApiChatPlatformCredentialCard";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, CheckCircle2, HelpCircle, Inbox, Send } from "lucide-react";
@@ -8,8 +9,11 @@ import { AlertTriangle, CheckCircle2, HelpCircle, Inbox, Send } from "lucide-rea
  *
  * Consolida, en una sola lectura, lo que hoy está disperso: las pérdidas de
  * recepción asentadas por el webhook, los fallos de entrega de la cola y las
- * entregas detenidas. Es **solo lectura**: su función es que el fallo del
- * conducto deje de ser invisible, no corregirlo desde aquí.
+ * entregas detenidas. El **informe** es solo lectura: su función es que el
+ * fallo del conducto deje de ser invisible, no corregirlo desde aquí. Las dos
+ * escrituras de la hoja están declaradas y acotadas: la recuperación del
+ * adjunto conservado, que restituye trabajo a la cola, y la credencial de
+ * plataforma, que es la pieza cuyo estado explica los fallos que aquí se miden.
  *
  * La clasificación distingue tres cosas que no son la misma: lo **verificado**,
  * lo que tiene **pérdidas** y lo que **no tiene evidencia** —porque la falta de
@@ -104,9 +108,12 @@ export default function ApiChatAudit() {
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Errores del mecanismo de comunicación: pérdidas de recepción, fallos
-          de entrega y entregas detenidas. Solo lectura.
+          de entrega y entregas detenidas. El informe es de solo lectura y la
+          credencial de plataforma se administra aquí.
         </p>
       </div>
+
+      <ApiChatPlatformCredentialCard />
 
       {report.isLoading ? (
         <p className="text-sm text-muted-foreground">Leyendo el canal…</p>

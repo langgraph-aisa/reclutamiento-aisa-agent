@@ -621,7 +621,17 @@ export async function renderSpreadsheetHtml(
   storageKey: string,
   title = "Hoja"
 ) {
-  const data = await readKnowledgeFile(storageKey);
+  return renderSpreadsheetHtmlFromBuffer(
+    await readKnowledgeFile(storageKey),
+    title
+  );
+}
+
+/** La misma vista previa de hoja de cálculo, a partir de los bytes ya leídos. */
+export async function renderSpreadsheetHtmlFromBuffer(
+  data: Buffer,
+  title = "Hoja"
+) {
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(data, { type: "buffer" });
   const sheetName = workbook.SheetNames[0];
@@ -672,20 +682,27 @@ export async function renderSpreadsheetHtml(
 }
 
 /** Vista previa de texto plano para extensiones sin representación gráfica. */
-export async function renderPlainTextPreview(storageKey: string) {
+export async function renderPlainTextPreview(
+  storageKey: string,
+  title = "Archivo de texto"
+) {
   return renderPlainTextPreviewFromBuffer(
-    await readKnowledgeFile(storageKey)
+    await readKnowledgeFile(storageKey),
+    title
   );
 }
 
 /** La misma vista previa de texto, a partir de los bytes ya leídos. */
-export function renderPlainTextPreviewFromBuffer(data: Buffer) {
+export function renderPlainTextPreviewFromBuffer(
+  data: Buffer,
+  title = "Archivo de texto"
+) {
   const text = data.toString("utf8").slice(0, 200_000);
   const escape = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-  return wrapViewerDocument("Archivo de texto", `<p>${escape}</p>`);
+  return wrapViewerDocument(title, `<p>${escape}</p>`);
 }
 
 const KnowledgeAnalysisSchema = z.object({

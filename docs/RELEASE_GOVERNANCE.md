@@ -1,8 +1,21 @@
-# Gobierno de release JARVI RH 2.0.238
+# Gobierno de release JARVI RH 2.0.239
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.238**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.239**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.239
+El release **administra la credencial de plataforma de ApiChat en la hoja que diagnostica el canal y previsualiza Excel por ruta**. Sin migración.
+
+**El defecto observado.** La credencial de plataforma se administraba en «Mi cuenta», lejos del síntoma que explica: un token retirado produce exactamente las pérdidas de recepción y los fallos de entrega que la hoja de Auditoría de ApiChat mide, de modo que corregir el fallo y diagnosticarlo exigía navegar entre dos hojas. Además, el navegador del RAG del proyecto conservaba una copia propia del árbol de Dropbox y no reconocía la hoja de cálculo: el mismo archivo se previsualizaba en una superficie y no en la otra.
+
+**La credencial.** La tarjeta se extrae a `client/src/components/ApiChatPlatformCredentialCard.tsx`, se monta al inicio de la hoja de auditoría —antes del veredicto, porque una credencial ausente es una causa y no un detalle— y solo se dibuja para la administración: sin ese rol no se consulta ni se declara. «Mi cuenta» conserva la credencial propia y declara dónde se administra la institucional.
+
+**El visor.** `renderSpreadsheetHtmlFromBuffer` componen la hoja de cálculo a partir de los bytes ya leídos, la ruta `/api/dropbox/render` la sirve para `xlsx` y `xls` con el vale firmado atado a la ruta, y las vistas previas de texto declaran el nombre del archivo en lugar de un título genérico.
+
+**Una sola superficie.** La Custodia de proyectos releva su navegador propio por `DropboxTreeBrowser`: la hoja aporta su origen de datos y su acuñador de vales, y la navegación, las extensiones y la previsualización quedan en una sola pieza compartida con el RAG del candidato.
+
+**Sin migración.** Reutiliza el backend, el vale del visor, las tablas vigentes y el cifrado de credenciales.
 
 ### Alcance candidato 2.0.238
 El release **abre los documentos de ofimática y de texto en el visor por ruta**. Sin migración.
@@ -1145,4 +1158,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.238.md](PRUEBAS_CAJA_NEGRA_2.0.238.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.239.md](PRUEBAS_CAJA_NEGRA_2.0.239.md).
