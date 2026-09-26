@@ -4,12 +4,15 @@ import { getPool, getUserById } from "./db";
 import {
   knowledgeFilePath,
   knowledgeFileStats,
+  knowledgeMimeType,
   renderCsvPreview,
   renderDocxHtml,
   renderPlainTextPreview,
   renderSpreadsheetHtml,
 } from "./knowledge";
 import { storageBackendForKey } from "./dropboxProject";
+import { dropboxBackendForProject } from "./dropboxProject";
+import { DropboxStorageBackend } from "./dropboxStorage";
 import type { StorageBackend } from "./storageBackend";
 import { readLocalSession } from "./localAuth";
 import { VIEWER_SECURITY_HEADERS, verifyViewerToken } from "./viewerAccess";
@@ -567,6 +570,94 @@ export function registerKnowledgeRoutes(app: Express) {
       respondDeliveryFailure(req, res, classifyDeliveryFailure(error), {
         fileId: row?.id,
         storageKey: row?.storage_key,
+      });
+    }
+  });
+
+  // Vista del árbol real del proyecto en Dropbox: entrega un archivo por su
+  // ruta visible —carpeta del proyecto, plaza y candidato incluidas— con el
+  // vale de alcance «dropbox» o la sesión de administración. Es lo que permite
+  // que el RAG del proyecto muestre y abra la misma estructura que el usuario
+  // ve en su Dropbox, incluso los archivos que no están en el catálogo.
+  app.get("/api/dropbox/view", async (req, res) => {
+    const projectId = Number(req.query.projectId);
+    const filePath = String(req.query.path ?? "").trim();
+    if (
+      !Number.isInteger(projectId) ||
+      projectId <= 0 ||
+      !filePath ||
+      filePath.includes("..")
+    ) {
+      res.status(400).json({ error: "Referencia de archivo inválida." });
+      return;
+    }
+    let authorized = verifyViewerToken(
+      "dropbox",
+      `${projectId}:${filePath}`,
+      req.query.t as string | undefined
+    );
+    if (!authorized) {
+      const localUserId = await readLocalSession(req);
+      const user = localUserId ? await getUserById(localUserId) : null;
+      authorized = Boolean(user?.active && user.role === "admin");
+    }
+    if (!authorized) {
+      res.status(403).json({ error: "Acceso restringido a administración." });
+      return;
+    }
+    const pool = await getPool();
+    if (!pool) {
+      res.status(503).json({ error: "Base de datos no disponible." });
+      return;
+    }
+    try {
+      const backend = await dropboxBackendForProject(pool, projectId);
+      if (!(backend instanceof DropboxStorageBackend)) {
+        res.status(404).json({
+          error: "El proyecto no custodia sus documentos en Dropbox.",
+        });
+        return;
+      }
+      const extension = filePath.split(".").pop()?.toLowerCase() ?? "";
+      const disposition = filePath.split("/").pop() ?? "documento";
+      res.set(
+        "Content-Disposition",
+        `inline; filename="${disposition.replace(/[^\w.\- ]/g, "_")}"`
+      );
+      const stats = await backend.statVisible(filePath);
+      const range = /^bytes=(\d*)-(\d*)$/.exec(
+        (req.headers.range ?? "").trim()
+      );
+      const common = {
+        ...VIEWER_SECURITY_HEADERS,
+        "Content-Type": knowledgeMimeType(extension),
+        "Cache-Control": "private, max-age=3600",
+        "Accept-Ranges": "bytes",
+      };
+      if (range) {
+        const start = range[1] ? Number(range[1]) : 0;
+        const end = range[2]
+          ? Math.min(Number(range[2]), stats.size - 1)
+          : stats.size - 1;
+        if (start > end || start >= stats.size || end < 0) {
+          res.status(416).set("Content-Range", `bytes */${stats.size}`).end();
+          return;
+        }
+        const data = await backend.readRangeVisible(filePath, start, end);
+        res.writeHead(206, {
+          ...common,
+          "Content-Length": data.length,
+          "Content-Range": `bytes ${start}-${start + data.length - 1}/${stats.size}`,
+        });
+        res.end(data);
+        return;
+      }
+      const data = await backend.readVisible(filePath);
+      res.writeHead(200, { ...common, "Content-Length": data.length });
+      res.end(data);
+    } catch (error) {
+      respondDeliveryFailure(req, res, classifyDeliveryFailure(error), {
+        storageKey: filePath,
       });
     }
   });

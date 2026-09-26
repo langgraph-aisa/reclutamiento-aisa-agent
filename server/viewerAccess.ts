@@ -28,7 +28,7 @@ export const VIEWER_TOKEN_TTL_SECONDS = 900;
  * Alcances admitidos; cada recurso valida el suyo. Un vale del RAG de proyectos
  * no abre el RAG del candidato ni al revés, aunque compartan el volumen.
  */
-export type ViewerScope = "knowledge" | "inbox" | "candidate";
+export type ViewerScope = "knowledge" | "inbox" | "candidate" | "dropbox";
 
 function viewerSecret() {
   const secret = process.env.JWT_SECRET?.trim();

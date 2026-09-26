@@ -4,6 +4,7 @@ import { currentStorageBackend } from "./storageBackend";
 import {
   DropboxStorageBackend,
   sanitizeDropboxSegment,
+  type DropboxListEntry,
   type DropboxPathResolver,
 } from "./dropboxStorage";
 import {
@@ -304,6 +305,32 @@ export async function ensureApplicationDropboxFolder(
     [applicationId, JSON.stringify({ projectId, path })]
   );
   return { created: true, path, reason: "creada" };
+}
+
+/**
+ * Lista el árbol visible del proyecto tal como está en Dropbox: la raíz de la
+ * carpeta del proyecto, o una subcarpeta suya. Devuelve la disponibilidad, la
+ * raíz visible y los hijos inmediatos —carpetas y archivos con su nombre
+ * original—, de modo que el RAG del proyecto se vea igual que la carpeta.
+ */
+export async function listProjectDropboxTree(
+  pool: Pool,
+  projectId: number,
+  relativePath = ""
+): Promise<{
+  available: boolean;
+  root: string | null;
+  path: string;
+  entries: DropboxListEntry[];
+}> {
+  const backend = await dropboxBackendForProject(pool, projectId);
+  if (!(backend instanceof DropboxStorageBackend))
+    return { available: false, root: null, path: "", entries: [] };
+  const root = (await projectName(pool, projectId)) ?? `Proyecto ${projectId}`;
+  const suffix = String(relativePath ?? "").trim();
+  const path = [root, suffix].filter(Boolean).join("/");
+  const entries = await backend.list(path);
+  return { available: true, root, path, entries };
 }
 
 /**

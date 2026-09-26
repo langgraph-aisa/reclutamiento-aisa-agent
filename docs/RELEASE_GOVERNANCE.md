@@ -1,8 +1,21 @@
-# Gobierno de release JARVI RH 2.0.235
+# Gobierno de release JARVI RH 2.0.236
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.235**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.236**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.236
+El release **espeja el árbol real de Dropbox en el RAG del proyecto**. Sin migración.
+
+**El defecto observado.** El visor resolvía por **clave de catálogo**: solo abría los archivos registrados en `knowledge_files` o `candidate_knowledge_files`. Los documentos que están en la carpeta del proyecto con su nombre original —«ESTUDIO DE VIABILIDAD…pdf», la carpeta de la plaza y la del candidato— no existen en el catálogo, de modo que el visor respondía «el documento binario no se encuentra en la ruta configurada» aunque el archivo estuviera en Dropbox.
+
+**La lectura del árbol.** `DropboxStorageBackend` gana `list` —con `files/list_folder`— y la lectura por ruta visible: `statVisible`, `readVisible` y `readRangeVisible`, que resuelven la ruta bajo la carpeta de la aplicación sin pasar por el resolutor de claves. `listProjectDropboxTree` publica la raíz visible del proyecto y sus hijos inmediatos.
+
+**El visor por ruta.** La ruta `GET /api/dropbox/view` entrega un archivo por su ruta visible con el vale de alcance `dropbox` —o la sesión de administración— y conserva las cabeceras del visor y la lectura por rangos, de modo que PDF, audio y video mantengan paginado y desplazamiento. El vale se acuña en `storage.projectFileToken` y el árbol se sirve en `storage.projectTree`.
+
+**La hoja.** La Custodia de proyectos incorpora el navegador del árbol —migas de pan, carpetas y archivos con su tamaño— y la previsualización integrada, sin salir del aplicativo.
+
+**Sin migración.** Reutiliza el backend, el visor y las tablas vigentes.
 
 ### Alcance candidato 2.0.235
 El release **materializa la carpeta del expediente en Dropbox al recibir el formulario y reevalúa el perfil cuando el currículum queda analizado**. Sin migración.
@@ -1110,4 +1123,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.235.md](PRUEBAS_CAJA_NEGRA_2.0.235.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.236.md](PRUEBAS_CAJA_NEGRA_2.0.236.md).

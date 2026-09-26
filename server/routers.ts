@@ -134,6 +134,7 @@ import {
 import {
   assignProjectDropboxConnection,
   migrateProjectStorage,
+  listProjectDropboxTree,
   projectStorageProfile,
   setProjectStorageMode,
 } from "./dropboxProject";
@@ -6755,6 +6756,44 @@ export const appRouter = router({
         const pool = await requirePool();
         return projectStorageProfile(pool, input.projectId);
       }),
+    projectTree: projectAdminProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          path: z.string().max(400).optional(),
+        })
+      )
+      .query(async ({ input }) => {
+        const pool = await requirePool();
+        try {
+          return await listProjectDropboxTree(
+            pool,
+            input.projectId,
+            input.path ?? ""
+          );
+        } catch (error) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: safeIntegrationMessage(
+              error,
+              "No fue posible leer la carpeta del proyecto en Dropbox."
+            ),
+          });
+        }
+      }),
+    projectFileToken: projectAdminProcedure
+      .input(
+        z.object({
+          projectId: z.number().int().positive(),
+          path: z.string().min(1).max(400),
+        })
+      )
+      .query(({ input }) => ({
+        token: createViewerToken(
+          "dropbox",
+          `${input.projectId}:${input.path}`
+        ),
+      })),
     setProjectStorage: projectAdminProcedure
       .input(
         z.object({

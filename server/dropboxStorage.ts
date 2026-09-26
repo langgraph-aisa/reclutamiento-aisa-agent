@@ -63,6 +63,15 @@ type DropboxMetadata = {
   client_modified?: string;
 };
 
+/** Hijo inmediato de una carpeta visible: lo que el usuario ve en Dropbox. */
+export type DropboxListEntry = {
+  name: string;
+  path: string;
+  type: "file" | "folder";
+  size: number;
+  modified: string | null;
+};
+
 type DropboxErrorBody = {
   error_summary?: string;
   error?: unknown;
@@ -287,6 +296,135 @@ export class DropboxStorageBackend implements StorageBackend {
         await DropboxStorageBackend.readError(response)
       );
     }
+  }
+
+  /** Segmentos saneados de una ruta visible relativa a la carpeta de la aplicación. */
+  private visibleSegments(relativePath: string): string[] {
+    const raw = String(relativePath ?? "").trim();
+    if (raw.includes(".."))
+      throw new Error("La referencia de almacenamiento no es válida.");
+    return raw
+      .split("/")
+      .filter(segment => segment.length > 0)
+      .map(normalizeSegment);
+  }
+
+  /** Ruta absoluta de una carpeta o archivo visible, o `null` si es la raíz. */
+  private visibleAbsolute(relativePath: string): string {
+    const segments = this.visibleSegments(relativePath);
+    return segments.length ? this.fullPath(...segments) : this.fullPath();
+  }
+
+  /**
+   * Lista una carpeta visible con sus hijos inmediatos. Es la lectura que
+   * permite que el RAG del proyecto muestre la misma estructura que el usuario
+   * ve en Dropbox —carpetas y archivos con su nombre original—, incluidas las
+   * carpetas de plaza y de candidato que el alta materializa.
+   */
+  async list(relativePath = ""): Promise<DropboxListEntry[]> {
+    const response = await this.fetchImpl()(
+      `${DROPBOX_API_BASE}/files/list_folder`,
+      {
+        method: "POST",
+        headers: {
+          ...(await this.authHeaders()),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          path: this.visibleAbsolute(relativePath),
+          recursive: false,
+          include_deleted: false,
+        }),
+      }
+    );
+    if (response.status === 409) return [];
+    if (!response.ok) {
+      throw dropboxApiError(
+        "el listado de la carpeta",
+        response.status,
+        await DropboxStorageBackend.readError(response)
+      );
+    }
+    const body = (await response.json()) as {
+      entries?: Array<Record<string, unknown>>;
+    };
+    return (body.entries ?? [])
+      .filter(entry => Boolean(entry.name))
+      .map(entry => ({
+        name: String(entry.name),
+        path: String(entry.path_display ?? ""),
+        type: (entry[".tag"] === "folder" ? "folder" : "file") as
+          | "folder"
+          | "file",
+        size: Number(entry.size ?? 0),
+        modified: entry.server_modified ? String(entry.server_modified) : null,
+      }));
+  }
+
+  /** Metadatos de un archivo visible por su ruta relativa. */
+  async statVisible(relativePath: string): Promise<StorageStat> {
+    const metadata = await this.metadata(this.visibleAbsolute(relativePath));
+    if (!metadata || metadata[".tag"] === "folder") throw missingFileError();
+    return {
+      size: Number(metadata.size ?? 0),
+      mtime: metadata.server_modified
+        ? new Date(metadata.server_modified)
+        : new Date(0),
+    };
+  }
+
+  /** Lectura completa de un archivo visible por su ruta relativa. */
+  async readVisible(relativePath: string): Promise<Buffer> {
+    const response = await this.fetchImpl()(
+      `${DROPBOX_CONTENT_BASE}/files/download`,
+      {
+        method: "POST",
+        headers: {
+          ...(await this.authHeaders()),
+          "Dropbox-API-Arg": JSON.stringify({
+            path: this.visibleAbsolute(relativePath),
+          }),
+        },
+      }
+    );
+    if (!response.ok) {
+      throw dropboxApiError(
+        "la lectura",
+        response.status,
+        await DropboxStorageBackend.readError(response)
+      );
+    }
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  /** Lectura parcial con rango de un archivo visible: conserva el paginado del visor. */
+  async readRangeVisible(
+    relativePath: string,
+    start: number,
+    end: number
+  ): Promise<Buffer> {
+    const response = await this.fetchImpl()(
+      `${DROPBOX_CONTENT_BASE}/files/download`,
+      {
+        method: "POST",
+        headers: {
+          ...(await this.authHeaders()),
+          "Dropbox-API-Arg": JSON.stringify({
+            path: this.visibleAbsolute(relativePath),
+          }),
+          Range: `bytes=${start}-${end}`,
+        },
+      }
+    );
+    if (response.status === 416) return Buffer.alloc(0);
+    if (!response.ok) {
+      throw dropboxApiError(
+        "la lectura con rango",
+        response.status,
+        await DropboxStorageBackend.readError(response)
+      );
+    }
+    return Buffer.from(await response.arrayBuffer());
   }
 
   async write(key: string, data: Buffer): Promise<void> {

@@ -99,6 +99,30 @@ function fakeDropbox(options: { downloadStatus?: number } = {}) {
       }
       return binary(file.content);
     }
+    if (url === `${DROPBOX_API_BASE}/files/list_folder`) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { path: string };
+      const prefix = body.path === "/" ? "/" : `${body.path}/`;
+      const entries: Array<Record<string, unknown>> = [];
+      for (const folder of folders) {
+        if (!folder.startsWith(prefix)) continue;
+        const rest = folder.slice(prefix.length);
+        if (rest && !rest.includes("/"))
+          entries.push({ ".tag": "folder", name: rest, path_display: folder });
+      }
+      for (const [path, file] of files) {
+        if (!path.startsWith(prefix)) continue;
+        const rest = path.slice(prefix.length);
+        if (rest && !rest.includes("/"))
+          entries.push({
+            ".tag": "file",
+            name: rest,
+            path_display: path,
+            size: file.content.length,
+            server_modified: file.modified,
+          });
+      }
+      return json({ entries });
+    }
     if (url === `${DROPBOX_API_BASE}/files/delete_v2`) {
       const body = JSON.parse(String(init?.body ?? "{}")) as { path: string };
       if (!files.delete(body.path)) {
@@ -113,6 +137,46 @@ function fakeDropbox(options: { downloadStatus?: number } = {}) {
 }
 
 describe("backend de almacenamiento en Dropbox", () => {
+  it("lista el árbol visible y lee por ruta, incluidas carpetas y nombres originales", async () => {
+    const { fetchImpl } = fakeDropbox();
+    const backend = new DropboxStorageBackend(async () => "access-token", {
+      fetchImpl,
+    });
+
+    // El alta materializa la jerarquía y el RAG del proyecto la recorre tal cual.
+    await backend.ensureFolderPath(
+      "Solar Guatemala/Ejecutivo de Negocios (Ventas)/Gustavo Martínez Fuentes"
+    );
+    await backend.write(
+      "Solar Guatemala/ESTUDIO DE VIABILIDAD.pdf",
+      Buffer.from("0123456789")
+    );
+
+    const entries = await backend.list("Solar Guatemala");
+    expect(
+      entries.some(
+        entry => entry.type === "folder" && entry.name === "Ejecutivo de Negocios (Ventas)"
+      )
+    ).toBe(true);
+    const file = entries.find(entry => entry.name === "ESTUDIO DE VIABILIDAD.pdf");
+    expect(file?.type).toBe("file");
+    expect(file?.size).toBe(10);
+
+    await expect(
+      backend.statVisible("Solar Guatemala/ESTUDIO DE VIABILIDAD.pdf")
+    ).resolves.toMatchObject({ size: 10 });
+    await expect(
+      backend.readVisible("Solar Guatemala/ESTUDIO DE VIABILIDAD.pdf")
+    ).resolves.toEqual(Buffer.from("0123456789"));
+    await expect(
+      backend.readRangeVisible(
+        "Solar Guatemala/ESTUDIO DE VIABILIDAD.pdf",
+        2,
+        5
+      )
+    ).resolves.toEqual(Buffer.from("2345"));
+  });
+
   it("escribe creando la jerarquía de carpetas y publica los bytes", async () => {
     const { files, folders, fetchImpl } = fakeDropbox();
     const backend = new DropboxStorageBackend(async () => "access-token", {

@@ -6,6 +6,7 @@ import {
   assignProjectDropboxConnection,
   dropboxBackendForProject,
   ensureApplicationDropboxFolder,
+  listProjectDropboxTree,
   migrateProjectStorage,
   projectDropboxConnectionUserId,
   projectDropboxPathResolver,
@@ -233,6 +234,66 @@ describe("resolución del proyecto y del backend de Dropbox", () => {
     await expect(
       ensureApplicationDropboxFolder(pool, 11)
     ).resolves.toEqual({ created: false, path: null, reason: "sin_dropbox" });
+  });
+
+  it("lista el árbol real del proyecto para el RAG del proyecto", async () => {
+    const { pool } = fakePool({ mode: "dropbox" });
+    vi.stubGlobal(
+      "fetch",
+      (async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/oauth2/token"))
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ access_token: "access" }),
+          } as unknown as Response;
+        if (url.endsWith("/list_folder"))
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              entries: [
+                {
+                  ".tag": "folder",
+                  name: "Ejecutivo de Negocios (Ventas)",
+                  path_display:
+                    "/JARVI RH/Solar Guatemala/Ejecutivo de Negocios (Ventas)",
+                },
+                {
+                  ".tag": "file",
+                  name: "ESTUDIO DE VIABILIDAD.pdf",
+                  path_display:
+                    "/JARVI RH/Solar Guatemala/ESTUDIO DE VIABILIDAD.pdf",
+                  size: 271_000,
+                  server_modified: "2026-09-14T11:06:00Z",
+                },
+              ],
+            }),
+          } as unknown as Response;
+        return {
+          ok: false,
+          status: 404,
+          json: async () => ({}),
+        } as unknown as Response;
+      }) as unknown as typeof fetch
+    );
+
+    const tree = await listProjectDropboxTree(pool, 7);
+
+    expect(tree.available).toBe(true);
+    expect(tree.root).toBe("Solar Guatemala");
+    expect(tree.path).toBe("Solar Guatemala");
+    expect(tree.entries).toHaveLength(2);
+    expect(tree.entries[0]).toMatchObject({
+      type: "folder",
+      name: "Ejecutivo de Negocios (Ventas)",
+    });
+    expect(tree.entries[1]).toMatchObject({
+      type: "file",
+      name: "ESTUDIO DE VIABILIDAD.pdf",
+      size: 271_000,
+    });
   });
 
   it("resuelve el proyecto de una clave de proyecto y de una postulación", async () => {
