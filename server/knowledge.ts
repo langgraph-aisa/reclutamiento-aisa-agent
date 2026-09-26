@@ -475,7 +475,14 @@ ${body}
  * formato y para que las tablas e imágenes se ajusten al ancho disponible.
  */
 export async function renderDocxHtml(storageKey: string, title = "Documento") {
-  const data = await readKnowledgeFile(storageKey);
+  return renderDocxHtmlFromBuffer(await readKnowledgeFile(storageKey), title);
+}
+
+/** La misma vista previa de Word, a partir de los bytes ya leídos. */
+export async function renderDocxHtmlFromBuffer(
+  data: Buffer,
+  title = "Documento"
+) {
   const result = await mammoth.convertToHtml(
     { buffer: data },
     {
@@ -503,7 +510,11 @@ export async function renderDocxHtml(storageKey: string, title = "Documento") {
  * muestre columnas alineadas en lugar de texto plano con comas.
  */
 export async function renderCsvPreview(storageKey: string, title = "Hoja") {
-  const data = await readKnowledgeFile(storageKey);
+  return renderCsvPreviewFromBuffer(await readKnowledgeFile(storageKey), title);
+}
+
+/** La misma vista previa de CSV, a partir de los bytes ya leídos. */
+export function renderCsvPreviewFromBuffer(data: Buffer, title = "Hoja") {
   const text = data.toString("utf8");
   const delimiter = detectCsvDelimiter(text);
   const rows = parseDelimitedRows(text, delimiter);
@@ -662,7 +673,13 @@ export async function renderSpreadsheetHtml(
 
 /** Vista previa de texto plano para extensiones sin representación gráfica. */
 export async function renderPlainTextPreview(storageKey: string) {
-  const data = await readKnowledgeFile(storageKey);
+  return renderPlainTextPreviewFromBuffer(
+    await readKnowledgeFile(storageKey)
+  );
+}
+
+/** La misma vista previa de texto, a partir de los bytes ya leídos. */
+export function renderPlainTextPreviewFromBuffer(data: Buffer) {
   const text = data.toString("utf8").slice(0, 200_000);
   const escape = text
     .replace(/&/g, "&amp;")

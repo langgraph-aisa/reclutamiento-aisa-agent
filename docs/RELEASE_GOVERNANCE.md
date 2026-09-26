@@ -1,8 +1,19 @@
-# Gobierno de release JARVI RH 2.0.237
+# Gobierno de release JARVI RH 2.0.238
 
 ## Identidad y fuente única
 
-La versión vigente es **JARVI RH 2.0.237**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+La versión vigente es **JARVI RH 2.0.238**. `package.json` es la fuente canónica y `shared/release.ts` expone la constante consumida por la interfaz y las pruebas. El pie del menú administrativo presenta producto, versión, rama, hash corto, sincronización con `origin/main` y distribución de lenguajes calculada durante cada build.
+
+### Alcance candidato 2.0.238
+El release **abre los documentos de ofimática y de texto en el visor por ruta**. Sin migración.
+
+**El defecto observado.** El navegador del árbol de Dropbox entregaba el archivo por su ruta visible, pero la previsualización integrada cubría solo PDF, imagen, audio y video: un documento de Word, una hoja CSV o un archivo de texto se ofrecían únicamente como apertura en una pestaña nueva.
+
+**La lectura.** Las conversiones de `server/knowledge.ts` se exponen sobre bytes —`renderDocxHtmlFromBuffer`, `renderCsvPreviewFromBuffer` y `renderPlainTextPreviewFromBuffer`— y las variantes por clave de catálogo delegan en ellas, de modo que la vista previa del catálogo y la del árbol real comparten una sola implementación.
+
+**El visor.** `GET /api/dropbox/render` compone la vista previa de un archivo de la carpeta del proyecto o del expediente, autorizado con el vale de alcance `dropbox` atado a la ruta —o con sesión de administrador—, y responde 415 con el documento del visor cuando el formato no tiene previsualización, conservando el enlace de apertura.
+
+**Sin migración.** Reutiliza el backend, el vale del visor y las tablas vigentes.
 
 ### Alcance candidato 2.0.237
 El release **espeja la carpeta real del expediente en el RAG del candidato**. Sin migración.
@@ -1134,4 +1145,4 @@ Las confirmaciones de 2.0.117 son controles institucionales transversales, no pr
 
 La revisión normativa consultó fuentes oficiales del Congreso y DIACO: Decreto 47-2008 sobre comunicaciones electrónicas, Decreto 06-2003 sobre protección al consumidor, Decreto 57-2008 sobre acceso a información pública y el estado legislativo de iniciativas generales de protección de datos a septiembre de 2026. Las referencias contextualizan el documento; la validación final por asesoría jurídica de AISA continúa siendo un control organizacional requerido.
 
-La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.237.md](PRUEBAS_CAJA_NEGRA_2.0.237.md).
+La especificación del release está en [PRUEBAS_CAJA_NEGRA_2.0.238.md](PRUEBAS_CAJA_NEGRA_2.0.238.md).

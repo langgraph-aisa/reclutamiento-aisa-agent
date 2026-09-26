@@ -57,6 +57,7 @@ type TreeEntry = {
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"];
 const AUDIO_EXTENSIONS = ["mp3", "wav", "ogg", "opus", "m4a", "aac", "flac", "amr"];
 const VIDEO_EXTENSIONS = ["mp4", "webm", "mov", "3gp", "mpeg"];
+const RENDER_EXTENSIONS = ["docx", "csv", "txt", "md", "log"];
 
 function extensionOf(name: string) {
   const parts = name.toLowerCase().split(".");
@@ -81,9 +82,11 @@ function formatSize(bytes: number) {
  */
 function DropboxBrowser({ projectId }: { projectId: number }) {
   const [path, setPath] = useState("");
-  const [preview, setPreview] = useState<{ path: string; url: string } | null>(
-    null
-  );
+  const [preview, setPreview] = useState<{
+    path: string;
+    view: string;
+    render: string | null;
+  } | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const utils = trpc.useUtils();
   const tree = trpc.storage.projectTree.useQuery({ projectId, path });
@@ -100,11 +103,13 @@ function DropboxBrowser({ projectId }: { projectId: number }) {
         projectId,
         path: childPath,
       });
+      const query = `projectId=${projectId}&path=${encodeURIComponent(
+        childPath
+      )}&t=${encodeURIComponent(token)}`;
       setPreview({
         path: childPath,
-        url: `/api/dropbox/view?projectId=${projectId}&path=${encodeURIComponent(
-          childPath
-        )}&t=${encodeURIComponent(token)}`,
+        view: `/api/dropbox/view?${query}`,
+        render: `/api/dropbox/render?${query}`,
       });
     } catch (error) {
       toast.error(
@@ -234,21 +239,27 @@ function DropboxBrowser({ projectId }: { projectId: number }) {
           </div>
           {IMAGE_EXTENSIONS.includes(previewExtension) ? (
             <img
-              src={preview.url}
+              src={preview.view}
               alt={preview.path}
               className="max-h-96 w-full rounded-lg object-contain"
             />
           ) : AUDIO_EXTENSIONS.includes(previewExtension) ? (
-            <audio controls src={preview.url} className="w-full">
+            <audio controls src={preview.view} className="w-full">
               <Music className="h-4 w-4" />
             </audio>
           ) : VIDEO_EXTENSIONS.includes(previewExtension) ? (
-            <video controls src={preview.url} className="max-h-96 w-full rounded-lg">
+            <video controls src={preview.view} className="max-h-96 w-full rounded-lg">
               <Video className="h-4 w-4" />
             </video>
           ) : previewExtension === "pdf" ? (
             <iframe
-              src={preview.url}
+              src={preview.view}
+              title={preview.path}
+              className="h-96 w-full rounded-lg border border-border/60"
+            />
+          ) : preview.render && RENDER_EXTENSIONS.includes(previewExtension) ? (
+            <iframe
+              src={preview.render}
               title={preview.path}
               className="h-96 w-full rounded-lg border border-border/60"
             />
@@ -260,7 +271,7 @@ function DropboxBrowser({ projectId }: { projectId: number }) {
               </p>
               <a
                 className="text-primary underline"
-                href={preview.url}
+                href={preview.view}
                 target="_blank"
                 rel="noreferrer"
               >

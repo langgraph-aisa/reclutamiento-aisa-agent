@@ -12,9 +12,27 @@ import {
   knowledgeFileKind,
   knowledgeMimeType,
   limitWords,
+  renderCsvPreviewFromBuffer,
+  renderPlainTextPreviewFromBuffer,
 } from "./knowledge";
 
 describe("project knowledge settings and limits", () => {
+  it("compone la vista previa a partir de bytes para CSV y texto", () => {
+    // El visor por ruta de Dropbox reutiliza estas conversiones: los bytes ya
+    // leídos del backend se convierten a HTML igual que en el RAG por catálogo.
+    const csv = renderCsvPreviewFromBuffer(
+      Buffer.from("nombre;edad\nAna;30\n"),
+      "Hoja"
+    );
+    expect(csv).toContain("<th>nombre</th>");
+    expect(csv).toContain("<td>Ana</td>");
+
+    const text = renderPlainTextPreviewFromBuffer(
+      Buffer.from("<b>hola</b>")
+    );
+    expect(text).toContain("&lt;b&gt;hola&lt;/b&gt;");
+  });
+
   it("declares the institutional word limits for summaries and deep analysis", () => {
     expect(KNOWLEDGE_SUMMARY_WORD_LIMIT).toBe(66);
     expect(KNOWLEDGE_ANALYSIS_WORD_LIMIT).toBe(325);

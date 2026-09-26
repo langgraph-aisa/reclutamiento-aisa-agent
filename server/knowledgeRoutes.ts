@@ -6,8 +6,11 @@ import {
   knowledgeFileStats,
   knowledgeMimeType,
   renderCsvPreview,
+  renderCsvPreviewFromBuffer,
   renderDocxHtml,
+  renderDocxHtmlFromBuffer,
   renderPlainTextPreview,
+  renderPlainTextPreviewFromBuffer,
   renderSpreadsheetHtml,
 } from "./knowledge";
 import { storageBackendForKey } from "./dropboxProject";
@@ -655,6 +658,92 @@ export function registerKnowledgeRoutes(app: Express) {
       const data = await backend.readVisible(filePath);
       res.writeHead(200, { ...common, "Content-Length": data.length });
       res.end(data);
+    } catch (error) {
+      respondDeliveryFailure(req, res, classifyDeliveryFailure(error), {
+        storageKey: filePath,
+      });
+    }
+  });
+
+  // Vista previa por ruta del árbol de Dropbox: Word, CSV y texto se convierten
+  // a HTML para que el visor los muestre legibles, igual que el RAG por
+  // catálogo. El resto de los formatos conserva la entrega binaria.
+  app.get("/api/dropbox/render", async (req, res) => {
+    const projectId = Number(req.query.projectId);
+    const filePath = String(req.query.path ?? "").trim();
+    if (
+      !Number.isInteger(projectId) ||
+      projectId <= 0 ||
+      !filePath ||
+      filePath.includes("..")
+    ) {
+      res.status(400).json({ error: "Referencia de archivo inválida." });
+      return;
+    }
+    let authorized = verifyViewerToken(
+      "dropbox",
+      `${projectId}:${filePath}`,
+      req.query.t as string | undefined
+    );
+    if (!authorized) {
+      const localUserId = await readLocalSession(req);
+      const user = localUserId ? await getUserById(localUserId) : null;
+      authorized = Boolean(user?.active && user.role === "admin");
+    }
+    if (!authorized) {
+      res.status(403).json({ error: "Acceso restringido a administración." });
+      return;
+    }
+    const pool = await getPool();
+    if (!pool) {
+      res.status(503).json({ error: "Base de datos no disponible." });
+      return;
+    }
+    const extension = filePath.split(".").pop()?.toLowerCase() ?? "";
+    const title = (filePath.split("/").pop() ?? "Documento").replace(
+      /\.[^.]+$/,
+      ""
+    );
+    try {
+      const backend = await dropboxBackendForProject(pool, projectId);
+      if (!(backend instanceof DropboxStorageBackend)) {
+        res.status(404).json({
+          error: "El proyecto no custodia sus documentos en Dropbox.",
+        });
+        return;
+      }
+      const data = await backend.readVisible(filePath);
+      let html: string | null = null;
+      if (extension === "docx") html = await renderDocxHtmlFromBuffer(data, title);
+      else if (extension === "csv") html = renderCsvPreviewFromBuffer(data, title);
+      else if (["txt", "md", "log"].includes(extension))
+        html = renderPlainTextPreviewFromBuffer(data);
+      if (!html) {
+        const message =
+          "Este tipo de archivo no dispone de vista previa integrada; descárguelo para revisarlo.";
+        if (prefersHtml(req)) {
+          res
+            .status(415)
+            .type("html")
+            .send(
+              viewerErrorDocument(
+                "Sin vista previa para este formato",
+                message,
+                "Los formatos con vista previa integrada por ruta son PDF, imagen, audio, video, Word, CSV y texto."
+              )
+            );
+          return;
+        }
+        res.status(415).json({ error: message });
+        return;
+      }
+      res
+        .set({
+          ...VIEWER_SECURITY_HEADERS,
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "private, max-age=600",
+        })
+        .send(html);
     } catch (error) {
       respondDeliveryFailure(req, res, classifyDeliveryFailure(error), {
         storageKey: filePath,

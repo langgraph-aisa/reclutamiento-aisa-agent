@@ -101,8 +101,8 @@ function readClientSources(directory = "client/src"): string {
 
 describe("black-box release contract", () => {
   it("exposes the approved product release and audited runtime", () => {
-    expect(APP_VERSION).toBe("2.0.237");
-    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.237");
+    expect(APP_VERSION).toBe("2.0.238");
+    expect(RELEASE_LABEL).toBe("JARVI RH 2.0.238");
     expect(AUDITED_RUNTIME).toEqual({
       langfuseTracing: "5.11.1",
       langfuseLangChain: "5.11.1",
@@ -619,6 +619,9 @@ describe("black-box release contract", () => {
     // desde el backend, la ruta del visor y la hoja de custodia vigentes.
     // 2.0.237: +1 por el navegador del árbol de Dropbox compartido entre el RAG
     // del proyecto y el del candidato (client/src/components/DropboxTreeBrowser.tsx).
+    // 2.0.238: sin archivos nuevos: la vista previa de Word, CSV y texto vive en
+    // las conversiones por bytes de `server/knowledge.ts`, en la ruta del visor y
+    // en el navegador compartido ya censados.
     expect(audit.files).toHaveLength(162);
     expect(audit.findings).toEqual([]);
     expect(publicCopyAudit.files).toHaveLength(162);
@@ -1327,7 +1330,7 @@ describe("black-box release contract", () => {
       .slice(readme.indexOf("## Referencias"), readme.indexOf("## Licencia"))
       .match(/^\d+\./gm);
 
-    expect(readme).toContain("Talento AISA · JARVI RH 2.0.237");
+    expect(readme).toContain("Talento AISA · JARVI RH 2.0.238");
     expect(readme).toContain(
       'src="client/public/brand/talento-aisa-personaje.png" width="240"'
     );
@@ -1347,6 +1350,7 @@ describe("black-box release contract", () => {
     expect(bibliography).toHaveLength(41);
     expect(readme).toContain("### API, infraestructura y modelos");
     expect(readme).toContain("<!-- release-history:start -->");
+    expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.238");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.237");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.236");
     expect(readme).toContain("### 25SEP2026 · JARVI RH 2.0.235");
@@ -1906,7 +1910,7 @@ describe("black-box release contract", () => {
     expect(guide).toContain("conversation_reconciliation");
     expect(guide).toContain("server/services/sender.ts");
     expect(guide).toContain("ALTER ROLE jarvi_receptor");
-    expect(governance).toContain("Alcance candidato 2.0.237");
+    expect(governance).toContain("Alcance candidato 2.0.238");
     expect(split).toContain("FOR UPDATE");
     expect(split).not.toContain("PASSWORD '");
   });
@@ -2188,7 +2192,7 @@ describe("black-box release contract", () => {
     expect(inbox).toContain('stage: "decodificacion"');
     expect(inbox).toContain('stage: "direccion-publica"');
 
-    expect(governance).toContain("Alcance candidato 2.0.237");
+    expect(governance).toContain("Alcance candidato 2.0.238");
     expect(blackBox).toContain("BN-AUDIT-01");
     expect(blackBox).toContain("BN-AUDIT-09");
   });

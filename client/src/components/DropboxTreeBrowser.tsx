@@ -42,6 +42,7 @@ const AUDIO_EXTENSIONS = [
   "amr",
 ];
 const VIDEO_EXTENSIONS = ["mp4", "webm", "mov", "3gp", "mpeg"];
+const RENDER_EXTENSIONS = ["docx", "csv", "txt", "md", "log"];
 
 function extensionOf(name: string) {
   const parts = name.toLowerCase().split(".");
@@ -76,11 +77,16 @@ export function DropboxTreeBrowser({
   emptyLabel?: string;
   unavailableLabel?: string;
   onNavigate: (relativePath: string) => void;
-  openFile: (fullPath: string) => Promise<string>;
+  openFile: (fullPath: string) => Promise<{
+    view: string;
+    render: string | null;
+  }>;
 }) {
-  const [preview, setPreview] = useState<{ path: string; url: string } | null>(
-    null
-  );
+  const [preview, setPreview] = useState<{
+    path: string;
+    view: string;
+    render: string | null;
+  } | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const segments = relativePath
     ? relativePath.split("/").filter(Boolean)
@@ -92,8 +98,8 @@ export function DropboxTreeBrowser({
       .join("/");
     setOpening(entry.name);
     try {
-      const url = await openFile(fullPath);
-      setPreview({ path: fullPath, url });
+      const urls = await openFile(fullPath);
+      setPreview({ path: fullPath, view: urls.view, render: urls.render });
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -223,25 +229,31 @@ export function DropboxTreeBrowser({
           </div>
           {IMAGE_EXTENSIONS.includes(previewExtension) ? (
             <img
-              src={preview.url}
+              src={preview.view}
               alt={preview.path}
               className="max-h-96 w-full rounded-lg object-contain"
             />
           ) : AUDIO_EXTENSIONS.includes(previewExtension) ? (
-            <audio controls src={preview.url} className="w-full">
+            <audio controls src={preview.view} className="w-full">
               <Music className="h-4 w-4" />
             </audio>
           ) : VIDEO_EXTENSIONS.includes(previewExtension) ? (
             <video
               controls
-              src={preview.url}
+              src={preview.view}
               className="max-h-96 w-full rounded-lg"
             >
               <Video className="h-4 w-4" />
             </video>
           ) : previewExtension === "pdf" ? (
             <iframe
-              src={preview.url}
+              src={preview.view}
+              title={preview.path}
+              className="h-96 w-full rounded-lg border border-border/60"
+            />
+          ) : preview.render && RENDER_EXTENSIONS.includes(previewExtension) ? (
+            <iframe
+              src={preview.render}
               title={preview.path}
               className="h-96 w-full rounded-lg border border-border/60"
             />
@@ -253,7 +265,7 @@ export function DropboxTreeBrowser({
               </p>
               <a
                 className="text-primary underline"
-                href={preview.url}
+                href={preview.view}
                 target="_blank"
                 rel="noreferrer"
               >

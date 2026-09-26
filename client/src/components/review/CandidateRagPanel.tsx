@@ -182,9 +182,13 @@ function CandidateDropboxBrowser({
           applicationId,
           path: fullPath,
         });
-        return `/api/dropbox/view?projectId=${file.projectId}&path=${encodeURIComponent(
+        const query = `projectId=${file.projectId}&path=${encodeURIComponent(
           file.path
         )}&t=${encodeURIComponent(file.token)}`;
+        return {
+          view: `/api/dropbox/view?${query}`,
+          render: `/api/dropbox/render?${query}`,
+        };
       }}
     />
   );
